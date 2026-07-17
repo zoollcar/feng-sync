@@ -132,14 +132,15 @@ public partial class MainWindow : Window
         var type = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = new[] { "Google Drive", "SFTP" }, SelectedIndex = 0 };
         var accounts = new ListBox { Height = 115, DisplayMemberPath = "Display", Margin = new Thickness(0, 4, 0, 8) };
         var refreshAccounts = new Button { Content = "刷新账号列表", MinWidth = 105 }; var reconnect = new Button { Content = "重新登录", MinWidth = 85, Margin = new Thickness(6, 0, 0, 0) }; var removeAccount = new Button { Content = "清除账号", MinWidth = 85, Margin = new Thickness(6, 0, 0, 0) };
-        var name = new TextBox { Text = "云端连接", Margin = new Thickness(0, 4, 0, 8) }; var root = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        var name = new TextBox { Text = "云端连接", Margin = new Thickness(0, 4, 0, 8) }; var root = new TextBox { Margin = new Thickness(0, 4, 0, 8) }; var browseRemote = new Button { Content = "浏览远程目录…", MinWidth = 115, Margin = new Thickness(6, 4, 0, 8) };
         var host = new TextBox { Margin = new Thickness(0, 4, 0, 8) }; var port = new TextBox { Text = "22", Margin = new Thickness(0, 4, 0, 8) }; var user = new TextBox { Margin = new Thickness(0, 4, 0, 8) }; var password = new PasswordBox { Margin = new Thickness(0, 4, 0, 12) };
         var sftpFields = new StackPanel(); sftpFields.Children.Add(new TextBlock { Text = "主机" }); sftpFields.Children.Add(host); sftpFields.Children.Add(new TextBlock { Text = "端口" }); sftpFields.Children.Add(port); sftpFields.Children.Add(new TextBlock { Text = "用户名" }); sftpFields.Children.Add(user); sftpFields.Children.Add(new TextBlock { Text = "密码" }); sftpFields.Children.Add(password); sftpFields.Visibility = Visibility.Collapsed;
         type.SelectionChanged += (_, _) => sftpFields.Visibility = type.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         var configure = new Button { Content = "连接并验证", Margin = new Thickness(0, 0, 0, 12) };
         var ok = new Button { Content = "添加到同步端点", IsDefault = true, MinWidth = 120 }; var cancel = new Button { Content = "取消", IsCancel = true, MinWidth = 70, Margin = new Thickness(8, 0, 0, 0) }; var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right }; buttons.Children.Add(ok); buttons.Children.Add(cancel);
         var accountButtons = new StackPanel { Orientation = Orientation.Horizontal }; accountButtons.Children.Add(refreshAccounts); accountButtons.Children.Add(reconnect); accountButtons.Children.Add(removeAccount);
-        var panel = new StackPanel { Margin = new Thickness(18), Width = 360 }; panel.Children.Add(new TextBlock { Text = "连接云端端点", FontSize = 18, FontWeight = FontWeights.Bold }); panel.Children.Add(new TextBlock { Text = "已保存的云端账号（Google Drive 当前由 rclone 不提供邮箱时显示连接 ID）", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 2) }); panel.Children.Add(accounts); panel.Children.Add(accountButtons); panel.Children.Add(new Separator { Margin = new Thickness(0, 10, 0, 8) }); panel.Children.Add(new TextBlock { Text = "新建：Google Drive 会在默认浏览器完成授权；SFTP 使用下方填写的连接信息。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) }); panel.Children.Add(new TextBlock { Text = "服务" }); panel.Children.Add(type); panel.Children.Add(new TextBlock { Text = "显示名称" }); panel.Children.Add(name); panel.Children.Add(sftpFields); panel.Children.Add(new TextBlock { Text = "远程根目录（可留空）" }); panel.Children.Add(root); panel.Children.Add(configure); panel.Children.Add(buttons);
+        var rootRow = new DockPanel(); DockPanel.SetDock(browseRemote, Dock.Right); rootRow.Children.Add(browseRemote); rootRow.Children.Add(root);
+        var panel = new StackPanel { Margin = new Thickness(18), Width = 360 }; panel.Children.Add(new TextBlock { Text = "连接云端端点", FontSize = 18, FontWeight = FontWeights.Bold }); panel.Children.Add(new TextBlock { Text = "已保存的云端账号（Google Drive 当前由 rclone 不提供邮箱时显示连接 ID）", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 2) }); panel.Children.Add(accounts); panel.Children.Add(accountButtons); panel.Children.Add(new Separator { Margin = new Thickness(0, 10, 0, 8) }); panel.Children.Add(new TextBlock { Text = "新建：Google Drive 会在默认浏览器完成授权；SFTP 使用下方填写的连接信息。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) }); panel.Children.Add(new TextBlock { Text = "服务" }); panel.Children.Add(type); panel.Children.Add(new TextBlock { Text = "显示名称" }); panel.Children.Add(name); panel.Children.Add(sftpFields); panel.Children.Add(new TextBlock { Text = "远程根目录（也可用浏览按钮选择）" }); panel.Children.Add(rootRow); panel.Children.Add(configure); panel.Children.Add(buttons);
         var dialog = new Window { Title = "添加云端端点", Content = panel, SizeToContent = SizeToContent.WidthAndHeight, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this, ResizeMode = ResizeMode.NoResize };
         var remoteId = "fengsync_" + Guid.NewGuid().ToString("N"); var configured = false;
         async Task RefreshAccountsAsync() { accounts.ItemsSource = await LoadCloudAccountsAsync(); }
@@ -147,15 +148,61 @@ public partial class MainWindow : Window
         reconnect.Click += async (_, _) => { if (accounts.SelectedItem is not CloudAccount account) return; try { await RunRcloneAsync("config", "reconnect", account.Name + ":", "--config", BundledRclone.ConfigPath); await RefreshAccountsAsync(); } catch (Exception ex) { MessageBox.Show(ex.Message, "重新登录失败", MessageBoxButton.OK, MessageBoxImage.Error); } };
         removeAccount.Click += async (_, _) => { if (accounts.SelectedItem is not CloudAccount account || MessageBox.Show($"清除云端账号“{account.Name}”？本地 Profile 不会被删除。", "清除账号", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return; try { await RunRcloneAsync("config", "delete", account.Name, "--config", BundledRclone.ConfigPath); await RefreshAccountsAsync(); } catch (Exception ex) { MessageBox.Show(ex.Message, "清除失败", MessageBoxButton.OK, MessageBoxImage.Error); } };
         configure.Click += async (_, _) => { try { configure.IsEnabled = false; configure.Content = type.SelectedIndex == 0 ? "正在等待浏览器授权…" : "正在验证连接…"; await ConfigureCloudAsync(remoteId, type.SelectedIndex == 0, host.Text, port.Text, user.Text, password.Password); configured = true; configure.Content = "连接已验证"; await RefreshAccountsAsync(); } catch (Exception ex) { configure.Content = "连接并验证"; MessageBox.Show(ex.Message, "Feng Sync", MessageBoxButton.OK, MessageBoxImage.Error); } finally { configure.IsEnabled = true; } };
+        browseRemote.Click += async (_, _) =>
+        {
+            var account = accounts.SelectedItem as CloudAccount; var selectedId = account?.Name ?? (configured ? remoteId : null);
+            if (string.IsNullOrWhiteSpace(selectedId)) { MessageBox.Show("请先选择已保存账号，或先点击“连接并验证”。", "Feng Sync", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+            try { browseRemote.IsEnabled = false; root.Text = await PickRemoteDirectoryAsync(selectedId, root.Text); }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "读取远程目录失败", MessageBoxButton.OK, MessageBoxImage.Error); }
+            finally { browseRemote.IsEnabled = true; }
+        };
         ok.Click += (_, _) => { var account = accounts.SelectedItem as CloudAccount; if (account is null && !configured) { MessageBox.Show("请先连接并验证新账号，或从已保存账号列表选择一个。", "Feng Sync"); return; } var selectedId = account?.Name ?? remoteId; var isGoogle = account?.IsGoogleDrive ?? type.SelectedIndex == 0; target.Text = (isGoogle ? "gdrive://" : "sftp://") + selectedId + (string.IsNullOrWhiteSpace(root.Text) ? "" : "/" + root.Text.Trim().TrimStart('/')); dialog.DialogResult = true; };
         dialog.Loaded += async (_, _) => await RefreshAccountsAsync(); dialog.ShowDialog();
+    }
+    private async Task<string> PickRemoteDirectoryAsync(string remote, string currentPath)
+    {
+        await using var daemon = await RcloneDaemon.StartAsync(BundledRclone.ExecutablePath, BundledRclone.ConfigPath);
+        // RC expects an rclone filesystem specifier ("remote:"), not the raw profile name.
+        var filesystem = remote.EndsWith(':') ? remote : remote + ":";
+        var directories = await daemon.Client.ListDirectoriesAsync(filesystem, "", false);
+        var tree = new TreeView { Margin = new Thickness(12), MinWidth = 420, MinHeight = 360 };
+        TreeViewItem Create(string name, string path)
+        {
+            var item = new TreeViewItem { Header = string.IsNullOrEmpty(path) ? "/（根目录）" : "📁 " + name, Tag = path };
+            item.Expanded += async (_, _) =>
+            {
+                if (item.Items.Count != 1 || (item.Items[0] as TreeViewItem)?.Tag is not null) return;
+                item.Items.Clear();
+                try
+                {
+                    var children = await daemon.Client.ListDirectoriesAsync(filesystem, path, false);
+                    foreach (var child in children.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => RemoteDirectoryTree.RelativeToListingRoot(x, path)).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                    {
+                        var childName = child.Contains('/') ? child[(child.LastIndexOf('/') + 1)..] : child;
+                        var childPath = string.IsNullOrEmpty(path) ? child : path.TrimEnd('/') + "/" + child;
+                        item.Items.Add(Create(childName, childPath));
+                    }
+                }
+                catch (Exception ex) { item.Items.Add(new TreeViewItem { Header = "无法读取子目录：" + ex.Message, IsEnabled = false }); }
+            };
+            // The placeholder creates an expand affordance; it is replaced on first expansion.
+            item.Items.Add(new TreeViewItem { Header = "正在加载…", Tag = null });
+            return item;
+        }
+        var rootItem = Create("", ""); rootItem.Items.Clear(); foreach (var directory in directories.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim('/')).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) rootItem.Items.Add(Create(directory, directory)); tree.Items.Add(rootItem); rootItem.IsSelected = true; rootItem.IsExpanded = true;
+        var use = new Button { Content = "选择此文件夹", IsDefault = true, MinWidth = 110 }; var cancel = new Button { Content = "取消", IsCancel = true, Margin = new Thickness(8, 0, 0, 0), MinWidth = 70 }; var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(12, 0, 12, 12) }; buttons.Children.Add(use); buttons.Children.Add(cancel);
+        var layout = new DockPanel(); DockPanel.SetDock(buttons, Dock.Bottom); layout.Children.Add(buttons); layout.Children.Add(tree);
+        var picker = new Window { Title = $"选择 {remote}: 中的文件夹", Owner = this, Content = layout, WindowStartupLocation = WindowStartupLocation.CenterOwner, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.CanResize };
+        string? selected = currentPath.Trim('/'); tree.SelectedItemChanged += (_, _) => selected = (tree.SelectedItem as TreeViewItem)?.Tag as string ?? selected;
+        use.Click += (_, _) => picker.DialogResult = true;
+        return picker.ShowDialog() == true ? selected ?? "" : currentPath;
     }
     private sealed record CloudAccount(string Name, string Type) { public bool IsGoogleDrive => Type.Equals("drive", StringComparison.OrdinalIgnoreCase); public string Display => $"{(IsGoogleDrive ? "Google Drive" : "SFTP")}  ·  {Name}"; }
     private static async Task<IReadOnlyList<CloudAccount>> LoadCloudAccountsAsync()
     {
         if (!File.Exists(BundledRclone.ConfigPath)) return [];
-        var json = await RunRcloneAsync("config", "show", "--json", "--config", BundledRclone.ConfigPath); using var doc = JsonDocument.Parse(json); if (doc.RootElement.ValueKind != JsonValueKind.Object) return [];
-        return doc.RootElement.EnumerateObject().Select(x => new CloudAccount(x.Name, x.Value.TryGetProperty("type", out var type) ? type.GetString() ?? "unknown" : "unknown")).Where(x => x.Type is "drive" or "sftp").OrderBy(x => x.Display).ToList();
+        var json = await RunRcloneAsync("config", "dump", "--config", BundledRclone.ConfigPath);
+        return RcloneConfig.ParseDump(json).Select(x => new CloudAccount(x.Name, x.Type)).OrderBy(x => x.Display).ToList();
     }
     private static async Task<string> RunRcloneAsync(params string[] arguments)
     {

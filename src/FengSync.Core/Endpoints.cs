@@ -32,6 +32,21 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
         return doc.RootElement.Clone();
     }
     public Task<JsonElement> ListAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/list", new { fs, remote, opt = new { recurse = true } }, ct);
+    public async Task<IReadOnlyList<string>> ListDirectoriesAsync(string fs, string remote, bool recurse = false, CancellationToken ct = default)
+    {
+        var response = await CallAsync("operations/list", new { fs, remote, opt = new { recurse } }, ct);
+        if (!response.TryGetProperty("list", out var list)) return [];
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in list.EnumerateArray())
+        {
+            var path = item.TryGetProperty("Path", out var value) ? value.GetString() ?? "" : "";
+            if (string.IsNullOrWhiteSpace(path)) continue;
+            if (item.TryGetProperty("IsDir", out var isDir) && isDir.GetBoolean()) paths.Add(path.Trim('/'));
+            var parent = path.Trim('/');
+            while (parent.Contains('/')) { parent = parent[..parent.LastIndexOf('/')]; paths.Add(parent); }
+        }
+        return paths.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+    }
     public Task CopyFileAsync(string sourceFs, string sourceRemote, string targetFs, string targetRemote, CancellationToken ct = default) => CallAsync("operations/copyfile", new { srcFs = sourceFs, srcRemote = sourceRemote, dstFs = targetFs, dstRemote = targetRemote }, ct);
     public Task MoveFileAsync(string fs, string source, string target, CancellationToken ct = default) => CallAsync("operations/movefile", new { srcFs = fs, srcRemote = source, dstFs = fs, dstRemote = target }, ct);
     public Task DeleteFileAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/deletefile", new { fs, remote }, ct);
@@ -44,7 +59,15 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
 {
     public EndpointProfile Profile { get; } = profile;
     public EndpointCapabilities Capabilities { get; } = capabilities;
-    private string Fs => Profile.Remote ?? throw new InvalidOperationException("远程端点缺少 rclone remote 名称。");
+    // rclone RC's fs parameter is a filesystem specifier, e.g. "drive:"; an unqualified remote name is treated as a local path.
+    private string Fs
+    {
+        get
+        {
+            var remote = Profile.Remote ?? throw new InvalidOperationException("远程端点缺少 rclone remote 名称。");
+            return remote.EndsWith(':') ? remote : remote + ":";
+        }
+    }
     private string At(string relative) => string.IsNullOrWhiteSpace(Profile.Root) ? relative : $"{Profile.Root.TrimEnd('/')}/{relative.TrimStart('/')}";
     internal RcloneRcClient Client => client;
     internal string FileSystem => Fs;

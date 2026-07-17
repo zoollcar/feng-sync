@@ -22,7 +22,8 @@ public sealed class RcloneDaemon : IAsyncDisposable
         start.ArgumentList.Add("rcd"); start.ArgumentList.Add("--rc-addr"); start.ArgumentList.Add($"127.0.0.1:{port}"); start.ArgumentList.Add("--config"); start.ArgumentList.Add(configPath);
         start.Environment["RCLONE_RC_USER"] = user; start.Environment["RCLONE_RC_PASS"] = password;
         var process = Process.Start(start) ?? throw new InvalidOperationException("无法启动 rclone。");
-        var uri = new Uri($"http://127.0.0.1:{port}/"); var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        // Cloud backends may need a token refresh and an initial page walk.  Keep this bounded, but do not race a healthy Drive request.
+        var uri = new Uri($"http://127.0.0.1:{port}/"); var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
         var daemon = new RcloneDaemon(process, http, user, password, uri);
         try
         {

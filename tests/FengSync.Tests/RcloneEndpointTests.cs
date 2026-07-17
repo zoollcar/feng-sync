@@ -22,6 +22,24 @@ public sealed class RcloneEndpointTests : IDisposable
         Assert.Equal(2, items.Count); Assert.Equal("ABCD", items.Single(x => x.Path == "folder/a.txt").Fingerprint!.Hash); Assert.Contains(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/list"));
     }
 
+    [Fact]
+    public async Task Directory_listing_includes_empty_and_implicit_parent_folders()
+    {
+        _handler.ListJson = "{\"list\":[{\"Path\":\"empty\",\"IsDir\":true},{\"Path\":\"one/two/file.txt\",\"IsDir\":false}]}";
+        var client = new RcloneRcClient(_http, _http.BaseAddress!, "user", "pass");
+        var directories = await client.ListDirectoriesAsync("remote", "", false);
+        Assert.Equal(["empty", "one", "one/two"], directories);
+        Assert.Contains(_handler.Bodies, x => x.Contains("\"recurse\":false", StringComparison.Ordinal));
+        var tree = RemoteDirectoryTree.Build(directories);
+        Assert.Equal(["empty", "one"], tree.Children.Select(x => x.Name)); Assert.Equal("one/two", Assert.Single(tree.Children.Single(x => x.Name == "one").Children).Path);
+    }
+
+    [Theory]
+    [InlineData("cloudfile/入职", "cloudfile", "入职")]
+    [InlineData("入职", "cloudfile", "入职")]
+    [InlineData("cloudfile/contacts/a", "cloudfile", "contacts/a")]
+    public void Directory_paths_are_not_prefixed_twice(string listed, string root, string expected) => Assert.Equal(expected, RemoteDirectoryTree.RelativeToListingRoot(listed, root));
+
     [Theory]
     [InlineData(EndpointType.Sftp)]
     [InlineData(EndpointType.GoogleDrive)]
@@ -31,6 +49,14 @@ public sealed class RcloneEndpointTests : IDisposable
         var remote = Remote(type); var plan = await new EndpointSynchronizer().SynchronizeAsync(new LocalEndpoint(_root), remote, SyncMode.Update);
         Assert.Single(plan.Operations); Assert.Contains(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/copyfile")); Assert.Contains(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/movefile"));
         Assert.Contains(_handler.Bodies, x => x.Contains(".fengsync-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Remote_calls_use_a_colon_qualified_rclone_filesystem()
+    {
+        _handler.ListJson = "{\"list\":[]}";
+        await Remote(EndpointType.GoogleDrive).ScanAsync();
+        Assert.Contains(_handler.Bodies, x => x.Contains("\"fs\":\"test:\"", StringComparison.Ordinal));
     }
 
     [Fact]
