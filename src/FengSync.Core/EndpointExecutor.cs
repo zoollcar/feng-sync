@@ -3,18 +3,25 @@ namespace FengSync.Core;
 /// <summary>Endpoint-neutral executor for local folders, SFTP and Google Drive through rclone RC.</summary>
 public sealed class EndpointExecutor
 {
-    public async Task ExecuteAsync(SyncPlan plan, IEndpoint left, IEndpoint right, IProgress<string>? progress = null, CancellationToken ct = default, VersioningPolicy? versioning = null)
+    public async Task ExecuteAsync(SyncPlan plan, IEndpoint left, IEndpoint right, IProgress<string>? progress = null, CancellationToken ct = default, VersioningPolicy? versioning = null, int maxConcurrentCopies = 3)
     {
         if (!plan.CanExecute) throw new InvalidOperationException("计划含未裁决的冲突、或未选择任何动作。");
+        if (maxConcurrentCopies is < 1 or > 32) throw new ArgumentOutOfRangeException(nameof(maxConcurrentCopies), "并发数必须在 1 到 32 之间。");
         var selected = plan.Operations.Where(x => x.Selected).ToList();
         foreach (var op in selected.Where(x => x.Kind is OperationKind.CreateLeftDirectory or OperationKind.CreateRightDirectory))
             await (op.Kind == OperationKind.CreateLeftDirectory ? left : right).CreateDirectoryAsync(op.Path, ct);
-        foreach (var op in selected.Where(x => x.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft))
-        {
-            var source = op.Kind == OperationKind.CopyLeftToRight ? left : right; var target = op.Kind == OperationKind.CopyLeftToRight ? right : left;
-            var temporary = op.Path + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial";
-            await CopyAsync(source, target, op.Path, temporary, ct); await target.MoveAsync(temporary, op.Path, ct); progress?.Report(op.Path);
-        }
+        using (var transferGate = new SemaphoreSlim(maxConcurrentCopies, maxConcurrentCopies))
+            await Task.WhenAll(selected.Where(x => x.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft).Select(async op =>
+            {
+                await transferGate.WaitAsync(ct);
+                try
+                {
+                    var source = op.Kind == OperationKind.CopyLeftToRight ? left : right; var target = op.Kind == OperationKind.CopyLeftToRight ? right : left;
+                    var temporary = op.Path + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial";
+                    await CopyAsync(source, target, op.Path, temporary, ct); await target.MoveAsync(temporary, op.Path, ct); progress?.Report(op.Path);
+                }
+                finally { transferGate.Release(); }
+            }));
         foreach (var op in selected.Where(x => x.Kind is OperationKind.DeleteLeft or OperationKind.DeleteRight).OrderByDescending(x => x.Path.Length))
         {
             var target = op.Kind == OperationKind.DeleteLeft ? left : right;
