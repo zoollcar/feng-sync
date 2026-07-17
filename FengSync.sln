@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FengSync.Core", "src\FengSync.Core\FengSync.Core.csproj", "{A09E3BDE-5A00-4B55-88B5-BE78EBC3CE00}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FengSync", "src\FengSync\FengSync.csproj", "{B3A5E917-A079-4FB9-A52B-128BB80A8CBB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FengSync.Tests", "tests\FengSync.Tests\FengSync.Tests.csproj", "{C2CD35BB-5908-4292-A244-CBBAA663D3B3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A09E3BDE-5A00-4B55-88B5-BE78EBC3CE00}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A09E3BDE-5A00-4B55-88B5-BE78EBC3CE00}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B3A5E917-A079-4FB9-A52B-128BB80A8CBB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B3A5E917-A079-4FB9-A52B-128BB80A8CBB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C2CD35BB-5908-4292-A244-CBBAA663D3B3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2CD35BB-5908-4292-A244-CBBAA663D3B3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+	EndGlobalSection
+EndGlobal

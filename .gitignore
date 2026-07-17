@@ -1,0 +1,10 @@
+# Build output and local IDE state
+[Bb]in/
+[Oo]bj/
+.vs/
+
+# Disposable integration-test directories, credentials, SSH keys and rclone config
+.fengsync-test/
+
+# Local user configuration and task journal
+FengSync.local.json
