@@ -33,12 +33,23 @@ public sealed class RcloneEndpointTests : IDisposable
         Assert.Contains(_handler.Bodies, x => x.Contains(".fengsync-", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Remote_executor_honors_the_configured_copy_concurrency()
+    {
+        _handler.DelayCopy = true;
+        var source = Remote(EndpointType.Sftp); var target = Remote(EndpointType.Sftp);
+        var plan = new SyncPlan([new SyncOperation("one.txt", OperationKind.CopyLeftToRight, "test"), new SyncOperation("two.txt", OperationKind.CopyLeftToRight, "test")]);
+        await new EndpointExecutor().ExecuteAsync(plan, source, target, maxConcurrentCopies: 2);
+        Assert.True(_handler.MaximumConcurrentCopies >= 2);
+    }
+
     private RcloneEndpoint Remote(EndpointType type) => new(new RcloneRcClient(_http, _http.BaseAddress!, "user", "pass"), new EndpointProfile(Guid.NewGuid(), type, "root", "test"), new(false, true, true, TimeSpan.FromSeconds(1)));
     private sealed class RecordingHandler : HttpMessageHandler
     {
         public string ListJson { get; set; } = "{\"list\":[]}";
         public List<Uri> Requests { get; } = []; public List<string> Bodies { get; } = [];
+        public bool DelayCopy { get; set; } public int MaximumConcurrentCopies { get; private set; } private int _concurrentCopies;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        { Requests.Add(request.RequestUri!); Bodies.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken)); var payload = request.RequestUri!.AbsolutePath.EndsWith("operations/list") ? ListJson : "{}"; return new(HttpStatusCode.OK) { Content = new StringContent(payload, Encoding.UTF8, "application/json") }; }
+        { Requests.Add(request.RequestUri!); Bodies.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken)); if (DelayCopy && request.RequestUri!.AbsolutePath.EndsWith("operations/copyfile")) { var current = Interlocked.Increment(ref _concurrentCopies); MaximumConcurrentCopies = Math.Max(MaximumConcurrentCopies, current); await Task.Delay(80, cancellationToken); Interlocked.Decrement(ref _concurrentCopies); } var payload = request.RequestUri!.AbsolutePath.EndsWith("operations/list") ? ListJson : "{}"; return new(HttpStatusCode.OK) { Content = new StringContent(payload, Encoding.UTF8, "application/json") }; }
     }
 }

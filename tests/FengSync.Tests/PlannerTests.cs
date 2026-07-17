@@ -31,4 +31,11 @@ public sealed class PlannerTests
     [Theory] [InlineData("CON.txt")] [InlineData("name. ")] [InlineData("dir/../x")]
     public void Invalid_windows_path_blocks_plan(string path) => Assert.Contains(_planner.Build([File(path, "A")], [], null).Operations, x => x.Kind == OperationKind.Blocked);
     [Fact] public void Existing_baseline_with_new_path_copies_new_path() => Assert.Equal(OperationKind.CopyLeftToRight, Assert.Single(_planner.Build([File("a.txt", "A"), File("b.txt", "B")], [File("a.txt", "A")], Baseline()).Operations).Kind);
+    [Fact] public void A_normal_copy_can_be_overridden_to_the_other_direction()
+    {
+        var operation = new SyncOperation("a.txt", OperationKind.CopyLeftToRight, "default");
+        operation.OverrideCopyDirection(false);
+        Assert.Equal(OperationKind.CopyRightToLeft, operation.Kind); Assert.Equal("用户覆盖：右侧覆盖左侧", operation.Reason);
+    }
+    [Fact] public void A_delete_cannot_be_reversed_as_a_copy() => Assert.Throws<InvalidOperationException>(() => new SyncOperation("a.txt", OperationKind.DeleteRight, "delete").OverrideCopyDirection(false));
 }
