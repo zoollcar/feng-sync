@@ -66,6 +66,15 @@ public sealed class NewFeatureIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Batch_runner_executes_multiple_profiles_in_parallel()
+    {
+        var left2 = Path.Combine(_root, "left2"); var right2 = Path.Combine(_root, "right2"); Directory.CreateDirectory(left2); Directory.CreateDirectory(right2);
+        await File.WriteAllTextAsync(Path.Combine(Left, "first.txt"), "first"); await File.WriteAllTextAsync(Path.Combine(left2, "second.txt"), "second");
+        var results = await new BatchRunner().RunAsync([SyncProfile.Create("one", Left, Right) with { Mode = SyncMode.Mirror }, SyncProfile.Create("two", left2, right2) with { Mode = SyncMode.Mirror }]);
+        Assert.Equal(2, results.Count); Assert.Equal("first", await File.ReadAllTextAsync(Path.Combine(Right, "first.txt"))); Assert.Equal("second", await File.ReadAllTextAsync(Path.Combine(right2, "second.txt")));
+    }
+
+    [Fact]
     public async Task Endpoint_neutral_synchronizer_executes_local_endpoints()
     {
         await File.WriteAllTextAsync(Path.Combine(Left, "portable.txt"), "portable");
