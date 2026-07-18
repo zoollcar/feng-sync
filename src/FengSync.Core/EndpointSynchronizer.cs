@@ -12,7 +12,11 @@ public sealed class EndpointSynchronizer
         SyncFilter? filter = null, VersioningPolicy? versioning = null, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var plan = await CompareAsync(left, right, mode, baseline, filter, ct);
-        await new EndpointExecutor().ExecuteAsync(plan, left, right, progress, ct, versioning);
+        var snapshot = await PlanSnapshot.CaptureAsync(plan, left, right, ct);
+        var result = await new SyncExecutor().ExecuteAsync(snapshot, left, right,
+            progress is null ? null : new Progress<TransferProgress>(x => { if (x.Stage == TransferStage.Committed) progress.Report(x.Path); }),
+            ct, versioning: versioning);
+        if (!result.Succeeded) throw new IOException($"同步有 {result.FailedOperations} 个操作失败。");
         return plan;
     }
 }

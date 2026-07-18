@@ -13,6 +13,14 @@ public sealed class ModePlannerTests
         Assert.Equal(OperationKind.CopyLeftToRight, Assert.Single(new ModePlanner().Build(SyncMode.Update, [File("a.txt", "new")], [File("a.txt", "old")]).Operations).Kind);
     [Fact] public void Filter_excludes_planned_path() =>
         Assert.Empty(new ModePlanner().Build(SyncMode.Mirror, [File("a.tmp", "x")], [], filter: new SyncFilter(Exclude: ["*.tmp"])).Operations);
+
+    [Fact]
+    public void Filtered_baseline_path_never_becomes_a_delete()
+    {
+        var baseline = new[] { new BaselineEntry("ignored.tmp", File("ignored.tmp", "old"), File("ignored.tmp", "old")) };
+        var plan = new ModePlanner().Build(SyncMode.TwoWay, [], [], baseline, new SyncFilter(Exclude: ["*.tmp"]));
+        Assert.Empty(plan.Operations);
+    }
     [Fact] public async Task Profiles_round_trip_without_credentials()
     {
         var path = Path.Combine(Path.GetTempPath(), "fengsync-profile-" + Guid.NewGuid() + ".json");

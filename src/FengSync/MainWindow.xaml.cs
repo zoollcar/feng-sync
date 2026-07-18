@@ -1,4 +1,8 @@
 using FengSync.Core;
+using FengSync.Core.Capabilities;
+using FengSync.Core.Configuration;
+using FengSync.Core.SftpServer;
+using FengSync.Services;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
 using System.Text.Json;
@@ -9,13 +13,14 @@ using System.Windows.Media;
 using System.Diagnostics;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using FengSync.Views;
 
 namespace FengSync;
 public partial class MainWindow : Window
 {
-    private readonly ObservableCollection<ComparisonRow> _rows = []; private readonly ObservableCollection<SyncProfile> _profiles = []; private readonly ProfileStore _profileStore = new(); private SyncPlan? _plan; private IEndpoint? _left, _right; private RcloneDaemon? _rclone; private AppSettings _settings; private CancellationTokenSource? _syncCancellation; private bool _closing;
+    private readonly ObservableCollection<ComparisonRow> _rows = []; private readonly ObservableCollection<SyncProfile> _profiles = []; private readonly ProfileStore _profileStore = new(); private SyncPlan? _plan; private PlanSnapshot? _snapshot; private IEndpoint? _left, _right; private RcloneDaemon? _rclone; private ApplicationSettings _settings; private CancellationTokenSource? _syncCancellation; private bool _closing;
     private SyncMode SelectedMode => (SyncMode)Math.Max(0, SyncModeBox?.SelectedIndex ?? 0);
-    public MainWindow() { InitializeComponent(); Comparison.ItemsSource = _rows; ProfileList.ItemsSource = _profiles; _settings = LoadSettings(); UpdateSettingsText(); Status.Text = "选择左右端点后点击“比较”。"; Loaded += async (_, _) => await LoadProfilesAsync(); }
+    public MainWindow() { InitializeComponent(); Comparison.ItemsSource = _rows; ProfileList.ItemsSource = _profiles; _settings = new(); UpdateSettingsText(); Status.Text = "正在加载设置…"; Loaded += async (_, _) => await InitializeAsync(); }
     private async void Compare_Click(object sender, RoutedEventArgs e)
     {
         try { await BuildPlanAsync(); }
@@ -25,7 +30,48 @@ public partial class MainWindow : Window
     {
         if (_plan is null || _left is null || _right is null) return;
         ProgressWindow? progressDialog = null;
-        try { Comparison.CommitEdit(DataGridEditingUnit.Cell, true); Comparison.CommitEdit(DataGridEditingUnit.Row, true); var operations = _rows.Select(x => x.Operation).ToList(); var current = new SyncPlan(operations); if (!current.CanExecute) { Status.Text = "请先选择操作并裁决所有冲突。"; return; } SyncButton.IsEnabled = false; _syncCancellation = new(); var total = operations.Count(x => x.Selected && x.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft); Status.Text = $"正在以 {_settings.MaxConcurrentCopies} 路并发同步…"; progressDialog = new ProgressWindow(total, !_settings.ShowCompleted) { Owner = this }; progressDialog.Show(); await new EndpointExecutor().ExecuteAsync(current, _left, _right, new Progress<string>(p => progressDialog.Report(p)), _syncCancellation.Token, _settings.Versioning, _settings.MaxConcurrentCopies); if (SelectedMode == SyncMode.TwoWay && _left is LocalEndpoint localLeft && _right is LocalEndpoint localRight) await new BaselineStore().CommitAsync(localLeft, localRight); Status.Text = "同步完成。"; progressDialog.Complete(true, "所有选中的操作已完成。"); }
+        try
+        {
+            var effective = CurrentSettings; Comparison.CommitEdit(DataGridEditingUnit.Cell, true); Comparison.CommitEdit(DataGridEditingUnit.Row, true);
+            var operations = _rows.Select(x => x.Operation).ToList(); var current = new SyncPlan(operations);
+            if (!current.CanExecute || _snapshot is null) { Status.Text = "请先选择操作并裁决所有冲突，然后重新比较。"; return; }
+            var profile = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create("临时", LeftPath.Text, RightPath.Text);
+            var scans = await Task.WhenAll(_left.ScanAsync(), _right.ScanAsync());
+            var leftEntries = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var rightEntries = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+            var safety = new SafetyValidator().ValidatePlan(current, leftEntries.Count, rightEntries.Count, SelectedMode, profile.MaxDeletes, profile.MaxDeleteRatio)
+                .Combine(new SafetyValidator().ValidateCapacity(current, leftEntries, rightEntries, _left, _right));
+            var risk = SyncRiskSummary.Create(current, leftEntries, rightEntries);
+            var thresholdOverride = SyncConfirmationPolicy.CanOverrideWithProfileName(safety);
+            if (safety.HasBlockingIssues && !thresholdOverride) { Status.Text = string.Join(" ", safety.Issues.Select(x => x.Message)); return; }
+            if (SyncConfirmationPolicy.RequiresConfirmation(risk) || thresholdOverride)
+            {
+                var confirmation = new SyncConfirmationWindow(risk, safety, profile.Name, risk.TransferBytes) { Owner = this };
+                if (confirmation.ShowDialog() != true) { Status.Text = "已取消高风险同步确认。"; return; }
+            }
+            SyncButton.IsEnabled = false; _syncCancellation = new(); var total = operations.Count(x => x.Selected && x.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft);
+            Status.Text = $"正在以 {effective.MaxConcurrentCopies} 路并发同步…"; progressDialog = new ProgressWindow(total, !_settings.ShowCompleted) { Owner = this }; progressDialog.Show();
+            var baselineRepository = new BaselineRepository(); var transaction = SelectedMode == SyncMode.TwoWay ? await baselineRepository.BeginAsync(_left, _right, _syncCancellation.Token) : null;
+            var run = await new SyncExecutor().ExecuteAsync(_snapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), _syncCancellation.Token, effective.VerifyCopies, effective.Versioning, effective.MaxConcurrentCopies, new TaskJournalStore());
+            if (transaction is not null)
+            {
+                transaction = run.Operations.Where(x => x.Stage == TransferStage.Committed).Aggregate(transaction, (current, item) => current.RecordCommitted(item.Path));
+                await baselineRepository.SaveAsync(transaction, _syncCancellation.Token);
+                await baselineRepository.CommitAsync(transaction, _left, _right, run.Succeeded, _syncCancellation.Token);
+            }
+            progressDialog.SetRetry(operations, async retryPlan =>
+            {
+                var retrySnapshot = await PlanSnapshot.CaptureAsync(retryPlan, _left, _right);
+                return await new SyncExecutor().ExecuteAsync(retrySnapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), CancellationToken.None, effective.VerifyCopies, effective.Versioning, effective.MaxConcurrentCopies, new TaskJournalStore());
+            });
+            if (!run.Succeeded)
+            {
+                Status.Text = $"同步部分失败：{run.FailedOperations} 个操作失败；基线未变更。";
+                progressDialog.Complete(run, $"{run.FailedOperations} 个操作失败。可查看错误详情、保存日志，或重试可重试失败项。");
+                return;
+            }
+            Status.Text = "同步完成。"; progressDialog.Complete(run, "所有选中的操作已完成；双向基线已安全提交。");
+        }
+        catch (OperationCanceledException) { Status.Text = "同步已取消。"; progressDialog?.Complete(new SyncRunResult(Guid.NewGuid(), []), "同步已取消。", cancelled: true); }
         catch (Exception ex) { Status.Text = "同步失败：" + ex.Message; progressDialog?.Complete(false, ex.Message); }
         finally { _syncCancellation?.Dispose(); _syncCancellation = null; RefreshSummary(); }
     }
@@ -41,12 +87,38 @@ public partial class MainWindow : Window
     }
     private static void Browse(System.Windows.Controls.TextBox target) { var dialog = new OpenFolderDialog(); if (dialog.ShowDialog() == true) target.Text = dialog.FolderName; }
     private void Comparison_CurrentCellChanged(object s, EventArgs e) => Dispatcher.BeginInvoke(RefreshSummary);
-    private void UpdateSettingsText() { if (ConcurrencyLabel is not null) ConcurrencyLabel.Text = _settings.MaxConcurrentCopies + " 路"; }
+    private EffectiveProfileSettings CurrentSettings => EffectiveProfileSettings.Resolve(ProfileList?.SelectedItem as SyncProfile ?? SyncProfile.Create("默认", "", ""), _settings);
+    private void UpdateSettingsText() { if (ConcurrencyLabel is not null) ConcurrencyLabel.Text = CurrentSettings.MaxConcurrentCopies + " 路"; }
     private void SyncMode_Changed(object s, SelectionChangedEventArgs e) { if (SyncModeCaption is not null) SyncModeCaption.Text = ModeTitle(); if (_plan is not null) Compare_Click(this, new RoutedEventArgs()); }
     private string ModeTitle() => SelectedMode switch { SyncMode.Mirror => "镜像 →", SyncMode.Update => "更新 →", SyncMode.Custom => "自定义 →", _ => "双向 ↔" };
-    private void SaveSettings_Click(object s, RoutedEventArgs e) { Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!); File.WriteAllText(SettingsPath, JsonSerializer.Serialize(_settings)); Status.Text = "设置已保存。"; }
-    private static string SettingsPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FengSync", "FengSync.local.json");
-    private static AppSettings LoadSettings() { try { return File.Exists(SettingsPath) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new() : new(); } catch { return new(); } }
+    private async void SaveSettings_Click(object s, RoutedEventArgs e) { await new SettingsStore().SaveAsync(_settings); Status.Text = "设置已保存。"; }
+    private static string SettingsPath => Path.Combine(AppDataPaths.Root, "FengSync.local.json");
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            var loaded = await new SettingsStore().LoadAsync();
+            _settings = loaded.Settings;
+            UpdateSettingsText();
+            Status.Text = loaded.RecoveredFromCorruption
+                ? $"设置文件已损坏，已备份到：{loaded.BackupPath}"
+                : loaded.Migrated
+                    ? $"程序设置已从 schema v{loaded.MigratedFromSchemaVersion} 迁移；原文件备份在：{loaded.MigrationBackupPath}"
+                    : "选择左右端点后点击“比较”。";
+        }
+        catch (Exception ex) { _settings = new(); Status.Text = "无法加载程序设置：" + ex.Message; }
+        await LoadProfilesAsync();
+        await ShowRecoveryIfRequiredAsync();
+    }
+    private async Task ShowRecoveryIfRequiredAsync()
+    {
+        try
+        {
+            var coordinator = new RecoveryCoordinator(); var items = await coordinator.FindRecoveryRequiredAsync();
+            if (items.Count > 0) new RecoveryWindow(items, coordinator) { Owner = this }.ShowDialog();
+        }
+        catch (Exception ex) { Status.Text = "无法读取恢复记录：" + ex.Message; }
+    }
     private Task RecompareAsync() { Compare_Click(this, new RoutedEventArgs()); return Task.CompletedTask; }
     private async Task LoadProfilesAsync()
     {
@@ -66,29 +138,77 @@ public partial class MainWindow : Window
         if (_profiles.Count == 0) _profiles.Add(SyncProfile.Create("未命名配置", "", ""));
         ProfileList.SelectedIndex = 0; await PersistProfilesAsync(); Status.Text = "配置已从本项目移除。";
     }
+    private async void EditProfile_Click(object s, RoutedEventArgs e)
+    {
+        if (ProfileList.SelectedItem is not SyncProfile original) { Status.Text = "请先选择一个 Profile。"; return; }
+        var updated = new ProfileDialogService().Edit(this, original);
+        if (updated is null) return;
+        var index = _profiles.IndexOf(original);
+        if (index >= 0) _profiles[index] = updated; else _profiles.Add(updated);
+        ProfileList.SelectedItem = updated;
+        await PersistProfilesAsync();
+        ApplyProfile(updated);
+        Status.Text = "Profile 设置已保存。";
+    }
     private void LoadProfile_Click(object s, RoutedEventArgs e) { if (ProfileList.SelectedItem is SyncProfile profile) ApplyProfile(profile); else Status.Text = "请先选择一个配置档案。"; }
     private async void SaveProfile_Click(object s, RoutedEventArgs e)
     {
         var old = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create("未命名配置", "", "");
-        var current = old with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode, MaxConcurrentCopies = _settings.MaxConcurrentCopies, VerifyCopies = _settings.VerifyCopies, Filter = _settings.Filter, Versioning = _settings.Versioning };
-        var index = _profiles.IndexOf(old); if (index >= 0) _profiles[index] = current; else _profiles.Add(current); await _profileStore.SaveAsync(_profiles); ProfileList.SelectedItem = current; Status.Text = "配置档案已保存（凭据不会写入档案）。";
+        var current = old with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode };
+        var dialog = new SaveFileDialog
+        {
+            Filter = "Feng Sync Profile (*.fengsync.json)|*.fengsync.json|JSON files (*.json)|*.json",
+            FileName = current.Name + ".fengsync.json",
+            InitialDirectory = Path.Combine(AppDataPaths.Root, "Profiles"),
+            AddExtension = true,
+            DefaultExt = ".fengsync.json"
+        };
+        if (dialog.ShowDialog() != true) { Status.Text = "已取消保存配置档案。"; return; }
+        var index = _profiles.IndexOf(old); if (index >= 0) _profiles[index] = current; else _profiles.Add(current);
+        await _profileStore.SaveAsync(_profiles);
+        await new ProfileStore(dialog.FileName).SaveAsync([current]);
+        ProfileList.SelectedItem = current;
+        Status.Text = $"配置档案已保存到：{dialog.FileName}";
     }
     private async void RunProfile_Click(object s, RoutedEventArgs e)
     {
         var profiles = ProfileList.SelectedItems.Cast<SyncProfile>().ToList();
         if (profiles.Count == 0) { Status.Text = "请先选择一个或多个 Profile。"; return; }
         if (profiles.Any(profile => string.IsNullOrWhiteSpace(profile.LeftPath) || string.IsNullOrWhiteSpace(profile.RightPath))) { Status.Text = "批处理中的每个 Profile 都必须有两个端点。"; return; }
-        try { Status.Text = $"正在并发执行 {profiles.Count} 个 Profile…"; var results = await Task.WhenAll(profiles.Select(RunBatchProfileAsync)); Status.Text = $"批处理完成：{profiles.Count} 个 Profile，计划 {results.Sum(x => x.Planned)} 项，执行 {results.Sum(x => x.Executed)} 项。"; }
+        if (profiles.Count > 1) { new BatchRunWindow(profiles, CurrentSettings.MaxConcurrentCopies, (profile, _) => RunBatchProfileAsync(profile)) { Owner = this }.ShowDialog(); return; }
+        try
+        {
+            var scheduler = new FengSync.Core.Automation.BatchScheduler(CurrentSettings.MaxConcurrentCopies);
+            Status.Text = $"正在以最多 {CurrentSettings.MaxConcurrentCopies} 路并发执行 {profiles.Count} 个 Profile…";
+            var results = await scheduler.RunAsync(profiles.Select(profile => (Func<CancellationToken, Task<ProfileRunResult>>)(token => RunBatchProfileAsync(profile))));
+            var successful = results.Where(x => x.Succeeded).Select(x => x.Value!).ToList();
+            var failures = results.Count(x => !x.Succeeded);
+            Status.Text = failures == 0
+                ? $"批处理完成：{profiles.Count} 个 Profile，计划 {successful.Sum(x => x.Planned)} 项，执行 {successful.Sum(x => x.Executed)} 项。"
+                : $"批处理完成：{successful.Count} 成功，{failures} 失败；其余 Profile 未受影响。";
+        }
         catch (Exception ex) { Status.Text = "批处理失败：" + ex.Message; }
     }
-    private void ProfileList_SelectionChanged(object s, SelectionChangedEventArgs e) { if (ProfileList.SelectedItem is SyncProfile profile) { _settings.LastSelectedProfileId = profile.Id; ApplyProfile(profile); } }
+    private void ProfileList_SelectionChanged(object s, SelectionChangedEventArgs e) { if (ProfileList.SelectedItem is SyncProfile profile) { _settings = _settings with { LastSelectedProfileId = profile.Id }; ApplyProfile(profile); } }
     private void ApplyProfile(SyncProfile profile)
     {
-        LeftPath.Text = profile.LeftPath; RightPath.Text = profile.RightPath; SyncModeBox.SelectedIndex = (int)profile.Mode; _settings.MaxConcurrentCopies = profile.MaxConcurrentCopies; _settings.VerifyCopies = profile.VerifyCopies; _settings.Filter = profile.Filter ?? SyncFilter.Empty; _settings.Versioning = profile.Versioning ?? new(); UpdateSettingsText(); Status.Text = $"已载入配置：{profile.Name}";
+        LeftPath.Text = profile.LeftPath; RightPath.Text = profile.RightPath; SyncModeBox.SelectedIndex = (int)profile.Mode; UpdateSettingsText();
+        var compatibility = new FeatureCapabilityService().Evaluate(profile);
+        CompareButton.IsEnabled = compatibility.CanRun; RunProfileButton.IsEnabled = compatibility.CanRun;
+        Status.Text = compatibility.CanRun ? $"已载入配置：{profile.Name}" : $"Profile 需要修复：{compatibility.Summary}";
     }
     private async Task BuildPlanAsync()
     {
-        (_left, _right) = await CreateEndpointsAsync(LeftPath.Text, RightPath.Text); var scans = await Task.WhenAll(_left.ScanAsync(), _right.ScanAsync()); var left = scans[0].ToDictionary(x => x.Path); var right = scans[1].ToDictionary(x => x.Path); var baseline = SelectedMode == SyncMode.TwoWay && _left is LocalEndpoint localLeft && _right is LocalEndpoint localRight ? await new BaselineStore().LoadAsync(localLeft, localRight) : null; _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, _settings.Filter); _rows.Clear(); foreach (var op in _plan.Operations) _rows.Add(new(op, left.GetValueOrDefault(op.Path), right.GetValueOrDefault(op.Path))); RefreshSummary(); Status.Text = $"{ModeTitle()} 比较完成。勾选要执行的差异，并裁决所有冲突。";
+        var profile = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create("临时", LeftPath.Text, RightPath.Text) with { Mode = SelectedMode }; var compatibility = new FeatureCapabilityService().Evaluate(profile with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode }); if (!compatibility.CanRun) throw new InvalidOperationException("该 Profile 需要修复：" + compatibility.Summary); var effective = CurrentSettings; (_left, _right) = await CreateEndpointsAsync(LeftPath.Text, RightPath.Text);
+        var configurationSafety = _left is LocalEndpoint configLeft && _right is LocalEndpoint configRight ? new SafetyValidator().ValidateConfiguration(configLeft.Root, configRight.Root, effective.Versioning?.ArchiveDirectory) : SafetyValidationResult.Pass;
+        if (configurationSafety.HasBlockingIssues) throw new InvalidOperationException(string.Join(" ", configurationSafety.Issues.Select(x => x.Message)));
+        var scans = await Task.WhenAll(_left.ScanAsync(), _right.ScanAsync()); var left = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var right = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var baseline = SelectedMode == SyncMode.TwoWay ? await new BaselineRepository().LoadAsync(_left, _right) : null; _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, effective.Filter);
+        var planSafety = new SafetyValidator().ValidatePlan(_plan, left.Count, right.Count, SelectedMode, profile.MaxDeletes, profile.MaxDeleteRatio).Combine(new SafetyValidator().ValidateCapacity(_plan, left, right, _left, _right));
+        if (planSafety.HasBlockingIssues && !SyncConfirmationPolicy.CanOverrideWithProfileName(planSafety)) throw new InvalidOperationException(string.Join(" ", planSafety.Issues.Select(x => x.Message)));
+        var risk = SyncRiskSummary.Create(_plan, left, right);
+        SafetySummary.Text = planSafety.HasBlockingIssues ? "安全检查：阻断（删除阈值可在同步确认中一次性放行）" : SyncConfirmationPolicy.RequiresConfirmation(risk) ? $"安全检查：警告 · 覆盖 {risk.Overwrites} 项，删除 {risk.Deletes} 项，传输 {FormatBytes(risk.TransferBytes)}" : "安全检查：通过";
+        SafetySummary.Foreground = planSafety.HasBlockingIssues ? Brushes.Firebrick : SyncConfirmationPolicy.RequiresConfirmation(risk) ? Brushes.DarkOrange : Brushes.ForestGreen;
+        _snapshot = await PlanSnapshot.CaptureAsync(_plan, _left, _right); _rows.Clear(); foreach (var op in _plan.Operations) _rows.Add(new(op, left.GetValueOrDefault(op.Path), right.GetValueOrDefault(op.Path))); RefreshSummary(); Status.Text = $"{ModeTitle()} 比较完成。勾选要执行的差异，并裁决所有冲突。";
     }
     private async Task<(IEndpoint Left, IEndpoint Right)> CreateEndpointsAsync(string left, string right)
     {
@@ -101,13 +221,22 @@ public partial class MainWindow : Window
     private async Task<ProfileRunResult> RunBatchProfileAsync(SyncProfile profile)
     {
         if (!IsCloud(profile.LeftPath) && !IsCloud(profile.RightPath)) return await new ProfileRunner().RunAsync(profile);
+        var compatibility = new FeatureCapabilityService().Evaluate(profile);
+        if (!compatibility.CanRun) throw new InvalidOperationException($"{profile.Name} 需要修复：{compatibility.Summary}");
         await using var daemon = await RcloneDaemon.StartAsync(BundledRclone.ExecutablePath, BundledRclone.ConfigPath);
         var left = CreateEndpoint(profile.LeftPath, daemon); var right = CreateEndpoint(profile.RightPath, daemon);
         var scans = await Task.WhenAll(left.ScanAsync(), right.ScanAsync());
         var plan = new ModePlanner().Build(profile.Mode, scans[0], scans[1], null, profile.Filter);
         if (!plan.CanExecute && plan.Operations.Any()) throw new InvalidOperationException($"{profile.Name} 遇到未裁决冲突。");
         var selected = plan.Operations.Count(x => x.Selected);
-        if (selected > 0) await new EndpointExecutor().ExecuteAsync(plan, left, right, versioning: profile.Versioning, maxConcurrentCopies: profile.MaxConcurrentCopies);
+        var effective = EffectiveProfileSettings.Resolve(profile, _settings);
+        var safety = new SafetyValidator().ValidatePlan(plan, scans[0].Count, scans[1].Count, profile.Mode, profile.MaxDeletes, profile.MaxDeleteRatio);
+        if (safety.HasBlockingIssues) throw new InvalidOperationException(string.Join(" ", safety.Issues.Select(x => x.Message)));
+        if (selected > 0)
+        {
+            var run = await new SyncExecutor().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, left, right), left, right, verifyCopies: effective.VerifyCopies, versioning: effective.Versioning, maxConcurrentCopies: effective.MaxConcurrentCopies, journals: new TaskJournalStore());
+            if (!run.Succeeded) throw new IOException($"{profile.Name} 有 {run.FailedOperations} 个操作失败。");
+        }
         return new ProfileRunResult(profile.Id, plan.Operations.Count, selected, DateTimeOffset.UtcNow);
     }
     private IEndpoint CreateEndpoint(string value)
@@ -222,11 +351,36 @@ public partial class MainWindow : Window
     }
     private void Options_Click(object s, RoutedEventArgs e)
     {
-        var concurrency = new Slider { Minimum = 1, Maximum = 8, Value = _settings.MaxConcurrentCopies, IsSnapToTickEnabled = true, TickFrequency = 1, Width = 220 }; var verify = new CheckBox { Content = "复制后验证文件大小", IsChecked = _settings.VerifyCopies, Margin = new Thickness(0, 8, 0, 0) }; var completed = new CheckBox { Content = "同步完成后保留进度窗口", IsChecked = _settings.ShowCompleted, Margin = new Thickness(0, 4, 0, 14) }; var save = new Button { Content = "保存", IsDefault = true, MinWidth = 85 }; var cancel = new Button { Content = "取消", IsCancel = true, MinWidth = 85, Margin = new Thickness(8, 0, 0, 0) }; var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right }; buttons.Children.Add(save); buttons.Children.Add(cancel); var panel = new StackPanel { Margin = new Thickness(18), Width = 320 }; panel.Children.Add(new TextBlock { Text = "程序选项", FontSize = 18, FontWeight = FontWeights.Bold }); panel.Children.Add(new TextBlock { Text = "最大并发传输数", Margin = new Thickness(0, 14, 0, 0) }); panel.Children.Add(concurrency); panel.Children.Add(verify); panel.Children.Add(completed); panel.Children.Add(buttons); var dialog = new Window { Title = "选项", Owner = this, Content = panel, SizeToContent = SizeToContent.WidthAndHeight, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize }; save.Click += (_, _) => { _settings.MaxConcurrentCopies = (int)Math.Round(concurrency.Value); _settings.VerifyCopies = verify.IsChecked == true; _settings.ShowCompleted = completed.IsChecked == true; SaveSettings_Click(this, new RoutedEventArgs()); UpdateSettingsText(); dialog.DialogResult = true; }; dialog.ShowDialog();
+        var dialog = new SettingsWindow(_settings, ApplyApplicationSettingsAsync, ShowSftpServerSettingsAsync) { Owner = this };
+        dialog.ShowDialog();
+    }
+
+    private async Task ApplyApplicationSettingsAsync(ApplicationSettings settings)
+    {
+        await new SettingsStore().SaveAsync(settings);
+        _settings = settings;
+        UpdateSettingsText();
+        Status.Text = "程序设置已应用。";
+    }
+
+    private Task ShowSftpServerSettingsAsync()
+    {
+        new SftpServerSettingsWindow { Owner = this }.ShowDialog();
+        return Task.CompletedTask;
     }
     private async void OpenProfileFile_Click(object s, RoutedEventArgs e) { var dialog = new OpenFileDialog { Filter = "Feng Sync files (*.fengsync.json;*.fengsync.batch.json)|*.fengsync.json;*.fengsync.batch.json|JSON files (*.json)|*.json" }; if (dialog.ShowDialog() != true) return; var raw = await File.ReadAllTextAsync(dialog.FileName); BatchJob? batch = null; try { if (JsonDocument.Parse(raw).RootElement.ValueKind == JsonValueKind.Object) batch = JsonSerializer.Deserialize<BatchJob>(raw); } catch (JsonException) { } var loaded = batch?.Profiles?.Count > 0 ? batch.Profiles : await new ProfileStore(dialog.FileName).LoadAsync(); if (loaded.Count == 0) { Status.Text = "该文件没有可打开的 Profile。"; return; } foreach (var profile in loaded.Where(x => _profiles.All(existing => existing.Id != x.Id))) _profiles.Add(profile); ProfileList.SelectedItem = loaded[0]; await PersistProfilesAsync(); Status.Text = batch is null ? $"已打开 {loaded.Count} 个 Profile。" : $"已打开批处理作业“{batch.Name}”（{loaded.Count} 个 Profile）。"; }
     private async void ExportProfile_Click(object s, RoutedEventArgs e) { await SaveProfileToListAsync(); var profile = ProfileList.SelectedItem as SyncProfile; if (profile is null) return; var dialog = new SaveFileDialog { Filter = "Feng Sync Profile (*.fengsync.json)|*.fengsync.json", FileName = profile.Name + ".fengsync.json" }; if (dialog.ShowDialog() != true) return; await new ProfileStore(dialog.FileName).SaveAsync([profile]); Status.Text = "Profile 已保存为文件。"; }
     private async void SaveBatchJob_Click(object s, RoutedEventArgs e) { await SaveProfileToListAsync(); var profiles = ProfileList.SelectedItems.Cast<SyncProfile>().ToList(); if (profiles.Count == 0 && ProfileList.SelectedItem is SyncProfile profile) profiles.Add(profile); if (profiles.Count == 0) return; var dialog = new SaveFileDialog { Filter = "Feng Sync Batch Job (*.fengsync.batch.json)|*.fengsync.batch.json", FileName = "batch.fengsync.batch.json" }; if (dialog.ShowDialog() != true) return; var job = new BatchJob(Path.GetFileNameWithoutExtension(dialog.FileName), profiles); await File.WriteAllTextAsync(dialog.FileName, JsonSerializer.Serialize(job)); Status.Text = $"批处理作业已保存（{profiles.Count} 个 Profile）。"; }
+    private void ManageSchedule_Click(object s, RoutedEventArgs e)
+    {
+        if (ProfileList.SelectedItem is not SyncProfile profile) { Status.Text = "请先选择一个 Profile。"; return; }
+        new ScheduleWizard(profile) { Owner = this }.ShowDialog();
+    }
+    private void ManageRealtimeMonitor_Click(object s, RoutedEventArgs e)
+    {
+        if (ProfileList.SelectedItem is not SyncProfile profile) { Status.Text = "请先选择一个 Profile。"; return; }
+        new RealtimeMonitorWindow(profile, (item, token) => RunBatchProfileAsync(item)) { Owner = this }.Show();
+    }
     private async void ShowLog_Click(object s, RoutedEventArgs e)
     {
         var jobs = await new TaskJournalStore().LoadIncompleteAsync();
@@ -234,7 +388,9 @@ public partial class MainWindow : Window
         var box = new TextBox { Text = text, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(14) };
         new Window { Title = "同步日志", Owner = this, Content = box, Width = 680, Height = 440, WindowStartupLocation = WindowStartupLocation.CenterOwner }.ShowDialog();
     }
-    private async Task SaveProfileToListAsync() { var old = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create("未命名配置", "", ""); var current = old with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode, MaxConcurrentCopies = _settings.MaxConcurrentCopies, VerifyCopies = _settings.VerifyCopies, Filter = _settings.Filter, Versioning = _settings.Versioning }; var index = _profiles.IndexOf(old); if (index >= 0) _profiles[index] = current; else _profiles.Add(current); ProfileList.SelectedItem = current; await PersistProfilesAsync(); }
+    private void ShowRunHistory_Click(object s, RoutedEventArgs e)
+        => new RunHistoryWindow((ProfileList.SelectedItem as SyncProfile)?.Id) { Owner = this }.ShowDialog();
+    private async Task SaveProfileToListAsync() { var old = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create("未命名配置", "", ""); var current = old with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode }; var index = _profiles.IndexOf(old); if (index >= 0) _profiles[index] = current; else _profiles.Add(current); ProfileList.SelectedItem = current; await PersistProfilesAsync(); }
     private Task PersistProfilesAsync() => _profileStore.SaveAsync(_profiles);
     private void Exit_Click(object s, RoutedEventArgs e) => Close();
     private void About_Click(object s, RoutedEventArgs e) => MessageBox.Show("Feng Sync\n本地、SFTP 与 Google Drive 的文件比较和同步。", "关于 Feng Sync");
@@ -247,13 +403,12 @@ public partial class MainWindow : Window
     }
     private async void CloseWhenReadyAsync()
     {
-        try { _settings.LastSelectedProfileId = (ProfileList.SelectedItem as SyncProfile)?.Id; Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!); await File.WriteAllTextAsync(SettingsPath, JsonSerializer.Serialize(_settings)); await PersistProfilesAsync(); await DisposeRcloneAsync(); }
+        try { _settings = _settings with { LastSelectedProfileId = (ProfileList.SelectedItem as SyncProfile)?.Id }; await new SettingsStore().SaveAsync(_settings); await PersistProfilesAsync(); await DisposeRcloneAsync(); }
         catch { /* Shutdown must not strand the window if a settings file is unavailable. */ }
         finally { Close(); }
     }
     protected override void OnClosed(EventArgs e) { base.OnClosed(e); }
     private sealed record BatchJob(string Name, IReadOnlyList<SyncProfile> Profiles);
-    private sealed class AppSettings { public int MaxConcurrentCopies { get; set; } = 3; public bool VerifyCopies { get; set; } = true; public bool ShowCompleted { get; set; } = true; public string? LastSelectedProfileId { get; set; } public SyncFilter? Filter { get; set; } = SyncFilter.Empty; public VersioningPolicy? Versioning { get; set; } = new(); }
 }
 public sealed class ComparisonRow : INotifyPropertyChanged
 {

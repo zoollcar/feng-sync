@@ -1,0 +1,8 @@
+{
+  "Id": "cli-unsafe-remote",
+  "Name": "CLI unsafe remote two-way",
+  "LeftPath": "sftp://unconfigured-remote/docs",
+  "RightPath": "C:\\Temp",
+  "Mode": 0,
+  "Enabled": true
+}

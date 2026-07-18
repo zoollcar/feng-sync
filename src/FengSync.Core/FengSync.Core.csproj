@@ -5,4 +5,9 @@
     <!-- Override the vulnerable transitive native SQLite bundle selected by Microsoft.Data.Sqlite 10.0.0. -->
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="SftpServer\node-sftp-host.cjs" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="SftpServer\package.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="SftpServer\package-lock.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -13,5 +13,5 @@ public static class BundledRclone
         }
     }
 
-    public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FengSync", "rclone", "rclone.conf");
+    public static string ConfigPath => Path.Combine(AppDataPaths.Root, "rclone", "rclone.conf");
 }

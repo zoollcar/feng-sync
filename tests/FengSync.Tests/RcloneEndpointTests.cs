@@ -23,6 +23,16 @@ public sealed class RcloneEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Remote_scan_normalizes_a_listing_that_includes_its_configured_root()
+    {
+        _handler.ListJson = "{\"list\":[{\"Path\":\"root/from-drive.txt\",\"IsDir\":false,\"Size\":5,\"ModTime\":\"2026-01-01T00:00:00Z\"}]}";
+
+        var item = Assert.Single(await Remote(EndpointType.GoogleDrive).ScanAsync());
+
+        Assert.Equal("from-drive.txt", item.Path);
+    }
+
+    [Fact]
     public async Task Directory_listing_includes_empty_and_implicit_parent_folders()
     {
         _handler.ListJson = "{\"list\":[{\"Path\":\"empty\",\"IsDir\":true},{\"Path\":\"one/two/file.txt\",\"IsDir\":false}]}";

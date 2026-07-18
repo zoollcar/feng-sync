@@ -1,3 +1,5 @@
+using FengSync.Core.Configuration;
+
 namespace FengSync.Core;
 
 public enum EntryKind { File, Directory }
@@ -13,22 +15,38 @@ public sealed record Fingerprint(long Size, DateTimeOffset ModifiedUtc, string? 
 }
 public sealed record EntrySnapshot(string Path, EntryKind Kind, Fingerprint? Fingerprint);
 public sealed record BaselineEntry(string Path, EntrySnapshot? Left, EntrySnapshot? Right);
-public sealed record SyncFilter(IReadOnlyList<string>? Include = null, IReadOnlyList<string>? Exclude = null)
+public sealed record SyncFilter(IReadOnlyList<string>? Include = null, IReadOnlyList<string>? Exclude = null, IReadOnlyList<FilterRule>? Rules = null)
 {
     public static SyncFilter Empty { get; } = new();
-    public bool Includes(string relativePath)
+    /// <summary>Converts the persisted simple lists into the shared ordered filtering model.
+    /// Includes are evaluated first and exclusions last, so an exclusion always remains safe.</summary>
+    public IReadOnlyList<FilterRule> ToRules()
     {
-        var path = relativePath.Replace('\\', '/');
-        bool Match(string pattern) => System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern.Replace('\\', '/'), path, ignoreCase: true);
-        return (Include is null || Include.Count == 0 || Include.Any(Match)) && !(Exclude?.Any(Match) ?? false);
+        if (Rules is { Count: > 0 }) return Rules;
+        var rules = new List<FilterRule>();
+        if (Include is { Count: > 0 })
+        {
+            // An include list changes the default from include-all to include-none.
+            rules.Add(new(FilterRuleKind.Exclude, "**", "不在包含规则中"));
+            rules.AddRange(Include.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => new FilterRule(FilterRuleKind.Include, x.Trim(), "包含规则")));
+        }
+        rules.AddRange((Exclude ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => new FilterRule(FilterRuleKind.Exclude, x.Trim(), "排除规则")));
+        return rules;
     }
+    public FilterEngine CreateEngine() => new(ToRules());
+    public bool Includes(string relativePath) => CreateEngine().Evaluate(relativePath).Included;
 }
-public sealed record VersioningPolicy(VersioningMode Mode = VersioningMode.None, string? ArchiveDirectory = null, int KeepDays = 30);
+public sealed record VersioningPolicy(VersioningMode Mode = VersioningMode.None, string? ArchiveDirectory = null, int? KeepDays = 30, int? MaxVersionsPerFile = null, long? MaxTotalBytes = null)
+{
+    public RetentionPolicy ToRetentionPolicy() => new(KeepDays, MaxVersionsPerFile, MaxTotalBytes);
+}
 public sealed record SyncProfile(
     string Id, string Name, string LeftPath, string RightPath,
     SyncMode Mode = SyncMode.TwoWay, SyncFilter? Filter = null,
     VersioningPolicy? Versioning = null, int MaxConcurrentCopies = 3,
-    bool VerifyCopies = true, bool Enabled = true)
+    bool VerifyCopies = true, bool Enabled = true,
+    ProfileSettings? Settings = null, string? Description = null,
+    int MaxDeletes = int.MaxValue, double MaxDeleteRatio = 1)
 {
     public static SyncProfile Create(string name, string left, string right) => new(Guid.NewGuid().ToString("N"), name, left, right);
 }

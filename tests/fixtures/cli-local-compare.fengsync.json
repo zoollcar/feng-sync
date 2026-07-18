@@ -1,0 +1,8 @@
+{
+  "Id": "cli-local-compare",
+  "Name": "CLI local compare",
+  "LeftPath": ".\\.fengsync-test\\local-left",
+  "RightPath": ".\\.fengsync-test\\local-right",
+  "Mode": 2,
+  "Enabled": true
+}

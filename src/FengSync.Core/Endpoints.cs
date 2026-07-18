@@ -27,7 +27,12 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, operation))
         { Content = JsonContent.Create(payload) };
         request.Headers.Authorization = new("Basic", Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{user}:{password}")));
-        using var response = await http.SendAsync(request, ct); response.EnsureSuccessStatusCode();
+        using var response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var detail = await response.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException($"rclone {operation} failed ({(int)response.StatusCode}): {detail}");
+        }
         using var body = await response.Content.ReadAsStreamAsync(ct); using var doc = await JsonDocument.ParseAsync(body, cancellationToken: ct);
         return doc.RootElement.Clone();
     }
@@ -80,7 +85,10 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
         var items = new List<EntrySnapshot>();
         foreach (var x in list.EnumerateArray())
         {
-            var path = x.GetProperty("Path").GetString() ?? "";
+            // RC list may return either a path relative to `remote` or a path prefixed by
+            // that remote. Normalize once here; every planner operation must be relative to
+            // Profile.Root so At() never produces `root/root/file` on a later copy.
+            var path = RelativeToRoot(x.GetProperty("Path").GetString() ?? "");
             if (Excluded(path)) continue;
             var directory = x.TryGetProperty("IsDir", out var isDir) && isDir.GetBoolean();
             if (directory) { items.Add(new(path, EntryKind.Directory, null)); continue; }
@@ -102,4 +110,12 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
     public Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default) => directory ? client.PurgeAsync(Fs, At(relativePath), cancellationToken) : client.DeleteFileAsync(Fs, At(relativePath), cancellationToken);
     public Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default) => client.MakeDirectoryAsync(Fs, At(relativePath), cancellationToken);
     private static bool Excluded(string path) => path.Equals("sync.fengdb", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".partial", StringComparison.OrdinalIgnoreCase) || path.Contains(".fengsync-", StringComparison.OrdinalIgnoreCase);
+    private string RelativeToRoot(string path)
+    {
+        path = path.Trim('/');
+        var root = Profile.Root.Trim('/');
+        return !string.IsNullOrEmpty(root) && path.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase)
+            ? path[(root.Length + 1)..]
+            : path;
+    }
 }

@@ -6,10 +6,14 @@ public sealed class ModePlanner
     public SyncPlan Build(SyncMode mode, IEnumerable<EntrySnapshot> left, IEnumerable<EntrySnapshot> right,
         IEnumerable<BaselineEntry>? baseline = null, SyncFilter? filter = null)
     {
-        filter ??= SyncFilter.Empty;
-        var l = left.Where(x => filter.Includes(x.Path)).ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
-        var r = right.Where(x => filter.Includes(x.Path)).ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
-        if (mode == SyncMode.TwoWay) return new ThreeWayPlanner().Build(l.Values, r.Values, baseline);
+        var engine = (filter ?? SyncFilter.Empty).CreateEngine();
+        bool Included(EntrySnapshot x) => engine.Evaluate(x.Path, new FilterEntryAttributes(x.Fingerprint?.Size, x.Fingerprint?.ModifiedUtc)).Included;
+        var l = left.Where(Included).ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+        var r = right.Where(Included).ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+        // Filtering is a sync boundary, not a deletion request. Filtering baseline records
+        // prevents a newly excluded historical path from being interpreted as missing.
+        var filteredBaseline = baseline?.Where(x => engine.Evaluate(x.Path).Included);
+        if (mode == SyncMode.TwoWay) return new ThreeWayPlanner().Build(l.Values, r.Values, filteredBaseline);
         var result = new List<SyncOperation>();
         foreach (var path in l.Keys.Union(r.Keys, StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
         {

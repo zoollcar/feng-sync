@@ -12,11 +12,11 @@ public sealed class NewFeatureIntegrationTests : IAsyncLifetime
     public Task DisposeAsync() { if (Directory.Exists(_root)) Directory.Delete(_root, true); return Task.CompletedTask; }
 
     [Fact]
-    public async Task Mirror_batch_deletes_destination_only_entries()
+    public async Task Mirror_batch_blocks_empty_source_deletion()
     {
         await File.WriteAllTextAsync(Path.Combine(Right, "obsolete.txt"), "old");
-        var result = await new ProfileRunner().RunAsync(SyncProfile.Create("mirror", Left, Right) with { Mode = SyncMode.Mirror });
-        Assert.Equal(1, result.Planned); Assert.Equal(1, result.Executed); Assert.False(File.Exists(Path.Combine(Right, "obsolete.txt")));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new ProfileRunner().RunAsync(SyncProfile.Create("mirror", Left, Right) with { Mode = SyncMode.Mirror }));
+        Assert.True(File.Exists(Path.Combine(Right, "obsolete.txt")));
     }
 
     [Fact]
