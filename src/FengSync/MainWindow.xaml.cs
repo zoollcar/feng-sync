@@ -95,6 +95,35 @@ public partial class MainWindow : Window
     }
     private void KeepLeft_Click(object sender, RoutedEventArgs e) => ResolveSelected(true); private void KeepRight_Click(object sender, RoutedEventArgs e) => ResolveSelected(false);
     private void ResolveSelected(bool left) { if (Comparison.SelectedItem is not ComparisonRow row) { Status.Text = "请选择要修改覆盖方向的行。"; return; } try { row.Operation.OverrideCopyDirection(left); row.Refresh(); Comparison.Items.Refresh(); RefreshSummary(); Status.Text = left ? "已设置为左侧覆盖右侧。" : "已设置为右侧覆盖左侧。"; } catch (Exception ex) { Status.Text = ex.Message; } }
+    // Action-cell context-menu handlers. The menu items reuse the same mutation logic as the top-bar
+    // KeepLeft/KeepRight buttons so right-click and toolbar produce identical results, including the
+    // InvalidOperationException path for unresolvable conflicts (e.g. Blocked rows whose KeepLeft/KeepRight
+    // are null). The "temporarily ignore" item deselects the row so the operation is skipped at sync time
+    // — there is no OperationKind for ignore in the model, and unchecking is the existing escape hatch.
+    private void ActionMenu_KeepLeft_Click(object sender, RoutedEventArgs e) => ApplyActionFromMenu(sender, true);
+    private void ActionMenu_KeepRight_Click(object sender, RoutedEventArgs e) => ApplyActionFromMenu(sender, false);
+    private void ActionMenu_Ignore_Click(object sender, RoutedEventArgs e) => IgnoreFromMenu(sender);
+    private void ApplyActionFromMenu(object sender, bool keepLeft)
+    {
+        if (GetRowFromMenu(sender) is not ComparisonRow row) { Status.Text = "请选择要修改覆盖方向的行。"; return; }
+        try { row.Operation.OverrideCopyDirection(keepLeft); row.Refresh(); Comparison.Items.Refresh(); RefreshSummary(); Status.Text = keepLeft ? "已设置为左侧覆盖右侧。" : "已设置为右侧覆盖左侧。"; }
+        catch (Exception ex) { Status.Text = ex.Message; }
+    }
+    private void IgnoreFromMenu(object sender)
+    {
+        if (GetRowFromMenu(sender) is not ComparisonRow row) { Status.Text = "请选择要忽略的行。"; return; }
+        if (!row.Selected) { Status.Text = "该行已忽略。"; return; }
+        row.Selected = false; row.Refresh(); Comparison.Items.Refresh(); RefreshSummary(); Status.Text = "已临时忽略该行（取消勾选可恢复）。";
+    }
+    // ContextMenu lives in a separate Popup visual tree. Since WPF 4.0 the menu's DataContext is inherited
+    // from its PlacementTarget (the Border in the cell template, whose DataContext is the row), so the
+    // simpler lookup usually works; PlacementTarget is a defensive fallback for edge cases.
+    private static ComparisonRow? GetRowFromMenu(object sender)
+    {
+        if (sender is MenuItem { DataContext: ComparisonRow direct }) return direct;
+        if (sender is MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement target } } && target.DataContext is ComparisonRow viaTarget) return viaTarget;
+        return null;
+    }
     private void RefreshSummary() { var selected = _rows.Count(x => x.Selected); var bytes = _rows.Where(x => x.Selected && x.Operation.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft).Sum(x => (x.Operation.Kind == OperationKind.CopyLeftToRight ? x.Left : x.Right)?.Fingerprint?.Size ?? 0); Summary.Text = $"左侧 {_rows.Count(x => x.Left is not null)} 项  ·  右侧 {_rows.Count(x => x.Right is not null)} 项  ·  { _rows.Count } 个差异/提示"; TransferSizeLabel.Text = $"已选待传输：{FormatBytes(bytes)}"; SelectedLabel.Text = selected.ToString(); SyncButton.IsEnabled = _plan is not null && new SyncPlan(_rows.Select(x => x.Operation).ToList()).CanExecute; }
     private static string FormatBytes(long bytes) => bytes < 1024 ? $"{bytes:N0} B" : bytes < 1024 * 1024 ? $"{bytes / 1024d:N1} KB" : bytes < 1024L * 1024 * 1024 ? $"{bytes / 1024d / 1024:N1} MB" : $"{bytes / 1024d / 1024 / 1024:N2} GB";
     private void BrowseLeft_Click(object s, RoutedEventArgs e) => Browse(LeftPath); private void BrowseRight_Click(object s, RoutedEventArgs e) => Browse(RightPath);
