@@ -99,7 +99,21 @@ public sealed class RunHistoryRepository
     private async Task<IReadOnlyList<RunHistoryEntry>> ReadAsync(CancellationToken ct)
     {
         if (!File.Exists(_path)) return [];
-        await using var stream = File.OpenRead(_path);
-        return await JsonSerializer.DeserializeAsync<List<RunHistoryEntry>>(stream, cancellationToken: ct) ?? [];
+        try
+        {
+            await using var stream = File.OpenRead(_path);
+            // Empty files (e.g. the previous process crashed before flushing a non-zero
+            // buffer) cannot be parsed by JsonSerializer, so short-circuit to an empty
+            // history instead of letting the exception escape and terminate the WPF
+            // process via the async-void Loaded handler.
+            if (stream.Length == 0) return [];
+            return await JsonSerializer.DeserializeAsync<List<RunHistoryEntry>>(stream, cancellationToken: ct) ?? [];
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            // Corrupt JSON or an inaccessible file must not block opening the Run
+            // History window; the next AppendAsync overwrites the file with valid JSON.
+            return [];
+        }
     }
 }
