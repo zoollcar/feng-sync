@@ -19,13 +19,30 @@ using FengSync.Views;
 namespace FengSync;
 public partial class MainWindow : Window
 {
-    private readonly ObservableCollection<ComparisonRow> _rows = []; private readonly ObservableCollection<SyncProfile> _profiles = []; private readonly ProfileStore _profileStore = new(); private SyncPlan? _plan; private PlanSnapshot? _snapshot; private IEndpoint? _left, _right; private RcloneDaemon? _rclone; private ApplicationSettings _settings; private CancellationTokenSource? _syncCancellation; private bool _closing;
+    private readonly ObservableCollection<ComparisonRow> _rows = []; private readonly ObservableCollection<SyncProfile> _profiles = []; private readonly ProfileStore _profileStore = new(); private SyncPlan? _plan; private PlanSnapshot? _snapshot; private IEndpoint? _left, _right; private RcloneDaemon? _rclone; private ApplicationSettings _settings; private CancellationTokenSource? _syncCancellation; private CancellationTokenSource? _compareCancellation; private bool _closing;
     private SyncMode SelectedMode => (SyncMode)Math.Max(0, SyncModeBox?.SelectedIndex ?? 0);
     public MainWindow() { InitializeComponent(); Comparison.ItemsSource = _rows; ProfileList.ItemsSource = _profiles; _settings = new(); UpdateSettingsText(); Status.Text = "正在加载设置…"; Loaded += async (_, _) => await InitializeAsync(); }
     private async void Compare_Click(object sender, RoutedEventArgs e)
     {
-        try { await BuildPlanAsync(); }
+        // Guard against re-entry while a comparison is already running; CompareButton is also disabled below
+        // so the user gets immediate visual feedback rather than a silent no-op.
+        if (_compareCancellation is not null) return;
+        _compareCancellation = new();
+        var token = _compareCancellation.Token;
+        CompareButton.IsEnabled = false;
+        try
+        {
+            Status.Text = $"正在准备比较：{LeftPath.Text} ↔ {RightPath.Text}";
+            await BuildPlanAsync(token);
+        }
+        catch (OperationCanceledException) { Status.Text = "比较已取消。"; }
         catch (Exception ex) { SyncButton.IsEnabled = false; Status.Text = ex.Message; }
+        finally
+        {
+            CompareButton.IsEnabled = true;
+            _compareCancellation?.Dispose();
+            _compareCancellation = null;
+        }
     }
     private async void Sync_Click(object sender, RoutedEventArgs e)
     {
@@ -198,18 +215,27 @@ public partial class MainWindow : Window
         CompareButton.IsEnabled = compatibility.CanRun; RunProfileButton.IsEnabled = compatibility.CanRun;
         Status.Text = compatibility.CanRun ? $"已载入配置：{profile.Name}" : $"Profile 需要修复：{compatibility.Summary}";
     }
-    private async Task BuildPlanAsync()
+    private async Task BuildPlanAsync(CancellationToken cancellationToken)
     {
         var profile = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create("临时", LeftPath.Text, RightPath.Text) with { Mode = SelectedMode }; var compatibility = new FeatureCapabilityService().Evaluate(profile with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode }); if (!compatibility.CanRun) throw new InvalidOperationException("该 Profile 需要修复：" + compatibility.Summary); var effective = CurrentSettings; (_left, _right) = await CreateEndpointsAsync(LeftPath.Text, RightPath.Text);
         var configurationSafety = _left is LocalEndpoint configLeft && _right is LocalEndpoint configRight ? new SafetyValidator().ValidateConfiguration(configLeft.Root, configRight.Root, effective.Versioning?.ArchiveDirectory) : SafetyValidationResult.Pass;
         if (configurationSafety.HasBlockingIssues) throw new InvalidOperationException(string.Join(" ", configurationSafety.Issues.Select(x => x.Message)));
-        var scans = await Task.WhenAll(_left.ScanAsync(), _right.ScanAsync()); var left = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var right = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var baseline = SelectedMode == SyncMode.TwoWay ? await new BaselineRepository().LoadAsync(_left, _right) : null; _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, effective.Filter);
+        // Surface progress phases in the status bar so the user knows the compare is still working while
+        // scans or analysis run. CompareButton is also disabled, but only status text change can communicate
+        // "still running" without extra dialogs. ScanAsync itself doesn't surface per-file progress (rclone's
+        // list is a single RPC; LocalEndpoint enumerates synchronously), so phase-based feedback is the
+        // honest minimum — see issue #3.
+        Status.Text = $"正在扫描端点：左 {LeftPath.Text}  ·  右 {RightPath.Text}";
+        var scans = await Task.WhenAll(_left.ScanAsync(cancellationToken), _right.ScanAsync(cancellationToken));
+        Status.Text = $"扫描完成：左侧 {scans[0].Count} 项  ·  右侧 {scans[1].Count} 项，正在分析差异…";
+        var left = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var right = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var baseline = SelectedMode == SyncMode.TwoWay ? await new BaselineRepository().LoadAsync(_left, _right) : null; _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, effective.Filter);
+        Status.Text = $"分析完成：{_plan.Operations.Count} 项差异，正在生成同步计划…";
         var planSafety = new SafetyValidator().ValidatePlan(_plan, left.Count, right.Count, SelectedMode, profile.MaxDeletes, profile.MaxDeleteRatio).Combine(new SafetyValidator().ValidateCapacity(_plan, left, right, _left, _right));
         if (planSafety.HasBlockingIssues && !SyncConfirmationPolicy.CanOverrideWithProfileName(planSafety)) throw new InvalidOperationException(string.Join(" ", planSafety.Issues.Select(x => x.Message)));
         var risk = SyncRiskSummary.Create(_plan, left, right);
         SafetySummary.Text = planSafety.HasBlockingIssues ? "安全检查：阻断（删除阈值可在同步确认中一次性放行）" : SyncConfirmationPolicy.RequiresConfirmation(risk) ? $"安全检查：警告 · 覆盖 {risk.Overwrites} 项，删除 {risk.Deletes} 项，传输 {FormatBytes(risk.TransferBytes)}" : "安全检查：通过";
         SafetySummary.Foreground = planSafety.HasBlockingIssues ? Brushes.Firebrick : SyncConfirmationPolicy.RequiresConfirmation(risk) ? Brushes.DarkOrange : Brushes.ForestGreen;
-        _snapshot = await PlanSnapshot.CaptureAsync(_plan, _left, _right); _rows.Clear(); foreach (var op in _plan.Operations) _rows.Add(new(op, left.GetValueOrDefault(op.Path), right.GetValueOrDefault(op.Path))); RefreshSummary(); Status.Text = $"{ModeTitle()} 比较完成。勾选要执行的差异，并裁决所有冲突。";
+        _snapshot = await PlanSnapshot.CaptureAsync(_plan, _left, _right, cancellationToken); _rows.Clear(); foreach (var op in _plan.Operations) _rows.Add(new(op, left.GetValueOrDefault(op.Path), right.GetValueOrDefault(op.Path))); RefreshSummary(); Status.Text = $"{ModeTitle()} 比较完成：左侧 {left.Count} 项  ·  右侧 {right.Count} 项  ·  {_plan.Operations.Count} 个差异/提示。勾选要执行的差异，并裁决所有冲突。";
     }
     private async Task<(IEndpoint Left, IEndpoint Right)> CreateEndpointsAsync(string left, string right)
     {
@@ -424,7 +450,7 @@ public partial class MainWindow : Window
         if (_closing) { base.OnClosing(e); return; }
         e.Cancel = true;
         if (_syncCancellation is not null && MessageBox.Show("同步正在运行。是否取消同步并退出？", "退出 Feng Sync", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        _syncCancellation?.Cancel(); _closing = true; CloseWhenReadyAsync();
+        _syncCancellation?.Cancel(); _compareCancellation?.Cancel(); _closing = true; CloseWhenReadyAsync();
     }
     private async void CloseWhenReadyAsync()
     {
