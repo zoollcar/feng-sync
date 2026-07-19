@@ -53,6 +53,7 @@ public sealed class RcloneEndpointTests : IDisposable
     [Theory]
     [InlineData(EndpointType.Sftp)]
     [InlineData(EndpointType.GoogleDrive)]
+    [InlineData(EndpointType.S3)]
     public async Task Local_to_remote_uses_the_same_safe_copy_then_move_protocol(EndpointType type)
     {
         await File.WriteAllTextAsync(Path.Combine(_root, "local.txt"), "content");

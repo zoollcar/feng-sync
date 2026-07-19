@@ -3,6 +3,9 @@
 [Oo]bj/
 .vs/
 
+# Release packages are uploaded as GitHub Release assets, never committed.
+artifacts/
+
 # Disposable integration-test directories, credentials, SSH keys and rclone config
 .fengsync-test/
 

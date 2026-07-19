@@ -45,9 +45,9 @@ public static class ProfileValidator
             errors.Add($"{side}端点地址或端口无效。");
             return;
         }
-        if (!uri.Scheme.Equals("sftp", StringComparison.OrdinalIgnoreCase) && !uri.Scheme.Equals("gdrive", StringComparison.OrdinalIgnoreCase))
+        if (!uri.Scheme.Equals("sftp", StringComparison.OrdinalIgnoreCase) && !uri.Scheme.Equals("gdrive", StringComparison.OrdinalIgnoreCase) && !uri.Scheme.Equals("s3", StringComparison.OrdinalIgnoreCase))
         {
-            errors.Add($"{side}端点协议不受支持；目前仅支持 sftp:// 和 gdrive://。");
+            errors.Add($"{side}端点协议不受支持；目前仅支持 sftp://、gdrive:// 和 s3://。");
             return;
         }
         if (uri.Port is 0 or > 65535) errors.Add($"{side}端点端口必须介于 1 和 65535 之间。");

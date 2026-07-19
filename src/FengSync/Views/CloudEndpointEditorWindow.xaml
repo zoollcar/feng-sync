@@ -32,7 +32,6 @@
    </StackPanel>
    <!-- S3 -->
    <StackPanel x:Name="S3Panel" Visibility="Collapsed">
-    <TextBlock Text="S3 端点目前支持创建与预览；接入到左右同步端点仍在开发中。" TextWrapping="Wrap" Foreground="DarkOrange" Margin="0,0,0,8"/>
     <TextBlock Text="显示名称"/><TextBox x:Name="S3NameBox" Text="S3 Bucket" Margin="0,3,0,10"/>
     <TextBlock Text="Provider（如 AWS、Minio、Cloudflare 等）"/><TextBox x:Name="S3ProviderBox" Text="AWS" Margin="0,3,0,10"/>
     <TextBlock Text="Access Key ID"/><TextBox x:Name="S3AccessKeyBox" Margin="0,3,0,10"/>

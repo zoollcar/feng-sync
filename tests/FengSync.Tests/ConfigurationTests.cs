@@ -142,6 +142,14 @@ public sealed class ConfigurationTests
     }
 
     [Fact]
+    public void Profile_validator_accepts_an_s3_remote_endpoint()
+    {
+        var profile = SyncProfile.Create("P", "s3://archive-bucket/backups", "C:\\right");
+
+        Assert.True(ProfileValidator.Validate(profile).IsValid);
+    }
+
+    [Fact]
     public void Profile_validator_rejects_archive_equal_to_an_endpoint()
     {
         var profile = SyncProfile.Create("P", "C:\\work", "C:\\right") with

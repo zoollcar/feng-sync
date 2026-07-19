@@ -8,7 +8,8 @@ namespace FengSync.Core;
 public static class EndpointFactory
 {
     public static bool IsRemote(string value) => value.StartsWith("gdrive://", StringComparison.OrdinalIgnoreCase)
-        || value.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase);
+        || value.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase)
+        || value.StartsWith("s3://", StringComparison.OrdinalIgnoreCase);
 
     public static async Task<EndpointPair> OpenAsync(string leftPath, string rightPath, CancellationToken ct = default)
     {
@@ -28,7 +29,7 @@ public static class EndpointFactory
         }
     }
 
-    /// <summary>Creates one endpoint from Feng Sync's stable URI form: sftp://remote/root or gdrive://remote/root.</summary>
+    /// <summary>Creates one endpoint from Feng Sync's stable URI form: sftp://remote/root, gdrive://remote/root, or s3://remote/root.</summary>
     public static IEndpoint Create(string value, RcloneDaemon? daemon = null)
     {
         if (!IsRemote(value)) return new LocalEndpoint(value);
@@ -37,7 +38,13 @@ public static class EndpointFactory
         var scheme = value[..separator];
         var remoteAndRoot = value[(separator + 3)..].Split('/', 2, StringSplitOptions.None);
         if (string.IsNullOrWhiteSpace(remoteAndRoot[0])) throw new InvalidOperationException("远端端点缺少 rclone remote 名称。");
-        var type = scheme.Equals("gdrive", StringComparison.OrdinalIgnoreCase) ? EndpointType.GoogleDrive : EndpointType.Sftp;
+        var type = scheme.ToLowerInvariant() switch
+        {
+            "gdrive" => EndpointType.GoogleDrive,
+            "sftp" => EndpointType.Sftp,
+            "s3" => EndpointType.S3,
+            _ => throw new InvalidOperationException("不支持的云端端点协议。")
+        };
         return new RcloneEndpoint(daemon.Client,
             new EndpointProfile(Guid.NewGuid(), type, remoteAndRoot.Length == 2 ? remoteAndRoot[1] : "", remoteAndRoot[0]),
             new(false, true, type == EndpointType.GoogleDrive, TimeSpan.FromSeconds(1)));

@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 
 namespace FengSync.Core;
 
-public enum EndpointType { Local, Sftp, GoogleDrive }
+public enum EndpointType { Local, Sftp, GoogleDrive, S3 }
 public sealed record EndpointProfile(Guid Id, EndpointType Type, string Root, string? Remote = null, string? Identity = null);
 public sealed record EndpointCapabilities(bool StableIds, bool ServerMove, bool EmptyDirectories, TimeSpan ModifiedTimePrecision);
 
@@ -59,7 +59,7 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     public Task PurgeAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/purge", new { fs, remote }, ct);
 }
 
-/// <summary>rclone-backed SFTP or Google Drive endpoint. Authentication is supplied exclusively by rclone.conf.</summary>
+/// <summary>rclone-backed SFTP, Google Drive, or S3 endpoint. Authentication is supplied exclusively by rclone.conf.</summary>
 public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profile, EndpointCapabilities capabilities) : IEndpoint
 {
     public EndpointProfile Profile { get; } = profile;

@@ -299,17 +299,18 @@ public partial class MainWindow : Window
     {
         if (!IsCloud(value)) return new LocalEndpoint(value);
         if (_rclone is null) throw new InvalidOperationException("云端连接未启动。");
-        var split = value.Split("://", 2, StringSplitOptions.None); var remoteAndRoot = split[1].Split('/', 2); var type = split[0].Equals("gdrive", StringComparison.OrdinalIgnoreCase) ? EndpointType.GoogleDrive : EndpointType.Sftp;
+        var split = value.Split("://", 2, StringSplitOptions.None); var remoteAndRoot = split[1].Split('/', 2); var type = CloudEndpointType(split[0]);
         return new RcloneEndpoint(_rclone.Client, new EndpointProfile(Guid.NewGuid(), type, remoteAndRoot.Length == 2 ? remoteAndRoot[1] : "", remoteAndRoot[0]), new(false, true, type == EndpointType.GoogleDrive, TimeSpan.FromSeconds(1)));
     }
     private static IEndpoint CreateEndpoint(string value, RcloneDaemon? daemon)
     {
         if (!IsCloud(value)) return new LocalEndpoint(value);
         if (daemon is null) throw new InvalidOperationException("云端连接未启动。");
-        var split = value.Split("://", 2, StringSplitOptions.None); var remoteAndRoot = split[1].Split('/', 2); var type = split[0].Equals("gdrive", StringComparison.OrdinalIgnoreCase) ? EndpointType.GoogleDrive : EndpointType.Sftp;
+        var split = value.Split("://", 2, StringSplitOptions.None); var remoteAndRoot = split[1].Split('/', 2); var type = CloudEndpointType(split[0]);
         return new RcloneEndpoint(daemon.Client, new EndpointProfile(Guid.NewGuid(), type, remoteAndRoot.Length == 2 ? remoteAndRoot[1] : "", remoteAndRoot[0]), new(false, true, type == EndpointType.GoogleDrive, TimeSpan.FromSeconds(1)));
     }
-    private static bool IsCloud(string value) => value.StartsWith("gdrive://", StringComparison.OrdinalIgnoreCase) || value.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase);
+    private static EndpointType CloudEndpointType(string scheme) => scheme.ToLowerInvariant() switch { "gdrive" => EndpointType.GoogleDrive, "sftp" => EndpointType.Sftp, "s3" => EndpointType.S3, _ => throw new InvalidOperationException("不支持的云端端点协议。") };
+    private static bool IsCloud(string value) => value.StartsWith("gdrive://", StringComparison.OrdinalIgnoreCase) || value.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase) || value.StartsWith("s3://", StringComparison.OrdinalIgnoreCase);
     private async Task DisposeRcloneAsync() { if (_rclone is not null) { await _rclone.DisposeAsync(); _rclone = null; } }
     // Cloud endpoint management now lives in a dedicated modal (issue #1): a clean list + 刷新/新建/重新登录/删除
     // actions, a "浏览远程目录" panel, and a "新建端点" editor. The ☁ buttons beside each endpoint box and the
@@ -367,7 +368,7 @@ public partial class MainWindow : Window
     {
         const string repoUrl = "https://github.com/zoollcar/feng-sync";
         var title = new TextBlock { Text = "Feng Sync", FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
-        var description = new TextBlock { Text = "本地、SFTP 与 Google Drive 的文件比较和同步。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) };
+        var description = new TextBlock { Text = "本地、SFTP、Google Drive 与 S3 的文件比较和同步。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) };
         var link = new Hyperlink(new Run(repoUrl)) { NavigateUri = new Uri(repoUrl) };
         link.RequestNavigate += (_, args) =>
         {

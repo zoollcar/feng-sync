@@ -37,9 +37,6 @@ public static class CloudEndpointService
         {
             ProviderKind.GoogleDrive => "gdrive://",
             ProviderKind.Sftp => "sftp://",
-            // TODO: EndpointFactory currently only maps gdrive:// and sftp://. s3:// remotes can be
-            // created and browsed here, but wiring them into a comparison needs an s3 branch in
-            // EndpointFactory.Create/IsRemote. Kept as a clean scheme so the plumbing is ready.
             ProviderKind.S3 => "s3://",
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };

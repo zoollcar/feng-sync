@@ -117,11 +117,6 @@ public partial class CloudEndpointManagerWindow : Window
     {
         if (Selected is not RcloneAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
         var kind = CloudEndpointService.KindFromRcloneType(account.Type);
-        if (kind == CloudEndpointService.ProviderKind.S3)
-        {
-            MessageBox.Show("S3 端点尚未接入左右同步端点，敬请期待。", "Feng Sync", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
         ResultUri = CloudEndpointService.BuildUri(kind, account.Name, RemotePathBox.Text);
         ResultSide = side;
         DialogResult = true;
