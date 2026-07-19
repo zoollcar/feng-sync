@@ -8,6 +8,7 @@ using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.IO;
 using System.Windows.Media;
 using System.Diagnostics;
@@ -393,7 +394,31 @@ public partial class MainWindow : Window
     private async Task SaveProfileToListAsync() { var old = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create("未命名配置", "", ""); var current = old with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode }; var index = _profiles.IndexOf(old); if (index >= 0) _profiles[index] = current; else _profiles.Add(current); ProfileList.SelectedItem = current; await PersistProfilesAsync(); }
     private Task PersistProfilesAsync() => _profileStore.SaveAsync(_profiles);
     private void Exit_Click(object s, RoutedEventArgs e) => Close();
-    private void About_Click(object s, RoutedEventArgs e) => MessageBox.Show("Feng Sync\n本地、SFTP 与 Google Drive 的文件比较和同步。", "关于 Feng Sync");
+    private void About_Click(object s, RoutedEventArgs e)
+    {
+        const string repoUrl = "https://github.com/zoollcar/feng-sync";
+        var title = new TextBlock { Text = "Feng Sync", FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
+        var description = new TextBlock { Text = "本地、SFTP 与 Google Drive 的文件比较和同步。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) };
+        var link = new Hyperlink(new Run(repoUrl)) { NavigateUri = new Uri(repoUrl) };
+        link.RequestNavigate += (_, args) =>
+        {
+            try { Process.Start(new ProcessStartInfo(args.Uri.AbsoluteUri) { UseShellExecute = true }); }
+            catch (Exception ex) { MessageBox.Show("无法打开链接：" + ex.Message, "Feng Sync", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            args.Handled = true;
+        };
+        var repoBlock = new TextBlock { Margin = new Thickness(0, 0, 0, 14) };
+        repoBlock.Inlines.Add(new Run("GitHub 仓库："));
+        repoBlock.Inlines.Add(link);
+        var ok = new Button { Content = "关闭", IsCancel = true, IsDefault = true, MinWidth = 90, HorizontalAlignment = HorizontalAlignment.Right };
+        var panel = new StackPanel { Margin = new Thickness(18), MinWidth = 360 };
+        panel.Children.Add(title);
+        panel.Children.Add(description);
+        panel.Children.Add(repoBlock);
+        panel.Children.Add(ok);
+        var dialog = new Window { Title = "关于 Feng Sync", Content = panel, Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.NoResize };
+        ok.Click += (_, _) => dialog.Close();
+        dialog.ShowDialog();
+    }
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         if (_closing) { base.OnClosing(e); return; }
