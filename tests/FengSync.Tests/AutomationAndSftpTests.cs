@@ -266,30 +266,4 @@ public sealed class AutomationAndSftpTests
         }
         finally { Directory.Delete(root, true); }
     }
-
-    [Fact]
-    public async Task Realtime_run_coordinator_queues_changes_while_a_run_is_active_and_suppresses_cooldown_loops()
-    {
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runs = 0;
-        await using var coordinator = new RealtimeRunCoordinator(async _ =>
-        {
-            Interlocked.Increment(ref runs); started.TrySetResult(); await release.Task;
-        }, TimeSpan.FromSeconds(2));
-
-        coordinator.NotifyChanged(); await started.Task;
-        coordinator.NotifyChanged();
-        release.SetResult();
-        await WaitUntilAsync(() => Volatile.Read(ref runs) == 2);
-        coordinator.NotifyChanged();
-        await Task.Delay(80);
-        Assert.Equal(2, runs);
-    }
-
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        for (var i = 0; i < 50 && !condition(); i++) await Task.Delay(20);
-        Assert.True(condition());
-    }
 }

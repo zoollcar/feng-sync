@@ -351,11 +351,6 @@ public partial class MainWindow : Window
         if (ProfileList.SelectedItem is not SyncProfile profile) { Status.Text = "请先选择一个 Profile。"; return; }
         new ScheduleWizard(profile) { Owner = this }.ShowDialog();
     }
-    private void ManageRealtimeMonitor_Click(object s, RoutedEventArgs e)
-    {
-        if (ProfileList.SelectedItem is not SyncProfile profile) { Status.Text = "请先选择一个 Profile。"; return; }
-        new RealtimeMonitorWindow(profile, (item, token) => RunBatchProfileAsync(item)) { Owner = this }.Show();
-    }
     private async void ShowLog_Click(object s, RoutedEventArgs e)
     {
         var jobs = await new TaskJournalStore().LoadIncompleteAsync();

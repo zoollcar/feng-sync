@@ -82,13 +82,4 @@ public sealed class NewFeatureIntegrationTests : IAsyncLifetime
         Assert.Equal(OperationKind.CopyLeftToRight, Assert.Single(plan.Operations).Kind);
         Assert.Equal("portable", await File.ReadAllTextAsync(Path.Combine(Right, "portable.txt")));
     }
-
-    [Fact]
-    public async Task Realtime_monitor_debounces_local_file_changes()
-    {
-        var fired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var monitor = new RealtimeMonitor(Left, Right, () => fired.TrySetResult(), TimeSpan.FromMilliseconds(80));
-        await File.WriteAllTextAsync(Path.Combine(Left, "watch.txt"), "changed");
-        await fired.Task.WaitAsync(TimeSpan.FromSeconds(8));
-    }
 }

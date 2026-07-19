@@ -6,7 +6,7 @@
 
 ## 界面设计
 
-- Profile 设置增加“自动化”页：计划运行、实时监控、启动时运行、无人值守风险策略。
+- Profile 设置增加“自动化”页：计划运行、启动时运行、无人值守风险策略。（实时监控功能已移除，参见 #8）
 - 提供 Windows 计划任务向导：频率、时间、网络/电源条件、运行账户、测试运行。
 - 批处理窗口展示队列、运行中数量、每项结果和全局停止/继续策略。
 - 程序设置提供全局最大同时运行 Profile 数、网络/磁盘并发上限。
@@ -22,7 +22,7 @@
 - 新增 `src/FengSync.Windows/TaskSchedulerService.cs`：Windows 任务计划集成。
 - 新增 `src/FengSync/Views/ScheduleWizard.xaml` 与 `BatchRunWindow.xaml`。
 - 修改 `BatchRunner.cs`：取消无上限 `Task.WhenAll`。
-- 接入现有 `RealtimeMonitor.cs`，增加运行中变更队列和循环抑制。
+- ~~接入现有 `RealtimeMonitor.cs`，增加运行中变更队列和循环抑制~~。该功能已随 Issue #8 移除，相关源文件已删除。
 
 ## 功能流程
 
