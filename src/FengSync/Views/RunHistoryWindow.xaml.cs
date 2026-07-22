@@ -21,6 +21,9 @@ public partial class RunHistoryWindow : Window
     }
     private async Task RefreshAsync()
     {
+        // Either ComboBox can raise SelectionChanged during InitializeComponent,
+        // before the other named controls have been created.
+        if (OutcomeBox is null || PeriodBox is null || Entries is null) return;
         var outcome = OutcomeBox.SelectedIndex switch { 1 => RunOutcome.Succeeded, 2 => RunOutcome.PartialSuccess, 3 => RunOutcome.Failed, 4 => RunOutcome.Cancelled, _ => (RunOutcome?)null };
         var since = PeriodBox.SelectedIndex switch { 1 => DateTimeOffset.UtcNow.AddDays(-7), 2 => DateTimeOffset.UtcNow.AddDays(-30), _ => (DateTimeOffset?)null };
         Entries.ItemsSource = await _repository.QueryAsync(_profileId, outcome, since);

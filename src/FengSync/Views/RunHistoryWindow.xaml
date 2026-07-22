@@ -1,11 +1,11 @@
 <Window x:Class="FengSync.Views.RunHistoryWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="运行历史" Width="850" Height="460" WindowStartupLocation="CenterOwner">
  <DockPanel Margin="14">
   <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-   <TextBlock Text="结果：" VerticalAlignment="Center"/><ComboBox x:Name="OutcomeBox" Width="130" SelectionChanged="FilterChanged"><ComboBoxItem Content="全部" IsSelected="True"/><ComboBoxItem Content="成功"/><ComboBoxItem Content="部分成功"/><ComboBoxItem Content="失败"/><ComboBoxItem Content="已取消"/></ComboBox>
-   <TextBlock Text="最近：" Margin="16,0,0,0" VerticalAlignment="Center"/><ComboBox x:Name="PeriodBox" Width="120" SelectionChanged="FilterChanged"><ComboBoxItem Content="全部" IsSelected="True"/><ComboBoxItem Content="7 天"/><ComboBoxItem Content="30 天"/></ComboBox>
-   <Button Click="Refresh_Click" Margin="12,0,0,0">刷新</Button>
+   <TextBlock Text="结果：" VerticalAlignment="Center"/><ComboBox x:Name="OutcomeBox" AutomationProperties.AutomationId="RunHistoryOutcome" Width="130" SelectionChanged="FilterChanged"><ComboBoxItem Content="全部" IsSelected="True"/><ComboBoxItem Content="成功"/><ComboBoxItem Content="部分成功"/><ComboBoxItem Content="失败"/><ComboBoxItem Content="已取消"/></ComboBox>
+   <TextBlock Text="最近：" Margin="16,0,0,0" VerticalAlignment="Center"/><ComboBox x:Name="PeriodBox" AutomationProperties.AutomationId="RunHistoryPeriod" Width="120" SelectionChanged="FilterChanged"><ComboBoxItem Content="全部" IsSelected="True"/><ComboBoxItem Content="7 天"/><ComboBoxItem Content="30 天"/></ComboBox>
+   <Button AutomationProperties.AutomationId="RefreshRunHistory" Click="Refresh_Click" Margin="12,0,0,0">刷新</Button>
   </StackPanel>
-  <DataGrid x:Name="Entries" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"><DataGrid.Columns>
+  <DataGrid x:Name="Entries" AutomationProperties.AutomationId="RunHistoryEntries" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"><DataGrid.Columns>
    <DataGridTextColumn Header="完成时间" Binding="{Binding CompletedUtc, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}" Width="170"/><DataGridTextColumn Header="Profile" Binding="{Binding ProfileId}" Width="*"/><DataGridTextColumn Header="结果" Binding="{Binding Outcome}" Width="100"/><DataGridTextColumn Header="计划" Binding="{Binding Planned}" Width="55"/><DataGridTextColumn Header="成功" Binding="{Binding Succeeded}" Width="55"/><DataGridTextColumn Header="失败" Binding="{Binding Failed}" Width="55"/><DataGridTextColumn Header="字节" Binding="{Binding TransferredBytes, StringFormat={}{0:N0}}" Width="95"/><DataGridTextColumn Header="详情" Binding="{Binding Detail}" Width="2*"/>
   </DataGrid.Columns></DataGrid>
  </DockPanel>

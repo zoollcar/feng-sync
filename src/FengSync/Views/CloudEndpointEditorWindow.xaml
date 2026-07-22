@@ -7,7 +7,7 @@
 
   <StackPanel Grid.Row="1" Margin="0,14,0,4">
    <TextBlock Text="服务" FontWeight="SemiBold"/>
-   <ComboBox x:Name="ServiceBox" Margin="0,4,0,0" SelectedIndex="0" SelectionChanged="Service_Changed">
+   <ComboBox x:Name="ServiceBox" AutomationProperties.AutomationId="CloudServiceType" Margin="0,4,0,0" SelectedIndex="0" SelectionChanged="Service_Changed">
     <ComboBoxItem Content="Google Drive"/><ComboBoxItem Content="SFTP"/><ComboBoxItem Content="S3 Bucket"/>
    </ComboBox>
   </StackPanel>
@@ -22,13 +22,13 @@
    </StackPanel>
    <!-- SFTP -->
    <StackPanel x:Name="SftpPanel" Visibility="Collapsed">
-    <TextBlock Text="显示名称"/><TextBox x:Name="SftpNameBox" Text="SFTP 连接" Margin="0,3,0,10"/>
-    <TextBlock Text="主机"/><TextBox x:Name="SftpHostBox" Margin="0,3,0,10"/>
-    <TextBlock Text="端口"/><TextBox x:Name="SftpPortBox" Text="22" Margin="0,3,0,10" Width="120" HorizontalAlignment="Left"/>
-    <TextBlock Text="用户名"/><TextBox x:Name="SftpUserBox" Margin="0,3,0,10"/>
-    <TextBlock Text="密码（如使用密钥登录可留空）"/><PasswordBox x:Name="SftpPasswordBox" Margin="0,3,0,10"/>
-    <TextBlock Text="私钥文件（可选，与密码二选一）"/><TextBox x:Name="SftpKeyFileBox" Margin="0,3,0,10"/>
-    <TextBlock Text="远程根目录（可选）"/><TextBox x:Name="SftpRootBox" Margin="0,3,0,10"/>
+    <TextBlock Text="显示名称"/><TextBox x:Name="SftpNameBox" AutomationProperties.AutomationId="SftpRemoteName" Text="SFTP 连接" Margin="0,3,0,10"/>
+    <TextBlock Text="主机"/><TextBox x:Name="SftpHostBox" AutomationProperties.AutomationId="SftpRemoteHost" Margin="0,3,0,10"/>
+    <TextBlock Text="端口"/><TextBox x:Name="SftpPortBox" AutomationProperties.AutomationId="SftpRemotePort" Text="22" Margin="0,3,0,10" Width="120" HorizontalAlignment="Left"/>
+    <TextBlock Text="用户名"/><TextBox x:Name="SftpUserBox" AutomationProperties.AutomationId="SftpRemoteUser" Margin="0,3,0,10"/>
+    <TextBlock Text="密码（如使用密钥登录可留空）"/><PasswordBox x:Name="SftpPasswordBox" AutomationProperties.AutomationId="SftpRemotePassword" Margin="0,3,0,10"/>
+    <TextBlock Text="私钥文件（可选，与密码二选一）"/><TextBox x:Name="SftpKeyFileBox" AutomationProperties.AutomationId="SftpRemoteKeyFile" Margin="0,3,0,10"/>
+    <TextBlock Text="远程根目录（可选）"/><TextBox x:Name="SftpRootBox" AutomationProperties.AutomationId="SftpRemoteRoot" Margin="0,3,0,10"/>
    </StackPanel>
    <!-- S3 -->
    <StackPanel x:Name="S3Panel" Visibility="Collapsed">
@@ -47,11 +47,11 @@
   </GroupBox>
 
   <Grid Grid.Row="4" Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-   <TextBlock x:Name="StatusText" Foreground="#4A5863" TextWrapping="Wrap" VerticalAlignment="Center"/>
+   <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="CloudEditorStatus" Foreground="#4A5863" TextWrapping="Wrap" VerticalAlignment="Center"/>
    <StackPanel Grid.Column="1" Orientation="Horizontal">
-    <Button x:Name="TestButton" Content="测试连接" Click="Test_Click" MinWidth="86"/>
+    <Button x:Name="TestButton" AutomationProperties.AutomationId="TestCloudEndpoint" Content="测试连接" Click="Test_Click" MinWidth="86"/>
     <Button x:Name="PreviewButton" Content="预览文件" Click="Preview_Click" Margin="8,0,0,0" MinWidth="86"/>
-    <Button x:Name="SaveButton" Content="保存" Click="Save_Click" IsDefault="True" Margin="8,0,0,0" MinWidth="70"/>
+    <Button x:Name="SaveButton" AutomationProperties.AutomationId="SaveCloudEndpoint" Content="保存" Click="Save_Click" IsDefault="True" Margin="8,0,0,0" MinWidth="70"/>
     <Button Content="取消" IsCancel="True" Margin="8,0,0,0" MinWidth="70"/>
    </StackPanel>
   </Grid>

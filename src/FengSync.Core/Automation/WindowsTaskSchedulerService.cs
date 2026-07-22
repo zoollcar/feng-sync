@@ -43,7 +43,7 @@ public sealed class WindowsTaskSchedulerService
     public async Task DeleteAsync(string name, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("任务名称不能为空。", nameof(name));
-        var result = await _run("schtasks.exe", $"/Delete /F /TN \\\"{name}\\\"", ct).ConfigureAwait(false);
+        var result = await _run("schtasks.exe", $"/Delete /F /TN \"{name}\"", ct).ConfigureAwait(false);
         if (result.ExitCode != 0) throw new InvalidOperationException("无法删除计划任务：" + result.StandardError.Trim());
     }
 

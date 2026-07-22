@@ -99,8 +99,15 @@ const server = new Server({ hostKeys: [hostKey] }, client => {
         const status = (id, code, msg) => sftp.status(id, code, msg);
         const guarded = (id, action) => { try { action(); } catch (e) { console.error(`SFTP request failed: ${e.message}`); status(id, STATUS_CODE.FAILURE, e.message); } };
         sftp.on('REALPATH', (id, p) => guarded(id, () => { const r = resolve(p, false, true, account); sftp.name(id, [{ filename: r.virtual, longname: r.virtual, attrs: {} }]); }))
-          .on('STAT', (id, p) => guarded(id, () => { const r = resolve(p, false, true, account); if (r.root) return sftp.attrs(id, { mode: 0o040755, size: 0 }); sftp.attrs(id, attrs(fs.statSync(visiblePath(r)))); }))
-          .on('LSTAT', (id, p) => guarded(id, () => { const r = resolve(p, false, true, account); if (r.root) return sftp.attrs(id, { mode: 0o040755, size: 0 }); sftp.attrs(id, attrs(fs.lstatSync(visiblePath(r)))); }))
+          // rclone probes a directory with STAT before creating it. Missing paths
+          // must use SSH_FX_NO_SUCH_FILE rather than generic FAILURE, otherwise
+          // rclone treats the parent as an unusable remote and never issues MKDIR.
+          .on('STAT', (id, p) => guarded(id, () => { const r = resolve(p, false, true, account); if (r.root) return sftp.attrs(id, { mode: 0o040755, size: 0 }); try { sftp.attrs(id, attrs(fs.statSync(visiblePath(r)))); } catch (e) { if (e.code === 'ENOENT') return status(id, STATUS_CODE.NO_SUCH_FILE, 'Not found'); throw e; } }))
+          .on('LSTAT', (id, p) => guarded(id, () => { const r = resolve(p, false, true, account); if (r.root) return sftp.attrs(id, { mode: 0o040755, size: 0 }); try { sftp.attrs(id, attrs(fs.lstatSync(visiblePath(r)))); } catch (e) { if (e.code === 'ENOENT') return status(id, STATUS_CODE.NO_SUCH_FILE, 'Not found'); throw e; } }))
+          // rclone preserves source timestamps after an upload. Implement the
+          // SFTP v3 metadata operations instead of advertising a writable server
+          // that fails every SetModTime request.
+          .on('SETSTAT', (id, p, a) => guarded(id, () => { const r = resolve(p, true, false, account); if (a && Number.isFinite(a.mtime)) fs.utimesSync(visiblePath(r), new Date(), new Date(a.mtime * 1000)); status(id, STATUS_CODE.OK); }))
           .on('OPENDIR', (id, p) => guarded(id, () => { const r = resolve(p, false, true, account); let entries;
             if (r.root) entries = [...shares.values()].filter(x => !Array.isArray(account?.AllowedShares) || !account.AllowedShares.length || account.AllowedShares.some(y => String(y).toLowerCase() === String(x.VirtualName).toLowerCase())).map(x => ({ filename: x.VirtualName, longname: x.VirtualName, attrs: { mode: 0o040755, size: 0 } }));
             else entries = fs.readdirSync(r.local, { withFileTypes: true }).filter(x => !x.name.endsWith(tmpSuffix)).map(x => { const f = path.join(r.local, x.name); return { filename: x.name, longname: x.name, attrs: attrs(fs.lstatSync(f)) }; });
@@ -112,6 +119,7 @@ const server = new Server({ hostKeys: [hostKey] }, client => {
           .on('READ', (id, h, offset, length) => guarded(id, () => { const f = get(h); if (!f || f.fd === undefined) throw Error('Invalid handle'); const b = Buffer.alloc(length); const n = fs.readSync(f.fd, b, 0, length, Number(offset)); n ? sftp.data(id, b.subarray(0, n)) : status(id, STATUS_CODE.EOF); }))
           .on('WRITE', (id, h, offset, data) => guarded(id, () => { const f = get(h); if (!f || !f.temp) throw Error('Read-only handle'); if (Number(offset) + data.length > maxUploadBytes) throw Error('Upload exceeds configured file size limit'); fs.writeSync(f.fd, data, 0, data.length, Number(offset)); status(id, STATUS_CODE.OK); }))
           .on('FSTAT', (id, h) => guarded(id, () => { const f = get(h); if (!f || f.fd === undefined) throw Error('Invalid handle'); sftp.attrs(id, attrs(fs.fstatSync(f.fd))); }))
+          .on('FSETSTAT', (id, h, a) => guarded(id, () => { const f = get(h); if (!f || f.fd === undefined) throw Error('Invalid handle'); if (a && Number.isFinite(a.mtime)) fs.futimesSync(f.fd, new Date(), new Date(a.mtime * 1000)); status(id, STATUS_CODE.OK); }))
           .on('CLOSE', (id, h) => guarded(id, () => { const f = get(h); if (!f) throw Error('Invalid handle'); if (f.fd !== undefined) fs.closeSync(f.fd); if (f.temp) { fs.renameSync(f.temp, f.target); audit(account?.UserName, address, 'upload', f.target, 'success'); } handles.delete(h.toString('base64')); status(id, STATUS_CODE.OK); }))
           .on('REMOVE', (id, p) => guarded(id, () => { const r = resolve(p, true, false, account); fs.unlinkSync(visiblePath(r)); audit(account?.UserName, address, 'delete', r.virtual, 'success'); status(id, STATUS_CODE.OK); }))
           .on('MKDIR', (id, p) => guarded(id, () => { const r = resolve(p, true, false, account); fs.mkdirSync(r.local); audit(account?.UserName, address, 'mkdir', r.virtual, 'success'); status(id, STATUS_CODE.OK); }))

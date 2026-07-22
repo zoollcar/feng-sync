@@ -21,7 +21,7 @@ public partial class ProfileEditorWindow : Window
         var setting = profile.Settings;
         foreach (var rule in (setting?.Filter ?? profile.Filter ?? SyncFilter.Empty).ToRules()) _rules.Add(new(rule));
         RuleGrid.ItemsSource = _rules;
-        UseDefaultCopies.IsChecked = setting?.VerifyCopies is null; VerifyCopies.IsChecked = setting?.VerifyCopies ?? profile.VerifyCopies;
+        UseDefaultCopies.IsChecked = setting?.VerifyCopies is null; VerifyCopies.IsChecked = setting?.VerifyCopies ?? profile.VerifyCopies; MaxDeletesBox.Text = profile.MaxDeletes.ToString(); MaxDeleteRatioBox.Text = profile.MaxDeleteRatio.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
         UseDefaultConcurrency.IsChecked = setting?.MaxConcurrentCopies is null; ConcurrencyBox.Text = (setting?.MaxConcurrentCopies ?? profile.MaxConcurrentCopies).ToString();
         TimeToleranceBox.Text = (setting?.TimeToleranceSeconds ?? 2).ToString();
         var versioning = setting?.Versioning ?? profile.Versioning ?? new(); VersioningBox.SelectedIndex = versioning.Mode == VersioningMode.TimestampedArchive ? 1 : versioning.Mode == VersioningMode.RecycleBin ? 2 : 0; ArchiveBox.Text = versioning.ArchiveDirectory; KeepDaysBox.Text = versioning.KeepDays?.ToString() ?? ""; MaxVersionsBox.Text = versioning.MaxVersionsPerFile?.ToString() ?? ""; MaxTotalMbBox.Text = versioning.MaxTotalBytes is long bytes ? (bytes / 1024d / 1024d).ToString("0.##") : "";
@@ -54,13 +54,15 @@ public partial class ProfileEditorWindow : Window
     private void Save(bool newId)
     {
         if (!int.TryParse(ConcurrencyBox.Text, out var concurrency) || concurrency is < 1 or > 64) { MessageBox.Show("最大并发数必须在 1 到 64 之间。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (!int.TryParse(MaxDeletesBox.Text, out var maxDeletes) || maxDeletes < 0) { Sections.SelectedIndex = 5; MessageBox.Show("最大删除数必须是非负整数。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (!double.TryParse(MaxDeleteRatioBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var maxDeleteRatio) || maxDeleteRatio is < 0 or > 1) { Sections.SelectedIndex = 5; MessageBox.Show("最大删除比例必须在 0 到 1 之间。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (!int.TryParse(TimeToleranceBox.Text, out var tolerance) || tolerance is < 0 or > 86400) { Sections.SelectedIndex = 1; MessageBox.Show("时间容差必须在 0 到 86400 秒之间。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (!TryNullableInt(KeepDaysBox.Text, out var keepDays, "保留天数") || !TryNullableInt(MaxVersionsBox.Text, out var maxVersions, "每文件版本数") || !TryTotalBytes(MaxTotalMbBox.Text, out var maxTotalBytes)) { Sections.SelectedIndex = 4; return; }
         var filter = new SyncFilter(Rules: Rules());
         var mode = (SyncMode)Math.Max(0, ModeBox.SelectedIndex);
         var versioning = VersioningBox.SelectedIndex switch { 1 => new VersioningPolicy(VersioningMode.TimestampedArchive, ArchiveBox.Text, keepDays, maxVersions, maxTotalBytes), 2 => new VersioningPolicy(VersioningMode.RecycleBin), _ => new VersioningPolicy() };
         var settings = new ProfileSettings(UseDefaultConcurrency.IsChecked == true ? null : concurrency, UseDefaultCopies.IsChecked == true ? null : VerifyCopies.IsChecked == true, filter, versioning, tolerance);
-        _viewModel.Update(p => p with { Name = NameBox.Text.Trim(), Description = DescriptionBox.Text, LeftPath = LeftPathBox.Text.Trim(), RightPath = RightPathBox.Text.Trim(), Mode = mode, Enabled = Enabled.IsChecked == true, Settings = settings });
+        _viewModel.Update(p => p with { Name = NameBox.Text.Trim(), Description = DescriptionBox.Text, LeftPath = LeftPathBox.Text.Trim(), RightPath = RightPathBox.Text.Trim(), Mode = mode, Enabled = Enabled.IsChecked == true, MaxDeletes = maxDeletes, MaxDeleteRatio = maxDeleteRatio, Settings = settings });
         var validation = ProfileValidator.Validate(_viewModel.Profile);
         if (!validation.IsValid) { Sections.SelectedIndex = validation.Errors.Any(x => x.Contains("端点") || x.Contains("名称")) ? 0 : 4; MessageBox.Show(string.Join(Environment.NewLine, validation.Errors), "无法保存 Profile", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         SavedProfile = newId ? _viewModel.SaveAsNew() : _viewModel.Profile; DialogResult = true;
