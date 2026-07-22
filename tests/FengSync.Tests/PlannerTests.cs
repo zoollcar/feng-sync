@@ -37,5 +37,11 @@ public sealed class PlannerTests
         operation.OverrideCopyDirection(false);
         Assert.Equal(OperationKind.CopyRightToLeft, operation.Kind); Assert.Equal("用户覆盖：右侧覆盖左侧", operation.Reason);
     }
-    [Fact] public void A_delete_cannot_be_reversed_as_a_copy() => Assert.Throws<InvalidOperationException>(() => new SyncOperation("a.txt", OperationKind.DeleteRight, "delete").OverrideCopyDirection(false));
+    [Fact] public void A_delete_can_be_reversed_from_the_still_present_side()
+    {
+        var operation = new SyncOperation("a.txt", OperationKind.DeleteRight, "delete");
+        operation.OverrideCopyDirection(true);
+        Assert.Equal(OperationKind.CopyLeftToRight, operation.Kind);
+    }
+    [Fact] public void A_delete_cannot_be_reversed_from_the_missing_side() => Assert.Throws<InvalidOperationException>(() => new SyncOperation("a.txt", OperationKind.DeleteRight, "delete").OverrideCopyDirection(false));
 }

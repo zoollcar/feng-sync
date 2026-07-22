@@ -59,7 +59,12 @@ public static class DeletionGuard
     }
 }
 
-public sealed record PlanSnapshot(SyncPlan Plan, IReadOnlyDictionary<Guid, Fingerprint?> SourceFingerprints, DateTimeOffset CapturedUtc)
+public sealed record PlanSnapshot(
+    SyncPlan Plan,
+    IReadOnlyDictionary<Guid, Fingerprint?> SourceFingerprints,
+    IReadOnlyDictionary<Guid, Fingerprint?> LeftFingerprints,
+    IReadOnlyDictionary<Guid, Fingerprint?> RightFingerprints,
+    DateTimeOffset CapturedUtc)
 {
     public static async Task<PlanSnapshot> CaptureAsync(SyncPlan plan, IEndpoint left, IEndpoint right, CancellationToken ct = default)
     {
@@ -67,12 +72,16 @@ public sealed record PlanSnapshot(SyncPlan Plan, IReadOnlyDictionary<Guid, Finge
         var leftEntries = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
         var rightEntries = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
         var sources = new Dictionary<Guid, Fingerprint?>();
-        foreach (var op in plan.Operations.Where(x => x.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft))
+        var leftFingerprints = new Dictionary<Guid, Fingerprint?>();
+        var rightFingerprints = new Dictionary<Guid, Fingerprint?>();
+        foreach (var op in plan.Operations)
         {
-            var entries = op.Kind == OperationKind.CopyLeftToRight ? leftEntries : rightEntries;
-            sources[op.OperationId] = entries.GetValueOrDefault(op.Path)?.Fingerprint;
+            leftFingerprints[op.OperationId] = leftEntries.GetValueOrDefault(op.Path)?.Fingerprint;
+            rightFingerprints[op.OperationId] = rightEntries.GetValueOrDefault(op.Path)?.Fingerprint;
+            if (op.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft)
+                sources[op.OperationId] = (op.Kind == OperationKind.CopyLeftToRight ? leftEntries : rightEntries).GetValueOrDefault(op.Path)?.Fingerprint;
         }
-        return new(plan, sources, DateTimeOffset.UtcNow);
+        return new(plan, sources, leftFingerprints, rightFingerprints, DateTimeOffset.UtcNow);
     }
 }
 
@@ -86,8 +95,10 @@ public sealed class PlanFreshnessValidator
         var issues = new List<SafetyIssue>();
         foreach (var op in snapshot.Plan.Operations.Where(x => x.Selected && x.Kind is (OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft)))
         {
-            var current = (op.Kind == OperationKind.CopyLeftToRight ? leftEntries : rightEntries).GetValueOrDefault(op.Path)?.Fingerprint;
-            if (!snapshot.SourceFingerprints.TryGetValue(op.OperationId, out var expected) || expected is null || current is null || !expected.Matches(current))
+            var sourceIsLeft = op.Kind == OperationKind.CopyLeftToRight;
+            var current = (sourceIsLeft ? leftEntries : rightEntries).GetValueOrDefault(op.Path)?.Fingerprint;
+            var expected = (sourceIsLeft ? snapshot.LeftFingerprints : snapshot.RightFingerprints).GetValueOrDefault(op.OperationId);
+            if (expected is null || current is null || !expected.Matches(current))
                 issues.Add(new("plan.stale", "源文件在比较后发生变化，请重新比较。", SafetySeverity.Blocking, op.Path));
         }
         return new(issues);

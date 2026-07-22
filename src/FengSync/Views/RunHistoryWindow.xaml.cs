@@ -11,7 +11,12 @@ public partial class RunHistoryWindow : Window
     private readonly string? _profileId;
     public RunHistoryWindow(string? profileId = null, RunHistoryRepository? repository = null)
     {
-        InitializeComponent(); _profileId = profileId; _repository = repository ?? new RunHistoryRepository();
+        // Initial selected values in XAML can raise SelectionChanged while
+        // InitializeComponent is still running. Set the dependencies first so
+        // the handler never attempts to refresh with a null repository.
+        _profileId = profileId;
+        _repository = repository ?? new RunHistoryRepository();
+        InitializeComponent();
         Loaded += async (_, _) => await RefreshAsync();
     }
     private async Task RefreshAsync()
