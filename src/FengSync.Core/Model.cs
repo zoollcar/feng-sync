@@ -67,11 +67,23 @@ public sealed class SyncOperation
         if (!IsConflict || (keepLeft ? KeepLeft : KeepRight) is not { } resolution) throw new InvalidOperationException("此冲突无法按所选方向裁决。");
         Kind = resolution; IsConflict = false; Reason = keepLeft ? "冲突裁决：保留左侧" : "冲突裁决：保留右侧";
     }
-    /// <summary>Lets the user override the planner's default copy direction without turning a copy into a deletion.</summary>
+    /// <summary>Lets the user override a planned copy or restore a deletion by copying the still-present side back.</summary>
     public void OverrideCopyDirection(bool keepLeft)
     {
         if (IsConflict) { Resolve(keepLeft); return; }
-        if (Kind is not (OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft)) throw new InvalidOperationException("只有文件覆盖操作可以修改方向；删除和目录操作不能反转。");
+        if (Kind == OperationKind.DeleteLeft && !keepLeft)
+        {
+            Kind = OperationKind.CopyRightToLeft;
+            Reason = "用户覆盖：恢复左侧已删除的文件";
+            return;
+        }
+        if (Kind == OperationKind.DeleteRight && keepLeft)
+        {
+            Kind = OperationKind.CopyLeftToRight;
+            Reason = "用户覆盖：恢复右侧已删除的文件";
+            return;
+        }
+        if (Kind is not (OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft)) throw new InvalidOperationException("该删除项只能改为由仍存在的一侧恢复文件。");
         Kind = keepLeft ? OperationKind.CopyLeftToRight : OperationKind.CopyRightToLeft;
         Reason = keepLeft ? "用户覆盖：左侧覆盖右侧" : "用户覆盖：右侧覆盖左侧";
     }

@@ -94,7 +94,23 @@ public partial class MainWindow : Window
         finally { _syncCancellation?.Dispose(); _syncCancellation = null; RefreshSummary(); }
     }
     private void KeepLeft_Click(object sender, RoutedEventArgs e) => ResolveSelected(true); private void KeepRight_Click(object sender, RoutedEventArgs e) => ResolveSelected(false);
-    private void ResolveSelected(bool left) { if (Comparison.SelectedItem is not ComparisonRow row) { Status.Text = "请选择要修改覆盖方向的行。"; return; } try { row.Operation.OverrideCopyDirection(left); row.Refresh(); Comparison.Items.Refresh(); RefreshSummary(); Status.Text = left ? "已设置为左侧覆盖右侧。" : "已设置为右侧覆盖左侧。"; } catch (Exception ex) { Status.Text = ex.Message; } }
+    private void ResolveSelected(bool left)
+    {
+        var rows = Comparison.SelectedItems.Cast<ComparisonRow>().ToList();
+        if (rows.Count == 0) { Status.Text = "请选择要修改覆盖方向的行。"; return; }
+        ApplyDirection(rows, left);
+    }
+    private void ApplyDirection(IEnumerable<ComparisonRow> rows, bool keepLeft)
+    {
+        var changed = 0; var errors = new List<string>();
+        foreach (var row in rows)
+        {
+            try { row.Operation.OverrideCopyDirection(keepLeft); row.Refresh(); changed++; }
+            catch (Exception ex) { errors.Add($"{row.Operation.Path}：{ex.Message}"); }
+        }
+        Comparison.Items.Refresh(); RefreshSummary();
+        Status.Text = errors.Count == 0 ? $"已将 {changed} 项设置为{(keepLeft ? "左侧覆盖右侧" : "右侧覆盖左侧")}。" : $"已修改 {changed} 项；{string.Join(" ", errors)}";
+    }
     // Action-cell context-menu handlers. The menu items reuse the same mutation logic as the top-bar
     // KeepLeft/KeepRight buttons so right-click and toolbar produce identical results, including the
     // InvalidOperationException path for unresolvable conflicts (e.g. Blocked rows whose KeepLeft/KeepRight
@@ -106,8 +122,8 @@ public partial class MainWindow : Window
     private void ApplyActionFromMenu(object sender, bool keepLeft)
     {
         if (GetRowFromMenu(sender) is not ComparisonRow row) { Status.Text = "请选择要修改覆盖方向的行。"; return; }
-        try { row.Operation.OverrideCopyDirection(keepLeft); row.Refresh(); Comparison.Items.Refresh(); RefreshSummary(); Status.Text = keepLeft ? "已设置为左侧覆盖右侧。" : "已设置为右侧覆盖左侧。"; }
-        catch (Exception ex) { Status.Text = ex.Message; }
+        var rows = Comparison.SelectedItems.Cast<ComparisonRow>().Contains(row) ? Comparison.SelectedItems.Cast<ComparisonRow>() : [row];
+        ApplyDirection(rows, keepLeft);
     }
     private void IgnoreFromMenu(object sender)
     {
