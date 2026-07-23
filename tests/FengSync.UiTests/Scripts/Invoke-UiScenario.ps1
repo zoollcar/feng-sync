@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('local', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('local', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume')][string]$Scenario,
     [Parameter(Mandatory)][string]$AppPath,
     [Parameter(Mandatory)][string]$Workspace
 )
@@ -16,6 +16,7 @@ $stamp = "ui-$Scenario-" + [Guid]::NewGuid().ToString('N')
 $root = Join-Path $Workspace ('.fengsync-test\ui\' + $stamp)
 $appData = Join-Path $root 'appdata'; $artifacts = Join-Path $root 'artifacts'
 New-Item -ItemType Directory -Force -Path $root, $appData, $artifacts | Out-Null
+$scenarioTimer = [Diagnostics.Stopwatch]::StartNew()
 
 function Wait-Until([scriptblock]$Condition, [string]$Message, [int]$Seconds = 30) {
   $end = [DateTime]::UtcNow.AddSeconds($Seconds)
@@ -49,6 +50,30 @@ function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds
   Wait-Until { (Find-Id $main 'Status').Current.Name -match '同步完成' } 'UI did not report synchronization completion' $transferSeconds
 }
 function Compare-Ui { param($main, [string]$left, [string]$right); Set-Text (Find-Id $main 'LeftPath') $left; Set-Text (Find-Id $main 'RightPath') $right; Click (Find-Id $main 'CompareButton') }
+function New-SmallFiles { param([string]$directory, [int]$count)
+  New-Item -ItemType Directory -Force -Path $directory | Out-Null
+  for ($i = 1; $i -le $count; $i++) { [IO.File]::WriteAllText((Join-Path $directory ('batch-{0:D3}.txt' -f $i)), "small performance fixture $i") }
+}
+function Invoke-MeasuredSync { param($main, [string]$left, [string]$right, [string]$expectedFile, [int]$comparisonSeconds = 180, [int]$transferSeconds = 600)
+  $comparisonTimer = [Diagnostics.Stopwatch]::StartNew()
+  Compare-Ui $main $left $right
+  try { Wait-Until { (Find-Id $main 'SyncButton').Current.IsEnabled } 'Comparison did not produce an executable plan' $comparisonSeconds }
+  catch { $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }; throw "Comparison did not produce an executable plan. UI status: $status" }
+  $comparisonTimer.Stop()
+  $syncTimer = [Diagnostics.Stopwatch]::StartNew()
+  Click (Find-Id $main 'SyncButton')
+  try { Wait-Until { Approve-ConfirmationIfPresent | Out-Null; Test-Path -LiteralPath $expectedFile } "Expected synchronized file was not created: $expectedFile" $transferSeconds }
+  catch { $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }; throw "Expected synchronized file was not created: $expectedFile. UI status: $status" }
+  Wait-Until { (Find-Id $main 'Status').Current.Name -match '同步完成' } 'UI did not report synchronization completion' $transferSeconds
+  $syncTimer.Stop()
+  [pscustomobject]@{ CompareMilliseconds = $comparisonTimer.ElapsedMilliseconds; SyncMilliseconds = $syncTimer.ElapsedMilliseconds }
+}
+function Assert-GoogleDriveBatch { param([string]$remotePath, [int]$count)
+  Wait-Until {
+    $listing = & $rclone lsf $remotePath --recursive --config $config 2>$null
+    $LASTEXITCODE -eq 0 -and @($listing | Where-Object { $_ -match '(^|/)batch-\d{3}\.txt$' }).Count -eq $count
+  } "Google Drive did not contain all $count batch fixture files: $remotePath" 180
+}
 function Start-App {
   $start = [Diagnostics.ProcessStartInfo]::new($AppPath); $start.UseShellExecute = $false; $start.EnvironmentVariables['FENGSYNC_DATA_DIR'] = $appData
   $p = [Diagnostics.Process]::Start($start)
@@ -89,7 +114,7 @@ try {
     if ($Scenario -eq 'sftp-to-local') { $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'; $config = Join-Path $appData 'rclone\rclone.conf'; New-Item -ItemType Directory -Force -Path (Split-Path $config) | Out-Null
       & $rclone config create ui_sftp sftp host 127.0.0.1 user ui port "$port" pass $password --config $config; if ($LASTEXITCODE -ne 0) { throw 'Could not configure isolated SFTP remote.' }; $sftpUri='sftp://ui_sftp/docs' }
   }
-  if ($Scenario -eq 'gdrive') {
+  if ($Scenario -in @('gdrive', 'gdrive-volume')) {
     # Discover the currently configured Feng Sync Google Drive credential.  The test
     # never guesses a remote name and only creates a random child below this fixed,
     # application-owned test root.
@@ -271,10 +296,42 @@ try {
       Wait-Sync $main (Join-Path $download 'drive-proof.txt') 180 300
       Assert-File (Join-Path $download 'drive-proof.txt') 'drive-roundtrip'
     }
+    'gdrive-volume' {
+      # This is deliberately a measurement test rather than a fixed time budget:
+      # Google API latency varies, while the emitted timings make file-count
+      # regressions visible without turning a healthy remote run into a flaky test.
+      $results = [System.Collections.Generic.List[object]]::new()
+      foreach ($mode in @(
+        [pscustomobject]@{ Name = '双向 ↔'; Slug = 'two-way' },
+        [pscustomobject]@{ Name = '镜像 →'; Slug = 'mirror' },
+        [pscustomobject]@{ Name = '更新 →'; Slug = 'update' }
+      )) {
+        foreach ($count in @(10, 100)) {
+          $case = "$($mode.Slug)-$count"
+          $upload = Join-Path $root (Join-Path 'drive-volume' $case)
+          $remoteCase = $driveUri.TrimEnd('/') + '/' + $case
+          # Google Drive does not preserve an empty directory. Materialize each
+          # isolated case so both comparison roots exist before the UI scans them.
+          & $rclone mkdir ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case") --config $config
+          if ($LASTEXITCODE -ne 0) { throw "Could not create Google Drive performance test child: $remoteCase" }
+          $anchor = Join-Path $root ("$case-anchor"); [IO.File]::WriteAllText($anchor, 'fixture')
+          & $rclone copyto $anchor ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case/.fengsync-fixture-anchor") --config $config
+          if ($LASTEXITCODE -ne 0) { throw "Could not materialize Google Drive performance test child: $remoteCase" }
+          New-SmallFiles $upload $count
+          Select-Mode $main $mode.Name
+          $timing = Invoke-MeasuredSync $main $upload $remoteCase (Join-Path $upload 'batch-001.txt') 180 600
+          Assert-GoogleDriveBatch ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case") $count
+          $results.Add([pscustomobject]@{ Mode = $mode.Slug; Files = $count; CompareMilliseconds = $timing.CompareMilliseconds; SyncMilliseconds = $timing.SyncMilliseconds })
+          Write-Output ("Google Drive performance: mode={0}, files={1}, compare={2}ms, sync={3}ms" -f $mode.Slug, $count, $timing.CompareMilliseconds, $timing.SyncMilliseconds)
+        }
+      }
+      if ($results.Count -ne 6) { throw 'Google Drive performance matrix did not complete every mode and file-count combination.' }
+    }
   }
   Capture-Window $process '99-complete.png'
   $passed = $true
-  Write-Output "Passed $Scenario"
+  $scenarioTimer.Stop()
+  Write-Output ("Passed {0}; completed in {1}" -f $Scenario, $scenarioTimer.Elapsed)
 }
 finally {
   Stop-App $process

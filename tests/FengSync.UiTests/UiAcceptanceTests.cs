@@ -55,6 +55,11 @@ public sealed class UiAcceptanceTests
     [Trait("Category", "External")]
     public Task Google_drive_test_directory_syncs_to_a_local_folder() => RunAsync("gdrive");
 
+    [Fact]
+    [Trait("Category", "UI")]
+    [Trait("Category", "External")]
+    public Task Google_drive_compare_and_sync_scales_from_10_to_100_small_files_in_each_mode() => RunAsync("gdrive-volume");
+
     // The SFTP server settings dialog has specialized host lifecycle setup and
     // remains a dedicated compatibility scenario until it is folded into the
     // unified host. Profile editing is already covered by the unified `profile`
