@@ -329,6 +329,10 @@ try {
           & $rclone copyto $anchor ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case/.fengsync-fixture-anchor") --config $config
           if ($LASTEXITCODE -ne 0) { throw "Could not materialize Google Drive performance test child: $remoteCase" }
           & ($workload.Create) $upload
+          # Each workload gets a new app/RC daemon. Reusing the completed session can leave
+          # an old comparison plan enabled and cause the next visible comparison to never run.
+          Stop-App $process; $process = $null
+          $launch = Start-App; $process = $launch[0]; $main = $launch[1]
           Select-Mode $main $mode.Name
           $timing = Invoke-MeasuredSync $main $upload $remoteCase (Join-Path $upload $workload.Expected) 180 600
           Assert-GoogleDriveFileCount ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case") $workload.Files

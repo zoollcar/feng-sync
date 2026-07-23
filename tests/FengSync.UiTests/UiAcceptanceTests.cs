@@ -58,7 +58,12 @@ public sealed class UiAcceptanceTests
     [Fact]
     [Trait("Category", "UI")]
     [Trait("Category", "External")]
-    public Task Google_drive_compare_and_sync_covers_flat_10_100_files_and_100_folders_in_each_mode() => RunAsync("gdrive-volume");
+    public Task Google_drive_compare_and_sync_covers_flat_10_100_files_and_100_folders_in_each_mode()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("FENGSYNC_INCLUDE_GOOGLE_DRIVE_VOLUME"), "1", StringComparison.Ordinal))
+            throw SkipException.ForSkip("SKIPPED: Google Drive 100-file / directory-fanout performance matrix is opt-in. Set FENGSYNC_INCLUDE_GOOGLE_DRIVE_VOLUME=1 to run it.");
+        return RunAsync("gdrive-volume");
+    }
 
     // The SFTP server settings dialog has specialized host lifecycle setup and
     // remains a dedicated compatibility scenario until it is folded into the

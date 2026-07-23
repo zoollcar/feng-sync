@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
   [ValidateSet('Debug', 'Release')][string]$Configuration = 'Debug',
-  [switch]$SkipGoogleDrive
+  [switch]$SkipGoogleDrive,
+  [switch]$IncludeGoogleDriveVolume
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,8 +40,10 @@ try {
   $filter = if ($SkipGoogleDrive) { 'Category!=External' } else { '' }
   $arguments = @('test', '.\tests\FengSync.UiTests\FengSync.UiTests.csproj', '-c', $Configuration, '--no-build', '--nologo')
   if ($filter) { $arguments += @('--filter', $filter) }
-  $uiName = if ($SkipGoogleDrive) { 'WPF UI acceptance tests (Google Drive excluded)' } else { 'WPF UI acceptance tests (including configured Google Drive)' }
-  Invoke-Stage $uiName { & dotnet @arguments }
+  $uiName = if ($SkipGoogleDrive) { 'WPF UI acceptance tests (Google Drive excluded)' } else { 'WPF UI acceptance tests (including configured Google Drive; volume matrix opt-in)' }
+  if ($IncludeGoogleDriveVolume) { $env:FENGSYNC_INCLUDE_GOOGLE_DRIVE_VOLUME = '1' }
+  try { Invoke-Stage $uiName { & dotnet @arguments } }
+  finally { Remove-Item Env:FENGSYNC_INCLUDE_GOOGLE_DRIVE_VOLUME -ErrorAction SilentlyContinue }
 }
 catch {
   Write-Error $_

@@ -93,11 +93,12 @@ pwsh -File .\scripts\Test-All.ps1
 dotnet test .\tests\FengSync.Tests                 # 核心、CLI 与真实 SFTP 协议
 dotnet test .\tests\FengSync.UiTests                # 本地、SFTP、Google Drive 的真实 WPF UI
 pwsh -File .\scripts\Test-All.ps1 -SkipGoogleDrive  # 暂不执行外部云端
+pwsh -File .\scripts\Test-All.ps1 -IncludeGoogleDriveVolume # 额外执行 Drive 100 文件/100 文件夹压力矩阵
 ```
 
 GUI 测试会创建隔离的 `.fengsync-test` 测试数据并保存截图。更详细的手动 GUI 冒烟测试说明见 [docs/GUI_TESTING.md](docs/GUI_TESTING.md)。
 
-Google Drive 回环测试会自动检测当前 Feng Sync 的 rclone 配置；发现 Google Drive 凭据后，它只会在该远端的 `test/FengSync-Automated-Tests/<run-id>` 创建临时目录，UI 上传并下载验证后只清理该子目录。除单文件回环外，外部性能场景会在双向、镜像、更新三种模式下覆盖：10 个扁平小文件、100 个扁平小文件，以及 100 个文件夹各含 1 个文件；每项均输出对比和同步耗时。未发现凭据时，该外部场景会显式跳过。失败时，本地 `.fengsync-test` 证据目录会被保留。
+Google Drive 回环测试会自动检测当前 Feng Sync 的 rclone 配置；发现 Google Drive 凭据后，它只会在该远端的 `test/FengSync-Automated-Tests/<run-id>` 创建临时目录，UI 上传并下载验证后只清理该子目录。默认只运行单文件回环。100 文件压力矩阵是显式可选项（`-IncludeGoogleDriveVolume`）：它在双向、镜像、更新三种模式下覆盖 10 个扁平小文件、100 个扁平小文件，以及 100 个文件夹各含 1 个文件；每项均输出对比和同步耗时。未发现凭据时，外部场景会显式跳过。失败时，本地 `.fengsync-test` 证据目录会被保留。
 
 ## 项目结构
 
