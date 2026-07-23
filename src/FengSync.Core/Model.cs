@@ -12,6 +12,8 @@ public sealed record Fingerprint(long Size, DateTimeOffset ModifiedUtc, string? 
 {
     public bool Matches(Fingerprint other) => Size == other.Size &&
         (Hash is not null && other.Hash is not null ? Hash == other.Hash : Math.Abs((ModifiedUtc - other.ModifiedUtc).TotalSeconds) < 2);
+    public bool Matches(Fingerprint other, TimeSpan timestampTolerance) => Size == other.Size &&
+        (Hash is not null && other.Hash is not null ? Hash == other.Hash : Math.Abs((ModifiedUtc - other.ModifiedUtc).TotalSeconds) <= timestampTolerance.TotalSeconds);
 }
 public sealed record EntrySnapshot(string Path, EntryKind Kind, Fingerprint? Fingerprint);
 public sealed record BaselineEntry(string Path, EntrySnapshot? Left, EntrySnapshot? Right);

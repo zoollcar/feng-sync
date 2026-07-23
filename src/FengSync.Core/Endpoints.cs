@@ -6,6 +6,8 @@ namespace FengSync.Core;
 public enum EndpointType { Local, Sftp, GoogleDrive, S3 }
 public sealed record EndpointProfile(Guid Id, EndpointType Type, string Root, string? Remote = null, string? Identity = null);
 public sealed record EndpointCapabilities(bool StableIds, bool ServerMove, bool EmptyDirectories, TimeSpan ModifiedTimePrecision);
+/// <summary>Best-effort scan feedback. Remote providers can only report after a listing request completes.</summary>
+public sealed record ScanProgress(int ItemsScanned, string? CurrentPath = null, bool Completed = false);
 
 /// <summary>Transport boundary: the planner never needs to know rclone, SFTP or Drive details.</summary>
 public interface IEndpoint
@@ -13,6 +15,13 @@ public interface IEndpoint
     EndpointProfile Profile { get; }
     EndpointCapabilities Capabilities { get; }
     Task<IReadOnlyList<EntrySnapshot>> ScanAsync(CancellationToken cancellationToken = default);
+    async Task<IReadOnlyList<EntrySnapshot>> ScanAsync(IProgress<ScanProgress> progress, CancellationToken cancellationToken = default)
+    {
+        progress.Report(new(0));
+        var entries = await ScanAsync(cancellationToken).ConfigureAwait(false);
+        progress.Report(new(entries.Count, Completed: true));
+        return entries;
+    }
     Task CopyToAsync(string relativePath, IEndpoint target, string temporaryPath, CancellationToken cancellationToken = default);
     Task MoveAsync(string from, string to, CancellationToken cancellationToken = default);
     Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default);

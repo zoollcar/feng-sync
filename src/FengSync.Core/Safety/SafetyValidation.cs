@@ -98,7 +98,12 @@ public sealed class PlanFreshnessValidator
             var sourceIsLeft = op.Kind == OperationKind.CopyLeftToRight;
             var current = (sourceIsLeft ? leftEntries : rightEntries).GetValueOrDefault(op.Path)?.Fingerprint;
             var expected = (sourceIsLeft ? snapshot.LeftFingerprints : snapshot.RightFingerprints).GetValueOrDefault(op.OperationId);
-            if (expected is null || current is null || !expected.Matches(current))
+            // Drive/SFTP listings can round a modification timestamp differently on two consecutive
+            // requests. Hashes still compare exactly; for hashless remote files accept the provider's
+            // advertised precision plus a small API serialization margin.
+            var source = sourceIsLeft ? left : right;
+            var tolerance = source is RcloneEndpoint ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(2);
+            if (expected is null || current is null || !expected.Matches(current, tolerance))
                 issues.Add(new("plan.stale", "源文件在比较后发生变化，请重新比较。", SafetySeverity.Blocking, op.Path));
         }
         return new(issues);

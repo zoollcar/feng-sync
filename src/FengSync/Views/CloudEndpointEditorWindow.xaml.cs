@@ -62,10 +62,14 @@ public partial class CloudEndpointEditorWindow : Window
             case Kind.Sftp:
                 if (string.IsNullOrWhiteSpace(SftpHostBox.Text) || string.IsNullOrWhiteSpace(SftpUserBox.Text))
                     throw new InvalidOperationException("SFTP 必须填写主机和用户名。");
+                if (!int.TryParse(SftpPortBox.Text, out var port) || port is < 1 or > 65535)
+                    throw new InvalidOperationException("SFTP 端口必须介于 1 和 65535 之间。");
+                if (string.IsNullOrWhiteSpace(SftpPasswordBox.Password) && string.IsNullOrWhiteSpace(SftpKeyFileBox.Text))
+                    throw new InvalidOperationException("SFTP 必须填写密码或私钥文件。");
                 return new Dictionary<string, string>
                 {
                     ["host"] = SftpHostBox.Text.Trim(),
-                    ["port"] = string.IsNullOrWhiteSpace(SftpPortBox.Text) ? "22" : SftpPortBox.Text.Trim(),
+                    ["port"] = port.ToString(),
                     ["user"] = SftpUserBox.Text.Trim(),
                     ["pass"] = SftpPasswordBox.Password,
                     ["key_file"] = SftpKeyFileBox.Text.Trim()

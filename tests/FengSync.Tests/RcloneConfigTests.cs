@@ -13,4 +13,13 @@ public sealed class RcloneConfigTests
     }
     [Fact]
     public void Non_object_dump_is_treated_as_empty_account_list() => Assert.Empty(RcloneConfig.ParseDump("[]"));
+
+    [Fact]
+    public void Config_dump_preserves_unicode_remote_names_for_later_delete_or_reconnect()
+    {
+        var account = Assert.Single(RcloneConfig.ParseDump("{\"SFTP_连接\":{\"type\":\"sftp\"}}"));
+
+        Assert.Equal("SFTP_连接", account.Name);
+        Assert.Equal("SFTP  ·  SFTP_连接", account.Display);
+    }
 }

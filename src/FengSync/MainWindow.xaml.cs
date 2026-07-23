@@ -275,7 +275,9 @@ public partial class MainWindow : Window
         // list is a single RPC; LocalEndpoint enumerates synchronously), so phase-based feedback is the
         // honest minimum — see issue #3.
         Status.Text = $"正在扫描端点：左 {LeftPath.Text}  ·  右 {RightPath.Text}";
-        var scans = await Task.WhenAll(_left.ScanAsync(cancellationToken), _right.ScanAsync(cancellationToken));
+        var leftProgress = new Progress<ScanProgress>(x => Status.Text = x.Completed ? $"左侧扫描完成：{x.ItemsScanned} 项。正在等待右侧…" : $"正在扫描左侧：已发现 {x.ItemsScanned} 项{(string.IsNullOrEmpty(x.CurrentPath) ? "" : " · " + x.CurrentPath)}");
+        var rightProgress = new Progress<ScanProgress>(x => Status.Text = x.Completed ? $"右侧扫描完成：{x.ItemsScanned} 项。正在分析差异…" : $"正在扫描右侧：已发现 {x.ItemsScanned} 项{(string.IsNullOrEmpty(x.CurrentPath) ? "" : " · " + x.CurrentPath)}");
+        var scans = await Task.WhenAll(_left.ScanAsync(leftProgress, cancellationToken), _right.ScanAsync(rightProgress, cancellationToken));
         Status.Text = $"扫描完成：左侧 {scans[0].Count} 项  ·  右侧 {scans[1].Count} 项，正在分析差异…";
         var left = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var right = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var baseline = SelectedMode == SyncMode.TwoWay ? await new BaselineRepository().LoadAsync(_left, _right) : null; _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, effective.Filter);
         Status.Text = $"分析完成：{_plan.Operations.Count} 项差异，正在生成同步计划…";

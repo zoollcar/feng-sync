@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using FengSync.Core;
 
 namespace FengSync.Services;
@@ -77,7 +78,7 @@ public static class CloudEndpointService
     public static async Task CreateRemoteAsync(ProviderKind kind, string remoteName, IReadOnlyDictionary<string, string> fields, CancellationToken ct = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(BundledRclone.ConfigPath)!);
-        var args = new List<string> { "config", "create", remoteName, RcloneType(kind), "--config", BundledRclone.ConfigPath };
+        var args = new List<string> { "config", "create", remoteName, RcloneType(kind), "--obscure", "--config", BundledRclone.ConfigPath };
         foreach (var (key, value) in fields)
             if (!string.IsNullOrWhiteSpace(value)) { args.Add(key); args.Add(value); }
         await RunAsync(ct, args.ToArray());
@@ -92,7 +93,7 @@ public static class CloudEndpointService
     private static async Task<string> RunAsync(CancellationToken ct, params string[] arguments)
     {
         var start = new ProcessStartInfo(BundledRclone.ExecutablePath)
-        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
+        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         foreach (var arg in arguments) start.ArgumentList.Add(arg);
         using var process = Process.Start(start) ?? throw new InvalidOperationException("无法启动内置 rclone。");
         var output = await process.StandardOutput.ReadToEndAsync(ct);

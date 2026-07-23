@@ -39,6 +39,15 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         Assert.True((await new PlanFreshnessValidator().ValidateAsync(snapshot, left, right)).HasBlockingIssues);
     }
 
+    [Fact]
+    public void Hashless_remote_fingerprints_allow_listing_timestamp_precision_but_not_material_changes()
+    {
+        var original = new Fingerprint(12, DateTimeOffset.Parse("2026-07-19T00:00:00Z"), null);
+        Assert.True(original.Matches(new(12, original.ModifiedUtc.AddSeconds(4), null), TimeSpan.FromSeconds(5)));
+        Assert.False(original.Matches(new(12, original.ModifiedUtc.AddSeconds(6), null), TimeSpan.FromSeconds(5)));
+        Assert.False(original.Matches(new(13, original.ModifiedUtc, null), TimeSpan.FromSeconds(5)));
+    }
+
     [Fact] public async Task Unified_executor_reports_byte_progress_and_verifies_copy()
     {
         await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), new string('x', 1024));
