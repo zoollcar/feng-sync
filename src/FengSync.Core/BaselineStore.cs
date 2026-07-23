@@ -11,6 +11,11 @@ public sealed class BaselineStore
         var a = left.PhysicalPath(Name); var b = right.PhysicalPath(Name);
         if (!File.Exists(a) && !File.Exists(b)) return null;
         if (!File.Exists(a) || !File.Exists(b)) throw new InvalidDataException("只有一侧存在 sync.fengdb；为避免误判删除，已停止比较。");
+        // New paired archives intentionally differ byte-for-byte because each endpoint
+        // holds an opposite fragment.  Keep this legacy facade readable for callers
+        // that have not yet moved to BaselineRepository.
+        if (await IsSessionArchiveAsync(a, ct) || await IsSessionArchiveAsync(b, ct))
+            return await new EndpointBaselineStore().LoadAsync(left, right, ct);
         await using var streamA = File.OpenRead(a); await using var streamB = File.OpenRead(b);
         var hashA = await SHA256.HashDataAsync(streamA, ct); var hashB = await SHA256.HashDataAsync(streamB, ct);
         if (!CryptographicOperations.FixedTimeEquals(hashA, hashB))
@@ -22,6 +27,16 @@ public sealed class BaselineStore
         var output = new List<BaselineEntry>(); await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct)) output.Add(new(reader.GetString(0), Entry(reader, 1), Entry(reader, 5)));
         return output;
+    }
+    private static async Task<bool> IsSessionArchiveAsync(string path, CancellationToken ct)
+    {
+        try
+        {
+            await using var connection = Open(path); await connection.OpenAsync(ct); await using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sessions'";
+            return await cmd.ExecuteScalarAsync(ct) is not null;
+        }
+        catch (SqliteException) { return false; }
     }
     public async Task CommitAsync(LocalEndpoint left, LocalEndpoint right, CancellationToken ct = default)
     {

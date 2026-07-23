@@ -60,4 +60,34 @@ public sealed class LocalIntegrationTests : IAsyncLifetime
         File.WriteAllText(Path.Combine(Left, "sync.fengdb"), "x"); File.WriteAllText(Path.Combine(Left, "a.fengsync-x.partial"), "x"); File.WriteAllText(Path.Combine(Left, "real.txt"), "x");
         Assert.Single(new LocalEndpoint(Left).Scan());
     }
+    [Fact] public async Task Paired_endpoint_archive_uses_opposite_fragments_and_survives_side_swap()
+    {
+        await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), "same");
+        await File.WriteAllTextAsync(Path.Combine(Right, "a.txt"), "same");
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right); var store = new EndpointBaselineStore();
+        await store.CommitAsync(left, right);
+        Assert.NotEqual(await File.ReadAllBytesAsync(Path.Combine(Left, "sync.fengdb")), await File.ReadAllBytesAsync(Path.Combine(Right, "sync.fengdb")));
+        Assert.Single((await store.LoadAsync(left, right))!);
+        Assert.Single((await store.LoadAsync(right, left))!);
+    }
+    [Fact] public async Task Lone_paired_archive_is_not_a_deletion_baseline()
+    {
+        await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), "same");
+        await File.WriteAllTextAsync(Path.Combine(Right, "a.txt"), "same");
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right); var store = new EndpointBaselineStore();
+        await store.CommitAsync(left, right); File.Delete(Path.Combine(Right, "sync.fengdb"));
+        Assert.Null(await store.LoadAsync(left, right));
+    }
+    [Fact] public async Task Legacy_state_is_reported_as_untrusted_and_rebuilt_on_commit()
+    {
+        await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), "same");
+        await File.WriteAllTextAsync(Path.Combine(Right, "a.txt"), "same");
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
+        await new BaselineStore().CommitAsync(left, right); // previous single-snapshot format
+        var store = new EndpointBaselineStore();
+        Assert.Null(await store.LoadAsync(left, right));
+        Assert.NotNull(store.LastLoadWarning);
+        await store.CommitAsync(left, right);
+        Assert.Single((await store.LoadAsync(left, right))!);
+    }
 }

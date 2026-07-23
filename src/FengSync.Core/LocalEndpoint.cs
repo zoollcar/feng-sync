@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 
 namespace FengSync.Core;
-public sealed class LocalEndpoint(string root) : IEndpoint
+public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorage
 {
     public string Root { get; } = Path.GetFullPath(root);
     public EndpointProfile Profile { get; } = new(Guid.NewGuid(), EndpointType.Local, Path.GetFullPath(root), Identity: Path.GetFullPath(root));
@@ -12,7 +12,7 @@ public sealed class LocalEndpoint(string root) : IEndpoint
         foreach (var path in Directory.EnumerateFileSystemEntries(Root, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(Root, path).Replace('\\', '/');
-            if (relative.Equals("sync.fengdb", StringComparison.OrdinalIgnoreCase) || relative.Contains(".fengsync-") || relative.EndsWith(".partial", StringComparison.OrdinalIgnoreCase)) continue;
+            if (SyncInternalPaths.IsExcludedFromScan(relative)) continue;
             var attr = File.GetAttributes(path); if (attr.HasFlag(FileAttributes.System) || attr.HasFlag(FileAttributes.ReparsePoint)) continue;
             if (attr.HasFlag(FileAttributes.Directory)) yield return new(relative, EntryKind.Directory, null);
             else { var f = new FileInfo(path); yield return new(relative, EntryKind.File, new(f.Length, f.LastWriteTimeUtc, Hash(path))); }
@@ -30,7 +30,7 @@ public sealed class LocalEndpoint(string root) : IEndpoint
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var relative = Path.GetRelativePath(Root, path).Replace('\\', '/');
-                if (relative.Equals("sync.fengdb", StringComparison.OrdinalIgnoreCase) || relative.Contains(".fengsync-") || relative.EndsWith(".partial", StringComparison.OrdinalIgnoreCase)) continue;
+                if (SyncInternalPaths.IsExcludedFromScan(relative)) continue;
                 var attr = File.GetAttributes(path); if (attr.HasFlag(FileAttributes.System) || attr.HasFlag(FileAttributes.ReparsePoint)) continue;
                 entries.Add(attr.HasFlag(FileAttributes.Directory)
                     ? new(relative, EntryKind.Directory, null)
@@ -52,5 +52,16 @@ public sealed class LocalEndpoint(string root) : IEndpoint
     public Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default)
     { var path = PhysicalPath(relativePath); if (directory) { if (Directory.Exists(path) && !Directory.EnumerateFileSystemEntries(path).Any()) Directory.Delete(path); } else if (File.Exists(path)) File.Delete(path); return Task.CompletedTask; }
     public Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default) { Directory.CreateDirectory(PhysicalPath(relativePath)); return Task.CompletedTask; }
+    public Task<string?> DownloadStateAsync(string relativePath, string localDirectory, CancellationToken cancellationToken = default)
+    {
+        var source = PhysicalPath(relativePath); if (!File.Exists(source)) return Task.FromResult<string?>(null);
+        Directory.CreateDirectory(localDirectory); var copy = Path.Combine(localDirectory, Guid.NewGuid().ToString("N") + ".db");
+        File.Copy(source, copy); return Task.FromResult<string?>(copy);
+    }
+    public Task UploadAndPublishStateAsync(string localPath, string temporaryRelativePath, CancellationToken cancellationToken = default)
+    {
+        var temporary = PhysicalPath(temporaryRelativePath); Directory.CreateDirectory(Path.GetDirectoryName(temporary)!);
+        File.Copy(localPath, temporary, true); File.Move(temporary, PhysicalPath(SyncInternalPaths.StateDatabase), true); return Task.CompletedTask;
+    }
     private static string Hash(string path) { using var sha = SHA256.Create(); using var s = File.OpenRead(path); return Convert.ToHexString(sha.ComputeHash(s)); }
 }

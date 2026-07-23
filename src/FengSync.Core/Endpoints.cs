@@ -28,6 +28,14 @@ public interface IEndpoint
     Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Private endpoint control plane used for sync.fengdb.  It is intentionally
+/// separate from ScanAsync so state objects can never leak into normal sync plans.</summary>
+public interface IEndpointStateStorage
+{
+    Task<string?> DownloadStateAsync(string relativePath, string localDirectory, CancellationToken cancellationToken = default);
+    Task UploadAndPublishStateAsync(string localPath, string temporaryRelativePath, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Minimal strongly typed wrapper around rclone's loopback RC API. It deliberately never puts credentials in command lines.</summary>
 public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, string password)
 {
@@ -69,7 +77,7 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
 }
 
 /// <summary>rclone-backed SFTP, Google Drive, or S3 endpoint. Authentication is supplied exclusively by rclone.conf.</summary>
-public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profile, EndpointCapabilities capabilities) : IEndpoint
+public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profile, EndpointCapabilities capabilities) : IEndpoint, IEndpointStateStorage
 {
     public EndpointProfile Profile { get; } = profile;
     public EndpointCapabilities Capabilities { get; } = capabilities;
@@ -118,7 +126,25 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
     public Task MoveAsync(string from, string to, CancellationToken cancellationToken = default) => client.MoveFileAsync(Fs, At(from), At(to), cancellationToken);
     public Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default) => directory ? client.PurgeAsync(Fs, At(relativePath), cancellationToken) : client.DeleteFileAsync(Fs, At(relativePath), cancellationToken);
     public Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default) => client.MakeDirectoryAsync(Fs, At(relativePath), cancellationToken);
-    private static bool Excluded(string path) => path.Equals("sync.fengdb", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".partial", StringComparison.OrdinalIgnoreCase) || path.Contains(".fengsync-", StringComparison.OrdinalIgnoreCase);
+    private static bool Excluded(string path) => SyncInternalPaths.IsExcludedFromScan(path);
+    public async Task<string?> DownloadStateAsync(string relativePath, string localDirectory, CancellationToken cancellationToken = default)
+    {
+        var response = await client.ListAsync(Fs, Profile.Root, cancellationToken);
+        var exists = response.TryGetProperty("list", out var list) && list.EnumerateArray().Any(x =>
+            !x.TryGetProperty("IsDir", out var isDir) || !isDir.GetBoolean()
+                ? RelativeToRoot(x.GetProperty("Path").GetString() ?? "").Equals(relativePath, StringComparison.OrdinalIgnoreCase)
+                : false);
+        if (!exists) return null;
+        Directory.CreateDirectory(localDirectory);
+        var destination = Path.Combine(localDirectory, Guid.NewGuid().ToString("N") + ".db");
+        await client.CopyFileAsync(Fs, At(relativePath), localDirectory, Path.GetFileName(destination), cancellationToken);
+        return destination;
+    }
+    public async Task UploadAndPublishStateAsync(string localPath, string temporaryRelativePath, CancellationToken cancellationToken = default)
+    {
+        await client.CopyFileAsync(Path.GetDirectoryName(localPath)!, Path.GetFileName(localPath), Fs, At(temporaryRelativePath), cancellationToken);
+        await client.MoveFileAsync(Fs, At(temporaryRelativePath), At(SyncInternalPaths.StateDatabase), cancellationToken);
+    }
     private string RelativeToRoot(string path)
     {
         path = path.Trim('/');

@@ -279,14 +279,14 @@ public partial class MainWindow : Window
         var rightProgress = new Progress<ScanProgress>(x => Status.Text = x.Completed ? $"右侧扫描完成：{x.ItemsScanned} 项。正在分析差异…" : $"正在扫描右侧：已发现 {x.ItemsScanned} 项{(string.IsNullOrEmpty(x.CurrentPath) ? "" : " · " + x.CurrentPath)}");
         var scans = await Task.WhenAll(_left.ScanAsync(leftProgress, cancellationToken), _right.ScanAsync(rightProgress, cancellationToken));
         Status.Text = $"扫描完成：左侧 {scans[0].Count} 项  ·  右侧 {scans[1].Count} 项，正在分析差异…";
-        var left = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var right = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var baseline = SelectedMode == SyncMode.TwoWay ? await new BaselineRepository().LoadAsync(_left, _right) : null; _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, effective.Filter);
+        var left = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var right = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var baselineRepository = new BaselineRepository(); var baseline = SelectedMode == SyncMode.TwoWay ? await baselineRepository.LoadAsync(_left, _right) : null; var baselineWarning = baselineRepository.LastLoadWarning; _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, effective.Filter);
         Status.Text = $"分析完成：{_plan.Operations.Count} 项差异，正在生成同步计划…";
         var planSafety = new SafetyValidator().ValidatePlan(_plan, left.Count, right.Count, SelectedMode, profile.MaxDeletes, profile.MaxDeleteRatio).Combine(new SafetyValidator().ValidateCapacity(_plan, left, right, _left, _right));
         if (planSafety.HasBlockingIssues && !SyncConfirmationPolicy.CanOverrideWithProfileName(planSafety)) throw new InvalidOperationException(string.Join(" ", planSafety.Issues.Select(x => x.Message)));
         var risk = SyncRiskSummary.Create(_plan, left, right);
         SafetySummary.Text = planSafety.HasBlockingIssues ? "安全检查：阻断（删除阈值可在同步确认中一次性放行）" : SyncConfirmationPolicy.RequiresConfirmation(risk) ? $"安全检查：警告 · 覆盖 {risk.Overwrites} 项，删除 {risk.Deletes} 项，传输 {FormatBytes(risk.TransferBytes)}" : "安全检查：通过";
         SafetySummary.Foreground = planSafety.HasBlockingIssues ? Brushes.Firebrick : SyncConfirmationPolicy.RequiresConfirmation(risk) ? Brushes.DarkOrange : Brushes.ForestGreen;
-        _snapshot = await PlanSnapshot.CaptureAsync(_plan, _left, _right, cancellationToken); _rows.Clear(); foreach (var op in _plan.Operations) _rows.Add(new(op, left.GetValueOrDefault(op.Path), right.GetValueOrDefault(op.Path))); RefreshSummary(); Status.Text = $"{ModeTitle()} 比较完成：左侧 {left.Count} 项  ·  右侧 {right.Count} 项  ·  {_plan.Operations.Count} 个差异/提示。勾选要执行的差异，并裁决所有冲突。";
+        _snapshot = await PlanSnapshot.CaptureAsync(_plan, _left, _right, cancellationToken); _rows.Clear(); foreach (var op in _plan.Operations) _rows.Add(new(op, left.GetValueOrDefault(op.Path), right.GetValueOrDefault(op.Path))); RefreshSummary(); Status.Text = baselineWarning ?? $"{ModeTitle()} 比较完成：左侧 {left.Count} 项  ·  右侧 {right.Count} 项  ·  {_plan.Operations.Count} 个差异/提示。勾选要执行的差异，并裁决所有冲突。";
     }
     private async Task<(IEndpoint Left, IEndpoint Right)> CreateEndpointsAsync(string left, string right)
     {
@@ -296,26 +296,10 @@ public partial class MainWindow : Window
         if (needsRemote) _rclone = await RcloneDaemon.StartAsync(BundledRclone.ExecutablePath, BundledRclone.ConfigPath);
         return (CreateEndpoint(left), CreateEndpoint(right));
     }
-    private async Task<ProfileRunResult> RunBatchProfileAsync(SyncProfile profile)
+    private Task<ProfileRunResult> RunBatchProfileAsync(SyncProfile profile)
     {
-        if (!IsCloud(profile.LeftPath) && !IsCloud(profile.RightPath)) return await new ProfileRunner().RunAsync(profile);
-        var compatibility = new FeatureCapabilityService().Evaluate(profile);
-        if (!compatibility.CanRun) throw new InvalidOperationException($"{profile.Name} 需要修复：{compatibility.Summary}");
-        await using var daemon = await RcloneDaemon.StartAsync(BundledRclone.ExecutablePath, BundledRclone.ConfigPath);
-        var left = CreateEndpoint(profile.LeftPath, daemon); var right = CreateEndpoint(profile.RightPath, daemon);
-        var scans = await Task.WhenAll(left.ScanAsync(), right.ScanAsync());
-        var plan = new ModePlanner().Build(profile.Mode, scans[0], scans[1], null, profile.Filter);
-        if (!plan.CanExecute && plan.Operations.Any()) throw new InvalidOperationException($"{profile.Name} 遇到未裁决冲突。");
-        var selected = plan.Operations.Count(x => x.Selected);
-        var effective = EffectiveProfileSettings.Resolve(profile, _settings);
-        var safety = new SafetyValidator().ValidatePlan(plan, scans[0].Count, scans[1].Count, profile.Mode, profile.MaxDeletes, profile.MaxDeleteRatio);
-        if (safety.HasBlockingIssues) throw new InvalidOperationException(string.Join(" ", safety.Issues.Select(x => x.Message)));
-        if (selected > 0)
-        {
-            var run = await new SyncExecutor().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, left, right), left, right, verifyCopies: effective.VerifyCopies, versioning: effective.Versioning, maxConcurrentCopies: effective.MaxConcurrentCopies, journals: new TaskJournalStore());
-            if (!run.Succeeded) throw new IOException($"{profile.Name} 有 {run.FailedOperations} 个操作失败。");
-        }
-        return new ProfileRunResult(profile.Id, plan.Operations.Count, selected, DateTimeOffset.UtcNow);
+        // Batch execution must use the same paired-baseline transaction as CLI/scheduler.
+        return new ProfileRunner(applicationSettings: _settings).RunAsync(profile);
     }
     private IEndpoint CreateEndpoint(string value)
     {

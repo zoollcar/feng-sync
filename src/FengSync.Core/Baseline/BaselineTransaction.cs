@@ -18,17 +18,16 @@ public sealed record BaselineTransaction(Guid Id, EndpointIdentity Left, Endpoin
     public BaselineTransaction Rollback(bool needsRecovery = false) => this with { State = needsRecovery ? BaselineTransactionState.NeedsRecovery : BaselineTransactionState.RolledBack };
 }
 
-/// <summary>Compatibility repository for the current local SQLite baseline. It never publishes a candidate until CommitAsync.</summary>
+/// <summary>Repository for the endpoint-neutral paired SQLite state archive.</summary>
 public sealed class BaselineRepository
 {
-    private readonly BaselineStore _store;
-    private readonly RemoteBaselineStore _remoteStore;
+    private readonly EndpointBaselineStore _store;
     private readonly BaselineTransactionStore _transactions;
-    public BaselineRepository(BaselineStore? store = null, BaselineTransactionStore? transactionStore = null, RemoteBaselineStore? remoteStore = null)
-        => (_store, _transactions, _remoteStore) = (store ?? new BaselineStore(), transactionStore ?? new BaselineTransactionStore(), remoteStore ?? new RemoteBaselineStore());
+    public BaselineRepository(EndpointBaselineStore? store = null, BaselineTransactionStore? transactionStore = null)
+        => (_store, _transactions) = (store ?? new EndpointBaselineStore(), transactionStore ?? new BaselineTransactionStore());
     public Task<IReadOnlyList<BaselineEntry>?> LoadAsync(LocalEndpoint left, LocalEndpoint right, CancellationToken ct = default) => _store.LoadAsync(left, right, ct);
-    public Task<IReadOnlyList<BaselineEntry>?> LoadAsync(IEndpoint left, IEndpoint right, CancellationToken ct = default) =>
-        left is LocalEndpoint localLeft && right is LocalEndpoint localRight ? _store.LoadAsync(localLeft, localRight, ct) : _remoteStore.LoadAsync(left, right, ct);
+    public Task<IReadOnlyList<BaselineEntry>?> LoadAsync(IEndpoint left, IEndpoint right, CancellationToken ct = default) => _store.LoadAsync(left, right, ct);
+    public string? LastLoadWarning => _store.LastLoadWarning;
     public BaselineTransaction Begin(IEndpoint left, IEndpoint right) => new(Guid.NewGuid(), EndpointIdentity.From(left), EndpointIdentity.From(right), DateTimeOffset.UtcNow);
     public async Task<BaselineTransaction> BeginAsync(IEndpoint left, IEndpoint right, CancellationToken ct = default)
     {
@@ -40,8 +39,7 @@ public sealed class BaselineRepository
     public async Task<BaselineTransaction> CommitAsync(BaselineTransaction transaction, LocalEndpoint left, LocalEndpoint right, bool allOperationsSucceeded, CancellationToken ct = default)
         => await CommitCoreAsync(transaction, left, right, allOperationsSucceeded, () => _store.CommitAsync(left, right, ct), ct);
     public async Task<BaselineTransaction> CommitAsync(BaselineTransaction transaction, IEndpoint left, IEndpoint right, bool allOperationsSucceeded, CancellationToken ct = default)
-        => await CommitCoreAsync(transaction, left, right, allOperationsSucceeded,
-            left is LocalEndpoint localLeft && right is LocalEndpoint localRight ? () => _store.CommitAsync(localLeft, localRight, ct) : () => _remoteStore.CommitAsync(left, right, ct), ct);
+        => await CommitCoreAsync(transaction, left, right, allOperationsSucceeded, () => _store.CommitAsync(left, right, ct), ct);
     private async Task<BaselineTransaction> CommitCoreAsync(BaselineTransaction transaction, IEndpoint left, IEndpoint right, bool allOperationsSucceeded, Func<Task> publish, CancellationToken ct)
     {
         if (!allOperationsSucceeded)

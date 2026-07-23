@@ -42,6 +42,13 @@ public sealed class ProfileRunner
                 await prepared.BaselineRepository.CommitAsync(transaction, prepared.Left, prepared.Right, run.Succeeded, ct);
             }
         }
+        // A successful no-op two-way run establishes (or refreshes) the paired baseline.
+        // Without this, two initially equal folders could never learn that a later absence
+        // is a deletion rather than an initial-sync difference.
+        else if (transaction is not null)
+        {
+            await prepared.BaselineRepository.CommitAsync(transaction, prepared.Left, prepared.Right, true, ct);
+        }
         var failed = run?.FailedOperations ?? 0;
         var succeeded = run?.SucceededOperations ?? selected;
         var transferred = run?.Operations.Sum(x => x.BytesTransferred) ?? 0;
