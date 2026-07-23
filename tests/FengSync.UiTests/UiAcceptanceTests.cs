@@ -58,7 +58,7 @@ public sealed class UiAcceptanceTests
     [Fact]
     [Trait("Category", "UI")]
     [Trait("Category", "External")]
-    public Task Google_drive_compare_and_sync_scales_from_10_to_100_small_files_in_each_mode() => RunAsync("gdrive-volume");
+    public Task Google_drive_compare_and_sync_covers_flat_10_100_files_and_100_folders_in_each_mode() => RunAsync("gdrive-volume");
 
     // The SFTP server settings dialog has specialized host lifecycle setup and
     // remains a dedicated compatibility scenario until it is folded into the

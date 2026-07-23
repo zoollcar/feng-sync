@@ -54,6 +54,13 @@ function New-SmallFiles { param([string]$directory, [int]$count)
   New-Item -ItemType Directory -Force -Path $directory | Out-Null
   for ($i = 1; $i -le $count; $i++) { [IO.File]::WriteAllText((Join-Path $directory ('batch-{0:D3}.txt' -f $i)), "small performance fixture $i") }
 }
+function New-FolderFiles { param([string]$directory, [int]$count)
+  for ($i = 1; $i -le $count; $i++) {
+    $folder = Join-Path $directory ('folder-{0:D3}' -f $i)
+    New-Item -ItemType Directory -Force -Path $folder | Out-Null
+    [IO.File]::WriteAllText((Join-Path $folder 'item.txt'), "folder performance fixture $i")
+  }
+}
 function Invoke-MeasuredSync { param($main, [string]$left, [string]$right, [string]$expectedFile, [int]$comparisonSeconds = 180, [int]$transferSeconds = 600)
   $comparisonTimer = [Diagnostics.Stopwatch]::StartNew()
   Compare-Ui $main $left $right
@@ -68,11 +75,11 @@ function Invoke-MeasuredSync { param($main, [string]$left, [string]$right, [stri
   $syncTimer.Stop()
   [pscustomobject]@{ CompareMilliseconds = $comparisonTimer.ElapsedMilliseconds; SyncMilliseconds = $syncTimer.ElapsedMilliseconds }
 }
-function Assert-GoogleDriveBatch { param([string]$remotePath, [int]$count)
+function Assert-GoogleDriveFileCount { param([string]$remotePath, [int]$count)
   Wait-Until {
     $listing = & $rclone lsf $remotePath --recursive --config $config 2>$null
-    $LASTEXITCODE -eq 0 -and @($listing | Where-Object { $_ -match '(^|/)batch-\d{3}\.txt$' }).Count -eq $count
-  } "Google Drive did not contain all $count batch fixture files: $remotePath" 180
+    $LASTEXITCODE -eq 0 -and @($listing | Where-Object { $_ -match '\.txt$' }).Count -eq $count
+  } "Google Drive did not contain all $count fixture files: $remotePath" 180
 }
 function Start-App {
   $start = [Diagnostics.ProcessStartInfo]::new($AppPath); $start.UseShellExecute = $false; $start.EnvironmentVariables['FENGSYNC_DATA_DIR'] = $appData
@@ -306,8 +313,12 @@ try {
         [pscustomobject]@{ Name = '镜像 →'; Slug = 'mirror' },
         [pscustomobject]@{ Name = '更新 →'; Slug = 'update' }
       )) {
-        foreach ($count in @(10, 100)) {
-          $case = "$($mode.Slug)-$count"
+        foreach ($workload in @(
+          [pscustomobject]@{ Slug = 'flat-10-files'; Files = 10; Create = { param($path) New-SmallFiles $path 10 }; Expected = 'batch-001.txt' },
+          [pscustomobject]@{ Slug = 'flat-100-files'; Files = 100; Create = { param($path) New-SmallFiles $path 100 }; Expected = 'batch-001.txt' },
+          [pscustomobject]@{ Slug = '100-folders-one-file-each'; Files = 100; Create = { param($path) New-FolderFiles $path 100 }; Expected = 'folder-001/item.txt' }
+        )) {
+          $case = "$($mode.Slug)-$($workload.Slug)"
           $upload = Join-Path $root (Join-Path 'drive-volume' $case)
           $remoteCase = $driveUri.TrimEnd('/') + '/' + $case
           # Google Drive does not preserve an empty directory. Materialize each
@@ -317,15 +328,15 @@ try {
           $anchor = Join-Path $root ("$case-anchor"); [IO.File]::WriteAllText($anchor, 'fixture')
           & $rclone copyto $anchor ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case/.fengsync-fixture-anchor") --config $config
           if ($LASTEXITCODE -ne 0) { throw "Could not materialize Google Drive performance test child: $remoteCase" }
-          New-SmallFiles $upload $count
+          & ($workload.Create) $upload
           Select-Mode $main $mode.Name
-          $timing = Invoke-MeasuredSync $main $upload $remoteCase (Join-Path $upload 'batch-001.txt') 180 600
-          Assert-GoogleDriveBatch ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case") $count
-          $results.Add([pscustomobject]@{ Mode = $mode.Slug; Files = $count; CompareMilliseconds = $timing.CompareMilliseconds; SyncMilliseconds = $timing.SyncMilliseconds })
-          Write-Output ("Google Drive performance: mode={0}, files={1}, compare={2}ms, sync={3}ms" -f $mode.Slug, $count, $timing.CompareMilliseconds, $timing.SyncMilliseconds)
+          $timing = Invoke-MeasuredSync $main $upload $remoteCase (Join-Path $upload $workload.Expected) 180 600
+          Assert-GoogleDriveFileCount ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case") $workload.Files
+          $results.Add([pscustomobject]@{ Mode = $mode.Slug; Workload = $workload.Slug; Files = $workload.Files; CompareMilliseconds = $timing.CompareMilliseconds; SyncMilliseconds = $timing.SyncMilliseconds })
+          Write-Output ("Google Drive performance: mode={0}, workload={1}, files={2}, compare={3}ms, sync={4}ms" -f $mode.Slug, $workload.Slug, $workload.Files, $timing.CompareMilliseconds, $timing.SyncMilliseconds)
         }
       }
-      if ($results.Count -ne 6) { throw 'Google Drive performance matrix did not complete every mode and file-count combination.' }
+      if ($results.Count -ne 9) { throw 'Google Drive performance matrix did not complete every mode and workload combination.' }
     }
   }
   Capture-Window $process '99-complete.png'

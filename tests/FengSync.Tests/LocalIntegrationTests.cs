@@ -22,6 +22,28 @@ public sealed class LocalIntegrationTests : IAsyncLifetime
         await new LocalExecutor().ExecuteAsync(plan, l, r, maxConcurrentCopies: 3);
         Assert.Equal(8, Directory.EnumerateFiles(Right, "*.txt").Count());
     }
+    [Fact] public async Task One_hundred_folders_with_one_file_each_are_compared_and_copied()
+    {
+        for (var i = 1; i <= 100; i++)
+        {
+            var folder = Path.Combine(Left, $"folder-{i:D3}"); Directory.CreateDirectory(folder);
+            await File.WriteAllTextAsync(Path.Combine(folder, "item.txt"), $"fixture {i}");
+        }
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
+        var plan = new ThreeWayPlanner().Build(left.Scan(), right.Scan(), null);
+        await new LocalExecutor().ExecuteAsync(plan, left, right, maxConcurrentCopies: 8);
+        Assert.Equal(100, Directory.EnumerateFiles(Right, "item.txt", SearchOption.AllDirectories).Count());
+        Assert.Equal("fixture 100", await File.ReadAllTextAsync(Path.Combine(Right, "folder-100", "item.txt")));
+    }
+    [Fact] public async Task One_hundred_flat_files_are_compared_and_copied()
+    {
+        for (var i = 1; i <= 100; i++) await File.WriteAllTextAsync(Path.Combine(Left, $"file-{i:D3}.txt"), $"fixture {i}");
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
+        var plan = new ThreeWayPlanner().Build(left.Scan(), right.Scan(), null);
+        await new LocalExecutor().ExecuteAsync(plan, left, right, maxConcurrentCopies: 8);
+        Assert.Equal(100, Directory.EnumerateFiles(Right, "*.txt").Count());
+        Assert.Equal("fixture 100", await File.ReadAllTextAsync(Path.Combine(Right, "file-100.txt")));
+    }
     [Fact] public async Task Baseline_round_trips_as_identical_sqlite_files()
     {
         await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), "hello"); await File.WriteAllTextAsync(Path.Combine(Right, "a.txt"), "hello"); var l = new LocalEndpoint(Left); var r = new LocalEndpoint(Right); var store = new BaselineStore();
