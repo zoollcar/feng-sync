@@ -1,6 +1,7 @@
 namespace FengSync.Core;
 
 using System.Text.Json;
+using FengSync.Core.Scanning;
 
 public sealed record EndpointIdentity(string Provider, string Root, string StableId)
 {
@@ -40,6 +41,10 @@ public sealed class BaselineRepository
         => await CommitCoreAsync(transaction, left, right, allOperationsSucceeded, () => _store.CommitAsync(left, right, ct), ct);
     public async Task<BaselineTransaction> CommitAsync(BaselineTransaction transaction, IEndpoint left, IEndpoint right, bool allOperationsSucceeded, CancellationToken ct = default)
         => await CommitCoreAsync(transaction, left, right, allOperationsSucceeded, () => _store.CommitAsync(left, right, ct), ct);
+    public Task CommitFromSnapshotAsync(IEndpoint left, IEndpoint right, ComparisonSnapshot snapshot, CancellationToken ct = default)
+        => _store.CommitFromSnapshotAsync(left, right, snapshot, ct);
+    public Task CommitFromResultsAsync(IEndpoint left, IEndpoint right, BaselineCommitInput input, CancellationToken ct = default)
+        => _store.CommitFromResultsAsync(left, right, input, ct);
     private async Task<BaselineTransaction> CommitCoreAsync(BaselineTransaction transaction, IEndpoint left, IEndpoint right, bool allOperationsSucceeded, Func<Task> publish, CancellationToken ct)
     {
         if (!allOperationsSucceeded)
@@ -86,6 +91,98 @@ public sealed class BaselineTransactionStore(string? root = null)
         if (File.Exists(path)) File.Delete(path);
         return Task.CompletedTask;
     }
+}
+
+/// <summary>
+/// Result-driven baseline commit input. The next two-way state is derived from
+/// the verified post-publish fingerprints captured by the executor rather than
+/// from the pre-sync comparison snapshot, so a successful copy cannot leave
+/// the target recorded with the old (missing or stale) fingerprint.
+/// </summary>
+public sealed record BaselineCommitInput(
+    ComparisonSnapshot Snapshot,
+    IReadOnlyDictionary<Guid, OperationRunResult> Results,
+    BaselineTransaction Transaction);
+
+/// <summary>
+/// Computes the next paired baseline from the snapshot, the previous baseline
+/// and the operation results. Rules follow 05-baseline-state.md:
+///   * committed copy => both sides reflect the verified target fingerprint
+///   * committed delete => remove the path or record both sides as missing
+///   * failed, cancelled, conflict, unselected or filtered => keep old baseline
+///   * neither side has the path and old baseline had it => drop the entry
+/// </summary>
+public static class BaselineStateBuilder
+{
+    public static IReadOnlyList<BaselineEntry> BuildNextState(BaselineCommitInput input, IReadOnlyList<BaselineEntry>? previousBaseline)
+    {
+        var byPath = previousBaseline is null
+            ? new Dictionary<string, BaselineEntry>(StringComparer.OrdinalIgnoreCase)
+            : previousBaseline.ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+
+        var leftSnapshot = input.Snapshot.Left.ByPath;
+        var rightSnapshot = input.Snapshot.Right.ByPath;
+        var opIndex = input.Snapshot.Plan.Operations.ToDictionary(x => x.OperationId);
+        var touchedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // 1. Update entries the operations touched. Unselected, conflict, failed
+        //    and filtered paths are not in input.Results so they fall through
+        //    and keep their previous baseline untouched.
+        foreach (var (id, result) in input.Results)
+        {
+            if (result.Stage != TransferStage.Committed || !result.Published) continue;
+            if (!opIndex.TryGetValue(id, out var op)) continue;
+            touchedPaths.Add(op.Path);
+            if (op.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft)
+            {
+                // After a successful copy both sides share the verified target
+                // fingerprint; using the pre-sync snapshot would have left the
+                // destination recorded with its old (missing/stale) state.
+                var verified = BuildFileEntry(op.Path, result.TargetAfter);
+                byPath[op.Path] = new BaselineEntry(op.Path, verified, verified);
+            }
+            else if (op.Kind is OperationKind.DeleteLeft)
+            {
+                var rightEntry = rightSnapshot.TryGetValue(op.Path, out var r) ? r : null;
+                byPath[op.Path] = new BaselineEntry(op.Path, null, rightEntry);
+            }
+            else if (op.Kind is OperationKind.DeleteRight)
+            {
+                var leftEntry = leftSnapshot.TryGetValue(op.Path, out var l) ? l : null;
+                byPath[op.Path] = new BaselineEntry(op.Path, leftEntry, null);
+            }
+            else if (op.Kind is OperationKind.CreateLeftDirectory or OperationKind.CreateRightDirectory)
+            {
+                var left = leftSnapshot.TryGetValue(op.Path, out var l) ? l : new EntrySnapshot(op.Path, EntryKind.Directory, null);
+                var right = rightSnapshot.TryGetValue(op.Path, out var r) ? r : new EntrySnapshot(op.Path, EntryKind.Directory, null);
+                byPath[op.Path] = new BaselineEntry(op.Path, left, right);
+            }
+        }
+
+        // 2. For paths the run did not touch, align with the snapshot if the
+        //    snapshot proves both sides are now absent; otherwise keep the
+        //    previous baseline so we never invent a deletion authority.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in leftSnapshot.Keys.Union(rightSnapshot.Keys, StringComparer.OrdinalIgnoreCase))
+        {
+            seen.Add(path);
+            var leftHas = leftSnapshot.ContainsKey(path);
+            var rightHas = rightSnapshot.ContainsKey(path);
+            byPath.TryGetValue(path, out var existing);
+            if (!leftHas && !rightHas && existing is not null && !touchedPaths.Contains(path))
+                byPath.Remove(path);
+        }
+
+        // 3. Drop baseline entries that reference paths neither side has ever
+        //    seen and the run did not touch. This keeps the payload bounded.
+        var stale = byPath.Keys.Where(p => !seen.Contains(p) && !touchedPaths.Contains(p)).ToList();
+        foreach (var p in stale) byPath.Remove(p);
+
+        return byPath.Values.OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static EntrySnapshot? BuildFileEntry(string path, Fingerprint? targetAfter) =>
+        targetAfter is null ? null : new EntrySnapshot(path, EntryKind.File, targetAfter);
 }
 
 public sealed record RecoveryItem(SyncJournal? Journal, BaselineTransaction? Transaction, string Detail)

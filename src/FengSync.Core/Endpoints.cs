@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Net.Http.Json;
+using FengSync.Core.Diagnostics;
 
 namespace FengSync.Core;
 
@@ -26,6 +27,17 @@ public interface IEndpoint
     Task MoveAsync(string from, string to, CancellationToken cancellationToken = default);
     Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default);
     Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Single-path metadata lookup. Endpoints should default to a single RC/FS call
+    /// (or a parent-directory list) rather than recursing the entire root. The default
+    /// implementation throws so a missing capability surfaces loudly; the planner
+    /// falls back to ScanAsync only when the implementor has explicitly opted in.
+    /// </summary>
+    Task<EntrySnapshot?> StatAsync(string relativePath, CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("此端点未实现 StatAsync；不要在热路径回退到 ScanAsync。");
+    }
 }
 
 /// <summary>Private endpoint control plane used for sync.fengdb.  It is intentionally
@@ -41,6 +53,7 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
 {
     public async Task<JsonElement> CallAsync(string operation, object payload, CancellationToken ct = default)
     {
+        SyncRunMetricsHub.Current.IncrementRcRequest();
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, operation))
         { Content = JsonContent.Create(payload) };
         request.Headers.Authorization = new("Basic", Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{user}:{password}")));
@@ -97,6 +110,7 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
 
     public async Task<IReadOnlyList<EntrySnapshot>> ScanAsync(CancellationToken cancellationToken = default)
     {
+        SyncRunMetricsHub.Current.IncrementDirectoryScan();
         var response = await client.ListAsync(Fs, Profile.Root, cancellationToken);
         if (!response.TryGetProperty("list", out var list)) return [];
         var items = new List<EntrySnapshot>();
@@ -152,5 +166,34 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
         return !string.IsNullOrEmpty(root) && path.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase)
             ? path[(root.Length + 1)..]
             : path;
+    }
+
+    public async Task<EntrySnapshot?> StatAsync(string relativePath, CancellationToken cancellationToken = default)
+    {
+        SyncRunMetricsHub.Current.IncrementStatCall();
+        var parent = relativePath.Contains('/') ? relativePath[..relativePath.LastIndexOf('/')] : "";
+        var name = relativePath.Contains('/') ? relativePath[(relativePath.LastIndexOf('/') + 1)..] : relativePath;
+        try
+        {
+            var response = await client.CallAsync("operations/list", new { fs = Fs, remote = string.IsNullOrEmpty(parent) ? Profile.Root : At(parent), opt = new { recurse = false } }, cancellationToken);
+            if (!response.TryGetProperty("list", out var list)) return null;
+            foreach (var x in list.EnumerateArray())
+            {
+                var candidate = x.TryGetProperty("Name", out var n) ? n.GetString() : x.TryGetProperty("Path", out var p) ? Path.GetFileName(p.GetString() ?? "") : null;
+                if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    var directory = x.TryGetProperty("IsDir", out var isDir) && isDir.GetBoolean();
+                    if (directory) return new(relativePath, EntryKind.Directory, null);
+                    var size = x.TryGetProperty("Size", out var s) ? s.GetInt64() : 0;
+                    var mod = x.TryGetProperty("ModTime", out var m) && DateTimeOffset.TryParse(m.GetString(), out var parsed) ? parsed : DateTimeOffset.MinValue;
+                    return new(relativePath, EntryKind.File, new(size, mod, null));
+                }
+            }
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 }

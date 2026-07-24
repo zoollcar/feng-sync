@@ -2,7 +2,24 @@ namespace FengSync.Core;
 
 public enum TransferStage { Pending, Preparing, Transferring, Verifying, Committed, Deleting, Failed, Cancelled }
 public sealed record TransferProgress(Guid OperationId, string Path, TransferStage Stage, long BytesCompleted, long TotalBytes, int ActiveTransfers = 0, string? Error = null);
-public sealed record OperationRunResult(Guid OperationId, string Path, OperationKind Kind, TransferStage Stage, long BytesTransferred = 0, string? Error = null);
+
+/// <summary>
+/// Result of a single planned operation. Carries the verified source and target
+/// metadata captured around the publish step so the M5 baseline commit can
+/// derive the next two-way state from real post-sync fingerprints instead of
+/// trusting the pre-sync comparison snapshot.
+/// </summary>
+public sealed record OperationRunResult(
+    Guid OperationId,
+    string Path,
+    OperationKind Kind,
+    TransferStage Stage,
+    long BytesTransferred = 0,
+    string? Error = null,
+    Fingerprint? SourceAfter = null,
+    Fingerprint? TargetAfter = null,
+    bool Published = false);
+
 public sealed record SyncRunResult(Guid RunId, IReadOnlyList<OperationRunResult> Operations, bool BaselineCommitted = false, bool NeedsRecovery = false)
 {
     public int SucceededOperations => Operations.Count(x => x.Stage == TransferStage.Committed);

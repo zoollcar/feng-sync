@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using FengSync.Core.Scanning;
+
 namespace FengSync.Core;
 
 public enum SafetySeverity { Warning, Blocking }
@@ -83,12 +86,39 @@ public sealed record PlanSnapshot(
         }
         return new(plan, sources, leftFingerprints, rightFingerprints, DateTimeOffset.UtcNow);
     }
+
+    /// <summary>
+    /// Captures the fingerprint map from an existing <see cref="ComparisonSnapshot"/>
+    /// rather than re-enumerating either endpoint. This is the recommended path for
+    /// every caller below the planner; the legacy ScanAsync overload remains so the
+    /// CLI/test plumbing can keep working unchanged.
+    /// </summary>
+    public static PlanSnapshot FromComparison(SyncPlan plan, ComparisonSnapshot comparison)
+    {
+        var sources = new Dictionary<Guid, Fingerprint?>();
+        var leftFingerprints = new Dictionary<Guid, Fingerprint?>();
+        var rightFingerprints = new Dictionary<Guid, Fingerprint?>();
+        foreach (var op in plan.Operations)
+        {
+            leftFingerprints[op.OperationId] = comparison.Left.ByPath.TryGetValue(op.Path, out var l) ? l.Fingerprint : null;
+            rightFingerprints[op.OperationId] = comparison.Right.ByPath.TryGetValue(op.Path, out var r) ? r.Fingerprint : null;
+            if (op.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft)
+            {
+                var sourceSide = op.Kind == OperationKind.CopyLeftToRight ? comparison.Left : comparison.Right;
+                sources[op.OperationId] = sourceSide.ByPath.TryGetValue(op.Path, out var s) ? s.Fingerprint : null;
+            }
+        }
+        return new(plan, sources, leftFingerprints, rightFingerprints, DateTimeOffset.UtcNow);
+    }
 }
 
 public sealed class PlanFreshnessValidator
 {
     public async Task<SafetyValidationResult> ValidateAsync(PlanSnapshot snapshot, IEndpoint left, IEndpoint right, CancellationToken ct = default)
     {
+        // Path of last resort: when the snapshot was not built from a paired
+        // ComparisonSnapshot, fall back to full-tree enumeration. The M2 work
+        // ensures this branch is only taken by legacy call sites.
         var scans = await Task.WhenAll(left.ScanAsync(ct), right.ScanAsync(ct));
         var leftEntries = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
         var rightEntries = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
@@ -107,6 +137,37 @@ public sealed class PlanFreshnessValidator
                 issues.Add(new("plan.stale", "源文件在比较后发生变化，请重新比较。", SafetySeverity.Blocking, op.Path));
         }
         return new(issues);
+    }
+
+    /// <summary>
+    /// Freshness check using only per-path StatAsync calls. The selected source
+    /// list is small compared to the full tree so this keeps the M2 guarantee:
+    /// the freshness validator must not double the directory scan cost.
+    /// </summary>
+    public async Task<SafetyValidationResult> ValidateStatAsync(PlanSnapshot snapshot, IEndpoint left, IEndpoint right, int maxParallel = 4, CancellationToken ct = default)
+    {
+        var selectedCopies = snapshot.Plan.Operations
+            .Where(x => x.Selected && x.Kind is (OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft))
+            .ToList();
+        if (selectedCopies.Count == 0) return SafetyValidationResult.Pass;
+        using var gate = new SemaphoreSlim(Math.Max(1, maxParallel), Math.Max(1, maxParallel));
+        var issues = new ConcurrentBag<SafetyIssue>();
+        await Task.WhenAll(selectedCopies.Select(async op =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                var sourceIsLeft = op.Kind == OperationKind.CopyLeftToRight;
+                var source = sourceIsLeft ? left : right;
+                var current = await source.StatAsync(op.Path, ct);
+                var expected = (sourceIsLeft ? snapshot.LeftFingerprints : snapshot.RightFingerprints).GetValueOrDefault(op.OperationId);
+                var tolerance = source is RcloneEndpoint ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(2);
+                if (expected is null || current?.Fingerprint is null || !expected.Matches(current.Fingerprint, tolerance))
+                    issues.Add(new("plan.stale", "源文件在比较后发生变化，请重新比较。", SafetySeverity.Blocking, op.Path));
+            }
+            finally { gate.Release(); }
+        }));
+        return new(issues.ToList());
     }
 }
 

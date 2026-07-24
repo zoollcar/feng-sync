@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
+using FengSync.Core.Scanning;
 using Microsoft.Data.Sqlite;
 
 namespace FengSync.Core;
@@ -72,6 +73,96 @@ public sealed class EndpointBaselineStore
             var leftFile = Path.Combine(directory, "left.db"); var rightFile = Path.Combine(directory, "right.db");
             await WriteArchiveAsync(leftFile, leftSessions, ct); await WriteArchiveAsync(rightFile, rightSessions, ct);
             // Validate both candidates before either formal publication.
+            _ = Join((await ReadArchiveAsync(leftFile, ct)).Sessions.Single(x => x.Id == id), (await ReadArchiveAsync(rightFile, ct)).Sessions.Single(x => x.Id == id));
+            await Task.WhenAll(PublishAsync(left, leftFile, ct), PublishAsync(right, rightFile, ct));
+        }
+        finally { TryDelete(directory); }
+    }
+
+    /// <summary>
+    /// Commits the baseline directly from the planner's <see cref="ComparisonSnapshot"/>
+    /// instead of re-enumerating either endpoint. M3 keeps the existing on-disk
+    /// format so consumers stay compatible; only the data source changes.
+    /// </summary>
+    public async Task CommitFromSnapshotAsync(IEndpoint left, IEndpoint right, ComparisonSnapshot snapshot, CancellationToken ct = default)
+    {
+        if (left is not IEndpointStateStorage || right is not IEndpointStateStorage)
+            throw new NotSupportedException("端点未实现 Feng Sync 状态存储接口。");
+        var directory = CreateWorkDirectory();
+        try
+        {
+            var downloaded = await Task.WhenAll(DownloadAsync(left, directory, ct), DownloadAsync(right, directory, ct));
+            var leftArchive = downloaded[0] is null ? Archive.Empty : (await TryReadArchiveAsync(downloaded[0]!, ct)).Archive;
+            var rightArchive = downloaded[1] is null ? Archive.Empty : (await TryReadArchiveAsync(downloaded[1]!, ct)).Archive;
+
+            // M3: build the next-state entries from the snapshot rather than
+            // scanning again. Path lookups use the per-side ByPath index to
+            // avoid the FirstOrDefault nested loops the previous implementation
+            // performed over both entry lists.
+            var leftPath = snapshot.Left.ByPath;
+            var rightPath = snapshot.Right.ByPath;
+            var allPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var k in leftPath.Keys) allPaths.Add(k);
+            foreach (var k in rightPath.Keys) allPaths.Add(k);
+            var entries = allPaths
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .Select(path => new BaselineEntry(path, leftPath.TryGetValue(path, out var l) ? l : null, rightPath.TryGetValue(path, out var r) ? r : null))
+                .ToList();
+
+            var payload = Encode(entries); var id = Guid.NewGuid(); var split = payload.Length / 2;
+            var lead = Fragment.Create(id, SessionRole.Lead, payload, payload[..split]);
+            var follower = Fragment.Create(id, SessionRole.Follower, payload, payload[split..]);
+            var pairIds = MatchingIds(leftArchive, rightArchive);
+            var leftSessions = leftArchive.Sessions.Where(x => !pairIds.Contains(x.Id)).Append(lead).ToList();
+            var rightSessions = rightArchive.Sessions.Where(x => !pairIds.Contains(x.Id)).Append(follower).ToList();
+            var leftFile = Path.Combine(directory, "left.db"); var rightFile = Path.Combine(directory, "right.db");
+            await WriteArchiveAsync(leftFile, leftSessions, ct); await WriteArchiveAsync(rightFile, rightSessions, ct);
+            _ = Join((await ReadArchiveAsync(leftFile, ct)).Sessions.Single(x => x.Id == id), (await ReadArchiveAsync(rightFile, ct)).Sessions.Single(x => x.Id == id));
+            await Task.WhenAll(PublishAsync(left, leftFile, ct), PublishAsync(right, rightFile, ct));
+        }
+        finally { TryDelete(directory); }
+    }
+
+    /// <summary>
+    /// M5: commits the next baseline derived from <see cref="BaselineStateBuilder"/>
+    /// rather than from the raw snapshot. This is the only safe source of
+    /// truth after a successful sync; using the pre-sync snapshot would leave
+    /// the destination recorded with its old (missing or stale) fingerprint.
+    /// </summary>
+    public async Task CommitFromResultsAsync(IEndpoint left, IEndpoint right, BaselineCommitInput input, CancellationToken ct = default)
+    {
+        if (left is not IEndpointStateStorage || right is not IEndpointStateStorage)
+            throw new NotSupportedException("端点未实现 Feng Sync 状态存储接口。");
+        var directory = CreateWorkDirectory();
+        try
+        {
+            var downloaded = await Task.WhenAll(DownloadAsync(left, directory, ct), DownloadAsync(right, directory, ct));
+            var leftArchive = downloaded[0] is null ? Archive.Empty : (await TryReadArchiveAsync(downloaded[0]!, ct)).Archive;
+            var rightArchive = downloaded[1] is null ? Archive.Empty : (await TryReadArchiveAsync(downloaded[1]!, ct)).Archive;
+
+            IReadOnlyList<BaselineEntry>? previous = null;
+            var leftRead = downloaded[0] is null ? new ArchiveRead(Archive.Empty, false) : await TryReadArchiveAsync(downloaded[0]!, ct);
+            var rightRead = downloaded[1] is null ? new ArchiveRead(Archive.Empty, false) : await TryReadArchiveAsync(downloaded[1]!, ct);
+            if (leftRead.Archive.Sessions.Count > 0 && rightRead.Archive.Sessions.Count > 0)
+            {
+                var leftPair = leftRead.Archive.Sessions.FirstOrDefault();
+                var rightPair = rightRead.Archive.Sessions.FirstOrDefault(r => r.Id != leftPair?.Id);
+                if (leftPair is not null && rightPair is not null)
+                {
+                    try { previous = Decode(Join(leftPair, rightPair)); }
+                    catch (InvalidDataException) { previous = null; }
+                }
+            }
+
+            var entries = BaselineStateBuilder.BuildNextState(input, previous);
+            var payload = Encode(entries); var id = Guid.NewGuid(); var split = payload.Length / 2;
+            var lead = Fragment.Create(id, SessionRole.Lead, payload, payload[..split]);
+            var follower = Fragment.Create(id, SessionRole.Follower, payload, payload[split..]);
+            var pairIds = MatchingIds(leftArchive, rightArchive);
+            var leftSessions = leftArchive.Sessions.Where(x => !pairIds.Contains(x.Id)).Append(lead).ToList();
+            var rightSessions = rightArchive.Sessions.Where(x => !pairIds.Contains(x.Id)).Append(follower).ToList();
+            var leftFile = Path.Combine(directory, "left.db"); var rightFile = Path.Combine(directory, "right.db");
+            await WriteArchiveAsync(leftFile, leftSessions, ct); await WriteArchiveAsync(rightFile, rightSessions, ct);
             _ = Join((await ReadArchiveAsync(leftFile, ct)).Sessions.Single(x => x.Id == id), (await ReadArchiveAsync(rightFile, ct)).Sessions.Single(x => x.Id == id));
             await Task.WhenAll(PublishAsync(left, leftFile, ct), PublishAsync(right, rightFile, ct));
         }

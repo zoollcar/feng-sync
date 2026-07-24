@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
+using FengSync.Core.Diagnostics;
+using FengSync.Core.Scanning;
 
 namespace FengSync.Core;
-public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorage
+public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorage, IContentHashEndpoint
 {
     public string Root { get; } = Path.GetFullPath(root);
     public EndpointProfile Profile { get; } = new(Guid.NewGuid(), EndpointType.Local, Path.GetFullPath(root), Identity: Path.GetFullPath(root));
@@ -9,13 +11,17 @@ public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorag
     public IEnumerable<EntrySnapshot> Scan()
     {
         if (!Directory.Exists(Root)) throw new DirectoryNotFoundException(Root);
+        SyncRunMetricsHub.Current.IncrementDirectoryScan();
         foreach (var path in Directory.EnumerateFileSystemEntries(Root, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(Root, path).Replace('\\', '/');
             if (SyncInternalPaths.IsExcludedFromScan(relative)) continue;
             var attr = File.GetAttributes(path); if (attr.HasFlag(FileAttributes.System) || attr.HasFlag(FileAttributes.ReparsePoint)) continue;
-            if (attr.HasFlag(FileAttributes.Directory)) yield return new(relative, EntryKind.Directory, null);
-            else { var f = new FileInfo(path); yield return new(relative, EntryKind.File, new(f.Length, f.LastWriteTimeUtc, Hash(path))); }
+            EntrySnapshot snapshot;
+            if (attr.HasFlag(FileAttributes.Directory)) snapshot = new(relative, EntryKind.Directory, null);
+            else { var f = new FileInfo(path); snapshot = new(relative, EntryKind.File, new(f.Length, f.LastWriteTimeUtc, null)); }
+            SyncRunMetricsHub.Current.AddEntriesEnumerated(1);
+            yield return snapshot;
         }
     }
     public string PhysicalPath(string relative) => Path.Combine(Root, relative.Replace('/', Path.DirectorySeparatorChar));
@@ -26,6 +32,7 @@ public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorag
         return Task.Run<IReadOnlyList<EntrySnapshot>>(() =>
         {
             var entries = new List<EntrySnapshot>();
+            SyncRunMetricsHub.Current.IncrementDirectoryScan();
             foreach (var path in Directory.EnumerateFileSystemEntries(Root, "*", SearchOption.AllDirectories))
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -34,12 +41,57 @@ public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorag
                 var attr = File.GetAttributes(path); if (attr.HasFlag(FileAttributes.System) || attr.HasFlag(FileAttributes.ReparsePoint)) continue;
                 entries.Add(attr.HasFlag(FileAttributes.Directory)
                     ? new(relative, EntryKind.Directory, null)
-                    : new EntrySnapshot(relative, EntryKind.File, new Fingerprint(new FileInfo(path).Length, File.GetLastWriteTimeUtc(path), Hash(path))));
+                    : new EntrySnapshot(relative, EntryKind.File, new Fingerprint(new FileInfo(path).Length, File.GetLastWriteTimeUtc(path), null)));
+                SyncRunMetricsHub.Current.AddEntriesEnumerated(1);
                 if (entries.Count == 1 || entries.Count % 25 == 0) progress.Report(new(entries.Count, relative));
             }
             progress.Report(new(entries.Count, entries.LastOrDefault()?.Path, true));
             return entries;
         }, cancellationToken);
+    }
+    public Task<EntrySnapshot?> StatAsync(string relativePath, CancellationToken cancellationToken = default)
+    {
+        SyncRunMetricsHub.Current.IncrementStatCall();
+        var physical = PhysicalPath(relativePath);
+        if (File.Exists(physical))
+        {
+            var info = new FileInfo(physical);
+            return Task.FromResult<EntrySnapshot?>(new(relativePath, EntryKind.File, new(info.Length, info.LastWriteTimeUtc, null)));
+        }
+        if (Directory.Exists(physical))
+        {
+            return Task.FromResult<EntrySnapshot?>(new(relativePath, EntryKind.Directory, null));
+        }
+        return Task.FromResult<EntrySnapshot?>(null);
+    }
+    public Task<ContentDigest> HashAsync(string relativePath, HashAlgorithmId algorithm, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    {
+        SyncRunMetricsHub.Current.IncrementHashFile();
+        var physical = PhysicalPath(relativePath);
+        HashAlgorithm hashInstance = algorithm switch
+        {
+            HashAlgorithmId.Sha256 => SHA256.Create(),
+            HashAlgorithmId.Sha1 => SHA1.Create(),
+            HashAlgorithmId.Md5 => MD5.Create(),
+            _ => throw new ArgumentOutOfRangeException(nameof(algorithm))
+        };
+        using (hashInstance)
+        {
+            using var stream = new FileStream(physical, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
+            var buffer = new byte[64 * 1024];
+            int read;
+            long total = 0;
+            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                hashInstance.TransformBlock(buffer, 0, read, null, 0);
+                total += read;
+                progress?.Report(total);
+            }
+            hashInstance.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            SyncRunMetricsHub.Current.AddHashBytes(total);
+            return Task.FromResult(new ContentDigest(algorithm, Convert.ToHexString(hashInstance.Hash!)));
+        }
     }
     public async Task CopyToAsync(string relativePath, IEndpoint target, string temporaryPath, CancellationToken cancellationToken = default)
     {
@@ -63,5 +115,4 @@ public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorag
         var temporary = PhysicalPath(temporaryRelativePath); Directory.CreateDirectory(Path.GetDirectoryName(temporary)!);
         File.Copy(localPath, temporary, true); File.Move(temporary, PhysicalPath(SyncInternalPaths.StateDatabase), true); return Task.CompletedTask;
     }
-    private static string Hash(string path) { using var sha = SHA256.Create(); using var s = File.OpenRead(path); return Convert.ToHexString(sha.ComputeHash(s)); }
 }

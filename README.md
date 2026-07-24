@@ -109,9 +109,3 @@ src/FengSync.Cli   无人值守的比较与同步命令行程序
 tests              xUnit 核心/集成测试和 PowerShell GUI 验收测试
 docs               GUI 测试说明、架构审查与实施设计记录
 ```
-
-## 相关文档
-
-- [GUI 测试说明](docs/GUI_TESTING.md)
-- [架构抽象层审查](docs/ARCHITECTURE_ABSTRACTION_REVIEW.md)
-- [实施设计索引](docs/implementation/README.md)
