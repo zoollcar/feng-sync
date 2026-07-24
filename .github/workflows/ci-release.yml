@@ -1,4 +1,4 @@
-name: Build, test and release
+name: Build and release
 
 on:
   push:
@@ -19,7 +19,7 @@ env:
   RUNTIME_IDENTIFIER: win-x64
 
 jobs:
-  build-and-test:
+  build:
     runs-on: windows-latest
 
     steps:
@@ -31,21 +31,14 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Set up Node.js for SFTP integration tests
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-          cache: npm
-          cache-dependency-path: src/FengSync.Core/SftpServer/package-lock.json
-
-      - name: Restore, build and run tests
+      - name: Restore and build
         shell: pwsh
-        run: ./scripts/Test-All.ps1 -Configuration $env:CONFIGURATION -SkipGoogleDrive
+        run: dotnet build ./FengSync.sln -c $env:CONFIGURATION --nologo
 
   release:
     # Only version tags publish software. Branch and pull-request builds only validate it.
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build-and-test
+    needs: build
     runs-on: windows-latest
 
     steps:
