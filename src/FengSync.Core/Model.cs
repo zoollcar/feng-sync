@@ -64,30 +64,40 @@ public sealed class SyncOperation
     public OperationKind? KeepLeft { get; }
     public OperationKind? KeepRight { get; }
     public bool IsConflict { get; private set; }
-    public void Resolve(bool keepLeft)
+    /// <summary>Resolve a conflict by choosing the left or right side as the winner.</summary>
+    public void ResolveConflict(bool keepLeft)
     {
         if (!IsConflict || (keepLeft ? KeepLeft : KeepRight) is not { } resolution) throw new InvalidOperationException("此冲突无法按所选方向裁决。");
         Kind = resolution; IsConflict = false; Reason = keepLeft ? "冲突裁决：保留左侧" : "冲突裁决：保留右侧";
     }
-    /// <summary>Lets the user override a planned copy or restore a deletion by copying the still-present side back.</summary>
+    /// <summary>Override a planned operation by choosing the winning side.
+    /// Copies flip direction, conflicts get resolved to the chosen side, and one-sided deletes
+    /// behave as follows: the named winning side is treated as the source. If that source still
+    /// exists, the missing side is restored from it; if that source has been deleted, the other
+    /// side is also removed (so both sides end up deleted).</summary>
     public void OverrideCopyDirection(bool keepLeft)
     {
-        if (IsConflict) { Resolve(keepLeft); return; }
-        if (Kind == OperationKind.DeleteLeft && !keepLeft)
+        if (IsConflict) { ResolveConflict(keepLeft); return; }
+        switch (Kind)
         {
-            Kind = OperationKind.CopyRightToLeft;
-            Reason = "用户覆盖：恢复左侧已删除的文件";
-            return;
+            case OperationKind.DeleteLeft:
+                // Left is missing. keepLeft=true → left "wins" but is gone → also delete right.
+                // keepLeft=false → right wins and still exists → restore left from right.
+                if (keepLeft) { Kind = OperationKind.DeleteRight; Reason = "用户覆盖：左侧覆盖右侧，左侧已删除；现也删除右侧"; return; }
+                Kind = OperationKind.CopyRightToLeft; Reason = "用户覆盖：右侧覆盖左侧，恢复已删除的左文件"; return;
+            case OperationKind.DeleteRight:
+                // Right is missing. keepLeft=true → left wins and still exists → restore right from left.
+                // keepLeft=false → right "wins" but is gone → also delete left.
+                if (keepLeft) { Kind = OperationKind.CopyLeftToRight; Reason = "用户覆盖：左侧覆盖右侧，恢复已删除的右文件"; return; }
+                Kind = OperationKind.DeleteLeft; Reason = "用户覆盖：右侧覆盖左侧，右侧已删除；现也删除左侧"; return;
+            case OperationKind.CopyLeftToRight:
+            case OperationKind.CopyRightToLeft:
+                Kind = keepLeft ? OperationKind.CopyLeftToRight : OperationKind.CopyRightToLeft;
+                Reason = keepLeft ? "用户覆盖：左侧覆盖右侧" : "用户覆盖：右侧覆盖左侧";
+                return;
+            default:
+                throw new InvalidOperationException("仅复制、删除与冲突项支持覆盖方向；目录创建或被屏蔽项无法覆盖。");
         }
-        if (Kind == OperationKind.DeleteRight && keepLeft)
-        {
-            Kind = OperationKind.CopyLeftToRight;
-            Reason = "用户覆盖：恢复右侧已删除的文件";
-            return;
-        }
-        if (Kind is not (OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft)) throw new InvalidOperationException("该删除项只能改为由仍存在的一侧恢复文件。");
-        Kind = keepLeft ? OperationKind.CopyLeftToRight : OperationKind.CopyRightToLeft;
-        Reason = keepLeft ? "用户覆盖：左侧覆盖右侧" : "用户覆盖：右侧覆盖左侧";
     }
 }
 public sealed record SyncPlan(IReadOnlyList<SyncOperation> Operations)

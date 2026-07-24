@@ -21,12 +21,17 @@ public sealed class PlannerTests
     [Fact] public void Conflict_can_be_explicitly_resolved_to_left()
     {
         var operation = Assert.Single(_planner.Build([File("a.txt", "B")], [File("a.txt", "C")], Baseline()).Operations);
-        operation.Resolve(true); Assert.False(operation.IsConflict); Assert.Equal(OperationKind.CopyLeftToRight, operation.Kind); Assert.True(new SyncPlan([operation]).CanExecute);
+        operation.ResolveConflict(true); Assert.False(operation.IsConflict); Assert.Equal(OperationKind.CopyLeftToRight, operation.Kind); Assert.True(new SyncPlan([operation]).CanExecute);
+    }
+    [Fact] public void Conflict_can_be_explicitly_resolved_to_right()
+    {
+        var operation = Assert.Single(_planner.Build([File("a.txt", "B")], [File("a.txt", "C")], Baseline()).Operations);
+        operation.ResolveConflict(false); Assert.False(operation.IsConflict); Assert.Equal(OperationKind.CopyRightToLeft, operation.Kind);
     }
     [Fact] public void Delete_modify_conflict_can_resolve_to_delete()
     {
         var operation = Assert.Single(_planner.Build([], [File("a.txt", "B")], Baseline()).Operations);
-        operation.Resolve(true); Assert.Equal(OperationKind.DeleteRight, operation.Kind);
+        operation.ResolveConflict(true); Assert.Equal(OperationKind.DeleteRight, operation.Kind);
     }
     [Theory] [InlineData("CON.txt")] [InlineData("name. ")] [InlineData("dir/../x")]
     public void Invalid_windows_path_blocks_plan(string path) => Assert.Contains(_planner.Build([File(path, "A")], [], null).Operations, x => x.Kind == OperationKind.Blocked);
@@ -37,11 +42,42 @@ public sealed class PlannerTests
         operation.OverrideCopyDirection(false);
         Assert.Equal(OperationKind.CopyRightToLeft, operation.Kind); Assert.Equal("用户覆盖：右侧覆盖左侧", operation.Reason);
     }
-    [Fact] public void A_delete_can_be_reversed_from_the_still_present_side()
+    [Fact] public void KeepLeft_on_DeleteRight_restores_right_from_left()
     {
         var operation = new SyncOperation("a.txt", OperationKind.DeleteRight, "delete");
         operation.OverrideCopyDirection(true);
         Assert.Equal(OperationKind.CopyLeftToRight, operation.Kind);
     }
-    [Fact] public void A_delete_cannot_be_reversed_from_the_missing_side() => Assert.Throws<InvalidOperationException>(() => new SyncOperation("a.txt", OperationKind.DeleteRight, "delete").OverrideCopyDirection(false));
+    [Fact] public void KeepRight_on_DeleteRight_also_deletes_the_still_present_left()
+    {
+        var operation = new SyncOperation("a.txt", OperationKind.DeleteRight, "delete");
+        operation.OverrideCopyDirection(false);
+        Assert.Equal(OperationKind.DeleteLeft, operation.Kind);
+    }
+    [Fact] public void KeepLeft_on_DeleteLeft_also_deletes_the_still_present_right()
+    {
+        var operation = new SyncOperation("a.txt", OperationKind.DeleteLeft, "delete");
+        operation.OverrideCopyDirection(true);
+        Assert.Equal(OperationKind.DeleteRight, operation.Kind);
+    }
+    [Fact] public void KeepRight_on_DeleteLeft_restores_left_from_right()
+    {
+        var operation = new SyncOperation("a.txt", OperationKind.DeleteLeft, "delete");
+        operation.OverrideCopyDirection(false);
+        Assert.Equal(OperationKind.CopyRightToLeft, operation.Kind);
+    }
+    [Fact] public void OverrideCopyDirection_rejects_unrelated_kinds()
+    {
+        var create = new SyncOperation("dir", OperationKind.CreateRightDirectory, "create");
+        Assert.Throws<InvalidOperationException>(() => create.OverrideCopyDirection(true));
+    }
+    [Fact] public void Blocked_rows_fall_through_to_conflict_resolution()
+    {
+        // Blocked rows are conflicts (IsConflict=true) with KeepLeft/KeepRight provided,
+        // so OverrideCopyDirection must take the ResolveConflict path and succeed.
+        var blocked = new SyncOperation("a.txt", OperationKind.Blocked, "blocked", true, OperationKind.CopyLeftToRight, OperationKind.CopyRightToLeft);
+        Assert.True(blocked.IsConflict);
+        blocked.OverrideCopyDirection(true);
+        Assert.False(blocked.IsConflict); Assert.Equal(OperationKind.CopyLeftToRight, blocked.Kind);
+    }
 }
