@@ -10,6 +10,25 @@ public sealed class PlannerTests
 
     [Fact] public void First_sync_copies_a_one_sided_file() => Assert.Equal(OperationKind.CopyLeftToRight, Assert.Single(_planner.Build([File("a.txt", "A")], [], null).Operations).Kind);
     [Fact] public void First_sync_never_infers_a_delete() => Assert.Empty(_planner.Build([], [], null).Operations);
+    [Fact] public void First_sync_both_different_emits_a_resolvable_conflict()
+    {
+        // No baseline, both files present, both different → Conflict with explicit resolutions so the toolbar
+        // "cover the other side" buttons succeed rather than failing with a missing-resolution error.
+        var operation = Assert.Single(_planner.Build([File("a.txt", "B")], [File("a.txt", "C")], null).Operations);
+        Assert.True(operation.IsConflict);
+        Assert.NotNull(operation.KeepLeft); Assert.NotNull(operation.KeepRight);
+        operation.ResolveConflict(true); Assert.Equal(OperationKind.CopyLeftToRight, operation.Kind);
+        var second = Assert.Single(_planner.Build([File("a.txt", "B")], [File("a.txt", "C")], null).Operations);
+        second.ResolveConflict(false); Assert.Equal(OperationKind.CopyRightToLeft, second.Kind);
+    }
+    [Fact] public void File_directory_conflict_stays_unresolved_until_the_type_collision_is_manually_handled()
+    {
+        var directory = new EntrySnapshot("photos", EntryKind.Directory, null);
+        var operation = Assert.Single(_planner.Build([directory], [File("photos", "old file")], null).Operations);
+        Assert.True(operation.IsConflict);
+        Assert.Null(operation.KeepLeft); Assert.Null(operation.KeepRight);
+        Assert.Throws<InvalidOperationException>(() => operation.ResolveConflict(true));
+    }
     [Fact] public void One_side_modification_propagates() => Assert.Equal(OperationKind.CopyLeftToRight, Assert.Single(_planner.Build([File("a.txt", "B")], [File("a.txt", "A")], Baseline()).Operations).Kind);
     [Fact] public void One_side_delete_propagates_only_with_baseline() => Assert.Equal(OperationKind.DeleteRight, Assert.Single(_planner.Build([], [File("a.txt", "A")], Baseline()).Operations).Kind);
     [Fact] public void Equal_two_sided_change_merges_without_action() => Assert.Empty(_planner.Build([File("a.txt", "B")], [File("a.txt", "B")], Baseline()).Operations);
@@ -70,6 +89,27 @@ public sealed class PlannerTests
     {
         var create = new SyncOperation("dir", OperationKind.CreateRightDirectory, "create");
         Assert.Throws<InvalidOperationException>(() => create.OverrideCopyDirection(true));
+    }
+    [Fact] public void KeepLeft_on_copy_with_empty_left_collapses_to_delete_right()
+    {
+        // Right has the file, left is empty: planner proposes CopyRightToLeft. Picking "left wins" should
+        // delete the right-side file so the (empty) winner's state propagates, not flip to a copy-from-empty.
+        var operation = new SyncOperation("a.txt", OperationKind.CopyRightToLeft, "default");
+        operation.OverrideCopyDirection(true, left: null, right: File("a.txt", "B"));
+        Assert.Equal(OperationKind.DeleteRight, operation.Kind);
+    }
+    [Fact] public void KeepRight_on_copy_with_empty_right_collapses_to_delete_left()
+    {
+        var operation = new SyncOperation("a.txt", OperationKind.CopyLeftToRight, "default");
+        operation.OverrideCopyDirection(false, left: File("a.txt", "B"), right: null);
+        Assert.Equal(OperationKind.DeleteLeft, operation.Kind);
+    }
+    [Fact] public void OverrideCopyDirection_with_both_sides_present_keeps_legacy_flip()
+    {
+        // Without empty-side asymmetry, flip semantics still apply so the existing tests stay intact.
+        var operation = new SyncOperation("a.txt", OperationKind.CopyLeftToRight, "default");
+        operation.OverrideCopyDirection(false, left: File("a.txt", "A"), right: File("a.txt", "B"));
+        Assert.Equal(OperationKind.CopyRightToLeft, operation.Kind);
     }
     [Fact] public void Blocked_rows_fall_through_to_conflict_resolution()
     {

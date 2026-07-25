@@ -35,7 +35,7 @@ public sealed class ThreeWayPlanner
     {
         if (l is null && r is not null) o.Add(new(p, r.Kind == EntryKind.Directory ? OperationKind.CreateLeftDirectory : OperationKind.CopyRightToLeft, "首次同步：仅右侧存在"));
         else if (r is null && l is not null) o.Add(new(p, l.Kind == EntryKind.Directory ? OperationKind.CreateRightDirectory : OperationKind.CopyLeftToRight, "首次同步：仅左侧存在"));
-        else if (l is not null && r is not null && !Same(l, r)) o.Add(new(p, OperationKind.Conflict, "首次同步：两侧内容不同"));
+        else if (l is not null && r is not null && !Same(l, r)) o.Add(Conflict(p, "首次同步：两侧内容不同", l, r));
     }
     private static void Decide(string p, EntrySnapshot? l, EntrySnapshot? r, BaselineEntry b, List<SyncOperation> o)
     {
@@ -44,7 +44,17 @@ public sealed class ThreeWayPlanner
         if (dl == Delta.Unchanged) { Propagate(p, r!, true, dr, o); return; }
         if (dr == Delta.Unchanged) { Propagate(p, l!, false, dl, o); return; }
         if (l is not null && r is not null && Same(l, r)) return;
-        o.Add(new(p, OperationKind.Conflict, $"两侧均已变更（左：{dl}；右：{dr}）", true, Resolution(l, true), Resolution(r, false)));
+        o.Add(Conflict(p, $"两侧均已变更（左：{dl}；右：{dr}）", l, r));
+    }
+    private static SyncOperation Conflict(string path, string reason, EntrySnapshot? left, EntrySnapshot? right)
+    {
+        // Replacing a file with a directory (or the reverse) also requires removing a
+        // whole conflicting subtree and replanning its children. A single operation cannot
+        // safely express that transaction, so leave it unresolved instead of emitting a
+        // directory creation that will fail on the existing file.
+        if (left is not null && right is not null && left.Kind != right.Kind)
+            return new(path, OperationKind.Conflict, reason + "（文件与目录类型不一致，请手动处理后重新比较）");
+        return new(path, OperationKind.Conflict, reason, true, Resolution(left, true), Resolution(right, false));
     }
     private static OperationKind Resolution(EntrySnapshot? source, bool sourceIsLeft) => source is null
         ? (sourceIsLeft ? OperationKind.DeleteRight : OperationKind.DeleteLeft)

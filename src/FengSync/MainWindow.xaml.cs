@@ -113,16 +113,21 @@ public partial class MainWindow : Window
     private void KeepLeft_Click(object sender, RoutedEventArgs e) => ResolveSelected(true); private void KeepRight_Click(object sender, RoutedEventArgs e) => ResolveSelected(false);
     private void ResolveSelected(bool left)
     {
+        // Top-bar buttons should match "select all then apply". When nothing is selected we
+        // fan out across every row in the comparison list so users do not have to first
+        // Ctrl+A or shift-click a range just to flip the default direction.
         var rows = Comparison.SelectedItems.Cast<ComparisonRow>().ToList();
-        if (rows.Count == 0) { Status.Text = "请选择要修改覆盖方向的行。"; return; }
-        ApplyDirection(rows, left);
+        var applyToAll = rows.Count == 0;
+        if (applyToAll) rows = _rows.ToList();
+        if (rows.Count == 0) { Status.Text = "暂无可修改覆盖方向的行；请先点击“比较”。"; return; }
+        ApplyDirection(rows, left, applyToAll);
     }
-    private void ApplyDirection(IEnumerable<ComparisonRow> rows, bool keepLeft)
+    private void ApplyDirection(IEnumerable<ComparisonRow> rows, bool keepLeft, bool activateRows = false)
     {
         var changed = 0; var errors = new List<string>();
         foreach (var row in rows)
         {
-            try { row.Operation.OverrideCopyDirection(keepLeft); row.Refresh(); changed++; }
+            try { row.Operation.OverrideCopyDirection(keepLeft, row.Left, row.Right); if (activateRows) row.EnableForCurrentPlan(); row.Refresh(); changed++; }
             catch (Exception ex) { errors.Add($"{row.Operation.Path}：{ex.Message}"); }
         }
         Comparison.Items.Refresh(); RefreshSummary();
@@ -454,7 +459,9 @@ public partial class MainWindow : Window
 public sealed class ComparisonRow : INotifyPropertyChanged
 {
     public ComparisonRow(SyncOperation operation, EntrySnapshot? left, EntrySnapshot? right, bool isFilterExcluded = false) { Operation = operation; Left = left; Right = right; IsFilterExcluded = isFilterExcluded; Refresh(); }
-    public SyncOperation Operation { get; } public EntrySnapshot? Left { get; } public EntrySnapshot? Right { get; } public bool IsFilterExcluded { get; } public bool IsIgnored { get; set; } public bool Selected { get => Operation.Selected; set { if (IsIgnored || IsFilterExcluded || Operation.Selected == value) return; Operation.Selected = value; OnPropertyChanged(); } } public string LeftDisplay { get; private set; } = ""; public string RightDisplay { get; private set; } = ""; public string LeftSize { get; private set; } = ""; public string RightSize { get; private set; } = ""; public string ActionDisplay { get; private set; } = ""; public Brush ActionBrush { get; private set; } = Brushes.DimGray; public string Reason => Operation.Reason;
+    public SyncOperation Operation { get; } public EntrySnapshot? Left { get; } public EntrySnapshot? Right { get; } public bool IsFilterExcluded { get; private set; } public bool IsIgnored { get; set; } public bool Selected { get => Operation.Selected; set { if (IsIgnored || IsFilterExcluded || Operation.Selected == value) return; Operation.Selected = value; OnPropertyChanged(); } } public string LeftDisplay { get; private set; } = ""; public string RightDisplay { get; private set; } = ""; public string LeftSize { get; private set; } = ""; public string RightSize { get; private set; } = ""; public string ActionDisplay { get; private set; } = ""; public Brush ActionBrush { get; private set; } = Brushes.DimGray; public string Reason => Operation.Reason;
+    /// <summary>Explicit toolbar coverage overrides this comparison's temporary exclusions without editing the persisted Profile.</summary>
+    public void EnableForCurrentPlan() { IsIgnored = false; IsFilterExcluded = false; Operation.Selected = true; OnPropertyChanged(nameof(Selected)); }
     public void Refresh() { LeftDisplay = Describe(Left); RightDisplay = Describe(Right); LeftSize = Size(Left); RightSize = Size(Right); (ActionDisplay, ActionBrush) = IsIgnored || IsFilterExcluded ? ("⊘", Brushes.DimGray) : Operation.IsConflict ? ("⚠", Brushes.DarkOrange) : Operation.Kind switch { OperationKind.CopyLeftToRight => ("✚→", Brushes.ForestGreen), OperationKind.CopyRightToLeft => ("←✚", Brushes.ForestGreen), OperationKind.DeleteLeft => ("←✖", Brushes.Firebrick), OperationKind.DeleteRight => ("✖→", Brushes.Firebrick), OperationKind.CreateLeftDirectory => ("←✚", Brushes.ForestGreen), OperationKind.CreateRightDirectory => ("✚→", Brushes.ForestGreen), OperationKind.Blocked => ("⛔", Brushes.Firebrick), _ => ("=", Brushes.DimGray) }; }
     private static string Describe(EntrySnapshot? e) => e is null ? "" : e.Kind == EntryKind.Directory ? "▰ " + e.Path : "▱ " + e.Path;
     private static string Size(EntrySnapshot? e) => e?.Fingerprint is null ? "" : e.Fingerprint.Size.ToString("N0");

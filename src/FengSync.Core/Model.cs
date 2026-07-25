@@ -74,8 +74,10 @@ public sealed class SyncOperation
     /// Copies flip direction, conflicts get resolved to the chosen side, and one-sided deletes
     /// behave as follows: the named winning side is treated as the source. If that source still
     /// exists, the missing side is restored from it; if that source has been deleted, the other
-    /// side is also removed (so both sides end up deleted).</summary>
-    public void OverrideCopyDirection(bool keepLeft)
+    /// side is also removed (so both sides end up deleted).
+    /// When entry snapshots are supplied, "use the empty side to override" turns into a delete
+    /// of the populated side so the result matches the winner's (empty) state.</summary>
+    public void OverrideCopyDirection(bool keepLeft, EntrySnapshot? left = null, EntrySnapshot? right = null)
     {
         if (IsConflict) { ResolveConflict(keepLeft); return; }
         switch (Kind)
@@ -92,6 +94,14 @@ public sealed class SyncOperation
                 Kind = OperationKind.DeleteLeft; Reason = "用户覆盖：右侧覆盖左侧，右侧已删除；现也删除左侧"; return;
             case OperationKind.CopyLeftToRight:
             case OperationKind.CopyRightToLeft:
+                // If entry info is available, "the winner wins" should land on a delete when the
+                // winner side currently has nothing — flipping direction would otherwise produce
+                // a copy from an empty source. With no entry info we keep the legacy flip behavior.
+                if (left is not null || right is not null)
+                {
+                    var winnerEmpty = keepLeft ? left is null : right is null;
+                    if (winnerEmpty) { Kind = keepLeft ? OperationKind.DeleteRight : OperationKind.DeleteLeft; Reason = keepLeft ? "用户覆盖：左侧覆盖右侧，左侧为空；现也删除右侧" : "用户覆盖：右侧覆盖左侧，右侧为空；现也删除左侧"; return; }
+                }
                 Kind = keepLeft ? OperationKind.CopyLeftToRight : OperationKind.CopyRightToLeft;
                 Reason = keepLeft ? "用户覆盖：左侧覆盖右侧" : "用户覆盖：右侧覆盖左侧";
                 return;
