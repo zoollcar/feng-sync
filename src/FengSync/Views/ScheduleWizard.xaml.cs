@@ -12,6 +12,7 @@ public partial class ScheduleWizard : Window
     private readonly SyncProfile _profile;
     private readonly WindowsTaskSchedulerService _scheduler;
     private readonly string _cliPath;
+    private bool _operationInProgress;
 
     public ScheduleWizard(SyncProfile profile, WindowsTaskSchedulerService? scheduler = null, string? cliPath = null)
     {
@@ -29,23 +30,25 @@ public partial class ScheduleWizard : Window
     private async void Create_Click(object sender, RoutedEventArgs e)
     {
         if (!File.Exists(_cliPath)) { ResultText.Text = "找不到 FengSync.Cli.exe；请重新安装完整应用。"; return; }
-        try
-        {
-            await _scheduler.CreateOrReplaceAsync(new ScheduledProfileTask(TaskName, _profile.Id, _cliPath, Schedule));
-            ResultText.Text = "计划任务已创建或更新。";
-        }
-        catch (Exception ex) { ResultText.Text = ex.Message; }
+        await RunBusyAsync((Button)sender, "正在创建…", async () => { await _scheduler.CreateOrReplaceAsync(new ScheduledProfileTask(TaskName, _profile.Id, _cliPath, Schedule)); ResultText.Text = "计划任务已创建或更新。"; });
     }
 
     private async void Test_Click(object sender, RoutedEventArgs e)
     {
-        try { await _scheduler.TestRunAsync(TaskName); ResultText.Text = "已请求测试运行；请在运行历史中查看结果。"; }
-        catch (Exception ex) { ResultText.Text = ex.Message; }
+        await RunBusyAsync((Button)sender, "正在请求…", async () => { await _scheduler.TestRunAsync(TaskName); ResultText.Text = "已请求测试运行；请在运行历史中查看结果。"; });
     }
 
     private async void Delete_Click(object sender, RoutedEventArgs e)
     {
-        try { await _scheduler.DeleteAsync(TaskName); ResultText.Text = "计划任务已删除。"; }
+        await RunBusyAsync((Button)sender, "正在删除…", async () => { await _scheduler.DeleteAsync(TaskName); ResultText.Text = "计划任务已删除。"; });
+    }
+    private async Task RunBusyAsync(Button button, string busyText, Func<Task> action)
+    {
+        if (_operationInProgress) return;
+        _operationInProgress = true;
+        var original = button.Content;
+        try { button.IsEnabled = false; button.Content = busyText; ResultText.Text = busyText; await action(); }
         catch (Exception ex) { ResultText.Text = ex.Message; }
+        finally { button.IsEnabled = true; button.Content = original; _operationInProgress = false; }
     }
 }

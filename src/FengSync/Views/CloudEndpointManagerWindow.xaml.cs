@@ -15,6 +15,7 @@ namespace FengSync.Views;
 public partial class CloudEndpointManagerWindow : Window
 {
     private readonly ObservableCollection<RcloneAccount> _accounts = [];
+    private bool _busy;
 
     /// <summary>Feng Sync endpoint URI chosen by the user, or null if nothing was added.</summary>
     public string? ResultUri { get; private set; }
@@ -35,6 +36,7 @@ public partial class CloudEndpointManagerWindow : Window
     {
         try
         {
+            StatusText.Text = "正在读取云端端点列表…";
             var previous = Selected?.Name;
             var accounts = await CloudEndpointService.LoadAccountsAsync();
             _accounts.Clear();
@@ -61,53 +63,58 @@ public partial class CloudEndpointManagerWindow : Window
         ResolvedUriText.Text = "将添加：" + CloudEndpointService.BuildUri(kind, account.Name, RemotePathBox.Text);
     }
 
-    private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshAsync();
+    private async void Refresh_Click(object sender, RoutedEventArgs e)
+        => await RunBusyAsync(RefreshButton, "正在刷新…", "正在读取云端端点列表…", RefreshAsync);
 
     private async void New_Click(object sender, RoutedEventArgs e)
     {
-        var editor = new CloudEndpointEditorWindow { Owner = this };
-        if (editor.ShowDialog() == true && editor.SavedRemoteName is not null)
+        await RunBusyAsync(NewButton, "正在新建…", "正在打开新建端点窗口…", async () =>
         {
+            var editor = new CloudEndpointEditorWindow { Owner = this };
+            if (editor.ShowDialog() != true || editor.SavedRemoteName is null) return;
             await RefreshAsync();
             var index = _accounts.ToList().FindIndex(x => x.Name == editor.SavedRemoteName);
             if (index >= 0) { EndpointList.SelectedIndex = index; EndpointSelector.SelectedIndex = index; }
             RemotePathBox.Text = editor.SavedRoot ?? "";
             UpdateResolvedUri();
             StatusText.Text = $"已创建端点：{editor.SavedRemoteName}。";
-        }
+        });
     }
 
     private async void Reconnect_Click(object sender, RoutedEventArgs e)
     {
         if (Selected is not RcloneAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
-        try
+        await RunBusyAsync(ReconnectButton, "正在登录…", "正在重新登录，请在浏览器完成授权…", async () =>
         {
-            StatusText.Text = "正在重新登录，请在浏览器完成授权…";
             await CloudEndpointService.ReconnectAsync(account.Name);
             await RefreshAsync();
             StatusText.Text = $"“{account.Name}”已重新登录。";
-        }
-        catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(ex.Message, "重新登录失败", MessageBoxButton.OK, MessageBoxImage.Error); }
+        });
     }
 
     private async void Delete_Click(object sender, RoutedEventArgs e)
     {
         if (Selected is not RcloneAccount account) { StatusText.Text = "请先选择要删除的端点。"; return; }
         if (MessageBox.Show($"删除云端端点“{account.Name}”？本地 Profile 不会被删除。", "删除端点", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        try { await CloudEndpointService.DeleteAsync(account.Name); await RefreshAsync(); StatusText.Text = $"已删除端点：{account.Name}。"; }
-        catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(ex.Message, "删除失败", MessageBoxButton.OK, MessageBoxImage.Error); }
+        await RunBusyAsync(DeleteButton, "正在删除…", $"正在删除端点“{account.Name}”…", async () => { await CloudEndpointService.DeleteAsync(account.Name); await RefreshAsync(); StatusText.Text = $"已删除端点：{account.Name}。"; });
     }
 
     private async void BrowseRemote_Click(object sender, RoutedEventArgs e)
     {
         if (Selected is not RcloneAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
-        try
+        await RunBusyAsync(BrowseRemoteButton, "正在打开…", "正在打开远程目录浏览器…", async () =>
         {
+            var loading = CreateLoadingWindow("正在连接云端并读取根目录…");
+            loading.Show();
+            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
+            try
+            {
             var picked = await PickRemoteDirectoryAsync(account.Name, RemotePathBox.Text);
             RemotePathBox.Text = picked;
             UpdateResolvedUri();
-        }
-        catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(ex.Message, "读取远程目录失败", MessageBoxButton.OK, MessageBoxImage.Error); }
+            }
+            finally { loading.Close(); }
+        });
     }
 
     private void AddLeft_Click(object sender, RoutedEventArgs e) => AddToSide("Left");
@@ -121,6 +128,27 @@ public partial class CloudEndpointManagerWindow : Window
         ResultSide = side;
         DialogResult = true;
     }
+
+    private async Task RunBusyAsync(Button button, string busyText, string status, Func<Task> action)
+    {
+        if (_busy) return;
+        _busy = true;
+        var original = button.Content;
+        try { button.IsEnabled = false; button.Content = busyText; StatusText.Text = status; await action(); }
+        catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(ex.Message, "云端端点", MessageBoxButton.OK, MessageBoxImage.Error); }
+        finally { button.IsEnabled = true; button.Content = original; _busy = false; }
+    }
+
+    private Window CreateLoadingWindow(string message) => new()
+    {
+        Title = "云端目录",
+        Owner = this,
+        Content = new TextBlock { Text = message, Margin = new Thickness(22), MinWidth = 280, TextWrapping = TextWrapping.Wrap },
+        WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        SizeToContent = SizeToContent.WidthAndHeight,
+        ResizeMode = ResizeMode.NoResize,
+        ShowInTaskbar = false
+    };
 
     // --- Remote directory picker: a modal TreeView with lazy expansion (same approach as MainWindow). ---
     private async Task<string> PickRemoteDirectoryAsync(string remote, string currentPath)

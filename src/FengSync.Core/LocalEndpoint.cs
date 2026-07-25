@@ -64,6 +64,20 @@ public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorag
         }
         return Task.FromResult<EntrySnapshot?>(null);
     }
+    public Task<IReadOnlyList<TransferTemporaryFile>> ListTransferTemporaryFilesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!Directory.Exists(Root)) return Task.FromResult<IReadOnlyList<TransferTemporaryFile>>([]);
+        var files = new List<TransferTemporaryFile>();
+        foreach (var file in Directory.EnumerateFiles(Root, "*.partial", SearchOption.AllDirectories))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var relative = Path.GetRelativePath(Root, file).Replace('\\', '/');
+            if (!SyncInternalPaths.TryGetTransferTemporaryOriginalPath(relative, out var original)) continue;
+            var info = new FileInfo(file);
+            files.Add(new(relative, original, info.Length, info.LastWriteTimeUtc));
+        }
+        return Task.FromResult<IReadOnlyList<TransferTemporaryFile>>(files);
+    }
     public Task<ContentDigest> HashAsync(string relativePath, HashAlgorithmId algorithm, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         SyncRunMetricsHub.Current.IncrementHashFile();

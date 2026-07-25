@@ -69,13 +69,17 @@ public sealed class SyncExecutor
             {
                 await gate.WaitAsync(ct); var nowActive = Interlocked.Increment(ref active); long bytes = snapshot.SourceFingerprints.GetValueOrDefault(op.OperationId)?.Size ?? 0;
                 var target = op.Kind == OperationKind.CopyLeftToRight ? right : left;
-                var temporary = op.Path + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial";
                 var committed = false;
                 try
                 {
                     var source = op.Kind == OperationKind.CopyLeftToRight ? left : right;
                     progress?.Report(new(op.OperationId, op.Path, TransferStage.Preparing, 0, bytes, nowActive)); await Mark(op, JournalState.Running, TransferStage.Transferring);
-                    await CopyAsync(source, target, op.Path, temporary, ct); await Mark(op, JournalState.Transferred, TransferStage.Transferring, bytes); progress?.Report(new(op.OperationId, op.Path, TransferStage.Transferring, bytes, bytes, nowActive));
+                    var (temporary, _) = await Execution.TransferResume.PrepareAsync(source, target, op.Path, ct);
+                    if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget)
+                        await Execution.TransferResume.AppendLocalAsync(localSource, localTarget, op.Path, temporary, ct);
+                    else
+                        await CopyAsync(source, target, op.Path, temporary, ct);
+                    await Mark(op, JournalState.Transferred, TransferStage.Transferring, bytes); progress?.Report(new(op.OperationId, op.Path, TransferStage.Transferring, bytes, bytes, nowActive));
                     ct.ThrowIfCancellationRequested();
                     if (verifyCopies) { progress?.Report(new(op.OperationId, op.Path, TransferStage.Verifying, bytes, bytes, nowActive)); await target.MoveAsync(temporary, op.Path, ct); await new ContentVerifier().VerifyAsync(source, target, op.Path, ct); }
                     else await target.MoveAsync(temporary, op.Path, ct);
@@ -85,9 +89,8 @@ public sealed class SyncExecutor
                 catch (Exception ex) when (ex is not OperationCanceledException) { await Mark(op, JournalState.Failed, TransferStage.Failed, bytes, ex.Message); progress?.Report(new(op.OperationId, op.Path, TransferStage.Failed, 0, bytes, nowActive, ex.Message)); }
                 finally
                 {
-                    // Copy targets are intentionally hidden until MoveAsync commits them. Do not
-                    // leave interrupted temporary objects behind for a subsequent scan or user.
-                    if (!committed) { try { await target.DeleteAsync(temporary, false, CancellationToken.None); } catch { /* retain original failure/cancellation */ } }
+                    if (!committed && target is not LocalEndpoint)
+                        try { await Execution.TransferResume.DiscardCandidatesAsync(target, op.Path, CancellationToken.None); } catch { /* retain original failure/cancellation */ }
                     Interlocked.Decrement(ref active); gate.Release();
                 }
             }));

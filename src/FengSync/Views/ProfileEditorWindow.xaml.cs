@@ -13,6 +13,7 @@ public partial class ProfileEditorWindow : Window
 {
     private readonly ProfileEditorViewModel _viewModel;
     private readonly ObservableCollection<EditableFilterRule> _rules = [];
+    private bool _backgroundActionInProgress;
     public SyncProfile? SavedProfile { get; private set; }
     public ProfileEditorWindow(SyncProfile profile)
     {
@@ -88,8 +89,8 @@ public partial class ProfileEditorWindow : Window
         if (!TryLong(RuleMinSizeBox.Text, out var min, "最小字节") || !TryLong(RuleMaxSizeBox.Text, out var max, "最大字节") || !TryDate(RuleAfterBox.Text, out var after, "修改时间下限") || !TryDate(RuleBeforeBox.Text, out var before, "修改时间上限")) return;
         rule.MinimumSizeBytes = min; rule.MaximumSizeBytes = max; rule.ModifiedAfter = after; rule.ModifiedBefore = before; rule.Hidden = RuleHiddenBox.IsChecked == true ? true : null; rule.SymbolicLink = RuleSymlinkBox.IsChecked == true ? true : null; RuleGrid.Items.Refresh();
     }
-    private async void PreviewRetention_Click(object sender, RoutedEventArgs e) => await ShowRetentionAsync(cleanup: false);
-    private async void CleanupRetention_Click(object sender, RoutedEventArgs e) => await ShowRetentionAsync(cleanup: true);
+    private async void PreviewRetention_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, "正在预览…", () => ShowRetentionAsync(cleanup: false));
+    private async void CleanupRetention_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, "正在清理…", () => ShowRetentionAsync(cleanup: true));
     private async Task ShowRetentionAsync(bool cleanup)
     {
         try { if (!TryNullableInt(KeepDaysBox.Text, out var days, "保留天数") || !TryNullableInt(MaxVersionsBox.Text, out var versions, "每文件版本数") || !TryTotalBytes(MaxTotalMbBox.Text, out var bytes)) return; var service = new RetentionCleanupService(); var policy = new RetentionPolicy(days, versions, bytes); if (cleanup) { var count = await service.CleanupAsync(ArchiveBox.Text.Trim(), policy); RetentionResult.Text = $"已清理 {count} 个归档版本。"; } else { var candidates = await service.PreviewAsync(ArchiveBox.Text.Trim(), policy); RetentionResult.Text = candidates.Count == 0 ? "没有需要清理的归档版本。" : $"预计清理 {candidates.Count} 项：" + string.Join("；", candidates.Take(3).Select(x => Path.GetFileName(x.Path) + "（" + x.Reason + "）")); } }
@@ -103,8 +104,8 @@ public partial class ProfileEditorWindow : Window
         var dialog = new Microsoft.Win32.OpenFolderDialog();
         if (dialog.ShowDialog() == true) target.Text = dialog.FolderName;
     }
-    private async void TestLeft_Click(object sender, RoutedEventArgs e) => await TestEndpointAsync("左侧", LeftPathBox.Text);
-    private async void TestRight_Click(object sender, RoutedEventArgs e) => await TestEndpointAsync("右侧", RightPathBox.Text);
+    private async void TestLeft_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, "测试中…", () => TestEndpointAsync("左侧", LeftPathBox.Text));
+    private async void TestRight_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, "测试中…", () => TestEndpointAsync("右侧", RightPathBox.Text));
     private async Task TestEndpointAsync(string side, string value)
     {
         try
@@ -123,6 +124,14 @@ public partial class ProfileEditorWindow : Window
             EndpointTestResult.Text = $"{side} SFTP 主机 {uri.Host}:{(uri.IsDefaultPort ? 22 : uri.Port)} 可连接。凭据会在实际同步时验证。";
         }
         catch (Exception ex) { EndpointTestResult.Text = $"{side}端点测试失败：{ex.Message}"; }
+    }
+    private async Task RunBusyAsync(Button button, string busyText, Func<Task> action)
+    {
+        if (_backgroundActionInProgress) return;
+        _backgroundActionInProgress = true;
+        var original = button.Content;
+        try { button.IsEnabled = false; button.Content = busyText; await action(); }
+        finally { button.IsEnabled = true; button.Content = original; _backgroundActionInProgress = false; }
     }
     private IReadOnlyList<FilterRule> Rules() => _rules.Where(x => !string.IsNullOrWhiteSpace(x.Pattern)).Select(x => x.ToRule()).ToList();
     private bool TryLong(string text, out long? value, string title) { if (string.IsNullOrWhiteSpace(text)) { value = null; return true; } if (long.TryParse(text, out var parsed) && parsed >= 0) { value = parsed; return true; } value = null; FilterTestResult.Text = title + "必须是非负整数。"; return false; }

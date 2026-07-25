@@ -102,5 +102,7 @@ public sealed class SyncOperation
 }
 public sealed record SyncPlan(IReadOnlyList<SyncOperation> Operations)
 {
-    public bool CanExecute => Operations.Any(x => x.Selected) && Operations.All(x => !x.IsConflict);
+    // An ignored conflict is intentionally left visible in the comparison list, but it
+    // must not prevent the remaining selected operations from running.
+    public bool CanExecute => Operations.Any(x => x.Selected) && Operations.Where(x => x.Selected).All(x => !x.IsConflict);
 }

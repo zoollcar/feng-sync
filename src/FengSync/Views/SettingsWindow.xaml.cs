@@ -11,13 +11,15 @@ public partial class SettingsWindow : Window
 {
     private readonly Func<ApplicationSettings, Task> _apply;
     private readonly Func<Task> _configureSftp;
+    private readonly Func<Task<int>> _cleanupTemporaryFiles;
     private ApplicationSettings _initial;
     private bool _loading;
+    private bool _applying;
 
-    public SettingsWindow(ApplicationSettings initial, Func<ApplicationSettings, Task> apply, Func<Task> configureSftp)
+    public SettingsWindow(ApplicationSettings initial, Func<ApplicationSettings, Task> apply, Func<Task> configureSftp, Func<Task<int>> cleanupTemporaryFiles)
     {
         InitializeComponent();
-        _initial = initial; _apply = apply; _configureSftp = configureSftp;
+        _initial = initial; _apply = apply; _configureSftp = configureSftp; _cleanupTemporaryFiles = cleanupTemporaryFiles;
         LoadValues(initial);
         StoragePath.Text = "设置文件：" + Path.Combine(AppDataPaths.Root, "FengSync.local.json");
     }
@@ -61,12 +63,29 @@ public partial class SettingsWindow : Window
 
     private async Task<bool> ApplyAsync()
     {
-        try { var value = BuildSettings(); await _apply(value); _initial = value; SetDirty(false); return true; }
+        if (_applying) return false;
+        _applying = true;
+        var applyOriginal = ApplyButton.Content;
+        var okOriginal = OkButton.Content;
+        try
+        {
+            ApplyButton.IsEnabled = false; OkButton.IsEnabled = false;
+            ApplyButton.Content = "正在应用…"; OkButton.Content = "正在保存…";
+            var value = BuildSettings(); await _apply(value); _initial = value; SetDirty(false); return true;
+        }
         catch (Exception ex) { MessageBox.Show(ex.Message, "程序设置", MessageBoxButton.OK, MessageBoxImage.Warning); return false; }
+        finally { ApplyButton.IsEnabled = true; OkButton.IsEnabled = true; ApplyButton.Content = applyOriginal; OkButton.Content = okOriginal; _applying = false; }
     }
     private async void Apply_Click(object sender, RoutedEventArgs e) => await ApplyAsync();
     private async void Ok_Click(object sender, RoutedEventArgs e) { if (await ApplyAsync()) DialogResult = true; }
     private async void ConfigureSftp_Click(object sender, RoutedEventArgs e) => await _configureSftp();
+    private async void CleanupTemporaryFiles_Click(object sender, RoutedEventArgs e)
+    {
+        CleanupTemporaryFilesButton.IsEnabled = false;
+        try { var removed = await _cleanupTemporaryFiles(); MessageBox.Show($"已清理 {removed} 个超过 7 天的本地临时文件。", "维护", MessageBoxButton.OK, MessageBoxImage.Information); }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "维护", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        finally { CleanupTemporaryFilesButton.IsEnabled = true; }
+    }
     private void ResetPage_Click(object sender, RoutedEventArgs e)
     {
         var defaults = new ApplicationSettings();

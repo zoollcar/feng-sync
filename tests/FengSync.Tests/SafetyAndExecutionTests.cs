@@ -56,6 +56,53 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         Assert.True(result.Succeeded); Assert.Equal(1, result.SucceededOperations); Assert.Contains(events, x => x.BytesCompleted == 1024 && x.Stage == TransferStage.Committed);
     }
 
+    [Fact] public async Task Local_executor_resumes_a_verified_fengsync_partial_file_without_exposing_it_to_the_plan()
+    {
+        var content = string.Concat(Enumerable.Repeat("abcdefgh", 8192));
+        await File.WriteAllTextAsync(Path.Combine(Left, "large.bin"), content);
+        var partial = Path.Combine(Right, "large.bin.fengsync-resume.partial");
+        await File.WriteAllTextAsync(partial, content[..12000]);
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
+        Assert.Single(left.Scan()); Assert.Empty(right.Scan());
+
+        var plan = new SyncPlan([new SyncOperation("large.bin", OperationKind.CopyLeftToRight, "copy")]);
+        var result = await new SyncExecutor().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, left, right), left, right);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(content, await File.ReadAllTextAsync(Path.Combine(Right, "large.bin")));
+        Assert.False(File.Exists(partial));
+    }
+
+    [Fact] public async Task Local_executor_discards_a_tampered_partial_before_copying_from_zero()
+    {
+        var content = new string('a', 32768);
+        await File.WriteAllTextAsync(Path.Combine(Left, "tampered.bin"), content);
+        var partial = Path.Combine(Right, "tampered.bin.fengsync-resume.partial");
+        await File.WriteAllTextAsync(partial, new string('z', 16000));
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
+        var plan = new SyncPlan([new SyncOperation("tampered.bin", OperationKind.CopyLeftToRight, "copy")]);
+
+        var result = await new SyncExecutor().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, left, right), left, right);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(content, await File.ReadAllTextAsync(Path.Combine(Right, "tampered.bin")));
+        Assert.False(File.Exists(partial));
+    }
+
+    [Fact] public void Maintenance_only_removes_expired_recognized_temporary_files()
+    {
+        var expired = Path.Combine(Right, "old.bin.fengsync-maintenance.partial");
+        var recent = Path.Combine(Right, "recent.bin.fengsync-maintenance.partial");
+        var ordinary = Path.Combine(Right, "ordinary.partial");
+        File.WriteAllText(expired, "x"); File.WriteAllText(recent, "x"); File.WriteAllText(ordinary, "x");
+        File.SetLastWriteTimeUtc(expired, DateTime.UtcNow.AddDays(-8));
+
+        var removed = TransferTemporaryMaintenance.RemoveExpiredLocalFiles([Right], TimeSpan.FromDays(7), DateTimeOffset.UtcNow);
+
+        Assert.Equal(1, removed);
+        Assert.False(File.Exists(expired)); Assert.True(File.Exists(recent)); Assert.True(File.Exists(ordinary));
+    }
+
     [Fact] public async Task Archive_retention_honors_days_count_and_capacity()
     {
         var archive = Path.Combine(_root, "archive"); Directory.CreateDirectory(archive);
@@ -101,7 +148,7 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         Assert.False(run.Succeeded);
         Assert.Equal(BaselineTransactionState.NeedsRecovery, committed.State);
         Assert.Null(await new BaselineStore().LoadAsync(left, right));
-        Assert.Empty(Directory.EnumerateFiles(Right, "*.fengsync-*.partial", SearchOption.AllDirectories));
+        Assert.Single(Directory.EnumerateFiles(Right, "*.fengsync-*.partial", SearchOption.AllDirectories));
     }
 
     [Fact] public async Task Remote_baseline_is_keyed_by_stable_endpoint_identity_and_atomically_replaces_only_on_commit()

@@ -9,6 +9,8 @@ public sealed record EndpointProfile(Guid Id, EndpointType Type, string Root, st
 public sealed record EndpointCapabilities(bool StableIds, bool ServerMove, bool EmptyDirectories, TimeSpan ModifiedTimePrecision);
 /// <summary>Best-effort scan feedback. Remote providers can only report after a listing request completes.</summary>
 public sealed record ScanProgress(int ItemsScanned, string? CurrentPath = null, bool Completed = false);
+/// <summary>A Feng Sync-owned staging object, kept out of normal comparisons.</summary>
+public sealed record TransferTemporaryFile(string RelativePath, string OriginalPath, long Size, DateTimeOffset ModifiedUtc);
 
 /// <summary>Transport boundary: the planner never needs to know rclone, SFTP or Drive details.</summary>
 public interface IEndpoint
@@ -27,6 +29,8 @@ public interface IEndpoint
     Task MoveAsync(string from, string to, CancellationToken cancellationToken = default);
     Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default);
     Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default);
+    /// <summary>Lists only Feng Sync transfer staging objects. Normal scans must never include them.</summary>
+    Task<IReadOnlyList<TransferTemporaryFile>> ListTransferTemporaryFilesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<TransferTemporaryFile>>([]);
 
     /// <summary>
     /// Single-path metadata lookup. Endpoints should default to a single RC/FS call
@@ -140,6 +144,22 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
     public Task MoveAsync(string from, string to, CancellationToken cancellationToken = default) => client.MoveFileAsync(Fs, At(from), At(to), cancellationToken);
     public Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default) => directory ? client.PurgeAsync(Fs, At(relativePath), cancellationToken) : client.DeleteFileAsync(Fs, At(relativePath), cancellationToken);
     public Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default) => client.MakeDirectoryAsync(Fs, At(relativePath), cancellationToken);
+    public async Task<IReadOnlyList<TransferTemporaryFile>> ListTransferTemporaryFilesAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await client.ListAsync(Fs, Profile.Root, cancellationToken);
+        if (!response.TryGetProperty("list", out var list)) return [];
+        var result = new List<TransferTemporaryFile>();
+        foreach (var item in list.EnumerateArray())
+        {
+            if (item.TryGetProperty("IsDir", out var directory) && directory.GetBoolean()) continue;
+            var path = RelativeToRoot(item.GetProperty("Path").GetString() ?? "");
+            if (!SyncInternalPaths.TryGetTransferTemporaryOriginalPath(path, out var original)) continue;
+            var size = item.TryGetProperty("Size", out var value) ? value.GetInt64() : 0;
+            var modified = item.TryGetProperty("ModTime", out var mod) && DateTimeOffset.TryParse(mod.GetString(), out var parsed) ? parsed : DateTimeOffset.MinValue;
+            result.Add(new(path, original, size, modified));
+        }
+        return result;
+    }
     private static bool Excluded(string path) => SyncInternalPaths.IsExcludedFromScan(path);
     public async Task<string?> DownloadStateAsync(string relativePath, string localDirectory, CancellationToken cancellationToken = default)
     {
@@ -156,8 +176,11 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
     }
     public async Task UploadAndPublishStateAsync(string localPath, string temporaryRelativePath, CancellationToken cancellationToken = default)
     {
-        await client.CopyFileAsync(Path.GetDirectoryName(localPath)!, Path.GetFileName(localPath), Fs, At(temporaryRelativePath), cancellationToken);
-        await client.MoveFileAsync(Fs, At(temporaryRelativePath), At(SyncInternalPaths.StateDatabase), cancellationToken);
+        // Do not delete the old state object before publishing the new one. Besides
+        // creating a data-loss window, Drive can retain a stale directory listing and
+        // make a following movefile stall. rclone's normal copy path stages internally
+        // and atomically overwrites the destination after a successful upload.
+        await client.CopyFileAsync(Path.GetDirectoryName(localPath)!, Path.GetFileName(localPath), Fs, At(SyncInternalPaths.StateDatabase), cancellationToken);
     }
     private string RelativeToRoot(string path)
     {

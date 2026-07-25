@@ -12,6 +12,24 @@ public partial class ProgressWindow : Window
     private IReadOnlyList<SyncOperation> _originalOperations = [];
     private Func<SyncPlan, Task<SyncRunResult>>? _retry;
     public ProgressWindow(int total, bool autoClose) { InitializeComponent(); _total = Math.Max(1, total); AutoClose.IsChecked = autoClose; Counter.Text = $"0 / {total}"; FileProgress.Maximum = _total; }
+    public void ShowInitialization(string phase, string detail)
+    {
+        StateTitle.Text = "正在初始化同步";
+        StateDescription.Text = $"{phase} · {detail}";
+        Counter.Text = phase;
+        CurrentFile.Text = detail;
+        FileProgress.IsIndeterminate = true;
+        BytesText.Text = "传输尚未开始";
+        SpeedText.Text = "正在准备";
+    }
+    public void BeginTransfers(int concurrency)
+    {
+        FileProgress.IsIndeterminate = false;
+        StateTitle.Text = "正在同步";
+        StateDescription.Text = $"初始化完成，正在以 {concurrency} 路并发传输…";
+        Counter.Text = $"0 / {_total}";
+        CurrentFile.Text = "等待传输任务…";
+    }
     public void Report(string path) { _done++; FileProgress.Value = _done; BytesGraph.Value = _done * 100.0 / _total; SpeedGraph.Value = Math.Min(100, _done * 100.0 / Math.Max(1, _clock.Elapsed.TotalSeconds)); Counter.Text = $"{_done} / {_total}"; CurrentFile.Text = path; BytesText.Text = $"已完成 {_done} 个文件"; SpeedText.Text = $"{_done / Math.Max(.1, _clock.Elapsed.TotalSeconds):N1} 文件/秒"; }
     public void Report(TransferProgress progress)
     {
@@ -27,6 +45,7 @@ public partial class ProgressWindow : Window
         => (_originalOperations, _retry) = (originalOperations, retry);
     public void Complete(SyncRunResult result, string text, bool cancelled = false)
     {
+        FileProgress.IsIndeterminate = false;
         _result = result; OperationResults.ItemsSource = result.Operations;
         var outcome = RunResultPresentation.OutcomeOf(result, cancelled);
         (StateIcon.Text, StateIcon.Foreground, StateTitle.Text) = outcome switch

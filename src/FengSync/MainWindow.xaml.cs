@@ -19,17 +19,16 @@ using FengSync.Views;
 namespace FengSync;
 public partial class MainWindow : Window
 {
-    private readonly ObservableCollection<ComparisonRow> _rows = []; private readonly ObservableCollection<SyncProfile> _profiles = []; private readonly ProfileStore _profileStore = new(); private SyncPlan? _plan; private PlanSnapshot? _snapshot; private IEndpoint? _left, _right; private RcloneDaemon? _rclone; private ApplicationSettings _settings; private CancellationTokenSource? _syncCancellation; private CancellationTokenSource? _compareCancellation; private bool _closing;
+    private readonly ObservableCollection<ComparisonRow> _rows = []; private readonly ObservableCollection<SyncProfile> _profiles = []; private readonly ProfileStore _profileStore = new(); private SyncPlan? _plan; private PlanSnapshot? _snapshot; private IEndpoint? _left, _right; private RcloneDaemon? _rclone; private ApplicationSettings _settings; private CancellationTokenSource? _syncCancellation; private CancellationTokenSource? _compareCancellation; private bool _syncInProgress; private bool _compareInProgress; private bool _closing;
     private SyncMode SelectedMode => (SyncMode)Math.Max(0, SyncModeBox?.SelectedIndex ?? 0);
     public MainWindow() { InitializeComponent(); Comparison.ItemsSource = _rows; ProfileList.ItemsSource = _profiles; Comparison.AddHandler(CheckBox.CheckedEvent, new RoutedEventHandler((_, _) => Dispatcher.BeginInvoke(RefreshSummary))); Comparison.AddHandler(CheckBox.UncheckedEvent, new RoutedEventHandler((_, _) => Dispatcher.BeginInvoke(RefreshSummary))); _settings = new(); UpdateSettingsText(); Status.Text = "正在加载设置…"; Loaded += async (_, _) => await InitializeAsync(); }
     private async void Compare_Click(object sender, RoutedEventArgs e)
     {
-        // Guard against re-entry while a comparison is already running; CompareButton is also disabled below
-        // so the user gets immediate visual feedback rather than a silent no-op.
-        if (_compareCancellation is not null) return;
+        if (_compareInProgress || _syncInProgress) return;
+        _compareInProgress = true;
         _compareCancellation = new();
         var token = _compareCancellation.Token;
-        CompareButton.IsEnabled = false;
+        UpdateActionButtons();
         try
         {
             Status.Text = $"正在准备比较：{LeftPath.Text} ↔ {RightPath.Text}";
@@ -39,36 +38,50 @@ public partial class MainWindow : Window
         catch (Exception ex) { SyncButton.IsEnabled = false; Status.Text = ex.Message; }
         finally
         {
-            CompareButton.IsEnabled = true;
             _compareCancellation?.Dispose();
             _compareCancellation = null;
+            _compareInProgress = false;
+            UpdateActionButtons();
         }
     }
     private async void Sync_Click(object sender, RoutedEventArgs e)
     {
-        if (_plan is null || _left is null || _right is null) return;
+        if (_syncInProgress || _compareInProgress || _plan is null || _left is null || _right is null) return;
         ProgressWindow? progressDialog = null;
+        _syncInProgress = true;
+        UpdateActionButtons();
         try
         {
             var effective = CurrentSettings; Comparison.CommitEdit(DataGridEditingUnit.Cell, true); Comparison.CommitEdit(DataGridEditingUnit.Row, true);
             var operations = _rows.Select(x => x.Operation).ToList(); var current = new SyncPlan(operations);
             if (!current.CanExecute || _snapshot is null) { Status.Text = "请先选择操作并裁决所有冲突，然后重新比较。"; return; }
             var profile = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create("临时", LeftPath.Text, RightPath.Text);
-            var scans = await Task.WhenAll(_left.ScanAsync(), _right.ScanAsync());
+            var total = operations.Count(x => x.Selected && x.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft);
+            _syncCancellation = new();
+            progressDialog = new ProgressWindow(total, !_settings.ShowCompleted) { Owner = this };
+            progressDialog.Show();
+            progressDialog.ShowInitialization("1 / 5", "正在准备同步计划…");
+            Status.Text = "正在准备同步…";
+
+            progressDialog.ShowInitialization("2 / 5", "正在重新扫描两个端点，确认执行前的最新状态…");
+            var scans = await Task.WhenAll(_left.ScanAsync(_syncCancellation.Token), _right.ScanAsync(_syncCancellation.Token));
             var leftEntries = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var rightEntries = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+            progressDialog.ShowInitialization("3 / 5", "正在进行删除阈值和目标空间安全检查…");
             var safety = new SafetyValidator().ValidatePlan(current, leftEntries.Count, rightEntries.Count, SelectedMode, profile.MaxDeletes, profile.MaxDeleteRatio)
                 .Combine(new SafetyValidator().ValidateCapacity(current, leftEntries, rightEntries, _left, _right));
             var risk = SyncRiskSummary.Create(current, leftEntries, rightEntries);
             var thresholdOverride = SyncConfirmationPolicy.CanOverrideWithProfileName(safety);
-            if (safety.HasBlockingIssues && !thresholdOverride) { Status.Text = string.Join(" ", safety.Issues.Select(x => x.Message)); return; }
+            if (safety.HasBlockingIssues && !thresholdOverride) { var message = string.Join(" ", safety.Issues.Select(x => x.Message)); Status.Text = message; progressDialog.Complete(false, message); return; }
             if (SyncConfirmationPolicy.RequiresConfirmation(risk) || thresholdOverride)
             {
+                progressDialog.ShowInitialization("4 / 5", "等待确认高风险同步操作…");
                 var confirmation = new SyncConfirmationWindow(risk, safety, profile.Name, risk.TransferBytes) { Owner = this };
-                if (confirmation.ShowDialog() != true) { Status.Text = "已取消高风险同步确认。"; return; }
+                if (confirmation.ShowDialog() != true) { Status.Text = "已取消高风险同步确认。"; progressDialog.Complete(new SyncRunResult(Guid.NewGuid(), []), "已取消高风险同步确认。", cancelled: true); return; }
             }
-            SyncButton.IsEnabled = false; _syncCancellation = new(); var total = operations.Count(x => x.Selected && x.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft);
-            Status.Text = $"正在以 {effective.MaxConcurrentCopies} 路并发同步…"; progressDialog = new ProgressWindow(total, !_settings.ShowCompleted) { Owner = this }; progressDialog.Show();
+            progressDialog.ShowInitialization("5 / 5", "正在建立双向同步基线…");
+            Status.Text = $"正在以 {effective.MaxConcurrentCopies} 路并发同步…";
             var baselineRepository = new BaselineRepository(); var transaction = SelectedMode == SyncMode.TwoWay ? await baselineRepository.BeginAsync(_left, _right, _syncCancellation.Token) : null;
+            progressDialog.BeginTransfers(effective.MaxConcurrentCopies);
             var run = await new SyncExecutor().ExecuteAsync(_snapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), _syncCancellation.Token, effective.VerifyCopies, effective.Versioning, effective.MaxConcurrentCopies, new TaskJournalStore());
             if (transaction is not null)
             {
@@ -93,7 +106,7 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException) { Status.Text = "同步已取消。"; progressDialog?.Complete(new SyncRunResult(Guid.NewGuid(), []), "同步已取消。", cancelled: true); }
         catch (Exception ex) { Status.Text = "同步失败：" + ex.Message; progressDialog?.Complete(false, ex.Message); }
-        finally { _syncCancellation?.Dispose(); _syncCancellation = null; RefreshSummary(); }
+        finally { _syncCancellation?.Dispose(); _syncCancellation = null; _syncInProgress = false; RefreshSummary(); UpdateActionButtons(); }
     }
     private static Task AppendRunHistoryAsync(SyncProfile profile, IReadOnlyCollection<SyncOperation> operations, SyncRunResult run, RunOutcome outcome, string? detail)
         => new RunHistoryRepository().AppendAsync(new RunHistoryEntry(profile.Id, outcome, DateTimeOffset.UtcNow, operations.Count(x => x.Selected), run.SucceededOperations, run.FailedOperations, run.Operations.Sum(x => x.BytesTransferred), detail, run.RunId));
@@ -116,24 +129,26 @@ public partial class MainWindow : Window
         Status.Text = errors.Count == 0 ? $"已将 {changed} 项设置为{(keepLeft ? "左侧覆盖右侧" : "右侧覆盖左侧")}。" : $"已修改 {changed} 项；{string.Join(" ", errors)}";
     }
     // Action-cell context-menu handlers. The menu items reuse the same mutation logic as the top-bar
-    // KeepLeft/KeepRight buttons so right-click and toolbar produce identical results, including the
-    // InvalidOperationException path for unresolvable conflicts (e.g. Blocked rows whose KeepLeft/KeepRight
-    // are null). The "temporarily ignore" item deselects the row so the operation is skipped at sync time
-    // — there is no OperationKind for ignore in the model, and unchecking is the existing escape hatch.
+    // KeepLeft/KeepRight buttons so right-click and toolbar produce identical results.
     private void ActionMenu_KeepLeft_Click(object sender, RoutedEventArgs e) => ApplyActionFromMenu(sender, true);
     private void ActionMenu_KeepRight_Click(object sender, RoutedEventArgs e) => ApplyActionFromMenu(sender, false);
-    private void ActionMenu_Ignore_Click(object sender, RoutedEventArgs e) => IgnoreFromMenu(sender);
+    private void ActionMenu_Ignore_Click(object sender, RoutedEventArgs e) => SetIgnoredFromMenu(sender, true);
+    private void ActionMenu_Enable_Click(object sender, RoutedEventArgs e) => SetIgnoredFromMenu(sender, false);
     private void ApplyActionFromMenu(object sender, bool keepLeft)
     {
         if (GetRowFromMenu(sender) is not ComparisonRow row) { Status.Text = "请选择要修改覆盖方向的行。"; return; }
         var rows = Comparison.SelectedItems.Cast<ComparisonRow>().Contains(row) ? Comparison.SelectedItems.Cast<ComparisonRow>() : [row];
         ApplyDirection(rows, keepLeft);
     }
-    private void IgnoreFromMenu(object sender)
+    private void SetIgnoredFromMenu(object sender, bool ignored)
     {
-        if (GetRowFromMenu(sender) is not ComparisonRow row) { Status.Text = "请选择要忽略的行。"; return; }
-        if (!row.Selected) { Status.Text = "该行已忽略。"; return; }
-        row.Selected = false; row.Refresh(); Comparison.Items.Refresh(); RefreshSummary(); Status.Text = "已临时忽略该行（取消勾选可恢复）。";
+        if (GetRowFromMenu(sender) is not ComparisonRow row) { Status.Text = "请选择要修改的行。"; return; }
+        if (row.IsFilterExcluded) { Status.Text = "该文件被 Profile 过滤规则排除；请在 Profile 中修改长期过滤规则。"; return; }
+        if (row.IsIgnored == ignored) { Status.Text = ignored ? "该文件已忽略。" : "该文件已启用。"; return; }
+        row.IsIgnored = ignored;
+        row.Operation.Selected = !ignored;
+        row.Refresh(); Comparison.Items.Refresh(); RefreshSummary();
+        Status.Text = ignored ? "已临时忽略该文件；仅影响本次同步。" : "已重新启用该文件。";
     }
     // ContextMenu lives in a separate Popup visual tree. Since WPF 4.0 the menu's DataContext is inherited
     // from its PlacementTarget (the Border in the cell template, whose DataContext is the row), so the
@@ -144,7 +159,15 @@ public partial class MainWindow : Window
         if (sender is MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement target } } && target.DataContext is ComparisonRow viaTarget) return viaTarget;
         return null;
     }
-    private void RefreshSummary() { var selected = _rows.Count(x => x.Selected); var bytes = _rows.Where(x => x.Selected && x.Operation.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft).Sum(x => (x.Operation.Kind == OperationKind.CopyLeftToRight ? x.Left : x.Right)?.Fingerprint?.Size ?? 0); Summary.Text = $"左侧 {_rows.Count(x => x.Left is not null)} 项  ·  右侧 {_rows.Count(x => x.Right is not null)} 项  ·  { _rows.Count } 个差异/提示"; TransferSizeLabel.Text = $"已选待传输：{FormatBytes(bytes)}"; SelectedLabel.Text = selected.ToString(); SyncButton.IsEnabled = _plan is not null && new SyncPlan(_rows.Select(x => x.Operation).ToList()).CanExecute; }
+    private void RefreshSummary() { var selected = _rows.Count(x => x.Selected); var bytes = _rows.Where(x => x.Selected && x.Operation.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft).Sum(x => (x.Operation.Kind == OperationKind.CopyLeftToRight ? x.Left : x.Right)?.Fingerprint?.Size ?? 0); Summary.Text = $"左侧 {_rows.Count(x => x.Left is not null)} 项  ·  右侧 {_rows.Count(x => x.Right is not null)} 项  ·  { _rows.Count } 个差异/提示"; TransferSizeLabel.Text = $"已选待传输：{FormatBytes(bytes)}"; SelectedLabel.Text = selected.ToString(); UpdateActionButtons(); }
+    private void UpdateActionButtons()
+    {
+        if (CompareButton is null || SyncButton is null) return;
+        var profile = ProfileList?.SelectedItem as SyncProfile ?? SyncProfile.Create("临时", LeftPath?.Text ?? "", RightPath?.Text ?? "");
+        var canRun = new FeatureCapabilityService().Evaluate(profile with { LeftPath = LeftPath?.Text ?? "", RightPath = RightPath?.Text ?? "", Mode = SelectedMode }).CanRun;
+        CompareButton.IsEnabled = canRun && !_closing && !_compareInProgress && !_syncInProgress;
+        SyncButton.IsEnabled = canRun && !_compareInProgress && !_syncInProgress && _plan is not null && new SyncPlan(_rows.Select(x => x.Operation).ToList()).CanExecute;
+    }
     private static string FormatBytes(long bytes) => bytes < 1024 ? $"{bytes:N0} B" : bytes < 1024 * 1024 ? $"{bytes / 1024d:N1} KB" : bytes < 1024L * 1024 * 1024 ? $"{bytes / 1024d / 1024:N1} MB" : $"{bytes / 1024d / 1024 / 1024:N2} GB";
     private void BrowseLeft_Click(object s, RoutedEventArgs e) => Browse(LeftPath); private void BrowseRight_Click(object s, RoutedEventArgs e) => Browse(RightPath);
     private async void Swap_Click(object sender, RoutedEventArgs e)
@@ -175,16 +198,6 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { _settings = new(); Status.Text = "无法加载程序设置：" + ex.Message; }
         await LoadProfilesAsync();
-        await ShowRecoveryIfRequiredAsync();
-    }
-    private async Task ShowRecoveryIfRequiredAsync()
-    {
-        try
-        {
-            var coordinator = new RecoveryCoordinator(); var items = await coordinator.FindRecoveryRequiredAsync();
-            if (items.Count > 0) new RecoveryWindow(items, coordinator) { Owner = this }.ShowDialog();
-        }
-        catch (Exception ex) { Status.Text = "无法读取恢复记录：" + ex.Message; }
     }
     private Task RecompareAsync() { Compare_Click(this, new RoutedEventArgs()); return Task.CompletedTask; }
     private async Task LoadProfilesAsync()
@@ -279,14 +292,24 @@ public partial class MainWindow : Window
         var rightProgress = new Progress<ScanProgress>(x => Status.Text = x.Completed ? $"右侧扫描完成：{x.ItemsScanned} 项。正在分析差异…" : $"正在扫描右侧：已发现 {x.ItemsScanned} 项{(string.IsNullOrEmpty(x.CurrentPath) ? "" : " · " + x.CurrentPath)}");
         var scans = await Task.WhenAll(_left.ScanAsync(leftProgress, cancellationToken), _right.ScanAsync(rightProgress, cancellationToken));
         Status.Text = $"扫描完成：左侧 {scans[0].Count} 项  ·  右侧 {scans[1].Count} 项，正在分析差异…";
-        var left = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var right = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var baselineRepository = new BaselineRepository(); var baseline = SelectedMode == SyncMode.TwoWay ? await baselineRepository.LoadAsync(_left, _right) : null; var baselineWarning = baselineRepository.LastLoadWarning; _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, effective.Filter);
+        var left = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var right = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var baselineRepository = new BaselineRepository(); var baseline = SelectedMode == SyncMode.TwoWay ? await baselineRepository.LoadAsync(_left, _right) : null; var baselineWarning = baselineRepository.LastLoadWarning;
+        // Build the complete diff, then render filtered paths as deselected rows. Filters
+        // remain a sync boundary because ignored operations are never selected/executed.
+        _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, SyncFilter.Empty);
+        var filter = effective.Filter.CreateEngine();
+        var ignoredPaths = new HashSet<string>(_plan.Operations.Where(op =>
+        {
+            var entry = left.GetValueOrDefault(op.Path) ?? right.GetValueOrDefault(op.Path);
+            return !filter.Evaluate(op.Path, new FilterEntryAttributes(entry?.Fingerprint?.Size, entry?.Fingerprint?.ModifiedUtc)).Included;
+        }).Select(op => op.Path), StringComparer.OrdinalIgnoreCase);
+        foreach (var operation in _plan.Operations.Where(op => ignoredPaths.Contains(op.Path))) operation.Selected = false;
         Status.Text = $"分析完成：{_plan.Operations.Count} 项差异，正在生成同步计划…";
         var planSafety = new SafetyValidator().ValidatePlan(_plan, left.Count, right.Count, SelectedMode, profile.MaxDeletes, profile.MaxDeleteRatio).Combine(new SafetyValidator().ValidateCapacity(_plan, left, right, _left, _right));
         if (planSafety.HasBlockingIssues && !SyncConfirmationPolicy.CanOverrideWithProfileName(planSafety)) throw new InvalidOperationException(string.Join(" ", planSafety.Issues.Select(x => x.Message)));
         var risk = SyncRiskSummary.Create(_plan, left, right);
         SafetySummary.Text = planSafety.HasBlockingIssues ? "安全检查：阻断（删除阈值可在同步确认中一次性放行）" : SyncConfirmationPolicy.RequiresConfirmation(risk) ? $"安全检查：警告 · 覆盖 {risk.Overwrites} 项，删除 {risk.Deletes} 项，传输 {FormatBytes(risk.TransferBytes)}" : "安全检查：通过";
         SafetySummary.Foreground = planSafety.HasBlockingIssues ? Brushes.Firebrick : SyncConfirmationPolicy.RequiresConfirmation(risk) ? Brushes.DarkOrange : Brushes.ForestGreen;
-        _snapshot = await PlanSnapshot.CaptureAsync(_plan, _left, _right, cancellationToken); _rows.Clear(); foreach (var op in _plan.Operations) _rows.Add(new(op, left.GetValueOrDefault(op.Path), right.GetValueOrDefault(op.Path))); RefreshSummary(); Status.Text = baselineWarning ?? $"{ModeTitle()} 比较完成：左侧 {left.Count} 项  ·  右侧 {right.Count} 项  ·  {_plan.Operations.Count} 个差异/提示。勾选要执行的差异，并裁决所有冲突。";
+        _snapshot = await PlanSnapshot.CaptureAsync(_plan, _left, _right, cancellationToken); _rows.Clear(); foreach (var op in _plan.Operations) _rows.Add(new(op, left.GetValueOrDefault(op.Path), right.GetValueOrDefault(op.Path), ignoredPaths.Contains(op.Path))); RefreshSummary(); Status.Text = baselineWarning ?? $"{ModeTitle()} 比较完成：左侧 {left.Count} 项  ·  右侧 {right.Count} 项  ·  {_plan.Operations.Count} 个差异/提示（其中 {ignoredPaths.Count} 项已忽略）。";
     }
     private async Task<(IEndpoint Left, IEndpoint Right)> CreateEndpointsAsync(string left, string right)
     {
@@ -333,7 +356,7 @@ public partial class MainWindow : Window
     }
     private void Options_Click(object s, RoutedEventArgs e)
     {
-        var dialog = new SettingsWindow(_settings, ApplyApplicationSettingsAsync, ShowSftpServerSettingsAsync) { Owner = this };
+        var dialog = new SettingsWindow(_settings, ApplyApplicationSettingsAsync, ShowSftpServerSettingsAsync, CleanupExpiredLocalTemporaryFilesAsync) { Owner = this };
         dialog.ShowDialog();
     }
 
@@ -399,23 +422,40 @@ public partial class MainWindow : Window
     {
         if (_closing) { base.OnClosing(e); return; }
         e.Cancel = true;
-        if (_syncCancellation is not null && MessageBox.Show("同步正在运行。是否取消同步并退出？", "退出 Feng Sync", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        _syncCancellation?.Cancel(); _compareCancellation?.Cancel(); _closing = true; CloseWhenReadyAsync();
+        _closing = true;
+        // Closing the only main window is an application exit, never a request to
+        // leave an invisible sync process behind.  All cancellable work is stopped
+        // before owned daemons and the SFTP child process are torn down.
+        _syncCancellation?.Cancel();
+        _compareCancellation?.Cancel();
+        CloseWhenReadyAsync();
+    }
+    private Task<int> CleanupExpiredLocalTemporaryFilesAsync()
+    {
+        var roots = _profiles.SelectMany(profile => new[] { profile.LeftPath, profile.RightPath })
+            .Where(path => !IsCloud(path));
+        return Task.FromResult(TransferTemporaryMaintenance.RemoveExpiredLocalFiles(roots, TimeSpan.FromDays(7), DateTimeOffset.UtcNow));
     }
     private async void CloseWhenReadyAsync()
     {
-        try { _settings = _settings with { LastSelectedProfileId = (ProfileList.SelectedItem as SyncProfile)?.Id }; await new SettingsStore().SaveAsync(_settings); await PersistProfilesAsync(); await DisposeRcloneAsync(); }
+        try
+        {
+            _settings = _settings with { LastSelectedProfileId = (ProfileList.SelectedItem as SyncProfile)?.Id };
+            await new SettingsStore().SaveAsync(_settings);
+            await PersistProfilesAsync();
+            await DisposeRcloneAsync();
+        }
         catch { /* Shutdown must not strand the window if a settings file is unavailable. */ }
-        finally { Close(); }
+        finally { await App.CurrentApp.ShutdownAsync(); }
     }
     protected override void OnClosed(EventArgs e) { base.OnClosed(e); }
     private sealed record BatchJob(string Name, IReadOnlyList<SyncProfile> Profiles);
 }
 public sealed class ComparisonRow : INotifyPropertyChanged
 {
-    public ComparisonRow(SyncOperation operation, EntrySnapshot? left, EntrySnapshot? right) { Operation = operation; Left = left; Right = right; Refresh(); }
-    public SyncOperation Operation { get; } public EntrySnapshot? Left { get; } public EntrySnapshot? Right { get; } public bool Selected { get => Operation.Selected; set { if (Operation.Selected == value) return; Operation.Selected = value; OnPropertyChanged(); } } public string LeftDisplay { get; private set; } = ""; public string RightDisplay { get; private set; } = ""; public string LeftSize { get; private set; } = ""; public string RightSize { get; private set; } = ""; public string ActionDisplay { get; private set; } = ""; public Brush ActionBrush { get; private set; } = Brushes.DimGray; public string Reason => Operation.Reason;
-    public void Refresh() { LeftDisplay = Describe(Left); RightDisplay = Describe(Right); LeftSize = Size(Left); RightSize = Size(Right); (ActionDisplay, ActionBrush) = Operation.IsConflict ? ("⚠", Brushes.DarkOrange) : Operation.Kind switch { OperationKind.CopyLeftToRight => ("✚→", Brushes.ForestGreen), OperationKind.CopyRightToLeft => ("←✚", Brushes.ForestGreen), OperationKind.DeleteLeft => ("←✖", Brushes.Firebrick), OperationKind.DeleteRight => ("✖→", Brushes.Firebrick), OperationKind.CreateLeftDirectory => ("←✚", Brushes.ForestGreen), OperationKind.CreateRightDirectory => ("✚→", Brushes.ForestGreen), OperationKind.Blocked => ("⛔", Brushes.Firebrick), _ => ("=", Brushes.DimGray) }; }
+    public ComparisonRow(SyncOperation operation, EntrySnapshot? left, EntrySnapshot? right, bool isFilterExcluded = false) { Operation = operation; Left = left; Right = right; IsFilterExcluded = isFilterExcluded; Refresh(); }
+    public SyncOperation Operation { get; } public EntrySnapshot? Left { get; } public EntrySnapshot? Right { get; } public bool IsFilterExcluded { get; } public bool IsIgnored { get; set; } public bool Selected { get => Operation.Selected; set { if (IsIgnored || IsFilterExcluded || Operation.Selected == value) return; Operation.Selected = value; OnPropertyChanged(); } } public string LeftDisplay { get; private set; } = ""; public string RightDisplay { get; private set; } = ""; public string LeftSize { get; private set; } = ""; public string RightSize { get; private set; } = ""; public string ActionDisplay { get; private set; } = ""; public Brush ActionBrush { get; private set; } = Brushes.DimGray; public string Reason => Operation.Reason;
+    public void Refresh() { LeftDisplay = Describe(Left); RightDisplay = Describe(Right); LeftSize = Size(Left); RightSize = Size(Right); (ActionDisplay, ActionBrush) = IsIgnored || IsFilterExcluded ? ("⊘", Brushes.DimGray) : Operation.IsConflict ? ("⚠", Brushes.DarkOrange) : Operation.Kind switch { OperationKind.CopyLeftToRight => ("✚→", Brushes.ForestGreen), OperationKind.CopyRightToLeft => ("←✚", Brushes.ForestGreen), OperationKind.DeleteLeft => ("←✖", Brushes.Firebrick), OperationKind.DeleteRight => ("✖→", Brushes.Firebrick), OperationKind.CreateLeftDirectory => ("←✚", Brushes.ForestGreen), OperationKind.CreateRightDirectory => ("✚→", Brushes.ForestGreen), OperationKind.Blocked => ("⛔", Brushes.Firebrick), _ => ("=", Brushes.DimGray) }; }
     private static string Describe(EntrySnapshot? e) => e is null ? "" : e.Kind == EntryKind.Directory ? "▰ " + e.Path : "▱ " + e.Path;
     private static string Size(EntrySnapshot? e) => e?.Fingerprint is null ? "" : e.Fingerprint.Size.ToString("N0");
     public event PropertyChangedEventHandler? PropertyChanged;

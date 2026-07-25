@@ -16,6 +16,7 @@ public partial class CloudEndpointEditorWindow : Window
     // Set once a remote has been successfully created so Test/Preview/Save don't recreate (or re-OAuth) it.
     private string? _configuredRemote;
     private Kind _configuredKind;
+    private bool _isBusy;
 
     /// <summary>The rclone remote name that was created; null if the dialog was cancelled.</summary>
     public string? SavedRemoteName { get; private set; }
@@ -137,10 +138,17 @@ public partial class CloudEndpointEditorWindow : Window
     /// <summary>Runs an rclone-backed action with a busy label and unified error reporting.</summary>
     private async Task RunBusyAsync(Button button, string busyText, Func<Task> action)
     {
+        if (_isBusy) return;
+        _isBusy = true;
         var original = button.Content;
-        try { button.IsEnabled = false; button.Content = busyText; StatusText.Text = busyText; await action(); }
+        try
+        {
+            TestButton.IsEnabled = false; PreviewButton.IsEnabled = false; SaveButton.IsEnabled = false;
+            button.Content = busyText; StatusText.Text = busyText;
+            await action();
+        }
         catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(ex.Message, "Feng Sync", MessageBoxButton.OK, MessageBoxImage.Error); }
-        finally { button.IsEnabled = true; button.Content = original; }
+        finally { TestButton.IsEnabled = true; PreviewButton.IsEnabled = true; SaveButton.IsEnabled = true; button.Content = original; _isBusy = false; }
     }
 
     // --- Directory-tree preview (lazy expansion mirrors MainWindow's remote picker) ---

@@ -136,7 +136,6 @@ public sealed class SyncExecutorV2
         var target = op.Kind == OperationKind.CopyLeftToRight ? right : left;
         var sourceKey = ResourceKey.For(source);
         var targetKey = ResourceKey.For(target);
-        var temporary = op.Path + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial";
         var bytes = snapshot.SourceFingerprints.GetValueOrDefault(op.OperationId)?.Size ?? 0;
         var committed = false;
         using (await governor.AcquireAsync(new[] { sourceKey, targetKey }, ct))
@@ -145,7 +144,11 @@ public sealed class SyncExecutorV2
             {
                 progress?.Report(new(op.OperationId, op.Path, TransferStage.Preparing, 0, bytes, nowActive));
                 await mark(op, JournalState.Running, TransferStage.Transferring, 0, null);
-                await CopyAsync(source, target, op.Path, temporary, ct);
+                var (temporary, _) = await TransferResume.PrepareAsync(source, target, op.Path, ct);
+                if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget)
+                    await TransferResume.AppendLocalAsync(localSource, localTarget, op.Path, temporary, ct);
+                else
+                    await CopyAsync(source, target, op.Path, temporary, ct);
                 await mark(op, JournalState.Transferred, TransferStage.Transferring, bytes, null);
                 progress?.Report(new(op.OperationId, op.Path, TransferStage.Transferring, bytes, bytes, nowActive));
                 if (verifyCopies)
@@ -174,9 +177,11 @@ public sealed class SyncExecutorV2
             }
             finally
             {
-                if (!committed)
+                // Local staging survives cancellation/failure for the next planned run.
+                // Remote backends are deliberately retried from zero, so remove their staging object.
+                if (!committed && target is not LocalEndpoint)
                 {
-                    try { await target.DeleteAsync(temporary, false, CancellationToken.None); }
+                    try { await TransferResume.DiscardCandidatesAsync(target, op.Path, CancellationToken.None); }
                     catch { /* preserve original failure */ }
                 }
             }

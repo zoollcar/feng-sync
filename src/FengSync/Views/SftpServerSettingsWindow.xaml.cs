@@ -12,6 +12,7 @@ public partial class SftpServerSettingsWindow : Window
     private SftpServerOptions _loaded = new();
     private readonly ObservableCollection<SftpAccount> _accounts = [];
     private readonly ObservableCollection<SftpShare> _shares = [];
+    private bool _operationInProgress;
 
     public SftpServerSettingsWindow()
     {
@@ -51,17 +52,19 @@ public partial class SftpServerSettingsWindow : Window
     }
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
-        try { await SaveAsync(EnabledBox.IsChecked == true); StatusText.Text = "SFTP 设置已保存。"; }
-        catch (Exception ex) { StatusText.Text = ex.Message; }
+        await RunBusyAsync((Button)sender, "正在保存…", async () => { await SaveAsync(EnabledBox.IsChecked == true); StatusText.Text = "SFTP 设置已保存。"; });
     }
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
-        try { await SaveAsync(true); await App.CurrentApp.SftpService.StartAsync(_loaded); StatusText.Text = "SFTP 服务器正在监听 " + _loaded.ListenAddress + ":" + _loaded.Port; }
-        catch (Exception ex) { StatusText.Text = ex.Message; }
+        await RunBusyAsync((Button)sender, "正在启动…", async () => { await SaveAsync(true); await App.CurrentApp.SftpService.StartAsync(_loaded); StatusText.Text = "SFTP 服务器正在监听 " + _loaded.ListenAddress + ":" + _loaded.Port; });
     }
     private async void Stop_Click(object sender, RoutedEventArgs e)
     {
-        await App.CurrentApp.SftpService.StopAsync(); StatusText.Text = "SFTP 服务器已停止；端口已释放。";
+        // A quick user (or UI automation) can request Stop as soon as the port
+        // opens, before Start's UI continuation has released the busy guard.
+        // Queue the stop behind that start instead of silently dropping it.
+        while (_operationInProgress) await Task.Delay(25);
+        await RunBusyAsync((Button)sender, "正在停止…", async () => { await App.CurrentApp.SftpService.StopAsync(); StatusText.Text = "SFTP 服务器已停止；端口已释放。"; });
     }
     private void Diagnose_Click(object sender, RoutedEventArgs e)
     {
@@ -69,6 +72,15 @@ public partial class SftpServerSettingsWindow : Window
         catch (Exception ex) { StatusText.Text = ex.Message; }
     }
     private void RefreshStatus() => StatusText.Text = App.CurrentApp.SftpService.IsRunning ? "SFTP 服务运行中。" : "SFTP 服务当前未运行。";
+    private async Task RunBusyAsync(Button button, string busyText, Func<Task> action)
+    {
+        if (_operationInProgress) return;
+        _operationInProgress = true;
+        var original = button.Content;
+        try { button.IsEnabled = false; button.Content = busyText; StatusText.Text = busyText; await action(); }
+        catch (Exception ex) { StatusText.Text = ex.Message; }
+        finally { button.IsEnabled = true; button.Content = original; _operationInProgress = false; }
+    }
 
     private void NewAccount_Click(object sender, RoutedEventArgs e) => EditAccount(null);
     private void EditAccount_Click(object sender, RoutedEventArgs e) => EditAccount(AccountsList.SelectedItem as SftpAccount);

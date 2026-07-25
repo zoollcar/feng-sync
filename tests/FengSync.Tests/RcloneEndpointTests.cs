@@ -71,6 +71,33 @@ public sealed class RcloneEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Publishing_state_database_uses_rclone_overwrite_without_deleting_the_old_google_drive_file_first()
+    {
+        _handler.ListJson = "{\"list\":[{\"Path\":\"root/sync.fengdb\",\"IsDir\":false},{\"Path\":\"root/sync.fengdb\",\"IsDir\":false}]}";
+        var local = Path.Combine(_root, "state.db");
+        await File.WriteAllTextAsync(local, "state");
+
+        await Remote(EndpointType.GoogleDrive).UploadAndPublishStateAsync(local, "sync.fengdb.fengsync-0123456789abcdef0123456789abcdef.tmp");
+
+        Assert.Single(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/copyfile"));
+        Assert.DoesNotContain(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/deletefile") || x.AbsolutePath.EndsWith("operations/movefile"));
+        Assert.Contains(_handler.Bodies, body => body.Contains("\"dstRemote\":\"root/sync.fengdb\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Publishing_state_database_uses_the_same_safe_overwrite_for_sftp()
+    {
+        _handler.ListJson = "{\"list\":[{\"Path\":\"root/sync.fengdb\",\"IsDir\":false}]}";
+        var local = Path.Combine(_root, "state.db");
+        await File.WriteAllTextAsync(local, "state");
+
+        await Remote(EndpointType.Sftp).UploadAndPublishStateAsync(local, "sync.fengdb.fengsync-0123456789abcdef0123456789abcdef.tmp");
+
+        Assert.Single(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/copyfile"));
+        Assert.DoesNotContain(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/deletefile") || x.AbsolutePath.EndsWith("operations/movefile"));
+    }
+
+    [Fact]
     public async Task Remote_executor_honors_the_configured_copy_concurrency()
     {
         _handler.DelayCopy = true;

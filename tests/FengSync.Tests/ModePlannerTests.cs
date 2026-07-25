@@ -21,6 +21,15 @@ public sealed class ModePlannerTests
         var plan = new ModePlanner().Build(SyncMode.TwoWay, [], [], baseline, new SyncFilter(Exclude: ["*.tmp"]));
         Assert.Empty(plan.Operations);
     }
+
+    [Fact]
+    public void Deselected_conflict_does_not_block_other_selected_operations()
+    {
+        var ignoredConflict = new SyncOperation("ignored.txt", OperationKind.Conflict, "filtered", selected: false);
+        var copy = new SyncOperation("keep.txt", OperationKind.CopyLeftToRight, "copy");
+
+        Assert.True(new SyncPlan([ignoredConflict, copy]).CanExecute);
+    }
     [Fact] public async Task Profiles_round_trip_without_credentials()
     {
         var path = Path.Combine(Path.GetTempPath(), "fengsync-profile-" + Guid.NewGuid() + ".json");
