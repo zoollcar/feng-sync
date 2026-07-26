@@ -15,6 +15,22 @@ public sealed class ConfigurationTests
     }
 
     [Fact]
+    public void Migrator_upgrades_schema_two_with_update_defaults()
+    {
+        var migrated = new ConfigurationMigrator().Migrate(new ApplicationSettings { SchemaVersion = 2 });
+        Assert.Equal(3, migrated.SchemaVersion);
+        Assert.True(migrated.AutoCheckForUpdates);
+        Assert.Null(migrated.LastUpdateCheckUtc);
+    }
+
+    [Fact]
+    public void Validator_requires_sidebar_width_and_valid_skipped_version()
+    {
+        Assert.NotEmpty(ConfigurationValidator.Validate(new ApplicationSettings { MainWindowSidebarWidth = 400 }));
+        Assert.NotEmpty(ConfigurationValidator.Validate(new ApplicationSettings { SkippedUpdateVersion = "bad" }));
+    }
+
+    [Fact]
     public void Effective_settings_merge_profile_overrides_without_mutating_defaults()
     {
         var defaults = new ApplicationSettings { DefaultMaxConcurrentCopies = 4, DefaultVerifyCopies = true, DefaultFilter = new SyncFilter(Exclude: ["*.tmp"]) };

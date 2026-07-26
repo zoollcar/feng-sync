@@ -1,6 +1,7 @@
 using FengSync.Core;
 using FengSync.Core.Capabilities;
 using FengSync.Core.Configuration;
+using FengSync.Core.Updates;
 using FengSync.Core.Execution;
 using FengSync.Core.Scanning;
 using FengSync.Core.SftpServer;
@@ -21,9 +22,9 @@ using FengSync.Views;
 namespace FengSync;
 public partial class MainWindow : Window
 {
-    private readonly ObservableCollection<ComparisonRow> _rows = []; private readonly ObservableCollection<SyncProfile> _profiles = []; private readonly ProfileStore _profileStore = new(); private SyncPlan? _plan; private PlanSnapshot? _snapshot; private ComparisonSnapshot? _comparison; private IEndpoint? _left, _right; private RcloneDaemon? _rclone; private ApplicationSettings _settings; private CancellationTokenSource? _syncCancellation; private CancellationTokenSource? _compareCancellation; private bool _syncInProgress; private bool _compareInProgress; private bool _closing;
+    private readonly ObservableCollection<ComparisonRow> _rows = []; private readonly ObservableCollection<SyncProfile> _profiles = []; private readonly ProfileStore _profileStore = new(); private readonly ApplicationVersionService _versionService = new(); private UpdateCoordinator? _updates; private SyncPlan? _plan; private PlanSnapshot? _snapshot; private ComparisonSnapshot? _comparison; private IEndpoint? _left, _right; private RcloneDaemon? _rclone; private ApplicationSettings _settings; private CancellationTokenSource? _syncCancellation; private CancellationTokenSource? _compareCancellation; private bool _syncInProgress; private bool _compareInProgress; private bool _closing;
     private SyncMode SelectedMode => (SyncMode)Math.Max(0, SyncModeBox?.SelectedIndex ?? 0);
-    public MainWindow() { InitializeComponent(); Comparison.ItemsSource = _rows; ProfileList.ItemsSource = _profiles; Comparison.AddHandler(CheckBox.CheckedEvent, new RoutedEventHandler((_, _) => Dispatcher.BeginInvoke(RefreshSummary))); Comparison.AddHandler(CheckBox.UncheckedEvent, new RoutedEventHandler((_, _) => Dispatcher.BeginInvoke(RefreshSummary))); _settings = new(); UpdateSettingsText(); Status.Text = "正在加载设置…"; Loaded += async (_, _) => await InitializeAsync(); }
+    public MainWindow() { InitializeComponent(); Comparison.ItemsSource = _rows; ProfileList.ItemsSource = _profiles; Comparison.AddHandler(CheckBox.CheckedEvent, new RoutedEventHandler((_, _) => Dispatcher.BeginInvoke(RefreshSummary))); Comparison.AddHandler(CheckBox.UncheckedEvent, new RoutedEventHandler((_, _) => Dispatcher.BeginInvoke(RefreshSummary))); _settings = new(); _updates = new UpdateCoordinator(_versionService, new GitHubReleaseClient(), () => _settings, ApplyApplicationSettingsAsync, ExitForUpdateAsync); UpdateSettingsText(); RefreshProfileSelection(); UpdateComparisonEmptyState(); Status.Text = "正在加载设置…"; Loaded += async (_, _) => await InitializeAsync(); }
     private async void Compare_Click(object sender, RoutedEventArgs e)
     {
         if (_compareInProgress || _syncInProgress) return;
@@ -43,6 +44,7 @@ public partial class MainWindow : Window
             _compareCancellation?.Dispose();
             _compareCancellation = null;
             _compareInProgress = false;
+            _ = _updates?.CheckDeferredAsync(this, _syncInProgress || _compareInProgress);
             UpdateActionButtons();
         }
     }
@@ -110,7 +112,7 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException) { Status.Text = "同步已取消。"; progressDialog?.Complete(new SyncRunResult(Guid.NewGuid(), []), "同步已取消。", cancelled: true); }
         catch (Exception ex) { Status.Text = "同步失败：" + ex.Message; progressDialog?.Complete(false, ex.Message); }
-        finally { _syncCancellation?.Dispose(); _syncCancellation = null; _syncInProgress = false; RefreshSummary(); UpdateActionButtons(); }
+        finally { _syncCancellation?.Dispose(); _syncCancellation = null; _syncInProgress = false; RefreshSummary(); UpdateActionButtons(); _ = _updates?.CheckDeferredAsync(this, _syncInProgress || _compareInProgress); }
     }
     private static Task AppendRunHistoryAsync(SyncProfile profile, IReadOnlyCollection<SyncOperation> operations, SyncRunResult run, RunOutcome outcome, string? detail)
         => new RunHistoryRepository().AppendAsync(new RunHistoryEntry(profile.Id, outcome, DateTimeOffset.UtcNow, operations.Count(x => x.Selected), run.SucceededOperations, run.FailedOperations, run.Operations.Sum(x => x.BytesTransferred), detail, run.RunId));
@@ -166,7 +168,7 @@ public partial class MainWindow : Window
         if (sender is MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement target } } && target.DataContext is ComparisonRow viaTarget) return viaTarget;
         return null;
     }
-    private void RefreshSummary() { var selected = _rows.Count(x => x.Selected); var bytes = _rows.Where(x => x.Selected && x.Operation.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft).Sum(x => (x.Operation.Kind == OperationKind.CopyLeftToRight ? x.Left : x.Right)?.Fingerprint?.Size ?? 0); Summary.Text = $"左侧 {_rows.Count(x => x.Left is not null)} 项  ·  右侧 {_rows.Count(x => x.Right is not null)} 项  ·  { _rows.Count } 个差异/提示"; TransferSizeLabel.Text = $"已选待传输：{FormatBytes(bytes)}"; SelectedLabel.Text = selected.ToString(); UpdateActionButtons(); }
+    private void RefreshSummary() { var selected = _rows.Count(x => x.Selected); var bytes = _rows.Where(x => x.Selected && x.Operation.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft).Sum(x => (x.Operation.Kind == OperationKind.CopyLeftToRight ? x.Left : x.Right)?.Fingerprint?.Size ?? 0); Summary.Text = $"左侧 {_rows.Count(x => x.Left is not null)} 项  ·  右侧 {_rows.Count(x => x.Right is not null)} 项  ·  { _rows.Count } 个差异/提示"; TransferSizeLabel.Text = $"已选待传输：{FormatBytes(bytes)}"; SelectedLabel.Text = selected.ToString(); UpdateComparisonEmptyState(); UpdateActionButtons(); }
     private void UpdateActionButtons()
     {
         if (CompareButton is null || SyncButton is null) return;
@@ -184,6 +186,22 @@ public partial class MainWindow : Window
     }
     private static void Browse(System.Windows.Controls.TextBox target) { var dialog = new OpenFolderDialog(); if (dialog.ShowDialog() == true) target.Text = dialog.FolderName; }
     private void Comparison_CurrentCellChanged(object s, EventArgs e) => Dispatcher.BeginInvoke(RefreshSummary);
+    private void UpdateComparisonEmptyState()
+    {
+        if (ComparisonEmptyState is null) return;
+        ComparisonEmptyState.Visibility = _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (ComparisonEmptyStateText is not null) ComparisonEmptyStateText.Text = _plan is null ? "选择左右端点后开始比较" : "没有需要同步的差异";
+    }
+    private void RefreshProfileSelection()
+    {
+        if (ProfileSelectionLabel is not null) ProfileSelectionLabel.Text = $"已选择 {ProfileList?.SelectedItems.Count ?? 0} 个 Profile";
+        if (EditProfileButton is not null) EditProfileButton.IsEnabled = (ProfileList?.SelectedItems.Count ?? 0) <= 1;
+    }
+    private void SidebarSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        _settings = _settings with { MainWindowSidebarWidth = ClampSidebarWidth(SidebarColumn.ActualWidth) };
+    }
+    private static double ClampSidebarWidth(double value) => double.IsNaN(value) || double.IsInfinity(value) ? 260 : Math.Clamp(value, 220, 380);
     private EffectiveProfileSettings CurrentSettings => EffectiveProfileSettings.Resolve(ProfileList?.SelectedItem as SyncProfile ?? SyncProfile.Create("默认", "", ""), _settings);
     private void UpdateSettingsText() { if (ConcurrencyLabel is not null) ConcurrencyLabel.Text = CurrentSettings.MaxConcurrentCopies + " 路"; }
     private void SyncMode_Changed(object s, SelectionChangedEventArgs e) { if (SyncModeCaption is not null) SyncModeCaption.Text = ModeTitle(); if (_plan is not null) Compare_Click(this, new RoutedEventArgs()); }
@@ -196,6 +214,7 @@ public partial class MainWindow : Window
         {
             var loaded = await new SettingsStore().LoadAsync();
             _settings = loaded.Settings;
+            SidebarColumn.Width = new GridLength(ClampSidebarWidth(_settings.MainWindowSidebarWidth));
             UpdateSettingsText();
             Status.Text = loaded.RecoveredFromCorruption
                 ? $"设置文件已损坏，已备份到：{loaded.BackupPath}"
@@ -205,6 +224,13 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { _settings = new(); Status.Text = "无法加载程序设置：" + ex.Message; }
         await LoadProfilesAsync();
+        if (App.CurrentApp.UpdatedFromVersion is { Length: > 0 } from && App.CurrentApp.UpdateTaskDirectory is { Length: > 0 } task)
+        {
+            Status.Text = $"已从 {from} 更新到 {_versionService.DisplayVersion}";
+            try { await File.WriteAllTextAsync(Path.Combine(Path.GetFullPath(task), "success"), "ok"); }
+            catch (Exception ex) { System.Diagnostics.Trace.TraceWarning("Unable to confirm update: " + ex.Message); }
+        }
+        _ = Dispatcher.InvokeAsync(() => _ = _updates?.CheckAsync(this, manual: false, _syncInProgress || _compareInProgress));
     }
     private Task RecompareAsync() { Compare_Click(this, new RoutedEventArgs()); return Task.CompletedTask; }
     private async Task LoadProfilesAsync()
@@ -280,7 +306,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { Status.Text = "批处理失败：" + ex.Message; }
     }
-    private void ProfileList_SelectionChanged(object s, SelectionChangedEventArgs e) { if (ProfileList.SelectedItem is SyncProfile profile) { _settings = _settings with { LastSelectedProfileId = profile.Id }; ApplyProfile(profile); } }
+    private void ProfileList_SelectionChanged(object s, SelectionChangedEventArgs e) { RefreshProfileSelection(); if (ProfileList.SelectedItem is SyncProfile profile) { _settings = _settings with { LastSelectedProfileId = profile.Id }; ApplyProfile(profile); } }
     private void ApplyProfile(SyncProfile profile)
     {
         LeftPath.Text = profile.LeftPath; RightPath.Text = profile.RightPath; SyncModeBox.SelectedIndex = (int)profile.Mode; UpdateSettingsText();
@@ -411,31 +437,12 @@ public partial class MainWindow : Window
     private async Task SaveProfileToListAsync() { var old = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create("未命名配置", "", ""); var current = old with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode }; var index = _profiles.IndexOf(old); if (index >= 0) _profiles[index] = current; else _profiles.Add(current); ProfileList.SelectedItem = current; await PersistProfilesAsync(); }
     private Task PersistProfilesAsync() => _profileStore.SaveAsync(_profiles);
     private void Exit_Click(object s, RoutedEventArgs e) => Close();
-    private void About_Click(object s, RoutedEventArgs e)
+    private async void CheckUpdates_Click(object s, RoutedEventArgs e)
     {
-        const string repoUrl = "https://github.com/zoollcar/feng-sync";
-        var title = new TextBlock { Text = "Feng Sync", FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
-        var description = new TextBlock { Text = "本地、SFTP、Google Drive 与 S3 的文件比较和同步。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) };
-        var link = new Hyperlink(new Run(repoUrl)) { NavigateUri = new Uri(repoUrl) };
-        link.RequestNavigate += (_, args) =>
-        {
-            try { Process.Start(new ProcessStartInfo(args.Uri.AbsoluteUri) { UseShellExecute = true }); }
-            catch (Exception ex) { MessageBox.Show("无法打开链接：" + ex.Message, "Feng Sync", MessageBoxButton.OK, MessageBoxImage.Warning); }
-            args.Handled = true;
-        };
-        var repoBlock = new TextBlock { Margin = new Thickness(0, 0, 0, 14) };
-        repoBlock.Inlines.Add(new Run("GitHub 仓库："));
-        repoBlock.Inlines.Add(link);
-        var ok = new Button { Content = "关闭", IsCancel = true, IsDefault = true, MinWidth = 90, HorizontalAlignment = HorizontalAlignment.Right };
-        var panel = new StackPanel { Margin = new Thickness(18), MinWidth = 360 };
-        panel.Children.Add(title);
-        panel.Children.Add(description);
-        panel.Children.Add(repoBlock);
-        panel.Children.Add(ok);
-        var dialog = new Window { Title = "关于 Feng Sync", Content = panel, Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.NoResize };
-        ok.Click += (_, _) => dialog.Close();
-        dialog.ShowDialog();
+        if (_updates is not null) await _updates.CheckAsync(this, manual: true, _syncInProgress || _compareInProgress);
     }
+    private void About_Click(object s, RoutedEventArgs e)
+        => new AboutWindow(_versionService.DisplayVersion, async () => { if (_updates is not null) await _updates.CheckAsync(this, manual: true, _syncInProgress || _compareInProgress); }) { Owner = this }.ShowDialog();
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         if (_closing) { base.OnClosing(e); return; }
@@ -465,6 +472,13 @@ public partial class MainWindow : Window
         }
         catch { /* Shutdown must not strand the window if a settings file is unavailable. */ }
         finally { await App.CurrentApp.ShutdownAsync(); }
+    }
+    private async Task ExitForUpdateAsync()
+    {
+        Status.Text = "正在退出并安装更新…";
+        _closing = true;
+        _settings = _settings with { LastSelectedProfileId = (ProfileList.SelectedItem as SyncProfile)?.Id };
+        await new SettingsStore().SaveAsync(_settings); await PersistProfilesAsync(); await DisposeRcloneAsync(); await App.CurrentApp.ShutdownAsync();
     }
     protected override void OnClosed(EventArgs e) { base.OnClosed(e); }
     private sealed record BatchJob(string Name, IReadOnlyList<SyncProfile> Profiles);

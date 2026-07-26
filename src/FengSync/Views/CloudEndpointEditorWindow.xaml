@@ -1,12 +1,12 @@
-<Window x:Class="FengSync.Views.CloudEndpointEditorWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="新建云端端点" Width="560" Height="680" MinWidth="480" MinHeight="520" WindowStartupLocation="CenterOwner">
+<Window x:Class="FengSync.Views.CloudEndpointEditorWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="新建云端端点" Width="560" Height="680" MinWidth="480" MinHeight="520" WindowStartupLocation="CenterOwner" Background="{DynamicResource WindowBackgroundBrush}">
  <Grid Margin="18"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <StackPanel>
-   <TextBlock Text="新建云端端点" FontSize="20" FontWeight="Bold"/>
-   <TextBlock Text="先选择服务类型，再填写连接信息。Google Drive 会在默认浏览器完成授权；SFTP / S3 使用下方填写的凭据。" TextWrapping="Wrap" Foreground="DimGray" Margin="0,4,0,0"/>
+   <TextBlock Text="新建云端端点" Style="{StaticResource PageTitleTextStyle}"/>
+   <TextBlock Text="先选择服务类型，再填写连接信息。Google Drive 会在默认浏览器完成授权；SFTP / S3 使用下方填写的凭据。" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryForegroundBrush}" Margin="0,4,0,0"/>
   </StackPanel>
 
   <StackPanel Grid.Row="1" Margin="0,14,0,4">
-   <TextBlock Text="服务" FontWeight="SemiBold"/>
+   <TextBlock Text="服务" Style="{StaticResource SectionTitleTextStyle}"/>
    <ComboBox x:Name="ServiceBox" AutomationProperties.AutomationId="CloudServiceType" Margin="0,4,0,0" SelectedIndex="0" SelectionChanged="Service_Changed">
     <ComboBoxItem Content="Google Drive"/><ComboBoxItem Content="SFTP"/><ComboBoxItem Content="S3 Bucket"/>
    </ComboBox>
@@ -47,7 +47,7 @@
   </GroupBox>
 
   <Grid Grid.Row="4" Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-   <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="CloudEditorStatus" Foreground="#4A5863" TextWrapping="Wrap" VerticalAlignment="Center"/>
+   <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="CloudEditorStatus" Foreground="{DynamicResource SecondaryForegroundBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
    <StackPanel Grid.Column="1" Orientation="Horizontal">
     <Button x:Name="TestButton" AutomationProperties.AutomationId="TestCloudEndpoint" Content="测试连接" Click="Test_Click" MinWidth="86"/>
     <Button x:Name="PreviewButton" Content="预览文件" Click="Preview_Click" Margin="8,0,0,0" MinWidth="86"/>

@@ -27,7 +27,7 @@ public partial class SettingsWindow : Window
     private void LoadValues(ApplicationSettings value)
     {
         _loading = true;
-        ShowCompleted.IsChecked = value.ShowCompleted; StartWithWindows.IsChecked = value.StartWithWindows;
+        AutoCheckForUpdates.IsChecked = value.AutoCheckForUpdates; ShowCompleted.IsChecked = value.ShowCompleted; StartWithWindows.IsChecked = value.StartWithWindows;
         Concurrency.Text = value.DefaultMaxConcurrentCopies.ToString(); VerifyCopies.IsChecked = value.DefaultVerifyCopies;
         TimeTolerance.Text = value.DefaultTimeToleranceSeconds.ToString();
         IncludeRules.Text = string.Join(Environment.NewLine, value.DefaultFilter.Include ?? []);
@@ -48,7 +48,7 @@ public partial class SettingsWindow : Window
             : new VersioningPolicy(FengSync.Core.VersioningMode.None, null, keepDays);
         var result = _initial with
         {
-            ShowCompleted = ShowCompleted.IsChecked == true, StartWithWindows = StartWithWindows.IsChecked == true,
+            AutoCheckForUpdates = AutoCheckForUpdates.IsChecked == true, ShowCompleted = ShowCompleted.IsChecked == true, StartWithWindows = StartWithWindows.IsChecked == true,
             DefaultMaxConcurrentCopies = concurrency, DefaultVerifyCopies = VerifyCopies.IsChecked == true,
             DefaultTimeToleranceSeconds = tolerance,
             DefaultFilter = new SyncFilter(Lines(IncludeRules.Text), Lines(ExcludeRules.Text)), DefaultVersioning = versioning,
@@ -92,7 +92,7 @@ public partial class SettingsWindow : Window
         _loading = true;
         switch (Pages.SelectedIndex)
         {
-            case 0: ShowCompleted.IsChecked = defaults.ShowCompleted; StartWithWindows.IsChecked = defaults.StartWithWindows; break;
+            case 0: AutoCheckForUpdates.IsChecked = defaults.AutoCheckForUpdates; ShowCompleted.IsChecked = defaults.ShowCompleted; StartWithWindows.IsChecked = defaults.StartWithWindows; break;
             case 1: Concurrency.Text = defaults.DefaultMaxConcurrentCopies.ToString(); VerifyCopies.IsChecked = defaults.DefaultVerifyCopies; TimeTolerance.Text = defaults.DefaultTimeToleranceSeconds.ToString(); IncludeRules.Text = ""; ExcludeRules.Text = ""; VersioningMode.SelectedIndex = 0; ArchiveDirectory.Text = ""; KeepDays.Text = defaults.DefaultVersioning.KeepDays.ToString(); break;
             case 2: LogRetention.Text = defaults.LogRetentionDays.ToString(); NotifyOnCompletion.IsChecked = defaults.NotifyOnCompletion; break;
             case 3: NetworkRetry.Text = defaults.NetworkRetryCount.ToString(); break;

@@ -48,6 +48,30 @@ public sealed class UiAcceptanceTests
 
     [Fact]
     [Trait("Category", "UI")]
+    public Task Main_window_shell_keeps_the_profile_workspace_and_toolbar_geometry() => RunAsync("ui-shell");
+
+    [Fact]
+    [Trait("Category", "UI")]
+    public Task Main_window_shell_is_visible_with_default_native_rendering() => RunAsync("ui-shell-native");
+
+    [Fact]
+    [Trait("Category", "UI")]
+    public Task Main_window_shell_is_visible_with_forced_software_rendering() => RunAsync("ui-shell-software");
+
+    [Fact]
+    [Trait("Category", "UI")]
+    public Task Main_window_visual_matrix_captures_supported_sizes_without_clipping_or_toolbar_overlap() => RunAsync("ui-visual-matrix");
+
+    [Fact]
+    [Trait("Category", "UI")]
+    public Task Fluent_settings_persist_update_preferences_and_sidebar_width() => RunAsync("update-settings");
+
+    [Fact]
+    [Trait("Category", "UI")]
+    public Task About_window_displays_the_built_product_version() => RunAsync("about");
+
+    [Fact]
+    [Trait("Category", "UI")]
     public Task Operations_menu_exposes_the_record_created_by_a_real_sync() => RunAsync("history");
 
     [Fact]

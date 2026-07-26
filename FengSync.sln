@@ -12,6 +12,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FengSync.Cli", "src\FengSyn
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FengSync.UiTests", "tests\FengSync.UiTests\FengSync.UiTests.csproj", "{E41E7AB5-62D7-4F4C-8A29-0C51B174A655}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FengSync.Updater", "src\FengSync.Updater\FengSync.Updater.csproj", "{F4F8E6C2-6A1A-43B8-9F0B-3BF6EA49C238}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,5 +40,9 @@ Global
 		{E41E7AB5-62D7-4F4C-8A29-0C51B174A655}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E41E7AB5-62D7-4F4C-8A29-0C51B174A655}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E41E7AB5-62D7-4F4C-8A29-0C51B174A655}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F4F8E6C2-6A1A-43B8-9F0B-3BF6EA49C238}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F4F8E6C2-6A1A-43B8-9F0B-3BF6EA49C238}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F4F8E6C2-6A1A-43B8-9F0B-3BF6EA49C238}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F4F8E6C2-6A1A-43B8-9F0B-3BF6EA49C238}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

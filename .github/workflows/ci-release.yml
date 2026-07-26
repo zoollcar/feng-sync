@@ -58,15 +58,19 @@ jobs:
         shell: pwsh
         run: |
           $version = '${{ github.ref_name }}' -replace '^v', ''
-          if ($version -notmatch '^\d+\.\d+\.\d+([-.+].+)?$') {
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
             throw "Release tag must use semantic versioning, for example v0.1.11. Received: ${{ github.ref_name }}"
           }
 
           $publishDir = Join-Path $env:RUNNER_TEMP 'feng-sync-publish'
+          $updaterDir = Join-Path $env:RUNNER_TEMP 'feng-sync-updater'
           $packageRoot = Join-Path $env:RUNNER_TEMP "FengSync-$version-win-x64"
           $zipPath = Join-Path $env:GITHUB_WORKSPACE "FengSync-$version-win-x64.zip"
 
-          dotnet publish ./src/FengSync/FengSync.csproj -c $env:CONFIGURATION -r $env:RUNTIME_IDENTIFIER --self-contained true -p:Version=$version -o $publishDir
+          # Pin InformationalVersion too: on Windows it is the EXE ProductVersion read by
+          # the application and the release-package gate below.  Suppress the SDK's
+          # SourceRevisionId suffix so ProductVersion equals the three-part release tag.
+          dotnet publish ./src/FengSync/FengSync.csproj -c $env:CONFIGURATION -r $env:RUNTIME_IDENTIFIER --self-contained true -p:Version=$version -p:InformationalVersion=$version -p:IncludeSourceRevisionInInformationalVersion=false -o $publishDir
           if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 
           # Bundle the pinned SFTP server dependency next to the protocol host.
@@ -74,22 +78,38 @@ jobs:
           npm ci --omit=dev --prefix $sftpDir
           if ($LASTEXITCODE -ne 0) { throw 'Installing the bundled SFTP dependency failed.' }
 
+          dotnet publish ./src/FengSync.Updater/FengSync.Updater.csproj -c $env:CONFIGURATION -r $env:RUNTIME_IDENTIFIER --self-contained true -p:Version=$version -p:InformationalVersion=$version -p:IncludeSourceRevisionInInformationalVersion=false -o $updaterDir
+          if ($LASTEXITCODE -ne 0) { throw 'Updater publish failed.' }
+          Copy-Item -LiteralPath (Join-Path $updaterDir 'FengSync.Updater.exe') -Destination (Join-Path $publishDir 'FengSync.Updater.exe') -Force
+          ./scripts/New-ReleaseManifest.ps1 -PublishDirectory $publishDir -Version $version
+          foreach ($required in @('FengSync.exe', 'FengSync.Updater.exe', 'release-manifest.json', 'SftpServer/node-sftp-host.cjs', 'SftpServer/node_modules')) { if (!(Test-Path (Join-Path $publishDir $required))) { throw "Release output missing: $required" } }
           New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
           Copy-Item -Path (Join-Path $publishDir '*') -Destination $packageRoot -Recurse -Force
           Compress-Archive -Path $packageRoot -DestinationPath $zipPath -CompressionLevel Optimal
+          $shaPath = "$zipPath.sha256"
+          $zipHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$zipHash  $(Split-Path $zipPath -Leaf)" | Set-Content -LiteralPath $shaPath -NoNewline
+
+          # Keep the update client and published release contract in lockstep.
+          ./scripts/Test-ReleasePackage.ps1 -PublishDirectory $publishDir -Version $version -ZipPath $zipPath -Sha256Path $shaPath
 
           "asset_name=FengSync-$version-win-x64.zip" >> $env:GITHUB_OUTPUT
           "asset_path=$zipPath" >> $env:GITHUB_OUTPUT
+          "sha_path=$shaPath" >> $env:GITHUB_OUTPUT
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.asset_name }}
-          path: ${{ steps.package.outputs.asset_path }}
+          path: |
+            ${{ steps.package.outputs.asset_path }}
+            ${{ steps.package.outputs.sha_path }}
           if-no-files-found: error
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: ${{ steps.package.outputs.asset_path }}
+          files: |
+            ${{ steps.package.outputs.asset_path }}
+            ${{ steps.package.outputs.sha_path }}

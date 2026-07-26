@@ -16,4 +16,10 @@ public sealed record ApplicationSettings
     public int NetworkRetryCount { get; init; } = 3;
     public bool StartWithWindows { get; init; }
     public string? LastSelectedProfileId { get; init; }
+    public bool AutoCheckForUpdates { get; init; } = true;
+    public DateTimeOffset? LastUpdateCheckUtc { get; init; }
+    public string? LatestReleaseEtag { get; init; }
+    public string? SkippedUpdateVersion { get; init; }
+    /// <summary>Persisted main-window Profile workspace width in device-independent pixels.</summary>
+    public double MainWindowSidebarWidth { get; init; } = 260;
 }

@@ -1,4 +1,5 @@
 using FengSync.Core.SftpServer;
+using System.IO;
 
 namespace FengSync;
 public partial class App : System.Windows.Application
@@ -10,14 +11,24 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(System.Windows.StartupEventArgs e)
     {
-        // Keep WPF rendering compatible with remote sessions and screen capture.
-        System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+        // Native rendering is the normal path.  Test and RDP troubleshooting can
+        // opt into the same software-rendering fallback without changing a user's
+        // permanent graphics behavior.
+        System.Windows.Media.RenderOptions.ProcessRenderMode =
+            Environment.GetEnvironmentVariable("FENGSYNC_FORCE_SOFTWARE_RENDERING") == "1"
+                ? System.Windows.Interop.RenderMode.SoftwareOnly
+                : System.Windows.Interop.RenderMode.Default;
         // MainWindow coordinates asynchronous cleanup before it explicitly shuts the
         // application down.  Never let WPF tear down the dispatcher first.
         ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
         base.OnStartup(e);
+        UpdatedFromVersion = e.Args.SkipWhile(x => x != "--updated-from").Skip(1).FirstOrDefault();
+        UpdateTaskDirectory = e.Args.SkipWhile(x => x != "--update-task").Skip(1).FirstOrDefault();
         _ = StartConfiguredSftpAsync();
     }
+
+    public string? UpdatedFromVersion { get; private set; }
+    public string? UpdateTaskDirectory { get; private set; }
 
     /// <summary>Stops application-owned services, then terminates the WPF dispatcher.</summary>
     public async Task ShutdownAsync()

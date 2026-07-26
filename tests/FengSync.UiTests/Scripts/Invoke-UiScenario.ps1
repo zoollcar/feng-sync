@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('local', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume')][string]$Scenario,
     [Parameter(Mandatory)][string]$AppPath,
     [Parameter(Mandatory)][string]$Workspace
 )
@@ -12,6 +12,14 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing, System.Windows.Forms
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class FengSyncUiMouse {
+  [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+  public const uint LEFTDOWN = 0x0002, LEFTUP = 0x0004;
+}
+'@
 $AppPath = [IO.Path]::GetFullPath($AppPath); $Workspace = [IO.Path]::GetFullPath($Workspace)
 if (-not (Test-Path -LiteralPath $AppPath)) { throw "Application not found: $AppPath" }
 $cleanup = Join-Path $Workspace 'tests\Shared\TestProcessCleanup.ps1'; . $cleanup; Clear-FengSyncTestProcesses -Workspace $Workspace
@@ -46,6 +54,15 @@ function Select-Ui($element) { $p = $null; if (-not $element.TryGetCurrentPatter
 function Toggle-Ui($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$p)) { throw "Element cannot be toggled: $($element.Current.Name)" }; $p.Toggle() }
 function Get-ToggleState($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$p)) { throw "Element has no TogglePattern: $($element.Current.Name)" }; return $p.Current.ToggleState }
 function Get-Text($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p)) { throw "Element has no ValuePattern: $($element.Current.Name)" }; return $p.Current.Value }
+function Drag-ElementHorizontally($element, [int]$offset) {
+  $box = $element.Current.BoundingRectangle
+  if ($box.Width -le 0 -or $box.Height -le 0) { throw "Element cannot be dragged because it has no bounds: $($element.Current.AutomationId)" }
+  $start = [Drawing.Point]::new([int]($box.Left + ($box.Width / 2)), [int]($box.Top + ($box.Height / 2)))
+  [Windows.Forms.Cursor]::Position = $start; Start-Sleep -Milliseconds 80
+  [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+  [Windows.Forms.Cursor]::Position = [Drawing.Point]::new($start.X + $offset, $start.Y); Start-Sleep -Milliseconds 180
+  [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+}
 function Get-LiveMain {
   if (-not $script:process -or $script:process.HasExited) { throw 'Feng Sync exited before the current UI step completed.' }
   $script:process.Refresh()
@@ -255,9 +272,28 @@ function Assert-GoogleDriveFileCount { param([string]$remotePath, [int]$count)
   } "Google Drive did not contain all $count fixture files: $remotePath" 180
 }
 function Start-App {
-  $start = [Diagnostics.ProcessStartInfo]::new($AppPath); $start.UseShellExecute = $false; $start.Arguments = "--fengsync-test-run-id $stamp"; $start.EnvironmentVariables['FENGSYNC_DATA_DIR'] = $appData
+  $start = [Diagnostics.ProcessStartInfo]::new($AppPath); $start.UseShellExecute = $false; $start.Arguments = "--fengsync-test-run-id $stamp"; $start.EnvironmentVariables['FENGSYNC_DATA_DIR'] = $appData; $start.EnvironmentVariables['FENGSYNC_DISABLE_UPDATE_CHECK'] = '1'
+  # Always set the value explicitly so a developer's parent shell cannot make
+  # the native scenario accidentally inherit forced software rendering.
+  $start.EnvironmentVariables['FENGSYNC_FORCE_SOFTWARE_RENDERING'] = if ($Scenario -eq 'ui-shell-software') { '1' } else { '0' }
+  # Start-App returns a two-item array consumed by every scenario.  Do not let
+  # its diagnostic text enter that pipeline and shift the process/main indexes.
+  $null = Write-HarnessTrace ("Launching Feng Sync with rendering mode: {0}" -f $(if ($Scenario -eq 'ui-shell-software') { 'software' } else { 'native-default' }))
   $p = [Diagnostics.Process]::Start($start)
-  $main = Wait-Until { if ($p.MainWindowHandle -ne 0) { [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle) } } 'Main window did not appear'
+  $main = Wait-Until {
+    if ($p.MainWindowHandle -eq 0) { return $null }
+    $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+    # A non-zero window handle arrives before WPF has necessarily populated the
+    # visual/automation tree. Return only when the actual application shell is
+    # available, so all rendering modes use the same reliable readiness gate.
+    $profileList = $candidate.FindFirst(
+      [System.Windows.Automation.TreeScope]::Descendants,
+      [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+        'ProfileList'))
+    if ($profileList) { return $candidate }
+    return $null
+  } 'Main window shell did not become ready'
   return @($p, $main)
 }
 function Stop-App {
@@ -284,6 +320,54 @@ function Capture-Window { param($p, [string]$name)
     try { $graphics.CopyFromScreen([int]$bounds.X, [int]$bounds.Y, 0, 0, $image.Size); $image.Save((Join-Path $artifacts $name), [Drawing.Imaging.ImageFormat]::Png) }
     finally { $graphics.Dispose(); $image.Dispose() }
   } catch { Write-Verbose "Could not capture UI screenshot: $_" }
+}
+function Set-WindowSize { param($window, [double]$width, [double]$height, [string]$label)
+  $windowPattern = $null
+  if ($window.TryGetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern, [ref]$windowPattern)) {
+    $windowPattern.SetWindowVisualState([System.Windows.Automation.WindowVisualState]::Normal)
+  }
+  $transform = $null
+  if (-not $window.TryGetCurrentPattern([System.Windows.Automation.TransformPattern]::Pattern, [ref]$transform) -or -not $transform.Current.CanResize) {
+    throw "Main window does not support UI Automation resizing for $label."
+  }
+  $transform.Resize($width, $height)
+  Wait-Until {
+    $bounds = (Get-LiveMain).Current.BoundingRectangle
+    # At non-100% DPI WPF applies the logical minimum size after the physical
+    # resize request.  A larger resulting rectangle is valid and still proves
+    # the narrowest available layout on that display.
+    $bounds.Width -ge ($width - 2) -and $bounds.Height -ge ($height - 2)
+  } "Main window did not resize to the $label visual-matrix target." 15 | Out-Null
+}
+function Assert-RectangleInside { param($element, $container, [string]$label)
+  $rect = $element.Current.BoundingRectangle; $outer = $container.Current.BoundingRectangle; $tolerance = 2
+  if ($rect.Width -le 0 -or $rect.Height -le 0) { throw "$label has no visible bounds." }
+  if ($rect.Left -lt ($outer.Left - $tolerance) -or $rect.Top -lt ($outer.Top - $tolerance) -or $rect.Right -gt ($outer.Right + $tolerance) -or $rect.Bottom -gt ($outer.Bottom + $tolerance)) {
+    throw "$label is clipped outside the main-window bounds."
+  }
+}
+function Test-RectanglesOverlap { param($first, $second)
+  $a = $first.Current.BoundingRectangle; $b = $second.Current.BoundingRectangle
+  return $a.Left -lt $b.Right -and $a.Right -gt $b.Left -and $a.Top -lt $b.Bottom -and $a.Bottom -gt $b.Top
+}
+function Assert-VisualMatrixGeometry { param($main, [string]$label)
+  # WPF does not always expose a plain Border as a UIA peer, so use the
+  # explicitly named workspace header and list as the observable sidebar edge.
+  $workspaceHeader = Find-Id $main 'ProfileWorkspaceHeader'; $profiles = Find-Id $main 'ProfileList'
+  $toolbar = @('CompareButton', 'SyncModeBox', 'EditCurrentProfileButton', 'KeepRightButton', 'KeepLeftButton', 'SyncButton') | ForEach-Object { Find-Id $main $_ }
+  # PreviewPanel is a Border and therefore may not expose a UIA peer; its two
+  # named text peers give a stable, user-visible clipping assertion instead.
+  $content = @('LeftPath', 'RightPath', 'Comparison', 'Summary', 'SafetySummary', 'Status') | ForEach-Object { Find-Id $main $_ }
+  @($workspaceHeader, $profiles) + $toolbar + $content | ForEach-Object { Assert-RectangleInside $_ $main "$label/$($_.Current.AutomationId)" }
+  foreach ($button in $toolbar) {
+    if ($button.Current.BoundingRectangle.Left -lt ($profiles.Current.BoundingRectangle.Right - 2)) { throw "$label/$($button.Current.AutomationId) enters the profile workspace." }
+  }
+  for ($i = 0; $i -lt $toolbar.Count; $i++) {
+    for ($j = $i + 1; $j -lt $toolbar.Count; $j++) {
+      if (Test-RectanglesOverlap $toolbar[$i] $toolbar[$j]) { throw "$label toolbar controls overlap: $($toolbar[$i].Current.AutomationId) and $($toolbar[$j].Current.AutomationId)." }
+    }
+  }
+  if ($profiles.Current.BoundingRectangle.Left -ge $toolbar[0].Current.BoundingRectangle.Left) { throw "$label profile list is not left of the toolbar." }
 }
 
 $process = $null; $server = $null; $remoteCleanup = $null; $sftpUri = $null; $driveUri = $null; $driveChild = $null; $scheduledTask = $null; $passed = $false
@@ -341,6 +425,78 @@ try {
   $launch = Start-App; $process = $launch[0]; $main = $launch[1]
   Capture-Window $process '01-main.png'
   switch ($Scenario) {
+    { $_ -in @('ui-shell', 'ui-shell-native', 'ui-shell-software') } {
+      $profiles = Find-Id $main 'ProfileList'; $header = Find-Id $main 'ProfileWorkspaceHeader'; $toolbar = Find-Id $main 'CompareButton'
+      if ($profiles.Current.BoundingRectangle.Left -ge $toolbar.Current.BoundingRectangle.Left) { throw 'Profile workspace is not left of the toolbar.' }
+      if ([Math]::Abs($header.Current.BoundingRectangle.Top - $toolbar.Current.BoundingRectangle.Top) -gt 20) { throw 'Profile workspace and toolbar are not vertically aligned in the shell.' }
+      $keepRight = Find-Id $main 'KeepRightButton'; $keepLeft = Find-Id $main 'KeepLeftButton'
+      if ($keepRight.Current.BoundingRectangle.Left -ge $keepLeft.Current.BoundingRectangle.Left) { throw 'KeepRightButton must precede KeepLeftButton.' }
+      if ($keepRight.Current.Name -ne '右侧覆盖左侧' -or $keepLeft.Current.Name -ne '左侧覆盖右侧') { throw 'Direction button names no longer match their AutomationId.' }
+      # Produce a real local comparison instead of accepting the initial placeholder
+      # text. This proves SafetySummary is rendered from an actual plan.
+      $left = Join-Path $root 'shell-left'; $right = Join-Path $root 'shell-right'; New-Item -ItemType Directory -Force -Path $left, $right | Out-Null
+      [IO.File]::WriteAllText((Join-Path $left 'safety-proof.txt'), 'plan')
+      Compare-Ui $main $left $right
+      $summary = Find-Id $main 'Summary'; $safety = Find-Id $main 'SafetySummary'
+      if ($summary.Current.BoundingRectangle.Height -le 0 -or $safety.Current.BoundingRectangle.Height -le 0 -or $safety.Current.BoundingRectangle.Top -lt $summary.Current.BoundingRectangle.Bottom) { throw 'Preview summary or safety text was clipped.' }
+      if ($safety.Current.Name -notmatch '安全检查') { throw "SafetySummary was not populated by the real comparison: $($safety.Current.Name)" }
+      Capture-Window $process '02-shell.png'
+      $screenshot = Join-Path $artifacts '02-shell.png'
+      if (-not (Test-Path -LiteralPath $screenshot) -or (Get-Item -LiteralPath $screenshot).Length -le 0) { throw 'Shell screenshot was not saved.' }
+      if ($main.Current.BoundingRectangle.Width -le 0 -or $main.Current.BoundingRectangle.Height -le 0) { throw 'Main window is not visible after shell rendering.' }
+      Write-HarnessTrace ("Shell rendering verified for mode: {0}; screenshot: {1}" -f $(if ($Scenario -eq 'ui-shell-software') { 'software' } else { 'native-default' }), $screenshot)
+    }
+    'ui-visual-matrix' {
+      $sizes = @(
+        [pscustomobject]@{ Label = '1040x640'; Width = 1040; Height = 640 },
+        [pscustomobject]@{ Label = '1366x768'; Width = 1366; Height = 768 },
+        [pscustomobject]@{ Label = '1626x894'; Width = 1626; Height = 894 }
+      )
+      foreach ($size in $sizes) {
+        Set-WindowSize $main $size.Width $size.Height $size.Label
+        $main = Get-LiveMain
+        Assert-VisualMatrixGeometry $main $size.Label
+        Capture-Window $process ("02-visual-{0}.png" -f $size.Label)
+        Write-HarnessTrace "Visual matrix verified: $($size.Label)."
+      }
+      $windowPattern = $null
+      if (-not $main.TryGetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern, [ref]$windowPattern)) { throw 'Main window does not expose WindowPattern for the maximized visual-matrix target.' }
+      $windowPattern.SetWindowVisualState([System.Windows.Automation.WindowVisualState]::Maximized)
+      Wait-Until { (Get-LiveMain).Current.BoundingRectangle.Width -gt 0 } 'Main window did not maximize.' 15 | Out-Null
+      $main = Get-LiveMain
+      Assert-VisualMatrixGeometry $main 'maximized'
+      Capture-Window $process '02-visual-maximized.png'
+      Write-HarnessTrace 'Visual matrix verified: maximized.'
+    }
+    'update-settings' {
+      $profiles = Find-Id $main 'ProfileList'; $beforeWidth = $profiles.Current.BoundingRectangle.Width
+      $splitter = Find-Id $main 'SidebarSplitter'; Drag-ElementHorizontally $splitter 75
+      Wait-Until { (Find-Id (Get-LiveMain) 'ProfileList').Current.BoundingRectangle.Width -gt ($beforeWidth + 35) } 'Sidebar width did not change after dragging the splitter.' 15 | Out-Null
+      $changedWidth = (Find-Id (Get-LiveMain) 'ProfileList').Current.BoundingRectangle.Width
+      Open-Menu (Find-Id $main 'ToolsMenu'); Click (Find-Id $main 'OptionsMenuItem')
+      $settings = Find-WindowLike '设置'
+      $auto = Find-Id $settings 'SettingsAutoCheckUpdates'
+      if ((Get-ToggleState $auto) -eq [System.Windows.Automation.ToggleState]::On) { Toggle-Ui $auto }
+      Click (Find-Id $settings 'SettingsApply'); Click (Find-Id $settings 'SettingsOk')
+      Open-Menu (Find-Id $main 'ToolsMenu'); Click (Find-Id $main 'OptionsMenuItem'); $settings = Find-WindowLike '设置'
+      if ((Get-ToggleState (Find-Id $settings 'SettingsAutoCheckUpdates')) -ne [System.Windows.Automation.ToggleState]::Off) { throw 'Auto update preference did not persist after reopening settings.' }
+      Capture-Window $process '02-update-settings.png'; Click (Find-Id $settings 'SettingsCancel')
+      Stop-App $process; $process = $null; $launch = Start-App; $process = $launch[0]; $main = $launch[1]
+      $restoredWidth = (Find-Id $main 'ProfileList').Current.BoundingRectangle.Width
+      if ([Math]::Abs($restoredWidth - $changedWidth) -gt 5) { throw "Sidebar width did not persist after restart. changed=$changedWidth restored=$restoredWidth" }
+      Open-Menu (Find-Id $main 'ToolsMenu'); Click (Find-Id $main 'OptionsMenuItem'); $settings = Find-WindowLike '设置'
+      if ((Get-ToggleState (Find-Id $settings 'SettingsAutoCheckUpdates')) -ne [System.Windows.Automation.ToggleState]::Off) { throw 'Auto update preference did not persist after restart.' }
+      Click (Find-Id $settings 'SettingsCancel')
+    }
+    'about' {
+      Open-Menu (Find-Id $main 'HelpMenu'); Click (Find-Id $main 'AboutMenuItem')
+      $about = Wait-Until { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'AboutWindow' } } 'About window did not appear'; $shown = (Find-Id $about 'AboutVersion').Current.Name
+      $product = [Diagnostics.FileVersionInfo]::GetVersionInfo($AppPath).ProductVersion
+      $releaseProduct = if ($product) { $product.TrimStart('v').Split('+')[0] } else { '' }
+      if ([string]::IsNullOrWhiteSpace($releaseProduct) -or $shown -notmatch [Regex]::Escape($releaseProduct)) { throw "About version '$shown' does not match product version '$product'." }
+      Find-Id $about 'AboutCheckUpdates' | Out-Null; Capture-Window $process '02-about.png'
+      [Windows.Forms.SendKeys]::SendWait('{ESC}')
+    }
     'local' {
       $left = Join-Path $root 'left'; $right = Join-Path $root 'right'; New-Item -ItemType Directory -Force -Path @($left, $right) | Out-Null
       [IO.File]::WriteAllText((Join-Path $left 'initial.txt'), 'left-initial')
@@ -574,6 +730,5 @@ finally {
     finally { $server.Dispose() }
   }
   if ($scheduledTask) { & schtasks.exe /Delete /F /TN $scheduledTask *> $null }
-  if ($passed -and (Test-Path -LiteralPath $root)) { Remove-Item -LiteralPath $root -Recurse -Force }
-  elseif (Test-Path -LiteralPath $root) { Write-Output "Artifacts retained: $root" }
+  if (Test-Path -LiteralPath $root) { Write-Output "Artifacts retained: $root" }
 }
