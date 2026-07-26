@@ -104,6 +104,50 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         Assert.Equal("right-change", await File.ReadAllTextAsync(Path.Combine(Right, "initial.txt")));
     }
 
+    [Fact]
+    public async Task V2_runs_an_unchanged_delete_after_an_unrelated_copy_fails()
+    {
+        await File.WriteAllTextAsync(Path.Combine(Left, "copy.txt"), "source");
+        await File.WriteAllTextAsync(Path.Combine(Right, "delete.txt"), "remove");
+        var left = new LocalEndpoint(Left);
+        var right = new LocalEndpoint(Right);
+        var copy = new SyncOperation("copy.txt", OperationKind.CopyLeftToRight, "copy");
+        var delete = new SyncOperation("delete.txt", OperationKind.DeleteRight, "delete");
+        var snapshot = await PlanSnapshot.CaptureAsync(new SyncPlan([copy, delete]), left, right);
+
+        // Cause only the copy to fail by making its previously absent target a directory.
+        Directory.CreateDirectory(Path.Combine(Right, "copy.txt"));
+
+        var result = await new FengSync.Core.Execution.SyncExecutorV2().ExecuteAsync(snapshot, left, right);
+
+        Assert.Equal(TransferStage.Failed, result.Operations.Single(x => x.OperationId == copy.OperationId).Stage);
+        Assert.Equal(TransferStage.Committed, result.Operations.Single(x => x.OperationId == delete.OperationId).Stage);
+        Assert.False(File.Exists(Path.Combine(Right, "delete.txt")));
+    }
+
+    [Fact]
+    public async Task V2_preserves_a_delete_target_changed_after_comparison_when_an_unrelated_copy_fails()
+    {
+        await File.WriteAllTextAsync(Path.Combine(Left, "copy.txt"), "source");
+        await File.WriteAllTextAsync(Path.Combine(Right, "delete.txt"), "old");
+        var left = new LocalEndpoint(Left);
+        var right = new LocalEndpoint(Right);
+        var copy = new SyncOperation("copy.txt", OperationKind.CopyLeftToRight, "copy");
+        var delete = new SyncOperation("delete.txt", OperationKind.DeleteRight, "delete");
+        var snapshot = await PlanSnapshot.CaptureAsync(new SyncPlan([copy, delete]), left, right);
+
+        Directory.CreateDirectory(Path.Combine(Right, "copy.txt"));
+        await File.WriteAllTextAsync(Path.Combine(Right, "delete.txt"), "newer contents");
+
+        var result = await new FengSync.Core.Execution.SyncExecutorV2().ExecuteAsync(snapshot, left, right);
+
+        Assert.Equal(TransferStage.Failed, result.Operations.Single(x => x.OperationId == copy.OperationId).Stage);
+        var deleteResult = result.Operations.Single(x => x.OperationId == delete.OperationId);
+        Assert.Equal(TransferStage.Failed, deleteResult.Stage);
+        Assert.Contains("删除目标在比较后已改变", deleteResult.Error);
+        Assert.Equal("newer contents", await File.ReadAllTextAsync(Path.Combine(Right, "delete.txt")));
+    }
+
     [Fact] public void Maintenance_only_removes_expired_recognized_temporary_files()
     {
         var expired = Path.Combine(Right, "old.bin.fengsync-maintenance.partial");

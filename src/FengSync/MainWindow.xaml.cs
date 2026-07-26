@@ -2,6 +2,7 @@ using FengSync.Core;
 using FengSync.Core.Capabilities;
 using FengSync.Core.Configuration;
 using FengSync.Core.Execution;
+using FengSync.Core.Scanning;
 using FengSync.Core.SftpServer;
 using FengSync.Services;
 using Microsoft.Win32;
@@ -20,7 +21,7 @@ using FengSync.Views;
 namespace FengSync;
 public partial class MainWindow : Window
 {
-    private readonly ObservableCollection<ComparisonRow> _rows = []; private readonly ObservableCollection<SyncProfile> _profiles = []; private readonly ProfileStore _profileStore = new(); private SyncPlan? _plan; private PlanSnapshot? _snapshot; private IEndpoint? _left, _right; private RcloneDaemon? _rclone; private ApplicationSettings _settings; private CancellationTokenSource? _syncCancellation; private CancellationTokenSource? _compareCancellation; private bool _syncInProgress; private bool _compareInProgress; private bool _closing;
+    private readonly ObservableCollection<ComparisonRow> _rows = []; private readonly ObservableCollection<SyncProfile> _profiles = []; private readonly ProfileStore _profileStore = new(); private SyncPlan? _plan; private PlanSnapshot? _snapshot; private ComparisonSnapshot? _comparison; private IEndpoint? _left, _right; private RcloneDaemon? _rclone; private ApplicationSettings _settings; private CancellationTokenSource? _syncCancellation; private CancellationTokenSource? _compareCancellation; private bool _syncInProgress; private bool _compareInProgress; private bool _closing;
     private SyncMode SelectedMode => (SyncMode)Math.Max(0, SyncModeBox?.SelectedIndex ?? 0);
     public MainWindow() { InitializeComponent(); Comparison.ItemsSource = _rows; ProfileList.ItemsSource = _profiles; Comparison.AddHandler(CheckBox.CheckedEvent, new RoutedEventHandler((_, _) => Dispatcher.BeginInvoke(RefreshSummary))); Comparison.AddHandler(CheckBox.UncheckedEvent, new RoutedEventHandler((_, _) => Dispatcher.BeginInvoke(RefreshSummary))); _settings = new(); UpdateSettingsText(); Status.Text = "正在加载设置…"; Loaded += async (_, _) => await InitializeAsync(); }
     private async void Compare_Click(object sender, RoutedEventArgs e)
@@ -57,9 +58,8 @@ public partial class MainWindow : Window
             var operations = _rows.Select(x => x.Operation).ToList(); var current = new SyncPlan(operations);
             if (!current.CanExecute || _snapshot is null) { Status.Text = "请先选择操作并裁决所有冲突，然后重新比较。"; return; }
             var profile = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create("临时", LeftPath.Text, RightPath.Text);
-            var total = operations.Count(x => x.Selected && x.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft);
             _syncCancellation = new();
-            progressDialog = new ProgressWindow(total, !_settings.ShowCompleted) { Owner = this };
+            progressDialog = new ProgressWindow(operations, !_settings.ShowCompleted) { Owner = this };
             progressDialog.Show();
             progressDialog.ShowInitialization("1 / 5", "正在准备同步计划…");
             Status.Text = "正在准备同步…";
@@ -85,8 +85,14 @@ public partial class MainWindow : Window
             progressDialog.BeginTransfers(effective.MaxConcurrentCopies);
             var run = await new SyncExecutorV2().ExecuteAsync(_snapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), _syncCancellation.Token, effective.VerifyCopies, effective.Versioning, journals: new TaskJournalStore(), maxConcurrentCopies: effective.MaxConcurrentCopies);
             transaction = run.Operations.Where(x => x.Stage == TransferStage.Committed).Aggregate(transaction, (current, item) => current.RecordCommitted(item.Path));
+            // A failed copy no longer prevents independent deletes from running.
+            // Persist exactly the committed subset so those deletes are not planned
+            // again, while failed and skipped paths retain their previous baseline.
+            if (_comparison is not null && run.SucceededOperations > 0)
+                await baselineRepository.CommitFromResultsAsync(_left, _right,
+                    new BaselineCommitInput(_comparison, run.Operations.ToDictionary(x => x.OperationId), transaction), _syncCancellation.Token);
+            transaction = run.Succeeded ? transaction.Complete() : transaction.Rollback(needsRecovery: true);
             await baselineRepository.SaveAsync(transaction, _syncCancellation.Token);
-            await baselineRepository.CommitAsync(transaction, _left, _right, run.Succeeded, _syncCancellation.Token);
             progressDialog.SetRetry(operations, async retryPlan =>
             {
                 var retrySnapshot = await PlanSnapshot.CaptureAsync(retryPlan, _left, _right);
@@ -111,21 +117,19 @@ public partial class MainWindow : Window
     private void KeepLeft_Click(object sender, RoutedEventArgs e) => ResolveSelected(true); private void KeepRight_Click(object sender, RoutedEventArgs e) => ResolveSelected(false);
     private void ResolveSelected(bool left)
     {
-        // Top-bar buttons should match "select all then apply". When nothing is selected we
-        // fan out across every row in the comparison list so users do not have to first
-        // Ctrl+A or shift-click a range just to flip the default direction.
-        var rows = Comparison.SelectedItems.Cast<ComparisonRow>().ToList();
-        var applyToAll = rows.Count == 0;
-        if (applyToAll) rows = _rows.ToList();
-        if (rows.Count == 0) { Status.Text = "暂无可修改覆盖方向的行；请先点击“比较”。"; return; }
-        ApplyDirection(rows, left, applyToAll);
+        // Toolbar coverage is deliberately a whole-plan operation: it must have the same
+        // result as selecting every comparison row and choosing the corresponding action
+        // from the context menu. Do not use DataGrid.SelectedItems here: a stale current-row
+        // selection would otherwise silently restrict the toolbar action to one row.
+        if (_rows.Count == 0) { Status.Text = "暂无可修改覆盖方向的行；请先点击“比较”。"; return; }
+        ApplyDirection(_rows, left);
     }
-    private void ApplyDirection(IEnumerable<ComparisonRow> rows, bool keepLeft, bool activateRows = false)
+    private void ApplyDirection(IEnumerable<ComparisonRow> rows, bool keepLeft)
     {
         var changed = 0; var errors = new List<string>();
         foreach (var row in rows)
         {
-            try { row.Operation.OverrideCopyDirection(keepLeft, row.Left, row.Right); if (activateRows) row.EnableForCurrentPlan(); row.Refresh(); changed++; }
+            try { row.Operation.OverrideCopyDirection(keepLeft, row.Left, row.Right); row.Refresh(); changed++; }
             catch (Exception ex) { errors.Add($"{row.Operation.Path}：{ex.Message}"); }
         }
         Comparison.Items.Refresh(); RefreshSummary();
@@ -224,7 +228,11 @@ public partial class MainWindow : Window
     private async void EditProfile_Click(object s, RoutedEventArgs e)
     {
         if (ProfileList.SelectedItem is not SyncProfile original) { Status.Text = "请先选择一个 Profile。"; return; }
-        var updated = new ProfileDialogService().Edit(this, original);
+        // The path and mode fields on the main window are editable. Opening the
+        // settings gear must edit what the user currently sees rather than stale
+        // values from the last persisted profile.
+        var editable = original with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode };
+        var updated = new ProfileDialogService().Edit(this, editable);
         if (updated is null) return;
         var index = _profiles.IndexOf(original);
         if (index >= 0) _profiles[index] = updated; else _profiles.Add(updated);
@@ -312,7 +320,14 @@ public partial class MainWindow : Window
         var risk = SyncRiskSummary.Create(_plan, left, right);
         SafetySummary.Text = planSafety.HasBlockingIssues ? "安全检查：阻断（删除阈值可在同步确认中一次性放行）" : SyncConfirmationPolicy.RequiresConfirmation(risk) ? $"安全检查：警告 · 覆盖 {risk.Overwrites} 项，删除 {risk.Deletes} 项，传输 {FormatBytes(risk.TransferBytes)}" : "安全检查：通过";
         SafetySummary.Foreground = planSafety.HasBlockingIssues ? Brushes.Firebrick : SyncConfirmationPolicy.RequiresConfirmation(risk) ? Brushes.DarkOrange : Brushes.ForestGreen;
-        _snapshot = await PlanSnapshot.CaptureAsync(_plan, _left, _right, cancellationToken); _rows.Clear(); foreach (var op in _plan.Operations) _rows.Add(new(op, left.GetValueOrDefault(op.Path), right.GetValueOrDefault(op.Path), ignoredPaths.Contains(op.Path))); RefreshSummary(); Status.Text = baselineWarning ?? $"{ModeTitle()} 比较完成：左侧 {left.Count} 项  ·  右侧 {right.Count} 项  ·  {_plan.Operations.Count} 个差异/提示（其中 {ignoredPaths.Count} 项已忽略）。";
+        _comparison = new ComparisonSnapshot
+        {
+            SnapshotId = Guid.NewGuid(),
+            Left = new EndpointSnapshot { Endpoint = _left.Profile, Paths = _left.Capabilities.EffectivePaths, StartedUtc = DateTimeOffset.UtcNow, CompletedUtc = DateTimeOffset.UtcNow, Entries = scans[0], ByPath = left },
+            Right = new EndpointSnapshot { Endpoint = _right.Profile, Paths = _right.Capabilities.EffectivePaths, StartedUtc = DateTimeOffset.UtcNow, CompletedUtc = DateTimeOffset.UtcNow, Entries = scans[1], ByPath = right },
+            Mode = ComparisonMode.TimeAndSize, TimeTolerance = TimeSpan.FromSeconds(effective.TimeToleranceSeconds), Baseline = baseline, Plan = _plan
+        };
+        _snapshot = PlanSnapshot.FromComparison(_plan, _comparison); _rows.Clear(); foreach (var op in _plan.Operations) _rows.Add(new(op, left.GetValueOrDefault(op.Path), right.GetValueOrDefault(op.Path), ignoredPaths.Contains(op.Path))); RefreshSummary(); Status.Text = baselineWarning ?? $"{ModeTitle()} 比较完成：左侧 {left.Count} 项  ·  右侧 {right.Count} 项  ·  {_plan.Operations.Count} 个差异/提示（其中 {ignoredPaths.Count} 项已忽略）。";
     }
     private async Task<(IEndpoint Left, IEndpoint Right)> CreateEndpointsAsync(string left, string right)
     {

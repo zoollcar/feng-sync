@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $Workspace = [IO.Path]::GetFullPath($Workspace)
 $CliPath = [IO.Path]::GetFullPath($CliPath)
 if (-not (Test-Path -LiteralPath $CliPath)) { throw "CLI executable was not found: $CliPath" }
+$cleanup = Join-Path $Workspace 'tests\Shared\TestProcessCleanup.ps1'; . $cleanup; Clear-FengSyncTestProcesses -Workspace $Workspace
 
 $runId = 'sftp-protocol-' + [Guid]::NewGuid().ToString('N')
 $root = Join-Path $Workspace ('.fengsync-test\protocol\' + $runId)
@@ -47,7 +48,7 @@ try {
   $options = @{ Enabled=$true; ListenAddress='127.0.0.1'; Port=$port; MaxConnections=2; Accounts=@(@{UserName=$user;Enabled=$true;PasswordSalt=[Convert]::ToBase64String($salt);PasswordHash=[Convert]::ToBase64String($hash);PasswordIterations=210000;PublicKeys=@()}); Shares=@(@{VirtualName='docs';PhysicalPath=$share;Permission='ReadWrite'}, @{VirtualName='readonly';PhysicalPath=$readOnlyShare;Permission='ReadOnly'}) }
   $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((@{ Options=$options; HostKeyPath=(Join-Path $root 'host-key.pem') } | ConvertTo-Json -Depth 8 -Compress)))
   $start = [Diagnostics.ProcessStartInfo]::new((Get-Command node -ErrorAction Stop).Source)
-  $start.Arguments = '"' + (Join-Path $Workspace 'src\FengSync.Core\SftpServer\node-sftp-host.cjs') + '"'; $start.UseShellExecute = $false; $start.CreateNoWindow = $true; $start.RedirectStandardInput = $true; $start.RedirectStandardError = $true
+  $start.Arguments = '"' + (Join-Path $Workspace 'src\FengSync.Core\SftpServer\node-sftp-host.cjs') + '" --fengsync-test-run-id ' + $runId; $start.UseShellExecute = $false; $start.CreateNoWindow = $true; $start.RedirectStandardInput = $true; $start.RedirectStandardError = $true
   $start.EnvironmentVariables['FENGSYNC_SFTP_CONFIG'] = $payload; $start.EnvironmentVariables['NODE_PATH'] = $modules
   $server = [Diagnostics.Process]::Start($start)
   # A raw TCP probe closes before the SSH handshake and is treated as an auth

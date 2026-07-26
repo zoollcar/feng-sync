@@ -13,7 +13,20 @@ public sealed class TaskJournalStore(string? root = null)
     public async Task SaveAsync(SyncJournal journal, CancellationToken ct = default)
     {
         Directory.CreateDirectory(_root); var target = Path.Combine(_root, journal.JobId + ".json"); var temp = target + ".tmp";
-        await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(journal), ct); File.Move(temp, target, true);
+        await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(journal), ct);
+        // On Windows a diagnostics reader can briefly open the current journal
+        // without delete sharing. Replacing it must wait for that transient read
+        // lock instead of turning an otherwise successful transfer into a failed
+        // operation.
+        const int attempts = 20;
+        for (var attempt = 1; ; attempt++)
+        {
+            try { File.Move(temp, target, true); break; }
+            catch (Exception ex) when (attempt < attempts && ex is IOException or UnauthorizedAccessException)
+            {
+                await Task.Delay(25, ct);
+            }
+        }
     }
     public async Task<IReadOnlyList<SyncJournal>> LoadIncompleteAsync(CancellationToken ct = default)
     {

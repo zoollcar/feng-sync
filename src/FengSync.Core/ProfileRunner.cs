@@ -75,6 +75,12 @@ public sealed class ProfileRunner
     {
         if (!run.Succeeded)
         {
+            // The executor may complete independent deletes after a copy failed.
+            // Persist only those committed results, leaving every failed or skipped
+            // path at its previous baseline state for a safe retry.
+            if (run.SucceededOperations > 0)
+                await prepared.BaselineRepository.CommitFromResultsAsync(prepared.Left, prepared.Right,
+                    new BaselineCommitInput(prepared.Comparison, run.Operations.ToDictionary(x => x.OperationId), transaction), ct);
             var rolledBack = transaction.Rollback(needsRecovery: true);
             await prepared.BaselineRepository.SaveAsync(rolledBack, ct);
             return rolledBack;

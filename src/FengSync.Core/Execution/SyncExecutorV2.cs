@@ -117,15 +117,34 @@ public sealed class SyncExecutorV2
                 }
             }
 
-            // Directories must exist before their descendants are copied; do them
-            // serially up front so the bounded copy pipeline can stay focused on
-            // file IO.
-            foreach (var op in selected.Where(x => (x.Kind is OperationKind.CreateLeftDirectory or OperationKind.CreateRightDirectory) && !aggregatedOperationIds.Contains(x.OperationId)))
+            // Parent directories must exist before descendants, but independent
+            // siblings should honor the configured concurrency. Grouping by depth
+            // preserves that dependency while avoiding 100 serial remote mkdir
+            // requests for a wide tree.
+            var directoryOps = selected
+                .Where(x => (x.Kind is OperationKind.CreateLeftDirectory or OperationKind.CreateRightDirectory) && !aggregatedOperationIds.Contains(x.OperationId))
+                .GroupBy(x => x.Path.Count(c => c == '/' || c == '\\'))
+                .OrderBy(x => x.Key);
+            foreach (var depthGroup in directoryOps)
             {
-                progress?.Report(new(op.OperationId, op.Path, TransferStage.Preparing, 0, 0));
-                await (op.Kind == OperationKind.CreateLeftDirectory ? left : right).CreateDirectoryAsync(op.Path, ct);
-                await Record(op, TransferStage.Committed, 0, null, null, true, null);
-                progress?.Report(new(op.OperationId, op.Path, TransferStage.Committed, 0, 0));
+                await Parallel.ForEachAsync(depthGroup,
+                    new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, maxConcurrentCopies), CancellationToken = ct },
+                    async (op, token) =>
+                {
+                    progress?.Report(new(op.OperationId, op.Path, TransferStage.Preparing, 0, 0));
+                    try
+                    {
+                        await (op.Kind == OperationKind.CreateLeftDirectory ? left : right).CreateDirectoryAsync(op.Path, token);
+                        await Record(op, TransferStage.Committed, 0, null, null, true, null);
+                        progress?.Report(new(op.OperationId, op.Path, TransferStage.Committed, 0, 0));
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        await Record(op, TransferStage.Failed, 0, null, null, false, ex.Message);
+                        progress?.Report(new(op.OperationId, op.Path, TransferStage.Failed, 0, 0, Error: ex.Message));
+                        throw;
+                    }
+                });
             }
 
             foreach (var op in selected.Where(x => x.Kind == OperationKind.Move && !aggregatedOperationIds.Contains(x.OperationId)))
@@ -134,6 +153,7 @@ public sealed class SyncExecutorV2
                 var target = move.ExecuteOn == EndpointSide.Left ? left : right;
                 var source = move.ChangedOn == EndpointSide.Left ? left : right;
                 await Mark(op, JournalState.Running, TransferStage.Preparing);
+                progress?.Report(new(op.OperationId, op.Path, TransferStage.Preparing, 0, 0));
                 try
                 {
                     // A same-target dual move is intentionally represented as an
@@ -143,6 +163,7 @@ public sealed class SyncExecutorV2
                     {
                         var after = await RequirePostPublishFingerprintAsync(target, move.ToPath, ct);
                         await Record(op, TransferStage.Committed, 0, after, after, true);
+                        progress?.Report(new(op.OperationId, op.Path, TransferStage.Committed, 0, 0));
                         continue;
                     }
                     var from = await target.StatAsync(move.FromPath, ct);
@@ -168,9 +189,13 @@ public sealed class SyncExecutorV2
                     var changed = await RequirePostPublishFingerprintAsync(source, move.ToPath, ct);
                     var targetAfter = await RequirePostPublishFingerprintAsync(target, move.ToPath, ct);
                     await Record(op, TransferStage.Committed, 0, changed, targetAfter, true);
+                    progress?.Report(new(op.OperationId, op.Path, TransferStage.Committed, 0, 0));
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
-                { await Record(op, TransferStage.Failed, 0, null, null, false, ex.Message); }
+                {
+                    await Record(op, TransferStage.Failed, 0, null, null, false, ex.Message);
+                    progress?.Report(new(op.OperationId, op.Path, TransferStage.Failed, 0, 0, Error: ex.Message));
+                }
             }
 
             if (results.Values.Any(x => x.Stage == TransferStage.Failed))
@@ -203,25 +228,38 @@ public sealed class SyncExecutorV2
             copyChannel.Writer.TryComplete();
             await Task.WhenAll(workerTasks);
 
-            if (results.Values.Any(x => x.Stage == TransferStage.Failed))
-            {
-                await Task.Yield();
-                return new(runId, results.Values.OrderBy(x => x.Path).ToList(), NeedsRecovery: true);
-            }
-
+            // A copy failure must be reported, but it must not prevent unrelated
+            // deletions from reaching the endpoint.  Each deletion was planned
+            // from the same stable snapshot and is independently idempotent.
+            // The result remains unsuccessful below, so callers retain a recovery
+            // transaction and only commit the operations that actually completed.
             var deletion = CreateDeletionStrategy(versioning);
             foreach (var op in selected.Where(x => (x.Kind is OperationKind.DeleteLeft or OperationKind.DeleteRight) && !aggregatedOperationIds.Contains(x.OperationId)).OrderByDescending(x => x.Path.Length))
             {
                 progress?.Report(new(op.OperationId, op.Path, TransferStage.Deleting, 0, 0));
-                await deletion.DeleteAsync(op.Kind == OperationKind.DeleteLeft ? left : right, op.Path, false, ct);
-                await Record(op, TransferStage.Committed, 0, null, null, true, null);
-                progress?.Report(new(op.OperationId, op.Path, TransferStage.Committed, 0, 0));
+                try
+                {
+                    var deleteFromLeft = op.Kind == OperationKind.DeleteLeft;
+                    var target = deleteFromLeft ? left : right;
+                    var entry = (deleteFromLeft ? snapshot.LeftEntries : snapshot.RightEntries)?.GetValueOrDefault(op.Path);
+                    await EnsureDeleteTargetUnchangedAsync(target, op.Path, entry, ct);
+                    await deletion.DeleteAsync(target, op.Path, entry?.Kind == EntryKind.Directory, ct);
+                    await Record(op, TransferStage.Committed, 0, null, null, true, null);
+                    progress?.Report(new(op.OperationId, op.Path, TransferStage.Committed, 0, 0));
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    await Record(op, TransferStage.Failed, 0, null, null, false, ex.Message);
+                    progress?.Report(new(op.OperationId, op.Path, TransferStage.Failed, 0, 0, Error: ex.Message));
+                    // A stale or otherwise failed delete must not prevent later,
+                    // independently validated deletes from reaching their desired state.
+                }
             }
             if (versioning?.Mode == VersioningMode.TimestampedArchive && !string.IsNullOrWhiteSpace(versioning.ArchiveDirectory))
                 await new RetentionCleanupService().CleanupAsync(versioning.ArchiveDirectory, versioning.ToRetentionPolicy(), ct);
 
             await Task.Yield();
-            return new(runId, results.Values.OrderBy(x => x.Path).ToList());
+            return new(runId, results.Values.OrderBy(x => x.Path).ToList(), NeedsRecovery: results.Values.Any(x => x.Stage == TransferStage.Failed));
         }
         catch (OperationCanceledException)
         {
@@ -272,18 +310,20 @@ public sealed class SyncExecutorV2
                     progress?.Report(new(op.OperationId, op.Path, TransferStage.Verifying, bytes, bytes, nowActive));
                     await PublishStagedAsync(target, temporary, op.Path, expectedTarget is not null, ct);
                     // M2: per-file StatAsync on the target only — never ScanAsync
-                    await new StatVerifier().VerifyAsync(source, target, op.Path, ct);
+                    var verified = await new StatVerifier().VerifyAsync(source, target, op.Path, ct);
+                    committed = true;
+                    await record(op, TransferStage.Committed, bytes, verified.Source, verified.Target, true, null);
                 }
                 else
                 {
                     await PublishStagedAsync(target, temporary, op.Path, expectedTarget is not null, ct);
+                    committed = true;
+                    // Capture post-publish fingerprints so the M5 baseline commit
+                    // can derive the next two-way state from real endpoint data.
+                    var sourceAfter = await RequirePostPublishFingerprintAsync(source, op.Path, ct);
+                    var targetAfter = await RequirePostPublishFingerprintAsync(target, op.Path, ct);
+                    await record(op, TransferStage.Committed, bytes, sourceAfter, targetAfter, true, null);
                 }
-                committed = true;
-                // Capture verified post-publish fingerprints so the M5 baseline
-                // commit can derive the next two-way state from real data.
-                var sourceAfter = await RequirePostPublishFingerprintAsync(source, op.Path, ct);
-                var targetAfter = await RequirePostPublishFingerprintAsync(target, op.Path, ct);
-                await record(op, TransferStage.Committed, bytes, sourceAfter, targetAfter, true, null);
                 progress?.Report(new(op.OperationId, op.Path, TransferStage.Committed, bytes, bytes, nowActive));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -308,6 +348,25 @@ public sealed class SyncExecutorV2
     {
         var entry = await endpoint.StatAsync(path, ct);
         return entry?.Fingerprint ?? throw new IOException($"发布后无法确认文件元数据：{path}");
+    }
+
+    /// <summary>
+    /// Deletes are allowed to continue after an unrelated copy fails, but they
+    /// must still be conditional on the object observed during comparison. An
+    /// already-absent object is an idempotent success; a newly created or
+    /// modified object must never be deleted by an old plan.
+    /// </summary>
+    private static async Task EnsureDeleteTargetUnchangedAsync(IEndpoint endpoint, string path, EntrySnapshot? expected, CancellationToken ct)
+    {
+        var current = await endpoint.StatAsync(path, ct);
+        if (current is null) return;
+        if (expected is null)
+            throw new IOException($"删除目标在比较后出现：{path}");
+        if (current.Kind != expected.Kind)
+            throw new IOException($"删除目标类型在比较后已改变：{path}");
+        if (expected.Fingerprint is not null &&
+            (current.Fingerprint is null || !expected.Fingerprint.Matches(current.Fingerprint, MoveTolerance(endpoint))))
+            throw new IOException($"删除目标在比较后已改变：{path}");
     }
 
     private static TimeSpan MoveTolerance(IEndpoint endpoint) => endpoint is RcloneEndpoint ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(2);
@@ -352,15 +411,17 @@ public sealed class SyncExecutorV2
 /// </summary>
 public sealed class StatVerifier
 {
-    public async Task VerifyAsync(IEndpoint source, IEndpoint target, string path, CancellationToken ct = default)
+    public async Task<(Fingerprint Source, Fingerprint Target)> VerifyAsync(IEndpoint source, IEndpoint target, string path, CancellationToken ct = default)
     {
         var sourceEntry = await source.StatAsync(path, ct);
         var targetEntry = await target.StatAsync(path, ct);
         // Some remote providers expose a just-committed object with eventual
         // consistency and no stable listing ID. In that case the transfer is
         // explicitly a downgraded verification rather than a false failure.
-        if (targetEntry is null && !target.Capabilities.StableIds) return;
+        if (targetEntry is null && !target.Capabilities.StableIds)
+            throw new IOException("传输后暂时无法读取目标文件元数据：" + path);
         if (sourceEntry?.Fingerprint is null || targetEntry?.Fingerprint is null || !sourceEntry.Fingerprint.Matches(targetEntry.Fingerprint))
             throw new IOException("传输验证失败：" + path);
+        return (sourceEntry.Fingerprint, targetEntry.Fingerprint);
     }
 }

@@ -1,5 +1,6 @@
 using Xunit;
 
-// UI Automation talks to one interactive Windows desktop. Parallel test processes
-// race for focus and can make otherwise-valid controls disappear between calls.
+// UI Automation drives the desktop's shared input and window tree. Running
+// scenarios concurrently opens multiple FengSync instances and lets one
+// scenario interact with another's dialogs.
 [assembly: CollectionBehavior(DisableTestParallelization = true)]

@@ -7,6 +7,13 @@ internal static class TransferResume
 {
     public static async Task<(string TemporaryPath, bool Resumed)> PrepareAsync(IEndpoint source, IEndpoint target, string path, CancellationToken ct)
     {
+        // Remote transfers are deliberately restarted from zero. A random staging
+        // name cannot collide with an earlier run, so recursively listing the whole
+        // remote tree here only adds an O(files * tree-size) control-plane cost.
+        // Failed remote staging objects are removed by the executor's failure path.
+        if (target is not LocalEndpoint)
+            return (path + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial", false);
+
         var candidates = (await target.ListTransferTemporaryFilesAsync(ct))
             .Where(x => x.OriginalPath.Equals(path, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(x => x.Size)

@@ -14,11 +14,22 @@ $OutputEncoding = [Console]::OutputEncoding
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing, System.Windows.Forms
 $AppPath = [IO.Path]::GetFullPath($AppPath); $Workspace = [IO.Path]::GetFullPath($Workspace)
 if (-not (Test-Path -LiteralPath $AppPath)) { throw "Application not found: $AppPath" }
+$cleanup = Join-Path $Workspace 'tests\Shared\TestProcessCleanup.ps1'; . $cleanup; Clear-FengSyncTestProcesses -Workspace $Workspace
 $stamp = "ui-$Scenario-" + [Guid]::NewGuid().ToString('N')
 $root = Join-Path $Workspace ('.fengsync-test\ui\' + $stamp)
 $appData = Join-Path $root 'appdata'; $artifacts = Join-Path $root 'artifacts'
 New-Item -ItemType Directory -Force -Path $root, $appData, $artifacts | Out-Null
+# A test has no reason to retain completed progress windows. This makes every
+# successful sync self-closing even before the explicit UI assertion below.
+[IO.File]::WriteAllText((Join-Path $appData 'FengSync.local.json'), '{"ShowCompleted":false}')
 $scenarioTimer = [Diagnostics.Stopwatch]::StartNew()
+$harnessLog = Join-Path $root 'harness.log'
+function Write-HarnessTrace([string]$message) {
+  $line = '{0:O} | {1}' -f [DateTimeOffset]::Now, $message
+  [IO.File]::AppendAllText($harnessLog, $line + [Environment]::NewLine)
+  Write-Output $message
+}
+Write-HarnessTrace "Starting scenario: $Scenario"
 
 function Wait-Until([scriptblock]$Condition, [string]$Message, [int]$Seconds = 30) {
   $end = [DateTime]::UtcNow.AddSeconds($Seconds)
@@ -33,39 +44,174 @@ function Set-Text($element, [string]$value) { $p = $null; if (-not $element.TryG
 function Set-Password($element, [string]$value) { $element.SetFocus(); [Windows.Forms.SendKeys]::SendWait($value) }
 function Select-Ui($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$p)) { throw "Element cannot be selected: $($element.Current.Name)" }; $p.Select() }
 function Toggle-Ui($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$p)) { throw "Element cannot be toggled: $($element.Current.Name)" }; $p.Toggle() }
+function Get-ToggleState($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$p)) { throw "Element has no TogglePattern: $($element.Current.Name)" }; return $p.Current.ToggleState }
 function Get-Text($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p)) { throw "Element has no ValuePattern: $($element.Current.Name)" }; return $p.Current.Value }
-function Find-WindowLike([string]$titleFragment, [int]$seconds = 20) { Wait-Until { try { $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)); foreach ($window in $windows) { if ($window.Current.Name -like "*$titleFragment*") { return $window } } } catch { $null } } "Missing window containing: $titleFragment" $seconds }
+function Get-LiveMain {
+  if (-not $script:process -or $script:process.HasExited) { throw 'Feng Sync exited before the current UI step completed.' }
+  $script:process.Refresh()
+  if ($script:process.MainWindowHandle -eq 0) { throw 'Feng Sync no longer has a main window.' }
+  return [System.Windows.Automation.AutomationElement]::FromHandle($script:process.MainWindowHandle)
+}
+function Find-AppWindow([scriptblock]$predicate) {
+  if (-not $script:process -or $script:process.HasExited) { return $null }
+  $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+    [System.Windows.Automation.TreeScope]::Descendants,
+    [System.Windows.Automation.PropertyCondition]::new(
+      [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
+      $script:process.Id))
+  foreach ($window in $windows) {
+    if ($window.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window -and (& $predicate $window)) { return $window }
+  }
+  return $null
+}
+function Find-WindowLike([string]$titleFragment, [int]$seconds = 20) {
+  Wait-Until { try { Find-AppWindow { param($window) $window.Current.Name -like "*$titleFragment*" } } catch { $null } } "Missing Feng Sync window containing: $titleFragment" $seconds
+}
 function Select-Mode($main, [string]$name) { $combo = Find-Id $main 'SyncModeBox'; $p = $null; if (-not $combo.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$p)) { throw 'Sync mode cannot expand.' }; $p.Expand(); Select-Ui (Find-Name $combo $name) }
+function Set-ProfileConcurrency($main, [int]$value) {
+  Click (Find-Id $main 'EditCurrentProfileButton')
+  $editor = Find-WindowLike 'Profile'
+  $sections = Find-Id $editor 'ProfileSections'
+  $sections.SetFocus()
+  [Windows.Forms.SendKeys]::SendWait('{END}')
+  $useDefault = Find-Id $editor 'ProfileUseDefaultConcurrency'
+  if ((Get-ToggleState $useDefault) -eq [System.Windows.Automation.ToggleState]::On) { Toggle-Ui $useDefault }
+  Set-Text (Find-Id $editor 'ProfileConcurrency') ([string]$value)
+  Click (Find-Id $editor 'ProfileSave')
+  Wait-Until {
+    $liveMain = Get-LiveMain
+    (Find-Id $liveMain 'Status' 2).Current.Name -match '已保存' -and
+      (Find-Id $liveMain 'ConcurrencyLabel' 2).Current.Name -match "^$value\s*路$"
+  } "Profile concurrency did not change to $value." 30
+  Write-HarnessTrace "Profile concurrency changed through the GUI to $value."
+}
+function Get-UiStatus {
+  return (Find-Id (Get-LiveMain) 'Status' 2).Current.Name
+}
+function Assert-NoUiFailure([string]$operation) {
+  $status = Get-UiStatus
+  if ($status -match '失败|已取消|未完成|错误|无法') { throw "$operation failed. UI status: $status" }
+  return $status
+}
+function Wait-MainReadyAfterSync([int]$seconds) {
+  Write-HarnessTrace 'Synchronized result observed; waiting for the application operation boundary.'
+  $deadline = [DateTime]::UtcNow.AddSeconds($seconds)
+  $mainReady = $false
+  do {
+    Assert-NoUiFailure 'Synchronization' | Out-Null
+    if ((Find-Id (Get-LiveMain) 'CompareButton' 2).Current.IsEnabled) { $mainReady = $true; break }
+    Start-Sleep -Milliseconds 150
+  } while ([DateTime]::UtcNow -lt $deadline)
+  if (-not $mainReady) { throw 'The main window did not become interactive after synchronization.' }
+  $status = Assert-NoUiFailure 'Synchronization'
+  if ($status -notmatch '同步完成') { throw "Synchronization ended without a successful completion status. UI status: $status" }
+  Write-HarnessTrace "Application operation boundary reached. UI status: $status"
+}
+$approvedConfirmations = [Collections.Generic.HashSet[string]]::new()
 function Approve-ConfirmationIfPresent {
-  $confirm = try { [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, '确认同步操作')) } catch { $null }
-  if ($confirm) { Click (Find-Name $confirm '确认同步' 2); return $true }
+  $confirm = try { Find-AppWindow { param($window) $window.Current.Name -eq '确认同步操作' } } catch { $null }
+  if ($confirm) {
+    # A just-closed modal can remain in UIA's tree for one polling interval.
+    # Its button must not receive a second Invoke, or WPF raises when DialogResult
+    # is assigned after the modal loop has already ended.
+    $id = [string]::Join('-', $confirm.GetRuntimeId())
+    if ($approvedConfirmations.Add($id)) { Click (Find-Name $confirm '确认同步' 2); return $true }
+  }
   return $false
 }
 function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds = 120, [int]$transferSeconds = 120, [string]$expectedContent = $null)
+  $checkExpectedContent = $PSBoundParameters.ContainsKey('expectedContent')
   try { Wait-Until { (Find-Id $main 'SyncButton').Current.IsEnabled } 'Comparison did not produce an executable plan' $comparisonSeconds }
   catch { $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }; throw "Comparison did not produce an executable plan. UI status: $status" }
-  Write-Output "Comparison ready; expected sync output: $expectedFile; expected content: $($expectedContent ?? '<existence-only>')"
+  $expectedDescription = if ($checkExpectedContent) { $expectedContent } else { '<existence-only>' }
+  Write-Output "Comparison ready; expected sync output: $expectedFile; expected content: $expectedDescription"
   Click (Find-Id $main 'SyncButton')
+  Write-HarnessTrace 'Sync button invoked.'
   # Verify the observable synchronization result rather than relying on localized
   # status text, which UI Automation can expose with a different console encoding.
+  Write-HarnessTrace "Probing synchronized result: $expectedFile"
+  $resultDeadline = [DateTime]::UtcNow.AddSeconds($transferSeconds)
+  $resultObserved = $false
   try {
-    Wait-Until {
+    do {
       Approve-ConfirmationIfPresent | Out-Null
-      if (-not (Test-Path -LiteralPath $expectedFile)) { return $false }
-      if ($null -eq $expectedContent) { return $true }
-      try { return [IO.File]::ReadAllText($expectedFile) -eq $expectedContent } catch { return $false }
-    } "Expected synchronized result was not produced: $expectedFile" $transferSeconds
+      Assert-NoUiFailure 'Synchronization' | Out-Null
+      $outputExists = Test-Path -LiteralPath $expectedFile
+      if ($outputExists) {
+        if (-not $checkExpectedContent) { $resultObserved = $true }
+        else {
+          try { $resultObserved = [IO.File]::ReadAllText($expectedFile) -eq $expectedContent }
+          catch { $resultObserved = $false }
+        }
+      }
+      if ($resultObserved) { break }
+      Start-Sleep -Milliseconds 150
+    } while ([DateTime]::UtcNow -lt $resultDeadline)
+    if (-not $resultObserved) { throw "Expected synchronized result was not produced: $expectedFile" }
   }
   catch {
     $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }
     $actual = try { if (Test-Path -LiteralPath $expectedFile) { [IO.File]::ReadAllText($expectedFile) } else { '<missing>' } } catch { '<unreadable>' }
     throw "Expected synchronized result was not produced: $expectedFile. Expected content: $expectedContent. Actual: $actual. UI status: $status"
   }
+  # Sync_Click re-enables CompareButton only from its finally block, after result
+  # persistence and progress-window completion have finished. This is the actual
+  # operation boundary; waiting on status text first can strand a completed test
+  # at the main window when UI Automation observes a stale text peer.
+  Wait-MainReadyAfterSync $transferSeconds
+  Write-HarnessTrace 'Sync complete; main window is responsive and the scenario will continue its next UI action.'
   $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }
   $actual = try { [IO.File]::ReadAllText($expectedFile) } catch { '<unreadable>' }
   Write-Output ("Sync result observed; status: {0}; output exists: {1}; actual content: {2}" -f $status, (Test-Path -LiteralPath $expectedFile), $actual)
 }
-function Compare-Ui { param($main, [string]$left, [string]$right); Set-Text (Find-Id $main 'LeftPath') $left; Set-Text (Find-Id $main 'RightPath') $right; Click (Find-Id $main 'CompareButton') }
+function Compare-Ui {
+  param($main, [string]$left, [string]$right, [int]$seconds = 120)
+  Set-Text (Find-Id $main 'LeftPath') $left
+  Set-Text (Find-Id $main 'RightPath') $right
+
+  # Changing SyncModeBox starts a comparison automatically when both endpoint
+  # fields are populated. Let that operation settle and reuse its plan instead
+  # of queuing an indistinguishable second comparison.
+  $preflightDeadline = [DateTime]::UtcNow.AddSeconds($seconds)
+  do {
+    $liveMain = Get-LiveMain
+    $status = Get-UiStatus
+    $compareEnabled = (Find-Id $liveMain 'CompareButton' 2).Current.IsEnabled
+    if ($compareEnabled) { break }
+    if ($status -match '失败|已取消|错误|无法|需要修复') { throw "Comparison failed. UI status: $status" }
+    Start-Sleep -Milliseconds 100
+  } while ([DateTime]::UtcNow -lt $preflightDeadline)
+  if (-not $compareEnabled) { throw "An automatically started comparison did not finish. UI status: $status" }
+  $syncEnabled = (Find-Id $liveMain 'SyncButton' 2).Current.IsEnabled
+  if ($syncEnabled -and $status -match '比较完成') {
+    Write-HarnessTrace "Using the comparison completed by the preceding UI action. UI status: $status"
+    return
+  }
+
+  $statusBeforeClick = Get-UiStatus
+  Click (Find-Id $main 'CompareButton')
+  Write-HarnessTrace "Compare button invoked: $left <-> $right"
+
+  # InvokePattern queues the WPF click; it does not wait for Compare_Click to
+  # enter. Require evidence that this invocation was accepted before considering
+  # enabled buttons. Otherwise a second compare can consume the previous plan.
+  $accepted = $false
+  $deadline = [DateTime]::UtcNow.AddSeconds($seconds)
+  do {
+    $liveMain = Get-LiveMain
+    $status = Get-UiStatus
+    if ($status -match '失败|已取消|错误|无法|需要修复') { throw "Comparison failed. UI status: $status" }
+    $compareEnabled = (Find-Id $liveMain 'CompareButton' 2).Current.IsEnabled
+    $syncEnabled = (Find-Id $liveMain 'SyncButton' 2).Current.IsEnabled
+    if (-not $compareEnabled -or $status -ne $statusBeforeClick) { $accepted = $true }
+    if ($accepted -and $compareEnabled -and $syncEnabled) {
+      Write-HarnessTrace "Comparison completed. UI status: $status"
+      return
+    }
+    Start-Sleep -Milliseconds 100
+  } while ([DateTime]::UtcNow -lt $deadline)
+  throw "Comparison did not complete with an executable plan. UI status: $status"
+}
 function New-SmallFiles { param([string]$directory, [int]$count)
   New-Item -ItemType Directory -Force -Path $directory | Out-Null
   for ($i = 1; $i -le $count; $i++) { [IO.File]::WriteAllText((Join-Path $directory ('batch-{0:D3}.txt' -f $i)), "small performance fixture $i") }
@@ -85,25 +231,49 @@ function Invoke-MeasuredSync { param($main, [string]$left, [string]$right, [stri
   $comparisonTimer.Stop()
   $syncTimer = [Diagnostics.Stopwatch]::StartNew()
   Click (Find-Id $main 'SyncButton')
-  try { Wait-Until { Approve-ConfirmationIfPresent | Out-Null; Test-Path -LiteralPath $expectedFile } "Expected synchronized file was not created: $expectedFile" $transferSeconds }
+  Write-HarnessTrace 'Measured sync button invoked.'
+  try {
+    $resultDeadline = [DateTime]::UtcNow.AddSeconds($transferSeconds)
+    do {
+      Approve-ConfirmationIfPresent | Out-Null
+      Assert-NoUiFailure 'Synchronization' | Out-Null
+      if (Test-Path -LiteralPath $expectedFile) { break }
+      Start-Sleep -Milliseconds 150
+    } while ([DateTime]::UtcNow -lt $resultDeadline)
+    if (-not (Test-Path -LiteralPath $expectedFile)) { throw "Expected synchronized file was not created: $expectedFile" }
+  }
   catch { $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }; throw "Expected synchronized file was not created: $expectedFile. UI status: $status" }
-  Wait-Until { (Find-Id $main 'Status').Current.Name -match '同步完成' } 'UI did not report synchronization completion' $transferSeconds
+  Wait-MainReadyAfterSync $transferSeconds
+  Write-HarnessTrace 'Measured sync complete; main window is responsive and the scenario will continue its next UI action.'
   $syncTimer.Stop()
   [pscustomobject]@{ CompareMilliseconds = $comparisonTimer.ElapsedMilliseconds; SyncMilliseconds = $syncTimer.ElapsedMilliseconds }
 }
 function Assert-GoogleDriveFileCount { param([string]$remotePath, [int]$count)
   Wait-Until {
-    $listing = & $rclone lsf $remotePath --recursive --config $config 2>$null
+    $listing = & $rclone lsf $remotePath --recursive --config $config --contimeout 10s --timeout 30s 2>$null
     $LASTEXITCODE -eq 0 -and @($listing | Where-Object { $_ -match '\.txt$' }).Count -eq $count
   } "Google Drive did not contain all $count fixture files: $remotePath" 180
 }
 function Start-App {
-  $start = [Diagnostics.ProcessStartInfo]::new($AppPath); $start.UseShellExecute = $false; $start.EnvironmentVariables['FENGSYNC_DATA_DIR'] = $appData
+  $start = [Diagnostics.ProcessStartInfo]::new($AppPath); $start.UseShellExecute = $false; $start.Arguments = "--fengsync-test-run-id $stamp"; $start.EnvironmentVariables['FENGSYNC_DATA_DIR'] = $appData
   $p = [Diagnostics.Process]::Start($start)
   $main = Wait-Until { if ($p.MainWindowHandle -ne 0) { [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle) } } 'Main window did not appear'
   return @($p, $main)
 }
-function Stop-App { param($p); if ($p -and -not $p.HasExited) { $p.Kill($true); $p.WaitForExit() }; if ($p) { $p.Dispose() } }
+function Stop-App {
+  param($p)
+  if (-not $p) { return }
+  try {
+    if (-not $p.HasExited) {
+      try { $p.Kill($true) } catch { & taskkill.exe /PID $p.Id /T /F *> $null }
+      if (-not $p.WaitForExit(10000)) {
+        & taskkill.exe /PID $p.Id /T /F *> $null
+        if (-not $p.WaitForExit(5000)) { throw "Feng Sync process $($p.Id) did not exit after forced termination." }
+      }
+    }
+  }
+  finally { $p.Dispose() }
+}
 function Assert-File { param([string]$path, [string]$content); if (-not (Test-Path -LiteralPath $path)) { throw "Expected file not found: $path" }; $actual = [IO.File]::ReadAllText($path); if ($actual -ne $content) { throw "Unexpected content in $path. Expected: $content. Actual: $actual" }; Write-Output "File assertion passed: $path; content: $actual" }
 function Capture-Window { param($p, [string]$name)
   try {
@@ -132,7 +302,7 @@ try {
     $password = 'ui-sftp-password'; $salt = [Security.Cryptography.RandomNumberGenerator]::GetBytes(16); $hash = [Security.Cryptography.Rfc2898DeriveBytes]::Pbkdf2($password, $salt, 210000, [Security.Cryptography.HashAlgorithmName]::SHA256, 32)
     $options = @{ Enabled=$true; ListenAddress='127.0.0.1'; Port=$port; MaxConnections=2; Accounts=@(@{UserName='ui';Enabled=$true;PasswordSalt=[Convert]::ToBase64String($salt);PasswordHash=[Convert]::ToBase64String($hash);PasswordIterations=210000;PublicKeys=@()}); Shares=@(@{VirtualName='docs';PhysicalPath=$share;Permission='ReadWrite'}) }
     $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((@{ Options=$options; HostKeyPath=(Join-Path $Workspace '.fengsync-test\real-sftp-host.pem') } | ConvertTo-Json -Depth 8 -Compress)))
-    $start = [Diagnostics.ProcessStartInfo]::new((Get-Command node -ErrorAction Stop).Source); $start.Arguments = '"' + (Join-Path $Workspace 'src\FengSync.Core\SftpServer\node-sftp-host.cjs') + '"'; $start.UseShellExecute=$false; $start.CreateNoWindow=$true; $start.EnvironmentVariables['FENGSYNC_SFTP_CONFIG']=$payload; $start.EnvironmentVariables['NODE_PATH']=$modules
+    $start = [Diagnostics.ProcessStartInfo]::new((Get-Command node -ErrorAction Stop).Source); $start.Arguments = '"' + (Join-Path $Workspace 'src\FengSync.Core\SftpServer\node-sftp-host.cjs') + '" --fengsync-test-run-id ' + $stamp; $start.UseShellExecute=$false; $start.CreateNoWindow=$true; $start.EnvironmentVariables['FENGSYNC_SFTP_CONFIG']=$payload; $start.EnvironmentVariables['NODE_PATH']=$modules
     $server = [Diagnostics.Process]::Start($start); Wait-Until { try { $tcp=[Net.Sockets.TcpClient]::new();$tcp.Connect('127.0.0.1',$port);$tcp.Dispose();$true } catch {$false} } 'SFTP fixture did not start'
     if ($Scenario -eq 'sftp-to-local') { $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'; $config = Join-Path $appData 'rclone\rclone.conf'; New-Item -ItemType Directory -Force -Path (Split-Path $config) | Out-Null
       & $rclone config create ui_sftp sftp host 127.0.0.1 user ui port "$port" pass $password --config $config; if ($LASTEXITCODE -ne 0) { throw 'Could not configure isolated SFTP remote.' }; $sftpUri='sftp://ui_sftp/docs' }
@@ -154,17 +324,17 @@ try {
     $driveUri = "gdrive://$driveRemote/test/FengSync-Automated-Tests"
     # The durable test root is intentionally retained. Only the generated child
     # beneath it is test data and will be purged in finally.
-    & $rclone mkdir "${driveRemote}:test" --config $sourceConfig
+    & $rclone mkdir "${driveRemote}:test" --config $sourceConfig --contimeout 10s --timeout 30s
     if ($LASTEXITCODE -ne 0) { throw "Google Drive credential '$driveRemote' cannot create or access its required text test root." }
     $config = Join-Path $appData 'rclone\rclone.conf'; New-Item -ItemType Directory -Force -Path (Split-Path $config) | Out-Null; Copy-Item -LiteralPath $sourceConfig -Destination $config -Force
     $driveChild = 'fengsync-ui-' + [Guid]::NewGuid().ToString('N'); $driveUri = $driveUri.TrimEnd('/') + '/' + $driveChild
     # Feng Sync scans both endpoint roots before planning. Google Drive does not
     # reliably materialize an empty directory, so place one disposable marker in
     # this generated child; the visible UI flow still performs the proof upload.
-    & $rclone mkdir "${driveRemote}:test/FengSync-Automated-Tests/$driveChild" --config $sourceConfig
+    & $rclone mkdir "${driveRemote}:test/FengSync-Automated-Tests/$driveChild" --config $sourceConfig --contimeout 10s --timeout 30s
     if ($LASTEXITCODE -ne 0) { throw "Could not create Google Drive test child: $driveUri" }
     $anchor = Join-Path $root '.fengsync-fixture-anchor'; [IO.File]::WriteAllText($anchor, 'fixture')
-    & $rclone copyto $anchor "${driveRemote}:test/FengSync-Automated-Tests/$driveChild/.fengsync-fixture-anchor" --config $sourceConfig
+    & $rclone copyto $anchor "${driveRemote}:test/FengSync-Automated-Tests/$driveChild/.fengsync-fixture-anchor" --config $sourceConfig --contimeout 10s --timeout 30s
     if ($LASTEXITCODE -ne 0) { throw "Could not materialize Google Drive test child: $driveUri" }
     $remoteCleanup = $driveUri
   }
@@ -191,7 +361,7 @@ try {
       [IO.File]::WriteAllText((Join-Path $right 'remove-in-mirror.txt'), 'delete')
       Select-Mode $main '镜像 →'; Compare-Ui $main $left $right
       Wait-Until { (Find-Id $main 'SyncButton').Current.IsEnabled } 'Mirror did not create a plan'; Click (Find-Id $main 'SyncButton')
-      $confirm = Wait-Until { [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, '确认同步操作')) } 'Mirror deletion did not ask for confirmation'; Click (Find-Name $confirm '确认同步')
+      $confirm = Find-WindowLike '确认同步'; Click (Find-Name $confirm '确认同步')
       Wait-Until { -not (Test-Path -LiteralPath (Join-Path $right 'remove-in-mirror.txt')) -and -not (Test-Path -LiteralPath (Join-Path $right 'right-only.txt')) } 'Mirror did not delete every right-only file' 60
       Assert-File (Join-Path $right 'from-left.txt') 'left'
     }
@@ -304,7 +474,7 @@ try {
       [IO.File]::WriteAllText((Join-Path $upload 'drive-proof.txt'), 'drive-roundtrip')
       Select-Mode $main '更新 →'; Compare-Ui $main $upload $driveUri; Wait-Sync $main (Join-Path $upload 'drive-proof.txt')
       Wait-Until {
-        $listing = & $rclone lsf "${driveRemote}:test/FengSync-Automated-Tests/$driveChild" --config $config 2>$null
+        $listing = & $rclone lsf "${driveRemote}:test/FengSync-Automated-Tests/$driveChild" --config $config --contimeout 10s --timeout 30s 2>$null
         $LASTEXITCODE -eq 0 -and $listing -contains 'drive-proof.txt'
       } 'UI upload did not become visible in the generated Google Drive test child.' 120
       # Start a second real application session for the download. This models the
@@ -339,18 +509,31 @@ try {
           $remoteCase = $driveUri.TrimEnd('/') + '/' + $case
           # Google Drive does not preserve an empty directory. Materialize each
           # isolated case so both comparison roots exist before the UI scans them.
-          & $rclone mkdir ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case") --config $config
+          & $rclone mkdir ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case") --config $config --contimeout 10s --timeout 30s
           if ($LASTEXITCODE -ne 0) { throw "Could not create Google Drive performance test child: $remoteCase" }
           $anchor = Join-Path $root ("$case-anchor"); [IO.File]::WriteAllText($anchor, 'fixture')
-          & $rclone copyto $anchor ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case/.fengsync-fixture-anchor") --config $config
+          & $rclone copyto $anchor ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case/.fengsync-fixture-anchor") --config $config --contimeout 10s --timeout 30s
           if ($LASTEXITCODE -ne 0) { throw "Could not materialize Google Drive performance test child: $remoteCase" }
           & ($workload.Create) $upload
           # Each workload gets a new app/RC daemon. Reusing the completed session can leave
           # an old comparison plan enabled and cause the next visible comparison to never run.
           Stop-App $process; $process = $null
           $launch = Start-App; $process = $launch[0]; $main = $launch[1]
+          $usesHighConcurrency = $workload.Files -eq 100
+          if ($usesHighConcurrency) {
+            # Set the endpoints first so the profile gear edits the values visible
+            # on the main window. The following measured comparison then proves the
+            # saved 10-way setting is the one actually used for synchronization.
+            Set-Text (Find-Id $main 'LeftPath') $upload
+            Set-Text (Find-Id $main 'RightPath') $remoteCase
+            Set-ProfileConcurrency $main 10
+          }
           Select-Mode $main $mode.Name
-          $timing = Invoke-MeasuredSync $main $upload $remoteCase (Join-Path $upload $workload.Expected) 180 600
+          # Completion is driven by the application's operation boundary. This
+          # longer value is only an emergency brake for a genuinely stuck remote
+          # request, not a delay used to advance the matrix.
+          $timing = Invoke-MeasuredSync $main $upload $remoteCase (Join-Path $upload $workload.Expected) 180 1800
+          if ($usesHighConcurrency) { Set-ProfileConcurrency $main 3 }
           Assert-GoogleDriveFileCount ("${driveRemote}:test/FengSync-Automated-Tests/$driveChild/$case") $workload.Files
           $results.Add([pscustomobject]@{ Mode = $mode.Slug; Workload = $workload.Slug; Files = $workload.Files; CompareMilliseconds = $timing.CompareMilliseconds; SyncMilliseconds = $timing.SyncMilliseconds })
           Write-Output ("Google Drive performance: mode={0}, workload={1}, files={2}, compare={3}ms, sync={4}ms" -f $mode.Slug, $workload.Slug, $workload.Files, $timing.CompareMilliseconds, $timing.SyncMilliseconds)
@@ -362,16 +545,34 @@ try {
   Capture-Window $process '99-complete.png'
   $passed = $true
   $scenarioTimer.Stop()
-  Write-Output ("Passed {0}; completed in {1}" -f $Scenario, $scenarioTimer.Elapsed)
+  Write-HarnessTrace ("Passed {0}; completed in {1}" -f $Scenario, $scenarioTimer.Elapsed)
+}
+catch {
+  Write-HarnessTrace ("Failed {0}: {1}" -f $Scenario, $_.Exception.Message)
+  throw
 }
 finally {
+  # Closing the application is the first failure-path action. Diagnostics and
+  # fixture cleanup must never delay or prevent the next UI scenario.
   Stop-App $process
+  Write-HarnessTrace "Cleaning up scenario: $Scenario"
   if ($remoteCleanup) {
     # The URI was validated as a child of the caller-provided dedicated test root.
     $parts = $remoteCleanup.Substring('gdrive://'.Length).Split('/',2); $config = Join-Path $appData 'rclone\rclone.conf'; $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'
-    if ($parts.Count -eq 2) { & $rclone purge ($parts[0] + ':' + $parts[1]) --config $config; if ($LASTEXITCODE -ne 0) { Write-Error "Google Drive cleanup failed for generated child $remoteCleanup" } }
+    if ($parts.Count -eq 2) { & $rclone purge ($parts[0] + ':' + $parts[1]) --config $config --contimeout 10s --timeout 30s; if ($LASTEXITCODE -ne 0) { Write-Error "Google Drive cleanup failed for generated child $remoteCleanup" } }
   }
-  if ($server -and -not $server.HasExited) { $server.Kill($true); $server.WaitForExit(); $server.Dispose() }
+  if ($server) {
+    try {
+      if (-not $server.HasExited) {
+        try { $server.Kill($true) } catch { & taskkill.exe /PID $server.Id /T /F *> $null }
+        if (-not $server.WaitForExit(5000)) {
+          & taskkill.exe /PID $server.Id /T /F *> $null
+          if (-not $server.WaitForExit(5000)) { Write-Warning "SFTP fixture process $($server.Id) did not exit after forced termination." }
+        }
+      }
+    }
+    finally { $server.Dispose() }
+  }
   if ($scheduledTask) { & schtasks.exe /Delete /F /TN $scheduledTask *> $null }
   if ($passed -and (Test-Path -LiteralPath $root)) { Remove-Item -LiteralPath $root -Recurse -Force }
   elseif (Test-Path -LiteralPath $root) { Write-Output "Artifacts retained: $root" }

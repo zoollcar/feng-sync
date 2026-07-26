@@ -125,6 +125,57 @@ public sealed class RcloneEndpointTests : IDisposable
         Assert.True(_handler.MaximumConcurrentCopies >= 2);
     }
 
+    [Fact]
+    public async Task Google_drive_executor_reaches_ten_way_concurrency_for_small_local_files()
+    {
+        _handler.DelayCopy = true;
+        var operations = new List<SyncOperation>();
+        for (var i = 1; i <= 10; i++)
+        {
+            var path = $"small-{i:D2}.txt";
+            await File.WriteAllTextAsync(Path.Combine(_root, path), "payload");
+            operations.Add(new SyncOperation(path, OperationKind.CopyLeftToRight, "volume"));
+        }
+        var local = new LocalEndpoint(_root);
+        var remote = Remote(EndpointType.GoogleDrive);
+        var plan = new SyncPlan(operations);
+
+        var result = await new SyncExecutorV2().ExecuteAsync(
+            await PlanSnapshot.CaptureAsync(plan, local, remote),
+            local, remote, maxConcurrentCopies: 10);
+
+        AssertSucceeded(result, _handler);
+        Assert.Equal(10, _handler.MaximumConcurrentCopies);
+    }
+
+    [Theory]
+    [InlineData(EndpointType.Sftp, false)]
+    [InlineData(EndpointType.Sftp, true)]
+    [InlineData(EndpointType.GoogleDrive, false)]
+    [InlineData(EndpointType.GoogleDrive, true)]
+    public async Task Remote_delete_is_conditional_on_the_compared_object_even_when_an_unrelated_copy_fails(EndpointType type, bool changeDeleteTarget)
+    {
+        await File.WriteAllTextAsync(Path.Combine(_root, "copy.txt"), "source");
+        _handler.Seed("delete.txt", 3);
+        var local = new LocalEndpoint(_root);
+        var remote = Remote(type);
+        var copy = new SyncOperation("copy.txt", OperationKind.CopyLeftToRight, "copy");
+        var delete = new SyncOperation("delete.txt", OperationKind.DeleteRight, "delete");
+        var snapshot = await PlanSnapshot.CaptureAsync(new SyncPlan([copy, delete]), local, remote);
+
+        // The copy target appeared after comparison, so this copy fails without
+        // changing the independently planned delete target.
+        _handler.Seed("copy.txt", 1);
+        if (changeDeleteTarget) _handler.Seed("delete.txt", 9);
+
+        var result = await new SyncExecutorV2().ExecuteAsync(snapshot, local, remote);
+
+        Assert.Equal(TransferStage.Failed, result.Operations.Single(x => x.OperationId == copy.OperationId).Stage);
+        var deleteResult = result.Operations.Single(x => x.OperationId == delete.OperationId);
+        Assert.Equal(changeDeleteTarget ? TransferStage.Failed : TransferStage.Committed, deleteResult.Stage);
+        Assert.Equal(!changeDeleteTarget, _handler.HasDeleteFor("delete.txt"));
+    }
+
     private static void AssertSucceeded(SyncRunResult result, RecordingHandler handler)
     {
         var operations = string.Join(Environment.NewLine, result.Operations.Select(x => $"path={x.Path}; kind={x.Kind}; stage={x.Stage}; published={x.Published}; error={x.Error ?? "<none>"}"));
@@ -146,6 +197,12 @@ public sealed class RcloneEndpointTests : IDisposable
         public void Seed(string path, long size)
         {
             lock (_gate) _objects[path] = (size, DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
+        }
+        public bool HasDeleteFor(string path)
+        {
+            lock (_gate)
+                return Requests.Zip(Bodies).Any(x => x.First.AbsolutePath.EndsWith("operations/deletefile") &&
+                    x.Second.Contains($"\"remote\":\"root/{path}\"", StringComparison.Ordinal));
         }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {

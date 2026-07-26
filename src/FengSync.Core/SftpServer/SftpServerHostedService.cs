@@ -62,7 +62,14 @@ public sealed class SftpServerHostedService : IAsyncDisposable
                 await process.WaitForExitAsync(ct).WaitAsync(TimeSpan.FromSeconds(3), ct).ConfigureAwait(false);
             }
         }
-        catch (TimeoutException) when (!process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); }
+        catch when (!process.HasExited)
+        {
+            // Cancellation and failed graceful shutdowns must not orphan the
+            // Node protocol host (notably when a test runner aborts a fixture).
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
         finally { process.Dispose(); }
     }
     public ValueTask DisposeAsync() => new(StopAsync());

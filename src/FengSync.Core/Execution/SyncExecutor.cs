@@ -97,7 +97,15 @@ public sealed class SyncExecutor
             if (results.Values.Any(x => x.Stage == TransferStage.Failed)) { await Task.Yield(); return new(runId, results.Values.OrderBy(x => x.Path).ToList(), NeedsRecovery: true); }
             var deletion = CreateDeletionStrategy(versioning);
             foreach (var op in selected.Where(x => x.Kind is OperationKind.DeleteLeft or OperationKind.DeleteRight).OrderByDescending(x => x.Path.Length))
-            { progress?.Report(new(op.OperationId, op.Path, TransferStage.Deleting, 0, 0)); await deletion.DeleteAsync(op.Kind == OperationKind.DeleteLeft ? left : right, op.Path, false, ct); await Mark(op, JournalState.Committed, TransferStage.Committed); progress?.Report(new(op.OperationId, op.Path, TransferStage.Committed, 0, 0)); }
+            {
+                progress?.Report(new(op.OperationId, op.Path, TransferStage.Deleting, 0, 0));
+                var deleteFromLeft = op.Kind == OperationKind.DeleteLeft;
+                var target = deleteFromLeft ? left : right;
+                var entry = (deleteFromLeft ? snapshot.LeftEntries : snapshot.RightEntries)?.GetValueOrDefault(op.Path);
+                await deletion.DeleteAsync(target, op.Path, entry?.Kind == EntryKind.Directory, ct);
+                await Mark(op, JournalState.Committed, TransferStage.Committed);
+                progress?.Report(new(op.OperationId, op.Path, TransferStage.Committed, 0, 0));
+            }
             if (versioning?.Mode == VersioningMode.TimestampedArchive && !string.IsNullOrWhiteSpace(versioning.ArchiveDirectory))
                 await new RetentionCleanupService().CleanupAsync(versioning.ArchiveDirectory, versioning.ToRetentionPolicy(), ct);
             await Task.Yield(); return new(runId, results.Values.OrderBy(x => x.Path).ToList());

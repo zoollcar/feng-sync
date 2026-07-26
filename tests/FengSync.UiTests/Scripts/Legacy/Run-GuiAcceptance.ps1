@@ -12,7 +12,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$workspace = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$workspace = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
+$cleanup = Join-Path $workspace 'tests\Shared\TestProcessCleanup.ps1'; . $cleanup; Clear-FengSyncTestProcesses -Workspace $workspace
+$testRunId = 'gui-' + [Guid]::NewGuid().ToString('N')
 $testRoot = Join-Path $workspace '.fengsync-test\gui-acceptance'
 $appData = Join-Path $testRoot 'appdata'
 $left = Join-Path $testRoot 'left'
@@ -85,7 +87,7 @@ if ($IncludeSftp) {
     Assert-That ($LASTEXITCODE -eq 0) '无法创建 GUI 验收专用 rclone SFTP 端点。'
 }
 # Explicitly inject the isolated data root: Start-Process inheritance differs between hosts/CI agents.
-$process = Start-Process -FilePath $app -Environment @{ FENGSYNC_DATA_DIR = $appData } -PassThru
+$process = Start-Process -FilePath $app -ArgumentList @('--fengsync-test-run-id', $testRunId) -Environment @{ FENGSYNC_DATA_DIR = $appData } -PassThru
 try {
     Wait-Until -condition { $process.Refresh() | Out-Null; return $process.MainWindowHandle -ne 0 } -timeoutSeconds 20 -message 'Feng Sync 未创建主窗口。'
     $root = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
@@ -131,6 +133,14 @@ try {
     [pscustomobject]@{ Result = 'Passed'; Root = $testRoot; Screenshots = (Get-ChildItem $artifacts -Filter '*.png').FullName } | ConvertTo-Json -Depth 3
 }
 finally {
-    if ($process -and -not $process.HasExited) { $process.CloseMainWindow() | Out-Null; Start-Sleep -Milliseconds 500; if (-not $process.HasExited) { $process.Kill($true) } }
+    if ($process) {
+        try {
+            if (-not $process.HasExited) {
+                $process.CloseMainWindow() | Out-Null
+                if (-not $process.WaitForExit(3000)) { $process.Kill($true); $process.WaitForExit() }
+            }
+        }
+        finally { $process.Dispose() }
+    }
     $env:FENGSYNC_DATA_DIR = $previousFengSyncData
 }

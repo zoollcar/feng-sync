@@ -2,7 +2,9 @@
 param([string] $Configuration = 'Debug')
 
 $ErrorActionPreference = 'Stop'
-$workspace = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$workspace = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
+$cleanup = Join-Path $workspace 'tests\Shared\TestProcessCleanup.ps1'; . $cleanup; Clear-FengSyncTestProcesses -Workspace $workspace
+$testRunId = 'sftp-gui-' + [Guid]::NewGuid().ToString('N')
 $root = Join-Path $workspace '.fengsync-test\gui-sftp-fixture'
 $share = Join-Path $root 'share'
 # Reuse the disposable fixture key to avoid expensive RSA generation during each GUI run.
@@ -37,7 +39,7 @@ $options = [ordered]@{
 }
 $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((@{ Options = $options; HostKeyPath = $hostKey } | ConvertTo-Json -Depth 8 -Compress)))
 $start = [Diagnostics.ProcessStartInfo]::new($node)
-$start.Arguments = '"{0}"' -f $hostScript
+$start.Arguments = '"{0}" --fengsync-test-run-id {1}' -f $hostScript, $testRunId
 $start.UseShellExecute = $false; $start.CreateNoWindow = $true; $start.RedirectStandardInput = $true; $start.RedirectStandardError = $true; $start.RedirectStandardOutput = $true
 $start.EnvironmentVariables['FENGSYNC_SFTP_CONFIG'] = $payload; $start.EnvironmentVariables['NODE_PATH'] = $modules
 $server = [Diagnostics.Process]::Start($start)
@@ -49,6 +51,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'GUI SFTP acceptance script failed.' }
 }
 finally {
-    if ($server -and -not $server.HasExited) { $server.StandardInput.Close(); if (-not $server.WaitForExit(3000)) { $server.Kill($true) } }
-    if ($server) { [IO.File]::WriteAllText((Join-Path $root 'server.stderr.log'), $server.StandardError.ReadToEnd()) }
+    if ($server) {
+        try {
+            if (-not $server.HasExited) {
+                $server.StandardInput.Close()
+                if (-not $server.WaitForExit(3000)) { $server.Kill($true); $server.WaitForExit() }
+            }
+            [IO.File]::WriteAllText((Join-Path $root 'server.stderr.log'), $server.StandardError.ReadToEnd())
+        }
+        finally { $server.Dispose() }
+    }
 }

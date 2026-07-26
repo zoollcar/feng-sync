@@ -2,7 +2,9 @@
 param([string] $Configuration = 'Debug')
 $ErrorActionPreference = 'Stop'
 
-$workspace = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$workspace = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
+$cleanup = Join-Path $workspace 'tests\Shared\TestProcessCleanup.ps1'; . $cleanup; Clear-FengSyncTestProcesses -Workspace $workspace
+$testRunId = 'sftp-settings-' + [Guid]::NewGuid().ToString('N')
 $app = Join-Path $workspace "src\FengSync\bin\$Configuration\net10.0-windows\FengSync.exe"
 $modules = Join-Path $workspace '.fengsync-test\sftp-node\node_modules'
 $node = (Get-Command node -ErrorAction Stop).Source
@@ -32,7 +34,7 @@ $settings | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 
 
 $process = $null
 try {
-  $start = [Diagnostics.ProcessStartInfo]::new($app); $start.UseShellExecute = $false; $start.EnvironmentVariables['FENGSYNC_DATA_DIR'] = (Join-Path $root 'appdata'); $process = [Diagnostics.Process]::Start($start)
+  $start = [Diagnostics.ProcessStartInfo]::new($app); $start.UseShellExecute = $false; $start.Arguments = "--fengsync-test-run-id $testRunId"; $start.EnvironmentVariables['FENGSYNC_DATA_DIR'] = (Join-Path $root 'appdata'); $process = [Diagnostics.Process]::Start($start)
   $main = Wait-Until { if ($process.MainWindowHandle -ne 0) { [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle) } } '主窗口未出现'
   Invoke-Element (Find-Name $main '工具'); Invoke-Element (Find-Name ([System.Windows.Automation.AutomationElement]::RootElement) '选项…')
   $settingsWindow = Wait-Until { [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '程序设置'))) } '程序设置窗口未打开'

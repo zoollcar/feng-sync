@@ -90,15 +90,8 @@ public sealed class ResourceGovernor
         }
     }
 
-    private static IReadOnlyDictionary<ResourceKind, int> DefaultBudgets() => new Dictionary<ResourceKind, int>
-    {
-        [ResourceKind.UnknownLocal] = 1,
-        [ResourceKind.LocalVolume] = 2,
-        [ResourceKind.Sftp] = 4,
-        [ResourceKind.GoogleDrive] = 4,
-        [ResourceKind.S3] = 8,
-        [ResourceKind.OtherRemote] = 1
-    };
+    private static IReadOnlyDictionary<ResourceKind, int> DefaultBudgets() =>
+        Enum.GetValues<ResourceKind>().ToDictionary(kind => kind, _ => 64);
 
     private sealed class ResourceKeyOrder : IComparer<ResourceKey>
     {

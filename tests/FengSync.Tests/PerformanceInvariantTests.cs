@@ -176,6 +176,29 @@ public sealed class PerformanceInvariantTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Task_journal_save_tolerates_a_brief_diagnostics_read_lock()
+    {
+        var journalRoot = Path.Combine(_root, "task-journal-lock");
+        var store = new TaskJournalStore(journalRoot);
+        var operationId = Guid.NewGuid();
+        var journal = new SyncJournal(Guid.NewGuid(), DateTimeOffset.UtcNow,
+            [new JournalItem(operationId, "a.txt", OperationKind.CopyLeftToRight, JournalState.Pending)]);
+        await store.SaveAsync(journal);
+        var path = Path.Combine(journalRoot, journal.JobId + ".json");
+
+        var reader = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var update = store.SaveAsync(journal with
+        {
+            Items = [new JournalItem(operationId, "a.txt", OperationKind.CopyLeftToRight, JournalState.Committed)]
+        });
+        await Task.Delay(100);
+        reader.Dispose();
+        await update;
+
+        Assert.Empty(await store.LoadIncompleteAsync());
+    }
+
+    [Fact]
     public async Task Wal_recovery_replays_a_complete_final_line()
     {
         var journalRoot = Path.Combine(_root, "wal-tail");

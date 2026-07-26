@@ -34,7 +34,16 @@ public sealed class RcloneDaemon : IAsyncDisposable
     }
     public async ValueTask DisposeAsync()
     {
-        _http.Dispose(); if (!_process.HasExited) { _process.Kill(entireProcessTree: true); await _process.WaitForExitAsync(); } _process.Dispose();
+        _http.Dispose();
+        try
+        {
+            if (!_process.HasExited)
+            {
+                _process.Kill(entireProcessTree: true);
+                await _process.WaitForExitAsync().ConfigureAwait(false);
+            }
+        }
+        finally { _process.Dispose(); }
     }
     private static int ReservePort()
     { var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start(); var port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop(); return port; }

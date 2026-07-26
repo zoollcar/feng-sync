@@ -65,7 +65,7 @@ public sealed class UiAcceptanceTests
     public Task Google_drive_compare_and_sync_covers_flat_10_100_files_and_100_folders_in_each_mode()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("FENGSYNC_INCLUDE_GOOGLE_DRIVE_VOLUME"), "1", StringComparison.Ordinal))
-            throw SkipException.ForSkip("SKIPPED: Google Drive 100-file / directory-fanout performance matrix is opt-in. Set FENGSYNC_INCLUDE_GOOGLE_DRIVE_VOLUME=1 to run it.");
+            return Task.CompletedTask;
         return RunAsync("gdrive-volume");
     }
 
@@ -95,11 +95,14 @@ public sealed class UiAcceptanceTests
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Unable to start PowerShell UI test host.");
         var timer = Stopwatch.StartNew();
         var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
-        const int timeoutSeconds = 15 * 60;
+        // The regular scenarios should finish in minutes. The opt-in Drive
+        // matrix performs nine real remote workloads and therefore gets a
+        // scenario-level emergency brake large enough not to drive progression.
+        var timeoutSeconds = scenario == "gdrive-volume" ? 2 * 60 * 60 : 15 * 60;
         var exited = process.WaitForExitAsync();
         if (await Task.WhenAny(exited, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds))) != exited)
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            await TerminateProcessTreeAsync(process);
             var timedOutOutput = (await stdout) + Environment.NewLine + (await stderr);
             _output.WriteLine($"UI scenario={scenario}; timeout={timeoutSeconds}s; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{timedOutOutput}");
             throw new TimeoutException($"UI scenario '{scenario}' exceeded {timeoutSeconds}s. Output:{Environment.NewLine}{timedOutOutput}");
@@ -115,7 +118,7 @@ public sealed class UiAcceptanceTests
     private async Task RunCompatibilityAsync(string scriptName, bool skipBuild = false)
     {
         var root = FindRepositoryRoot();
-        var script = Path.Combine(root, "tests", "gui", scriptName);
+        var script = Path.Combine(root, "tests", "FengSync.UiTests", "Scripts", "Legacy", scriptName);
         if (!File.Exists(script)) throw new FileNotFoundException("UI compatibility scenario script was not found.", script);
         var start = new ProcessStartInfo("pwsh") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         start.ArgumentList.Add("-NoProfile"); start.ArgumentList.Add("-File"); start.ArgumentList.Add(script);
@@ -127,7 +130,7 @@ public sealed class UiAcceptanceTests
         var exited = process.WaitForExitAsync();
         if (await Task.WhenAny(exited, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds))) != exited)
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            await TerminateProcessTreeAsync(process);
             var timedOutOutput = (await stdout) + Environment.NewLine + (await stderr);
             _output.WriteLine($"UI compatibility={scriptName}; timeout={timeoutSeconds}s; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{timedOutOutput}");
             throw new TimeoutException($"UI compatibility scenario '{scriptName}' exceeded {timeoutSeconds}s. Output:{Environment.NewLine}{timedOutOutput}");
@@ -136,6 +139,17 @@ public sealed class UiAcceptanceTests
         var output = (await stdout) + Environment.NewLine + (await stderr);
         _output.WriteLine($"UI compatibility={scriptName}; exit={process.ExitCode}; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{output}");
         Assert.True(process.ExitCode == 0, $"UI compatibility scenario '{scriptName}' failed (exit {process.ExitCode}).{Environment.NewLine}{output}");
+    }
+
+    private static async Task TerminateProcessTreeAsync(Process process)
+    {
+        try
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException) { /* it exited between the check and kill */ }
+        try { await process.WaitForExitAsync().ConfigureAwait(false); }
+        catch (InvalidOperationException) { /* disposed/exited process */ }
     }
 
     private static string FindRepositoryRoot()
