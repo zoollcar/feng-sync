@@ -116,14 +116,21 @@ public static class BaselineStateBuilder
 {
     public static IReadOnlyList<BaselineEntry> BuildNextState(BaselineCommitInput input, IReadOnlyList<BaselineEntry>? previousBaseline)
     {
-        var byPath = previousBaseline is null
-            ? new Dictionary<string, BaselineEntry>(StringComparer.OrdinalIgnoreCase)
-            : previousBaseline.ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+        // Use the common plan semantics here too. Otherwise a successful run
+        // against a case-sensitive endpoint would collapse A.txt and a.txt while
+        // publishing the next baseline.
+        var leftPaths = input.Snapshot.Left.Paths;
+        var rightPaths = input.Snapshot.Right.Paths;
+        var paths = new EndpointPathSemantics(leftPaths.CaseSensitive || rightPaths.CaseSensitive, leftPaths.UnicodeNormalization, '/');
+        var pathComparer = paths.CreateComparer();
+        var byPath = previousBaseline?.ToDictionary(x => x.Path, pathComparer)
+            ?? new Dictionary<string, BaselineEntry>(pathComparer);
 
         var leftSnapshot = input.Snapshot.Left.ByPath;
         var rightSnapshot = input.Snapshot.Right.ByPath;
-        var opIndex = input.Snapshot.Plan.Operations.ToDictionary(x => x.OperationId);
-        var touchedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var plan = input.Snapshot.Plan ?? throw new InvalidOperationException("比较快照缺少已执行计划。");
+        var opIndex = plan.Operations.ToDictionary(x => x.OperationId);
+        var touchedPaths = new HashSet<string>(pathComparer);
 
         // 1. Update entries the operations touched. Unselected, conflict, failed
         //    and filtered paths are not in input.Results so they fall through
@@ -140,6 +147,16 @@ public static class BaselineStateBuilder
                 // destination recorded with its old (missing/stale) state.
                 var verified = BuildFileEntry(op.Path, result.TargetAfter);
                 byPath[op.Path] = new BaselineEntry(op.Path, verified, verified);
+            }
+            else if (op.Kind == OperationKind.Move && op.Move is { } move)
+            {
+                // A move re-keys state; endpoint identities remain endpoint-local and
+                // are taken from the post-operation snapshots where available.
+                byPath.Remove(move.FromPath);
+                var leftAfter = leftSnapshot.TryGetValue(move.ToPath, out var l) ? l : BuildFileEntry(move.ToPath, result.TargetAfter);
+                var rightAfter = rightSnapshot.TryGetValue(move.ToPath, out var r) ? r : BuildFileEntry(move.ToPath, result.TargetAfter);
+                byPath[move.ToPath] = new BaselineEntry(move.ToPath, leftAfter, rightAfter);
+                touchedPaths.Add(move.FromPath);
             }
             else if (op.Kind is OperationKind.DeleteLeft)
             {
@@ -162,8 +179,8 @@ public static class BaselineStateBuilder
         // 2. For paths the run did not touch, align with the snapshot if the
         //    snapshot proves both sides are now absent; otherwise keep the
         //    previous baseline so we never invent a deletion authority.
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in leftSnapshot.Keys.Union(rightSnapshot.Keys, StringComparer.OrdinalIgnoreCase))
+        var seen = new HashSet<string>(pathComparer);
+        foreach (var path in leftSnapshot.Keys.Union(rightSnapshot.Keys, pathComparer))
         {
             seen.Add(path);
             var leftHas = leftSnapshot.ContainsKey(path);
@@ -178,7 +195,7 @@ public static class BaselineStateBuilder
         var stale = byPath.Keys.Where(p => !seen.Contains(p) && !touchedPaths.Contains(p)).ToList();
         foreach (var p in stale) byPath.Remove(p);
 
-        return byPath.Values.OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase).ToList();
+        return byPath.Values.OrderBy(x => paths.Canonicalize(x.Path), StringComparer.Ordinal).ToList();
     }
 
     private static EntrySnapshot? BuildFileEntry(string path, Fingerprint? targetAfter) =>

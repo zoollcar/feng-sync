@@ -3,20 +3,22 @@ namespace FengSync.Core;
 /// <summary>Pure three-way comparison. A missing baseline means first sync and never propagates deletion.</summary>
 public sealed class ThreeWayPlanner
 {
-    public SyncPlan Build(IEnumerable<EntrySnapshot> left, IEnumerable<EntrySnapshot> right, IEnumerable<BaselineEntry>? baseline)
+    public SyncPlan Build(IEnumerable<EntrySnapshot> left, IEnumerable<EntrySnapshot> right, IEnumerable<BaselineEntry>? baseline, EndpointPathSemantics? paths = null)
     {
         var leftEntries = left.ToList(); var rightEntries = right.ToList();
-        var l = Index(leftEntries); var r = Index(rightEntries);
-        var b = baseline?.ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+        var semantics = paths ?? new EndpointPathSemantics(false, System.Text.NormalizationForm.FormC);
+        var l = Index(leftEntries, semantics); var r = Index(rightEntries, semantics);
+        var b = baseline?.ToDictionary(x => semantics.Canonicalize(x.Path), x => x, StringComparer.Ordinal);
         var baselinePaths = b is null ? Enumerable.Empty<string>() : b.Keys;
-        var paths = l.Keys.Union(r.Keys, StringComparer.OrdinalIgnoreCase)
-            .Union(baselinePaths, StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+        var allPaths = l.Keys.Union(r.Keys, StringComparer.Ordinal)
+            .Union(baselinePaths, StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal);
         var output = new List<SyncOperation>();
-        foreach (var path in paths)
+        foreach (var key in allPaths)
         {
-            l.TryGetValue(path, out var nowL); r.TryGetValue(path, out var nowR);
+            l.TryGetValue(key, out var nowL); r.TryGetValue(key, out var nowR);
             BaselineEntry? old = null;
-            if (b is not null) b.TryGetValue(path, out old);
+            if (b is not null) b.TryGetValue(key, out old);
+            var path = nowL?.Path ?? nowR?.Path ?? old!.Path;
             // A known database may still have a newly created path that has no individual baseline.
             if (b is null || old is null) { First(path, nowL, nowR, output); continue; }
             Decide(path, nowL, nowR, old, output);
@@ -24,8 +26,8 @@ public sealed class ThreeWayPlanner
         output.InsertRange(0, PathRules.FindBlockers(leftEntries, rightEntries));
         return new(output);
     }
-    private static Dictionary<string, EntrySnapshot> Index(IEnumerable<EntrySnapshot> entries) =>
-        entries.ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+    private static Dictionary<string, EntrySnapshot> Index(IEnumerable<EntrySnapshot> entries, EndpointPathSemantics paths) =>
+        entries.ToDictionary(x => paths.Canonicalize(x.Path), x => x, StringComparer.Ordinal);
     private static Delta Change(EntrySnapshot? current, EntrySnapshot? old) =>
         old is null ? (current is null ? Delta.Unchanged : Delta.Created) : current is null ? Delta.Deleted :
         current.Kind == old.Kind && (current.Kind == EntryKind.Directory || current.Fingerprint!.Matches(old.Fingerprint!)) ? Delta.Unchanged : Delta.Modified;

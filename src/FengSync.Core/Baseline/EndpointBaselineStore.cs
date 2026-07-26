@@ -15,7 +15,9 @@ public enum SessionRole { Lead = 0, Follower = 1 }
 public sealed class EndpointBaselineStore
 {
     private const int SchemaVersion = 2;
-    private const int StreamVersion = 1;
+    // v2 adds move identity fields to the serialized EntrySnapshot payload. v1
+    // remains readable because JSON's missing optional fields deserialize safely.
+    private const int StreamVersion = 2;
     public string? LastLoadWarning { get; private set; }
 
     public async Task<IReadOnlyList<BaselineEntry>?> LoadAsync(IEndpoint left, IEndpoint right, CancellationToken ct = default)
@@ -143,15 +145,16 @@ public sealed class EndpointBaselineStore
             IReadOnlyList<BaselineEntry>? previous = null;
             var leftRead = downloaded[0] is null ? new ArchiveRead(Archive.Empty, false) : await TryReadArchiveAsync(downloaded[0]!, ct);
             var rightRead = downloaded[1] is null ? new ArchiveRead(Archive.Empty, false) : await TryReadArchiveAsync(downloaded[1]!, ct);
-            if (leftRead.Archive.Sessions.Count > 0 && rightRead.Archive.Sessions.Count > 0)
+            var pairs = (from l in leftRead.Archive.Sessions
+                         from r in rightRead.Archive.Sessions
+                         where l.Id == r.Id && l.Role != r.Role
+                         select (l, r)).ToList();
+            if (pairs.Count == 1)
             {
-                var leftPair = leftRead.Archive.Sessions.FirstOrDefault();
-                var rightPair = rightRead.Archive.Sessions.FirstOrDefault(r => r.Id != leftPair?.Id);
-                if (leftPair is not null && rightPair is not null)
-                {
-                    try { previous = Decode(Join(leftPair, rightPair)); }
-                    catch (InvalidDataException) { previous = null; }
-                }
+                var priorLead = pairs[0].l.Role == SessionRole.Lead ? pairs[0].l : pairs[0].r;
+                var priorFollower = pairs[0].l.Role == SessionRole.Follower ? pairs[0].l : pairs[0].r;
+                try { previous = Decode(Join(priorLead, priorFollower)); }
+                catch (InvalidDataException) { previous = null; }
             }
 
             var entries = BaselineStateBuilder.BuildNextState(input, previous);
@@ -218,10 +221,11 @@ public sealed class EndpointBaselineStore
     }
     private static byte[] Join(Fragment lead, Fragment follower)
     {
-        if (lead.StreamVersion != StreamVersion || follower.StreamVersion != StreamVersion || lead.PayloadSize != follower.PayloadSize || lead.PayloadHash != follower.PayloadHash || Hash(lead.Bytes) != lead.FragmentHash || Hash(follower.Bytes) != follower.FragmentHash) throw new InvalidDataException("sync.fengdb session 片段校验失败。");
+        if (!IsSupportedStream(lead.StreamVersion) || !IsSupportedStream(follower.StreamVersion) || lead.StreamVersion != follower.StreamVersion || lead.PayloadSize != follower.PayloadSize || lead.PayloadHash != follower.PayloadHash || Hash(lead.Bytes) != lead.FragmentHash || Hash(follower.Bytes) != follower.FragmentHash) throw new InvalidDataException("sync.fengdb session 片段校验失败。");
         var payload = lead.Bytes.Concat(follower.Bytes).ToArray(); if (payload.Length != lead.PayloadSize || Hash(payload) != lead.PayloadHash) throw new InvalidDataException("sync.fengdb 完整负载校验失败。"); return payload;
     }
     private static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+    private static bool IsSupportedStream(int version) => version is 1 or StreamVersion;
     private sealed record Archive(IReadOnlyList<Fragment> Sessions) { public static Archive Empty { get; } = new([]); }
     private sealed record ArchiveRead(Archive Archive, bool Invalid);
     private sealed record Fragment(Guid Id, SessionRole Role, int StreamVersion, int PayloadSize, string PayloadHash, string FragmentHash, byte[] Bytes)

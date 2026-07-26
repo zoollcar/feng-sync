@@ -3,11 +3,15 @@ using FengSync.Core.Diagnostics;
 using FengSync.Core.Scanning;
 
 namespace FengSync.Core;
-public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorage, IContentHashEndpoint
+public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorage, IContentHashEndpoint, IStagedPublishEndpoint
 {
     public string Root { get; } = Path.GetFullPath(root);
     public EndpointProfile Profile { get; } = new(Guid.NewGuid(), EndpointType.Local, Path.GetFullPath(root), Identity: Path.GetFullPath(root));
-    public EndpointCapabilities Capabilities { get; } = new(true, true, true, TimeSpan.Zero);
+    // Local scans currently do not capture a platform file ID. Do not advertise
+    // stable IDs until that metadata is actually included in EntrySnapshot.
+    public EndpointCapabilities Capabilities { get; } = new(false, true, true, TimeSpan.Zero,
+        new(MoveEvidenceCapabilities.SizeAndTime, EndpointMoveExecution.NativeRename, EndpointMoveExecution.NativeRename),
+        new(false, System.Text.NormalizationForm.FormC));
     public IEnumerable<EntrySnapshot> Scan()
     {
         if (!Directory.Exists(Root)) throw new DirectoryNotFoundException(Root);
@@ -114,7 +118,29 @@ public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorag
         await using var input = File.OpenRead(source); await using var output = File.Create(destination); await input.CopyToAsync(output, cancellationToken);
     }
     public Task MoveAsync(string from, string to, CancellationToken cancellationToken = default)
-    { var target = PhysicalPath(to); Directory.CreateDirectory(Path.GetDirectoryName(target)!); File.Move(PhysicalPath(from), target, true); return Task.CompletedTask; }
+    { var target = PhysicalPath(to); if (File.Exists(target) || Directory.Exists(target)) throw new IOException($"移动目标已存在：{to}"); Directory.CreateDirectory(Path.GetDirectoryName(target)!); File.Move(PhysicalPath(from), target, false); return Task.CompletedTask; }
+    public Task MoveDirectoryAsync(string from, string to, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var source = PhysicalPath(from);
+        var target = PhysicalPath(to);
+        if (!Directory.Exists(source)) throw new DirectoryNotFoundException(source);
+        if (File.Exists(target) || Directory.Exists(target)) throw new IOException($"移动目标已存在：{to}");
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        Directory.Move(source, target);
+        return Task.CompletedTask;
+    }
+    public Task PublishStagedAsync(string temporaryPath, string destinationPath, bool overwrite, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var source = PhysicalPath(temporaryPath);
+        var target = PhysicalPath(destinationPath);
+        if (Directory.Exists(target)) throw new IOException($"复制目标是目录：{destinationPath}");
+        if (!overwrite && File.Exists(target)) throw new IOException($"复制目标在比较后出现：{destinationPath}");
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        File.Move(source, target, overwrite);
+        return Task.CompletedTask;
+    }
     public Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default)
     { var path = PhysicalPath(relativePath); if (directory) { if (Directory.Exists(path) && !Directory.EnumerateFileSystemEntries(path).Any()) Directory.Delete(path); } else if (File.Exists(path)) File.Delete(path); return Task.CompletedTask; }
     public Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default) { Directory.CreateDirectory(PhysicalPath(relativePath)); return Task.CompletedTask; }

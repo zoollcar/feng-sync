@@ -1,11 +1,15 @@
 using System.Diagnostics;
+using System.Text;
 using Xunit;
+using Xunit.Abstractions;
 using Xunit.Sdk;
 
 namespace FengSync.UiTests;
 
 public sealed class UiAcceptanceTests
 {
+    private readonly ITestOutputHelper _output;
+    public UiAcceptanceTests(ITestOutputHelper output) => _output = output;
     [Fact]
     [Trait("Category", "UI")]
     public Task Local_folders_support_two_way_sync_and_manual_direction_override() => RunAsync("local");
@@ -73,7 +77,7 @@ public sealed class UiAcceptanceTests
     [Trait("Category", "UI")]
     public Task Sftp_server_settings_can_start_and_stop_the_real_host() => RunCompatibilityAsync("Run-SftpServerSettingsAcceptance.ps1");
 
-    private static async Task RunAsync(string scenario)
+    private async Task RunAsync(string scenario)
     {
         var root = FindRepositoryRoot();
         var script = Path.Combine(root, "tests", "FengSync.UiTests", "Scripts", "Invoke-UiScenario.ps1");
@@ -83,32 +87,55 @@ public sealed class UiAcceptanceTests
         if (!File.Exists(script)) throw new FileNotFoundException("UI test scenario script was not found.", script);
         if (!File.Exists(app)) throw new FileNotFoundException("Feng Sync must be built before UI tests run.", app);
 
-        var start = new ProcessStartInfo("pwsh") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        var start = new ProcessStartInfo("pwsh") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         start.ArgumentList.Add("-NoProfile"); start.ArgumentList.Add("-File"); start.ArgumentList.Add(script);
         start.ArgumentList.Add("-Scenario"); start.ArgumentList.Add(scenario);
         start.ArgumentList.Add("-AppPath"); start.ArgumentList.Add(app);
         start.ArgumentList.Add("-Workspace"); start.ArgumentList.Add(root);
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Unable to start PowerShell UI test host.");
+        var timer = Stopwatch.StartNew();
         var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        const int timeoutSeconds = 15 * 60;
+        var exited = process.WaitForExitAsync();
+        if (await Task.WhenAny(exited, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds))) != exited)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            var timedOutOutput = (await stdout) + Environment.NewLine + (await stderr);
+            _output.WriteLine($"UI scenario={scenario}; timeout={timeoutSeconds}s; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{timedOutOutput}");
+            throw new TimeoutException($"UI scenario '{scenario}' exceeded {timeoutSeconds}s. Output:{Environment.NewLine}{timedOutOutput}");
+        }
+        timer.Stop();
         var output = (await stdout) + Environment.NewLine + (await stderr);
+        _output.WriteLine($"UI scenario={scenario}; exit={process.ExitCode}; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{output}");
         if (process.ExitCode == 77 && output.Contains("SKIPPED:", StringComparison.Ordinal))
             throw SkipException.ForSkip(output.Trim());
         Assert.True(process.ExitCode == 0, $"UI scenario '{scenario}' failed (exit {process.ExitCode}).{Environment.NewLine}{output}");
     }
 
-    private static async Task RunCompatibilityAsync(string scriptName, bool skipBuild = false)
+    private async Task RunCompatibilityAsync(string scriptName, bool skipBuild = false)
     {
         var root = FindRepositoryRoot();
         var script = Path.Combine(root, "tests", "gui", scriptName);
         if (!File.Exists(script)) throw new FileNotFoundException("UI compatibility scenario script was not found.", script);
-        var start = new ProcessStartInfo("pwsh") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        var start = new ProcessStartInfo("pwsh") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         start.ArgumentList.Add("-NoProfile"); start.ArgumentList.Add("-File"); start.ArgumentList.Add(script);
         if (skipBuild) start.ArgumentList.Add("-SkipBuild");
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Unable to start UI compatibility scenario host.");
+        var timer = Stopwatch.StartNew();
         var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        Assert.True(process.ExitCode == 0, $"UI compatibility scenario '{scriptName}' failed (exit {process.ExitCode}).{Environment.NewLine}{await stdout}{Environment.NewLine}{await stderr}");
+        const int timeoutSeconds = 15 * 60;
+        var exited = process.WaitForExitAsync();
+        if (await Task.WhenAny(exited, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds))) != exited)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            var timedOutOutput = (await stdout) + Environment.NewLine + (await stderr);
+            _output.WriteLine($"UI compatibility={scriptName}; timeout={timeoutSeconds}s; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{timedOutOutput}");
+            throw new TimeoutException($"UI compatibility scenario '{scriptName}' exceeded {timeoutSeconds}s. Output:{Environment.NewLine}{timedOutOutput}");
+        }
+        timer.Stop();
+        var output = (await stdout) + Environment.NewLine + (await stderr);
+        _output.WriteLine($"UI compatibility={scriptName}; exit={process.ExitCode}; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{output}");
+        Assert.True(process.ExitCode == 0, $"UI compatibility scenario '{scriptName}' failed (exit {process.ExitCode}).{Environment.NewLine}{output}");
     }
 
     private static string FindRepositoryRoot()

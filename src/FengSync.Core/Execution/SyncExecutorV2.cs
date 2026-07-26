@@ -60,16 +60,121 @@ public sealed class SyncExecutorV2
 
         try
         {
+            var aggregatedOperationIds = new HashSet<Guid>();
+            foreach (var group in DirectoryMoveOptimizer.Find(snapshot, left, right))
+            {
+                var target = group.ExecuteOn == EndpointSide.Left ? left : right;
+                var source = group.ChangedOn == EndpointSide.Left ? left : right;
+                var groupedOperations = group.FileOperations.Concat(group.StructuralOperations).ToList();
+                try
+                {
+                    // Revalidate every old object and the directory destination
+                    // immediately before the single directory-level operation.
+                    if (await target.StatAsync(group.ToDirectory, ct) is not null)
+                        throw new IOException($"目录移动目标在比较后出现：{group.ToDirectory}");
+                    foreach (var operation in group.FileOperations)
+                    {
+                        var move = operation.Move!;
+                        var expected = snapshot.MoveFromFingerprints?.GetValueOrDefault(operation.OperationId);
+                        var current = await target.StatAsync(move.FromPath, ct);
+                        if (expected is null || current?.Fingerprint is null ||
+                            !expected.Matches(current.Fingerprint, MoveTolerance(target)))
+                            throw new IOException($"目录移动源在比较后已改变：{move.FromPath}");
+                    }
+
+                    foreach (var operation in groupedOperations)
+                        await Mark(operation, JournalState.Running, TransferStage.Preparing);
+                    await target.MoveDirectoryAsync(group.FromDirectory, group.ToDirectory, ct);
+
+                    foreach (var operation in group.FileOperations)
+                    {
+                        var move = operation.Move!;
+                        var sourceAfter = await RequirePostPublishFingerprintAsync(source, move.ToPath, ct);
+                        var targetAfter = await RequirePostPublishFingerprintAsync(target, move.ToPath, ct);
+                        await Record(operation, TransferStage.Committed, 0, sourceAfter, targetAfter, true);
+                        progress?.Report(new(operation.OperationId, operation.Path, TransferStage.Committed, 0, 0));
+                    }
+                    foreach (var operation in group.StructuralOperations)
+                    {
+                        await Record(operation, TransferStage.Committed, 0, null, null, true);
+                        progress?.Report(new(operation.OperationId, operation.Path, TransferStage.Committed, 0, 0));
+                    }
+                    foreach (var operation in groupedOperations)
+                        aggregatedOperationIds.Add(operation.OperationId);
+                }
+                catch (NotSupportedException)
+                {
+                    // Capability probes can be optimistic. Leave the operations
+                    // unconsumed so the existing per-file path executes them.
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    foreach (var operation in groupedOperations)
+                    {
+                        await Record(operation, TransferStage.Failed, 0, null, null, false, ex.Message);
+                        aggregatedOperationIds.Add(operation.OperationId);
+                    }
+                }
+            }
+
             // Directories must exist before their descendants are copied; do them
             // serially up front so the bounded copy pipeline can stay focused on
             // file IO.
-            foreach (var op in selected.Where(x => x.Kind is OperationKind.CreateLeftDirectory or OperationKind.CreateRightDirectory))
+            foreach (var op in selected.Where(x => (x.Kind is OperationKind.CreateLeftDirectory or OperationKind.CreateRightDirectory) && !aggregatedOperationIds.Contains(x.OperationId)))
             {
                 progress?.Report(new(op.OperationId, op.Path, TransferStage.Preparing, 0, 0));
                 await (op.Kind == OperationKind.CreateLeftDirectory ? left : right).CreateDirectoryAsync(op.Path, ct);
                 await Record(op, TransferStage.Committed, 0, null, null, true, null);
                 progress?.Report(new(op.OperationId, op.Path, TransferStage.Committed, 0, 0));
             }
+
+            foreach (var op in selected.Where(x => x.Kind == OperationKind.Move && !aggregatedOperationIds.Contains(x.OperationId)))
+            {
+                var move = op.Move ?? throw new InvalidOperationException("移动操作缺少描述。");
+                var target = move.ExecuteOn == EndpointSide.Left ? left : right;
+                var source = move.ChangedOn == EndpointSide.Left ? left : right;
+                await Mark(op, JournalState.Running, TransferStage.Preparing);
+                try
+                {
+                    // A same-target dual move is intentionally represented as an
+                    // internal committed operation so the paired baseline gets
+                    // re-keyed even though neither endpoint needs I/O.
+                    if (move.ChangedOn == move.ExecuteOn && move.PreferredExecution == EndpointMoveExecution.None && move.Fallback == MoveFallback.None)
+                    {
+                        var after = await RequirePostPublishFingerprintAsync(target, move.ToPath, ct);
+                        await Record(op, TransferStage.Committed, 0, after, after, true);
+                        continue;
+                    }
+                    var from = await target.StatAsync(move.FromPath, ct);
+                    var expected = snapshot.MoveFromFingerprints?.GetValueOrDefault(op.OperationId);
+                    if (from is null || (move.Kind == EntryKind.File && (expected is null || from.Fingerprint is null || !expected.Matches(from.Fingerprint, MoveTolerance(target)))))
+                        throw new IOException($"移动源在比较后已改变：{move.FromPath}");
+                    if (await target.StatAsync(move.ToPath, ct) is not null) throw new IOException($"移动目标已存在：{move.ToPath}");
+                    try
+                    {
+                        if (move.PreferredExecution == EndpointMoveExecution.None) throw new NotSupportedException();
+                        await target.MoveAsync(move.FromPath, move.ToPath, ct);
+                    }
+                    catch (NotSupportedException) when (move.Fallback == MoveFallback.CrossEndpointCopyDelete)
+                    {
+                        // The changed endpoint already contains the destination
+                        // content. Publish a no-overwrite copy to the execution
+                        // endpoint, then delete its still-validated old object.
+                        var temporary = move.ToPath + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial";
+                        await CopyAsync(source, target, move.ToPath, temporary, ct);
+                        await target.MoveAsync(temporary, move.ToPath, ct);
+                        await target.DeleteAsync(move.FromPath, move.Kind == EntryKind.Directory, ct);
+                    }
+                    var changed = await RequirePostPublishFingerprintAsync(source, move.ToPath, ct);
+                    var targetAfter = await RequirePostPublishFingerprintAsync(target, move.ToPath, ct);
+                    await Record(op, TransferStage.Committed, 0, changed, targetAfter, true);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                { await Record(op, TransferStage.Failed, 0, null, null, false, ex.Message); }
+            }
+
+            if (results.Values.Any(x => x.Stage == TransferStage.Failed))
+                return new(runId, results.Values.OrderBy(x => x.Path).ToList(), NeedsRecovery: true);
 
             var copyOps = selected.Where(x => x.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft).ToList();
             var copyChannel = Channel.CreateBounded<SyncOperation>(new BoundedChannelOptions(capacity)
@@ -105,7 +210,7 @@ public sealed class SyncExecutorV2
             }
 
             var deletion = CreateDeletionStrategy(versioning);
-            foreach (var op in selected.Where(x => x.Kind is OperationKind.DeleteLeft or OperationKind.DeleteRight).OrderByDescending(x => x.Path.Length))
+            foreach (var op in selected.Where(x => (x.Kind is OperationKind.DeleteLeft or OperationKind.DeleteRight) && !aggregatedOperationIds.Contains(x.OperationId)).OrderByDescending(x => x.Path.Length))
             {
                 progress?.Report(new(op.OperationId, op.Path, TransferStage.Deleting, 0, 0));
                 await deletion.DeleteAsync(op.Kind == OperationKind.DeleteLeft ? left : right, op.Path, false, ct);
@@ -137,6 +242,8 @@ public sealed class SyncExecutorV2
         var sourceKey = ResourceKey.For(source);
         var targetKey = ResourceKey.For(target);
         var bytes = snapshot.SourceFingerprints.GetValueOrDefault(op.OperationId)?.Size ?? 0;
+        var expectedTarget = (op.Kind == OperationKind.CopyLeftToRight ? snapshot.RightFingerprints : snapshot.LeftFingerprints)
+            .GetValueOrDefault(op.OperationId);
         var committed = false;
         using (await governor.AcquireAsync(new[] { sourceKey, targetKey }, ct))
         {
@@ -144,6 +251,15 @@ public sealed class SyncExecutorV2
             {
                 progress?.Report(new(op.OperationId, op.Path, TransferStage.Preparing, 0, bytes, nowActive));
                 await mark(op, JournalState.Running, TransferStage.Transferring, 0, null);
+                var currentTarget = await target.StatAsync(op.Path, ct);
+                if (expectedTarget is null)
+                {
+                    if (currentTarget is not null) throw new IOException($"复制目标在比较后出现：{op.Path}");
+                }
+                else if (currentTarget?.Fingerprint is null || !expectedTarget.Matches(currentTarget.Fingerprint, MoveTolerance(target)))
+                {
+                    throw new IOException($"复制目标在比较后已改变：{op.Path}");
+                }
                 var (temporary, _) = await TransferResume.PrepareAsync(source, target, op.Path, ct);
                 if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget)
                     await TransferResume.AppendLocalAsync(localSource, localTarget, op.Path, temporary, ct);
@@ -154,13 +270,13 @@ public sealed class SyncExecutorV2
                 if (verifyCopies)
                 {
                     progress?.Report(new(op.OperationId, op.Path, TransferStage.Verifying, bytes, bytes, nowActive));
-                    await target.MoveAsync(temporary, op.Path, ct);
+                    await PublishStagedAsync(target, temporary, op.Path, expectedTarget is not null, ct);
                     // M2: per-file StatAsync on the target only — never ScanAsync
                     await new StatVerifier().VerifyAsync(source, target, op.Path, ct);
                 }
                 else
                 {
-                    await target.MoveAsync(temporary, op.Path, ct);
+                    await PublishStagedAsync(target, temporary, op.Path, expectedTarget is not null, ct);
                 }
                 committed = true;
                 // Capture verified post-publish fingerprints so the M5 baseline
@@ -193,6 +309,13 @@ public sealed class SyncExecutorV2
         var entry = await endpoint.StatAsync(path, ct);
         return entry?.Fingerprint ?? throw new IOException($"发布后无法确认文件元数据：{path}");
     }
+
+    private static TimeSpan MoveTolerance(IEndpoint endpoint) => endpoint is RcloneEndpoint ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(2);
+
+    private static Task PublishStagedAsync(IEndpoint target, string temporary, string destination, bool overwrite, CancellationToken ct) =>
+        target is IStagedPublishEndpoint publisher
+            ? publisher.PublishStagedAsync(temporary, destination, overwrite, ct)
+            : target.MoveAsync(temporary, destination, ct);
 
     private static IDeletionStrategy CreateDeletionStrategy(VersioningPolicy? versioning) => versioning?.Mode switch
     {

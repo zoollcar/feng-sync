@@ -1,4 +1,5 @@
 using FengSync.Core.Configuration;
+using FengSync.Core.Scanning;
 
 namespace FengSync.Core;
 
@@ -7,7 +8,12 @@ public enum Delta { Unchanged, Created, Modified, Deleted }
 /// <summary>Compatibility modes modelled after FreeFileSync's synchronization settings.</summary>
 public enum SyncMode { TwoWay, Mirror, Update, Custom }
 public enum VersioningMode { None, RecycleBin, TimestampedArchive }
-public enum OperationKind { CopyLeftToRight, CopyRightToLeft, DeleteLeft, DeleteRight, CreateLeftDirectory, CreateRightDirectory, Conflict, Blocked }
+public enum OperationKind { CopyLeftToRight, CopyRightToLeft, DeleteLeft, DeleteRight, CreateLeftDirectory, CreateRightDirectory, Move, MoveConflict, Conflict, Blocked }
+public enum EndpointSide { Left, Right }
+public enum MoveConfidence { Certain, High, Medium, Rejected }
+public enum IdentityEvidenceKind { None, StableObjectId, StrongDigest, ProviderToken, WeakFingerprint }
+public enum EndpointMoveExecution { None, NativeRename, ServerCopyDelete }
+public enum MoveFallback { None, ServerCopyDelete, CrossEndpointCopyDelete }
 public sealed record Fingerprint(long Size, DateTimeOffset ModifiedUtc, string? Hash)
 {
     public bool Matches(Fingerprint other) => Size == other.Size &&
@@ -15,8 +21,16 @@ public sealed record Fingerprint(long Size, DateTimeOffset ModifiedUtc, string? 
     public bool Matches(Fingerprint other, TimeSpan timestampTolerance) => Size == other.Size &&
         (Hash is not null && other.Hash is not null ? Hash == other.Hash : Math.Abs((ModifiedUtc - other.ModifiedUtc).TotalSeconds) <= timestampTolerance.TotalSeconds);
 }
-public sealed record EntrySnapshot(string Path, EntryKind Kind, Fingerprint? Fingerprint);
+public sealed record EntryIdentity(string? StableObjectId = null, ContentDigest? StrongDigest = null, string? ProviderToken = null);
+/// <summary>Identity is endpoint-local only. Never compare StableObjectId values across endpoints.</summary>
+public sealed record EntrySnapshot(string Path, EntryKind Kind, Fingerprint? Fingerprint, EntryIdentity? Identity = null);
 public sealed record BaselineEntry(string Path, EntrySnapshot? Left, EntrySnapshot? Right);
+public sealed record MoveDescriptor(EndpointSide ChangedOn, EndpointSide ExecuteOn, string FromPath, string ToPath,
+    EntryKind Kind, IdentityEvidenceKind Evidence, MoveConfidence Confidence,
+    EndpointMoveExecution PreferredExecution, MoveFallback Fallback);
+public sealed record MoveDetectionSettings(bool Enabled = true, bool DetectFiles = true, bool AllowWeakFingerprint = true,
+    int MaxAmbiguousBucketSize = 16, MoveConfidence MinimumAutoExecuteConfidence = MoveConfidence.High,
+    bool PropagateMovesInMirror = true, bool PropagateMovesInUpdate = true);
 public sealed record SyncFilter(IReadOnlyList<string>? Include = null, IReadOnlyList<string>? Exclude = null, IReadOnlyList<FilterRule>? Rules = null)
 {
     public static SyncFilter Empty { get; } = new();
@@ -54,8 +68,8 @@ public sealed record SyncProfile(
 }
 public sealed class SyncOperation
 {
-    public SyncOperation(string path, OperationKind kind, string reason, bool selected = true, OperationKind? keepLeft = null, OperationKind? keepRight = null)
-    { (Path, Kind, Reason, Selected, KeepLeft, KeepRight) = (path, kind, reason, selected, keepLeft, keepRight); IsConflict = kind is OperationKind.Conflict or OperationKind.Blocked; }
+    public SyncOperation(string path, OperationKind kind, string reason, bool selected = true, OperationKind? keepLeft = null, OperationKind? keepRight = null, MoveDescriptor? move = null)
+    { (Path, Kind, Reason, Selected, KeepLeft, KeepRight, Move) = (path, kind, reason, selected, keepLeft, keepRight, move); IsConflict = kind is OperationKind.Conflict or OperationKind.MoveConflict or OperationKind.Blocked; }
     public string Path { get; }
     public Guid OperationId { get; } = Guid.NewGuid();
     public OperationKind Kind { get; private set; }
@@ -63,6 +77,7 @@ public sealed class SyncOperation
     public bool Selected { get; set; }
     public OperationKind? KeepLeft { get; }
     public OperationKind? KeepRight { get; }
+    public MoveDescriptor? Move { get; }
     public bool IsConflict { get; private set; }
     /// <summary>Resolve a conflict by choosing the left or right side as the winner.</summary>
     public void ResolveConflict(bool keepLeft)

@@ -1,12 +1,43 @@
 using System.Text.Json;
 using System.Net.Http.Json;
+using System.Text;
 using FengSync.Core.Diagnostics;
 
 namespace FengSync.Core;
 
 public enum EndpointType { Local, Sftp, GoogleDrive, S3 }
 public sealed record EndpointProfile(Guid Id, EndpointType Type, string Root, string? Remote = null, string? Identity = null);
-public sealed record EndpointCapabilities(bool StableIds, bool ServerMove, bool EmptyDirectories, TimeSpan ModifiedTimePrecision);
+public sealed record EndpointPathSemantics(bool CaseSensitive, NormalizationForm UnicodeNormalization, char Separator = '/')
+{
+    public string Canonicalize(string path)
+    {
+        var value = path.Replace('\\', Separator).Trim(Separator).Normalize(UnicodeNormalization);
+        return CaseSensitive ? value : value.ToUpperInvariant();
+    }
+
+    /// <summary>Dictionary comparer that applies this endpoint's path rules to
+    /// every lookup. Keeping the original key spelling still lets plans display
+    /// the provider's real path while avoiding unsafe Windows-only folding.</summary>
+    public IEqualityComparer<string> CreateComparer() => new CanonicalPathComparer(this);
+
+    private sealed class CanonicalPathComparer(EndpointPathSemantics semantics) : IEqualityComparer<string>
+    {
+        public bool Equals(string? x, string? y) => x is null ? y is null : y is not null &&
+            string.Equals(semantics.Canonicalize(x), semantics.Canonicalize(y), StringComparison.Ordinal);
+        public int GetHashCode(string obj) => StringComparer.Ordinal.GetHashCode(semantics.Canonicalize(obj));
+    }
+}
+[Flags] public enum MoveEvidenceCapabilities { None = 0, StableId = 1, StrongHash = 2, ProviderToken = 4, SizeAndTime = 8 }
+public sealed record EndpointMoveCapabilities(MoveEvidenceCapabilities Evidence, EndpointMoveExecution FileExecution,
+    EndpointMoveExecution DirectoryExecution, bool RequiresRuntimeProbe = false, int MaxConcurrentMoves = 4);
+public sealed record EndpointCapabilities(bool StableIds, bool ServerMove, bool EmptyDirectories, TimeSpan ModifiedTimePrecision,
+    EndpointMoveCapabilities? Move = null, EndpointPathSemantics? Paths = null)
+{
+    public EndpointMoveCapabilities EffectiveMove => Move ?? new(StableIds ? MoveEvidenceCapabilities.StableId : MoveEvidenceCapabilities.SizeAndTime,
+        ServerMove ? EndpointMoveExecution.NativeRename : EndpointMoveExecution.None,
+        ServerMove ? EndpointMoveExecution.NativeRename : EndpointMoveExecution.None);
+    public EndpointPathSemantics EffectivePaths => Paths ?? new(false, NormalizationForm.FormC);
+}
 /// <summary>Best-effort scan feedback. Remote providers can only report after a listing request completes.</summary>
 public sealed record ScanProgress(int ItemsScanned, string? CurrentPath = null, bool Completed = false);
 /// <summary>A Feng Sync-owned staging object, kept out of normal comparisons.</summary>
@@ -27,6 +58,9 @@ public interface IEndpoint
     }
     Task CopyToAsync(string relativePath, IEndpoint target, string temporaryPath, CancellationToken cancellationToken = default);
     Task MoveAsync(string from, string to, CancellationToken cancellationToken = default);
+    /// <summary>Moves a complete directory subtree. Implementations must not overwrite an existing destination.</summary>
+    Task MoveDirectoryAsync(string from, string to, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("此端点不支持原生目录移动。");
     Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default);
     Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default);
     /// <summary>Lists only Feng Sync transfer staging objects. Normal scans must never include them.</summary>
@@ -42,6 +76,17 @@ public interface IEndpoint
     {
         throw new NotSupportedException("此端点未实现 StatAsync；不要在热路径回退到 ScanAsync。");
     }
+}
+
+/// <summary>
+/// Optional endpoint capability for publishing a Feng Sync-owned staging file.
+/// This is deliberately separate from user-visible MoveAsync: a logical move
+/// must never overwrite its destination, while a verified copy update may
+/// atomically replace the destination captured by the comparison snapshot.
+/// </summary>
+public interface IStagedPublishEndpoint
+{
+    Task PublishStagedAsync(string temporaryPath, string destinationPath, bool overwrite, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Private endpoint control plane used for sync.fengdb.  It is intentionally
@@ -88,6 +133,8 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     }
     public Task CopyFileAsync(string sourceFs, string sourceRemote, string targetFs, string targetRemote, CancellationToken ct = default) => CallAsync("operations/copyfile", new { srcFs = sourceFs, srcRemote = sourceRemote, dstFs = targetFs, dstRemote = targetRemote }, ct);
     public Task MoveFileAsync(string fs, string source, string target, CancellationToken ct = default) => CallAsync("operations/movefile", new { srcFs = fs, srcRemote = source, dstFs = fs, dstRemote = target }, ct);
+    public Task MoveDirectoryAsync(string sourceFs, string targetFs, CancellationToken ct = default) =>
+        CallAsync("sync/move", new { srcFs = sourceFs, dstFs = targetFs, createEmptySrcDirs = true, deleteEmptySrcDirs = true }, ct);
     public Task DeleteFileAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/deletefile", new { fs, remote }, ct);
     public Task MakeDirectoryAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/mkdir", new { fs, remote }, ct);
     public Task PurgeAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/purge", new { fs, remote }, ct);
@@ -142,6 +189,8 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
         await client.CopyFileAsync(Fs, At(relativePath), remoteTarget.Fs, remoteTarget.At(temporaryPath), cancellationToken);
     }
     public Task MoveAsync(string from, string to, CancellationToken cancellationToken = default) => client.MoveFileAsync(Fs, At(from), At(to), cancellationToken);
+    public Task MoveDirectoryAsync(string from, string to, CancellationToken cancellationToken = default) =>
+        client.MoveDirectoryAsync(Fs + At(from), Fs + At(to), cancellationToken);
     public Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default) => directory ? client.PurgeAsync(Fs, At(relativePath), cancellationToken) : client.DeleteFileAsync(Fs, At(relativePath), cancellationToken);
     public Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default) => client.MakeDirectoryAsync(Fs, At(relativePath), cancellationToken);
     public async Task<IReadOnlyList<TransferTemporaryFile>> ListTransferTemporaryFilesAsync(CancellationToken cancellationToken = default)

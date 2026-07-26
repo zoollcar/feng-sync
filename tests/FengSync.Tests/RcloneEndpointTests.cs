@@ -2,6 +2,8 @@ using FengSync.Core;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
+using FengSync.Core.Execution;
 
 namespace FengSync.Tests;
 
@@ -57,8 +59,11 @@ public sealed class RcloneEndpointTests : IDisposable
     public async Task Local_to_remote_uses_the_same_safe_copy_then_move_protocol(EndpointType type)
     {
         await File.WriteAllTextAsync(Path.Combine(_root, "local.txt"), "content");
-        var remote = Remote(type); var plan = await new EndpointSynchronizer().SynchronizeAsync(new LocalEndpoint(_root), remote, SyncMode.Update);
-        Assert.Single(plan.Operations); Assert.Contains(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/copyfile")); Assert.Contains(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/movefile"));
+        var local = new LocalEndpoint(_root); var remote = Remote(type);
+        var plan = new SyncPlan([new SyncOperation("local.txt", OperationKind.CopyLeftToRight, "test")]);
+        var result = await new SyncExecutorV2().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, local, remote), local, remote);
+        AssertSucceeded(result, _handler);
+        Assert.Contains(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/copyfile")); Assert.Contains(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/movefile"));
         Assert.Contains(_handler.Bodies, x => x.Contains(".fengsync-", StringComparison.Ordinal));
     }
 
@@ -68,6 +73,17 @@ public sealed class RcloneEndpointTests : IDisposable
         _handler.ListJson = "{\"list\":[]}";
         await Remote(EndpointType.GoogleDrive).ScanAsync();
         Assert.Contains(_handler.Bodies, x => x.Contains("\"fs\":\"test:\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Google_drive_directory_move_uses_one_sync_move_request_with_root_qualified_filesystems()
+    {
+        await Remote(EndpointType.GoogleDrive).MoveDirectoryAsync("old-dir", "new-dir");
+
+        Assert.Single(_handler.Requests, x => x.AbsolutePath.EndsWith("sync/move"));
+        Assert.Contains(_handler.Bodies, x => x.Contains("\"srcFs\":\"test:root/old-dir\"", StringComparison.Ordinal));
+        Assert.Contains(_handler.Bodies, x => x.Contains("\"dstFs\":\"test:root/new-dir\"", StringComparison.Ordinal));
+        Assert.Contains(_handler.Bodies, x => x.Contains("\"deleteEmptySrcDirs\":true", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -101,10 +117,18 @@ public sealed class RcloneEndpointTests : IDisposable
     public async Task Remote_executor_honors_the_configured_copy_concurrency()
     {
         _handler.DelayCopy = true;
+        _handler.Seed("one.txt", 3); _handler.Seed("two.txt", 3);
         var source = Remote(EndpointType.Sftp); var target = Remote(EndpointType.Sftp);
         var plan = new SyncPlan([new SyncOperation("one.txt", OperationKind.CopyLeftToRight, "test"), new SyncOperation("two.txt", OperationKind.CopyLeftToRight, "test")]);
-        await new EndpointExecutor().ExecuteAsync(plan, source, target, maxConcurrentCopies: 2);
+        var result = await new SyncExecutorV2().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, source, target), source, target, maxConcurrentCopies: 2);
+        AssertSucceeded(result, _handler);
         Assert.True(_handler.MaximumConcurrentCopies >= 2);
+    }
+
+    private static void AssertSucceeded(SyncRunResult result, RecordingHandler handler)
+    {
+        var operations = string.Join(Environment.NewLine, result.Operations.Select(x => $"path={x.Path}; kind={x.Kind}; stage={x.Stage}; published={x.Published}; error={x.Error ?? "<none>"}"));
+        Assert.True(result.Succeeded, $"V2 synchronization failed.{Environment.NewLine}Operations:{Environment.NewLine}{operations}{Environment.NewLine}RC state:{Environment.NewLine}{handler.DiagnosticState}");
     }
 
     private RcloneEndpoint Remote(EndpointType type) => new(new RcloneRcClient(_http, _http.BaseAddress!, "user", "pass"), new EndpointProfile(Guid.NewGuid(), type, "root", "test"), new(false, true, true, TimeSpan.FromSeconds(1)));
@@ -113,7 +137,72 @@ public sealed class RcloneEndpointTests : IDisposable
         public string ListJson { get; set; } = "{\"list\":[]}";
         public List<Uri> Requests { get; } = []; public List<string> Bodies { get; } = [];
         public bool DelayCopy { get; set; } public int MaximumConcurrentCopies { get; private set; } private int _concurrentCopies;
+        private readonly object _gate = new();
+        private readonly Dictionary<string, (long Size, DateTimeOffset Modified)> _objects = new(StringComparer.Ordinal);
+        public string DiagnosticState
+        {
+            get { lock (_gate) return $"objects=[{string.Join(", ", _objects.Select(x => $"{x.Key}:{x.Value.Size}"))}]{Environment.NewLine}requests={string.Join(" | ", Requests.Select(x => x.AbsolutePath))}{Environment.NewLine}bodies={string.Join(" | ", Bodies)}"; }
+        }
+        public void Seed(string path, long size)
+        {
+            lock (_gate) _objects[path] = (size, DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
+        }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        { Requests.Add(request.RequestUri!); Bodies.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken)); if (DelayCopy && request.RequestUri!.AbsolutePath.EndsWith("operations/copyfile")) { var current = Interlocked.Increment(ref _concurrentCopies); MaximumConcurrentCopies = Math.Max(MaximumConcurrentCopies, current); await Task.Delay(80, cancellationToken); Interlocked.Decrement(ref _concurrentCopies); } var payload = request.RequestUri!.AbsolutePath.EndsWith("operations/list") ? ListJson : "{}"; return new(HttpStatusCode.OK) { Content = new StringContent(payload, Encoding.UTF8, "application/json") }; }
+        {
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
+            lock (_gate) { Requests.Add(request.RequestUri!); Bodies.Add(body); }
+            var operation = request.RequestUri!.AbsolutePath;
+            if (DelayCopy && operation.EndsWith("operations/copyfile"))
+            {
+                var current = Interlocked.Increment(ref _concurrentCopies);
+                lock (_gate) MaximumConcurrentCopies = Math.Max(MaximumConcurrentCopies, current);
+                await Task.Delay(80, cancellationToken);
+                Interlocked.Decrement(ref _concurrentCopies);
+            }
+            var payload = operation.EndsWith("operations/list") ? List(body) : Apply(operation, body);
+            return new(HttpStatusCode.OK) { Content = new StringContent(payload, Encoding.UTF8, "application/json") };
+        }
+
+        private string List(string body)
+        {
+            lock (_gate)
+            {
+                if (_objects.Count == 0) return ListJson;
+                using var request = JsonDocument.Parse(body);
+                var remote = request.RootElement.GetProperty("remote").GetString() ?? "";
+                var prefix = remote.Trim('/');
+                if (prefix == "root") prefix = "";
+                var values = _objects.Where(x => string.IsNullOrEmpty(prefix) || x.Key.StartsWith(prefix + "/", StringComparison.Ordinal) || x.Key == prefix)
+                    .Select(x => new { Path = x.Key, IsDir = false, Size = x.Value.Size, ModTime = x.Value.Modified.ToString("O") });
+                return JsonSerializer.Serialize(new { list = values });
+            }
+        }
+
+        private string Apply(string operation, string body)
+        {
+            if (!operation.EndsWith("operations/copyfile") && !operation.EndsWith("operations/movefile")) return "{}";
+            using var request = JsonDocument.Parse(body);
+            var root = request.RootElement;
+            var source = Relative(root.GetProperty("srcRemote").GetString() ?? "");
+            var destination = Relative(root.GetProperty("dstRemote").GetString() ?? "");
+            long size; DateTimeOffset modified;
+            lock (_gate)
+            {
+                if (!_objects.TryGetValue(source, out var sourceEntry))
+                {
+                    var sourceFs = root.TryGetProperty("srcFs", out var fs) ? fs.GetString() : null;
+                    var physical = string.IsNullOrEmpty(sourceFs) ? null : Path.Combine(sourceFs, source.Replace('/', Path.DirectorySeparatorChar));
+                    var info = physical is not null && File.Exists(physical) ? new FileInfo(physical) : null;
+                    size = info?.Length ?? 0;
+                    modified = info?.LastWriteTimeUtc ?? DateTimeOffset.Parse("2026-01-01T00:00:00Z");
+                }
+                else { size = sourceEntry.Size; modified = sourceEntry.Modified; }
+                _objects[destination] = (size, modified);
+                if (operation.EndsWith("operations/movefile")) _objects.Remove(source);
+            }
+            return "{}";
+        }
+
+        private static string Relative(string remote) => remote.Trim('/').StartsWith("root/", StringComparison.Ordinal) ? remote.Trim('/')[5..] : remote.Trim('/');
     }
 }

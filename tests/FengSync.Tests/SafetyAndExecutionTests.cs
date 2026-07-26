@@ -89,6 +89,21 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         Assert.False(File.Exists(partial));
     }
 
+    [Fact] public async Task V2_copy_atomically_replaces_the_unchanged_existing_target()
+    {
+        await File.WriteAllTextAsync(Path.Combine(Left, "initial.txt"), "right-change");
+        await File.WriteAllTextAsync(Path.Combine(Right, "initial.txt"), "left-change");
+        var left = new LocalEndpoint(Left);
+        var right = new LocalEndpoint(Right);
+        var plan = new SyncPlan([new SyncOperation("initial.txt", OperationKind.CopyLeftToRight, "update")]);
+        var snapshot = await PlanSnapshot.CaptureAsync(plan, left, right);
+
+        var result = await new FengSync.Core.Execution.SyncExecutorV2().ExecuteAsync(snapshot, left, right);
+
+        Assert.True(result.Succeeded, string.Join(Environment.NewLine, result.Operations.Select(x => $"{x.Kind} {x.Path}: {x.Error}")));
+        Assert.Equal("right-change", await File.ReadAllTextAsync(Path.Combine(Right, "initial.txt")));
+    }
+
     [Fact] public void Maintenance_only_removes_expired_recognized_temporary_files()
     {
         var expired = Path.Combine(Right, "old.bin.fengsync-maintenance.partial");

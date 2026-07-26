@@ -1,6 +1,7 @@
 using FengSync.Core;
 using FengSync.Core.Capabilities;
 using FengSync.Core.Configuration;
+using FengSync.Core.Execution;
 using FengSync.Core.SftpServer;
 using FengSync.Services;
 using Microsoft.Win32;
@@ -65,7 +66,7 @@ public partial class MainWindow : Window
 
             progressDialog.ShowInitialization("2 / 5", "正在重新扫描两个端点，确认执行前的最新状态…");
             var scans = await Task.WhenAll(_left.ScanAsync(_syncCancellation.Token), _right.ScanAsync(_syncCancellation.Token));
-            var leftEntries = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var rightEntries = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+            var leftEntries = scans[0].ToDictionary(x => x.Path, _left.Capabilities.EffectivePaths.CreateComparer()); var rightEntries = scans[1].ToDictionary(x => x.Path, _right.Capabilities.EffectivePaths.CreateComparer());
             progressDialog.ShowInitialization("3 / 5", "正在进行删除阈值和目标空间安全检查…");
             var safety = new SafetyValidator().ValidatePlan(current, leftEntries.Count, rightEntries.Count, SelectedMode, profile.MaxDeletes, profile.MaxDeleteRatio)
                 .Combine(new SafetyValidator().ValidateCapacity(current, leftEntries, rightEntries, _left, _right));
@@ -80,19 +81,16 @@ public partial class MainWindow : Window
             }
             progressDialog.ShowInitialization("5 / 5", "正在建立双向同步基线…");
             Status.Text = $"正在以 {effective.MaxConcurrentCopies} 路并发同步…";
-            var baselineRepository = new BaselineRepository(); var transaction = SelectedMode == SyncMode.TwoWay ? await baselineRepository.BeginAsync(_left, _right, _syncCancellation.Token) : null;
+            var baselineRepository = new BaselineRepository(); var transaction = await baselineRepository.BeginAsync(_left, _right, _syncCancellation.Token);
             progressDialog.BeginTransfers(effective.MaxConcurrentCopies);
-            var run = await new SyncExecutor().ExecuteAsync(_snapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), _syncCancellation.Token, effective.VerifyCopies, effective.Versioning, effective.MaxConcurrentCopies, new TaskJournalStore());
-            if (transaction is not null)
-            {
-                transaction = run.Operations.Where(x => x.Stage == TransferStage.Committed).Aggregate(transaction, (current, item) => current.RecordCommitted(item.Path));
-                await baselineRepository.SaveAsync(transaction, _syncCancellation.Token);
-                await baselineRepository.CommitAsync(transaction, _left, _right, run.Succeeded, _syncCancellation.Token);
-            }
+            var run = await new SyncExecutorV2().ExecuteAsync(_snapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), _syncCancellation.Token, effective.VerifyCopies, effective.Versioning, journals: new TaskJournalStore(), maxConcurrentCopies: effective.MaxConcurrentCopies);
+            transaction = run.Operations.Where(x => x.Stage == TransferStage.Committed).Aggregate(transaction, (current, item) => current.RecordCommitted(item.Path));
+            await baselineRepository.SaveAsync(transaction, _syncCancellation.Token);
+            await baselineRepository.CommitAsync(transaction, _left, _right, run.Succeeded, _syncCancellation.Token);
             progressDialog.SetRetry(operations, async retryPlan =>
             {
                 var retrySnapshot = await PlanSnapshot.CaptureAsync(retryPlan, _left, _right);
-                return await new SyncExecutor().ExecuteAsync(retrySnapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), CancellationToken.None, effective.VerifyCopies, effective.Versioning, effective.MaxConcurrentCopies, new TaskJournalStore());
+                return await new SyncExecutorV2().ExecuteAsync(retrySnapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), CancellationToken.None, effective.VerifyCopies, effective.Versioning, journals: new TaskJournalStore(), maxConcurrentCopies: effective.MaxConcurrentCopies);
             });
             if (!run.Succeeded)
             {
@@ -297,10 +295,10 @@ public partial class MainWindow : Window
         var rightProgress = new Progress<ScanProgress>(x => Status.Text = x.Completed ? $"右侧扫描完成：{x.ItemsScanned} 项。正在分析差异…" : $"正在扫描右侧：已发现 {x.ItemsScanned} 项{(string.IsNullOrEmpty(x.CurrentPath) ? "" : " · " + x.CurrentPath)}");
         var scans = await Task.WhenAll(_left.ScanAsync(leftProgress, cancellationToken), _right.ScanAsync(rightProgress, cancellationToken));
         Status.Text = $"扫描完成：左侧 {scans[0].Count} 项  ·  右侧 {scans[1].Count} 项，正在分析差异…";
-        var left = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var right = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase); var baselineRepository = new BaselineRepository(); var baseline = SelectedMode == SyncMode.TwoWay ? await baselineRepository.LoadAsync(_left, _right) : null; var baselineWarning = baselineRepository.LastLoadWarning;
+        var left = scans[0].ToDictionary(x => x.Path, _left.Capabilities.EffectivePaths.CreateComparer()); var right = scans[1].ToDictionary(x => x.Path, _right.Capabilities.EffectivePaths.CreateComparer()); var baselineRepository = new BaselineRepository(); var baseline = await baselineRepository.LoadAsync(_left, _right); var baselineWarning = baselineRepository.LastLoadWarning;
         // Build the complete diff, then render filtered paths as deselected rows. Filters
         // remain a sync boundary because ignored operations are never selected/executed.
-        _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, SyncFilter.Empty);
+        _plan = new ModePlanner().Build(SelectedMode, left.Values, right.Values, baseline, SyncFilter.Empty, _left.Capabilities, _right.Capabilities);
         var filter = effective.Filter.CreateEngine();
         var ignoredPaths = new HashSet<string>(_plan.Operations.Where(op =>
         {

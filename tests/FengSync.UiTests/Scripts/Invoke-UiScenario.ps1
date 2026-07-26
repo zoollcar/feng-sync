@@ -9,6 +9,8 @@ param(
 # screenshots; remote Google Drive cleanup is constrained to a generated child below
 # the fixed test/FengSync-Automated-Tests test root.
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing, System.Windows.Forms
 $AppPath = [IO.Path]::GetFullPath($AppPath); $Workspace = [IO.Path]::GetFullPath($Workspace)
 if (-not (Test-Path -LiteralPath $AppPath)) { throw "Application not found: $AppPath" }
@@ -39,15 +41,29 @@ function Approve-ConfirmationIfPresent {
   if ($confirm) { Click (Find-Name $confirm '确认同步' 2); return $true }
   return $false
 }
-function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds = 120, [int]$transferSeconds = 120)
+function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds = 120, [int]$transferSeconds = 120, [string]$expectedContent = $null)
   try { Wait-Until { (Find-Id $main 'SyncButton').Current.IsEnabled } 'Comparison did not produce an executable plan' $comparisonSeconds }
   catch { $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }; throw "Comparison did not produce an executable plan. UI status: $status" }
+  Write-Output "Comparison ready; expected sync output: $expectedFile; expected content: $($expectedContent ?? '<existence-only>')"
   Click (Find-Id $main 'SyncButton')
-  # The handler re-scans remote endpoints before showing this dialog, so it can
-  # appear asynchronously rather than immediately after the button invocation.
-  try { Wait-Until { Approve-ConfirmationIfPresent | Out-Null; Test-Path -LiteralPath $expectedFile } "Expected synchronized file was not created: $expectedFile" $transferSeconds }
-  catch { $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }; throw "Expected synchronized file was not created: $expectedFile. UI status: $status" }
-  Wait-Until { (Find-Id $main 'Status').Current.Name -match '同步完成' } 'UI did not report synchronization completion' $transferSeconds
+  # Verify the observable synchronization result rather than relying on localized
+  # status text, which UI Automation can expose with a different console encoding.
+  try {
+    Wait-Until {
+      Approve-ConfirmationIfPresent | Out-Null
+      if (-not (Test-Path -LiteralPath $expectedFile)) { return $false }
+      if ($null -eq $expectedContent) { return $true }
+      try { return [IO.File]::ReadAllText($expectedFile) -eq $expectedContent } catch { return $false }
+    } "Expected synchronized result was not produced: $expectedFile" $transferSeconds
+  }
+  catch {
+    $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }
+    $actual = try { if (Test-Path -LiteralPath $expectedFile) { [IO.File]::ReadAllText($expectedFile) } else { '<missing>' } } catch { '<unreadable>' }
+    throw "Expected synchronized result was not produced: $expectedFile. Expected content: $expectedContent. Actual: $actual. UI status: $status"
+  }
+  $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }
+  $actual = try { [IO.File]::ReadAllText($expectedFile) } catch { '<unreadable>' }
+  Write-Output ("Sync result observed; status: {0}; output exists: {1}; actual content: {2}" -f $status, (Test-Path -LiteralPath $expectedFile), $actual)
 }
 function Compare-Ui { param($main, [string]$left, [string]$right); Set-Text (Find-Id $main 'LeftPath') $left; Set-Text (Find-Id $main 'RightPath') $right; Click (Find-Id $main 'CompareButton') }
 function New-SmallFiles { param([string]$directory, [int]$count)
@@ -88,7 +104,7 @@ function Start-App {
   return @($p, $main)
 }
 function Stop-App { param($p); if ($p -and -not $p.HasExited) { $p.Kill($true); $p.WaitForExit() }; if ($p) { $p.Dispose() } }
-function Assert-File { param([string]$path, [string]$content); if (-not (Test-Path -LiteralPath $path)) { throw "Expected file not found: $path" }; if ([IO.File]::ReadAllText($path) -ne $content) { throw "Unexpected content in $path" } }
+function Assert-File { param([string]$path, [string]$content); if (-not (Test-Path -LiteralPath $path)) { throw "Expected file not found: $path" }; $actual = [IO.File]::ReadAllText($path); if ($actual -ne $content) { throw "Unexpected content in $path. Expected: $content. Actual: $actual" }; Write-Output "File assertion passed: $path; content: $actual" }
 function Capture-Window { param($p, [string]$name)
   try {
     if (-not $p -or $p.MainWindowHandle -eq 0) { return }
@@ -158,7 +174,7 @@ try {
     'local' {
       $left = Join-Path $root 'left'; $right = Join-Path $root 'right'; New-Item -ItemType Directory -Force -Path @($left, $right) | Out-Null
       [IO.File]::WriteAllText((Join-Path $left 'initial.txt'), 'left-initial')
-      Compare-Ui $main $left $right; Wait-Sync $main (Join-Path $right 'initial.txt'); Assert-File (Join-Path $right 'initial.txt') 'left-initial'
+      Compare-Ui $main $left $right; Wait-Sync $main (Join-Path $right 'initial.txt') 120 120 'left-initial'; Assert-File (Join-Path $right 'initial.txt') 'left-initial'
       # Establish a true two-way conflict, select its row, choose the right-to-left
       # direction in the visible UI, then prove the left file is the right content.
       [IO.File]::WriteAllText((Join-Path $left 'initial.txt'), 'left-change'); [IO.File]::WriteAllText((Join-Path $right 'initial.txt'), 'right-change')
@@ -166,7 +182,7 @@ try {
       $grid = Find-Id $main 'Comparison'; $rows = $grid.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
       $row = Wait-Until { $items = $grid.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)); if ($items.Count -gt 0) { $items[0] } } 'No comparison row was shown'
       Select-Ui $row
-      Click (Find-Id $main 'KeepRightButton'); Wait-Sync $main (Join-Path $left 'initial.txt'); Assert-File (Join-Path $left 'initial.txt') 'right-change'
+      Click (Find-Id $main 'KeepRightButton'); Wait-Sync $main (Join-Path $left 'initial.txt') 120 120 'right-change'; Assert-File (Join-Path $left 'initial.txt') 'right-change'
     }
     'modes' {
       $left = Join-Path $root 'left'; $right = Join-Path $root 'right'; New-Item -ItemType Directory -Force -Path @($left, $right) | Out-Null

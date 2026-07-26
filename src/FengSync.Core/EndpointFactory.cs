@@ -47,7 +47,13 @@ public static class EndpointFactory
         };
         return new RcloneEndpoint(daemon.Client,
             new EndpointProfile(Guid.NewGuid(), type, remoteAndRoot.Length == 2 ? remoteAndRoot[1] : "", remoteAndRoot[0]),
-            new(false, true, type == EndpointType.GoogleDrive, TimeSpan.FromSeconds(1)));
+            new(false, true, type == EndpointType.GoogleDrive, TimeSpan.FromSeconds(1),
+                type == EndpointType.S3
+                    ? new(MoveEvidenceCapabilities.SizeAndTime, EndpointMoveExecution.ServerCopyDelete, EndpointMoveExecution.None)
+                    : new(MoveEvidenceCapabilities.StrongHash | MoveEvidenceCapabilities.SizeAndTime,
+                        EndpointMoveExecution.NativeRename, type == EndpointType.GoogleDrive ? EndpointMoveExecution.NativeRename : EndpointMoveExecution.None,
+                        type == EndpointType.Sftp),
+                new(type != EndpointType.Sftp, System.Text.NormalizationForm.FormC)));
     }
 }
 

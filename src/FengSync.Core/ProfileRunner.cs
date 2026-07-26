@@ -28,8 +28,8 @@ public sealed class ProfileRunner
         await using var prepared = await PrepareAsync(profile, ct);
         if (!prepared.Plan.CanExecute && prepared.Plan.Operations.Any()) throw new InvalidOperationException("批处理遇到未裁决冲突；请先在界面中处理。 ");
         var selected = prepared.Plan.Operations.Count(x => x.Selected);
-        var transaction = profile.Mode == SyncMode.TwoWay
-            ? await prepared.BaselineRepository.BeginAsync(prepared.Left, prepared.Right, ct) : null;
+        // Mirror/Update also need a paired baseline for safe move propagation.
+        var transaction = await prepared.BaselineRepository.BeginAsync(prepared.Left, prepared.Right, ct);
         SyncRunResult? run = null;
         if (selected > 0)
         {
@@ -42,18 +42,15 @@ public sealed class ProfileRunner
             var snapshot = PlanSnapshot.FromComparison(prepared.Plan, prepared.Comparison);
             run = await new Execution.SyncExecutorV2().ExecuteAsync(snapshot, prepared.Left, prepared.Right,
                 progress is null ? null : new Progress<TransferProgress>(x => progress.Report(x.Path)), ct, prepared.Effective.VerifyCopies, prepared.Effective.Versioning, resourceGovernor: null, journals: new TaskJournalStore(), maxConcurrentCopies: prepared.Effective.MaxConcurrentCopies);
-            if (transaction is not null)
-            {
-                transaction = run.Operations.Where(x => x.Stage == TransferStage.Committed)
-                    .Aggregate(transaction, (current, item) => current.RecordCommitted(item.Path));
-                await prepared.BaselineRepository.SaveAsync(transaction, ct);
-                await CommitBaselineFromResultsAsync(prepared, transaction, run, ct);
-            }
+            transaction = run.Operations.Where(x => x.Stage == TransferStage.Committed)
+                .Aggregate(transaction, (current, item) => current.RecordCommitted(item.Path));
+            await prepared.BaselineRepository.SaveAsync(transaction, ct);
+            await CommitBaselineFromResultsAsync(prepared, transaction, run, ct);
         }
         // A successful no-op two-way run establishes (or refreshes) the paired baseline.
         // Without this, two initially equal folders could never learn that a later absence
         // is a deletion rather than an initial-sync difference.
-        else if (transaction is not null)
+        else
         {
             await CommitBaselineNoopAsync(prepared, transaction, ct);
         }
@@ -119,14 +116,14 @@ public sealed class ProfileRunner
                 : SafetyValidationResult.Pass;
             if (configurationSafety.HasBlockingIssues) throw new InvalidOperationException(string.Join(" ", configurationSafety.Issues.Select(x => x.Message)));
             var baselines = new BaselineRepository();
-            var baseline = profile.Mode == SyncMode.TwoWay ? await baselines.LoadAsync(left, right, ct) : null;
+            var baseline = await baselines.LoadAsync(left, right, ct);
             // Build a single paired snapshot of both endpoints so the planner, the
             // safety check, the freshness validator and the baseline commit all
             // operate on the same enumeration — no module below this point may
             // call ScanAsync again.
             var comparison = await new ComparisonSnapshotBuilder().CaptureAsync(left, right, ComparisonMode.TimeAndSize, TimeSpan.FromSeconds(effective.TimeToleranceSeconds), baseline, ct);
             var leftEntries = comparison.Left.Entries; var rightEntries = comparison.Right.Entries;
-            var plan = new ModePlanner().Build(profile.Mode, leftEntries, rightEntries, baseline, effective.Filter);
+            var plan = new ModePlanner().Build(profile.Mode, leftEntries, rightEntries, baseline, effective.Filter, left.Capabilities, right.Capabilities);
             var safety = new SafetyValidator();
             var planSafety = safety.ValidatePlan(plan, leftEntries.Count, rightEntries.Count, profile.Mode, profile.MaxDeletes, profile.MaxDeleteRatio)
                 .Combine(safety.ValidateCapacity(plan, comparison.Left.ByPath as IReadOnlyDictionary<string, EntrySnapshot>, comparison.Right.ByPath as IReadOnlyDictionary<string, EntrySnapshot>, left, right));

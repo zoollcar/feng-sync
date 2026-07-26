@@ -67,24 +67,33 @@ public sealed record PlanSnapshot(
     IReadOnlyDictionary<Guid, Fingerprint?> SourceFingerprints,
     IReadOnlyDictionary<Guid, Fingerprint?> LeftFingerprints,
     IReadOnlyDictionary<Guid, Fingerprint?> RightFingerprints,
-    DateTimeOffset CapturedUtc)
+    DateTimeOffset CapturedUtc,
+    IReadOnlyDictionary<Guid, Fingerprint?>? MoveFromFingerprints = null,
+    IReadOnlyDictionary<string, EntrySnapshot>? LeftEntries = null,
+    IReadOnlyDictionary<string, EntrySnapshot>? RightEntries = null)
 {
     public static async Task<PlanSnapshot> CaptureAsync(SyncPlan plan, IEndpoint left, IEndpoint right, CancellationToken ct = default)
     {
         var scans = await Task.WhenAll(left.ScanAsync(ct), right.ScanAsync(ct));
-        var leftEntries = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
-        var rightEntries = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+        var leftEntries = scans[0].ToDictionary(x => x.Path, left.Capabilities.EffectivePaths.CreateComparer());
+        var rightEntries = scans[1].ToDictionary(x => x.Path, right.Capabilities.EffectivePaths.CreateComparer());
         var sources = new Dictionary<Guid, Fingerprint?>();
         var leftFingerprints = new Dictionary<Guid, Fingerprint?>();
         var rightFingerprints = new Dictionary<Guid, Fingerprint?>();
+        var moveFrom = new Dictionary<Guid, Fingerprint?>();
         foreach (var op in plan.Operations)
         {
             leftFingerprints[op.OperationId] = leftEntries.GetValueOrDefault(op.Path)?.Fingerprint;
             rightFingerprints[op.OperationId] = rightEntries.GetValueOrDefault(op.Path)?.Fingerprint;
             if (op.Kind is OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft)
                 sources[op.OperationId] = (op.Kind == OperationKind.CopyLeftToRight ? leftEntries : rightEntries).GetValueOrDefault(op.Path)?.Fingerprint;
+            if (op.Kind == OperationKind.Move && op.Move is { } move)
+            {
+                var execute = move.ExecuteOn == EndpointSide.Left ? leftEntries : rightEntries;
+                moveFrom[op.OperationId] = execute.GetValueOrDefault(move.FromPath)?.Fingerprint;
+            }
         }
-        return new(plan, sources, leftFingerprints, rightFingerprints, DateTimeOffset.UtcNow);
+        return new(plan, sources, leftFingerprints, rightFingerprints, DateTimeOffset.UtcNow, moveFrom, leftEntries, rightEntries);
     }
 
     /// <summary>
@@ -98,6 +107,7 @@ public sealed record PlanSnapshot(
         var sources = new Dictionary<Guid, Fingerprint?>();
         var leftFingerprints = new Dictionary<Guid, Fingerprint?>();
         var rightFingerprints = new Dictionary<Guid, Fingerprint?>();
+        var moveFrom = new Dictionary<Guid, Fingerprint?>();
         foreach (var op in plan.Operations)
         {
             leftFingerprints[op.OperationId] = comparison.Left.ByPath.TryGetValue(op.Path, out var l) ? l.Fingerprint : null;
@@ -107,8 +117,13 @@ public sealed record PlanSnapshot(
                 var sourceSide = op.Kind == OperationKind.CopyLeftToRight ? comparison.Left : comparison.Right;
                 sources[op.OperationId] = sourceSide.ByPath.TryGetValue(op.Path, out var s) ? s.Fingerprint : null;
             }
+            if (op.Kind == OperationKind.Move && op.Move is { } move)
+            {
+                var execute = move.ExecuteOn == EndpointSide.Left ? comparison.Left : comparison.Right;
+                moveFrom[op.OperationId] = execute.ByPath.TryGetValue(move.FromPath, out var before) ? before.Fingerprint : null;
+            }
         }
-        return new(plan, sources, leftFingerprints, rightFingerprints, DateTimeOffset.UtcNow);
+        return new(plan, sources, leftFingerprints, rightFingerprints, DateTimeOffset.UtcNow, moveFrom, comparison.Left.ByPath, comparison.Right.ByPath);
     }
 }
 
@@ -120,8 +135,8 @@ public sealed class PlanFreshnessValidator
         // ComparisonSnapshot, fall back to full-tree enumeration. The M2 work
         // ensures this branch is only taken by legacy call sites.
         var scans = await Task.WhenAll(left.ScanAsync(ct), right.ScanAsync(ct));
-        var leftEntries = scans[0].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
-        var rightEntries = scans[1].ToDictionary(x => x.Path, StringComparer.OrdinalIgnoreCase);
+        var leftEntries = scans[0].ToDictionary(x => x.Path, left.Capabilities.EffectivePaths.CreateComparer());
+        var rightEntries = scans[1].ToDictionary(x => x.Path, right.Capabilities.EffectivePaths.CreateComparer());
         var issues = new List<SafetyIssue>();
         foreach (var op in snapshot.Plan.Operations.Where(x => x.Selected && x.Kind is (OperationKind.CopyLeftToRight or OperationKind.CopyRightToLeft)))
         {

@@ -38,6 +38,7 @@ public enum ComparisonMode { TimeAndSize, SizeOnly, Content }
 public sealed class EndpointSnapshot
 {
     public required EndpointProfile Endpoint { get; init; }
+    public required EndpointPathSemantics Paths { get; init; }
     public required DateTimeOffset StartedUtc { get; init; }
     public required DateTimeOffset CompletedUtc { get; init; }
     public required IReadOnlyList<EntrySnapshot> Entries { get; init; }

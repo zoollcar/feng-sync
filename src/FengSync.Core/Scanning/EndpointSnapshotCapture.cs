@@ -14,11 +14,12 @@ public static class EndpointSnapshotCapture
     {
         var started = DateTimeOffset.UtcNow;
         var entries = await endpoint.ScanAsync(ct).ConfigureAwait(false);
-        var byPath = new Dictionary<string, EntrySnapshot>(entries.Count, StringComparer.OrdinalIgnoreCase);
+        var byPath = new Dictionary<string, EntrySnapshot>(entries.Count, endpoint.Capabilities.EffectivePaths.CreateComparer());
         foreach (var entry in entries) byPath[entry.Path] = entry;
         return new EndpointSnapshot
         {
             Endpoint = endpoint.Profile,
+            Paths = endpoint.Capabilities.EffectivePaths,
             StartedUtc = started,
             CompletedUtc = DateTimeOffset.UtcNow,
             Entries = entries,
