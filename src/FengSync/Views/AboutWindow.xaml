@@ -20,7 +20,7 @@
                 <TextBlock Text="文件同步工作区" Style="{StaticResource CaptionTextStyle}" Margin="0,4,0,0" />
                 <TextBlock x:Name="VersionText"
                            AutomationProperties.AutomationId="AboutVersion"
-                           AutomationProperties.Name="当前版本"
+                           AutomationProperties.Name="{Binding Text, RelativeSource={RelativeSource Self}}"
                            Margin="0,18,0,0"
                            Style="{StaticResource BodyStrongTextStyle}" />
                 <TextBlock Text="本地、SFTP、Google Drive 与 S3 的文件比较和同步。"

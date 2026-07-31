@@ -13,7 +13,9 @@ public sealed class UiConsistencyGuardrailTests
 {
     private static readonly Regex HexColor = new(@"(?<![A-Za-z0-9])#[A-Fa-f0-9]{3,8}(?![A-Za-z0-9])", RegexOptions.CultureInvariant);
     private static readonly Regex ButtonStyleReference = new(@"Style\s*=\s*""\{(?:Static|Dynamic)Resource\s+(?<key>[^}\s]+)\}""", RegexOptions.CultureInvariant);
-    private static readonly Regex ButtonElement = new(@"<Button\b(?<attributes>[^>]*)>", RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    // Do not mistake property elements such as <Button.ContextMenu> for a
+    // Button control declaration; only an actual Button element needs a style.
+    private static readonly Regex ButtonElement = new(@"<Button(?=\s|/?>)(?<attributes>[^>]*)>", RegexOptions.CultureInvariant | RegexOptions.Singleline);
     private static readonly Regex ButtonTemplate = new(@"<Button\.Template\b|<ControlTemplate\b[^>]*\bTargetType\s*=\s*""(?:\{x:Type\s+)?Button\}?""", RegexOptions.CultureInvariant);
     private static readonly Regex PageLocalButtonVisual = new(@"\b(?:Height|MinHeight|Padding|FontSize|Background|Foreground|BorderBrush)\s*=", RegexOptions.CultureInvariant);
     private static readonly Regex TextOrContentAttribute = new(@"(?<property>Content|Text)\s*=\s*""(?<value>[^""]*)""", RegexOptions.CultureInvariant);

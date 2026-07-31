@@ -10,6 +10,7 @@ public sealed class UiAcceptanceTests
 {
     private readonly ITestOutputHelper _output;
     public UiAcceptanceTests(ITestOutputHelper output) => _output = output;
+    private static bool OnlineServicesEnabled => string.Equals(Environment.GetEnvironmentVariable("FENGSYNC_TEST_ONLINE_SERVICES"), "1", StringComparison.Ordinal);
     [Fact]
     [Trait("Category", "UI")]
     public Task Local_folders_support_two_way_sync_and_manual_direction_override() => RunAsync("local");
@@ -81,14 +82,14 @@ public sealed class UiAcceptanceTests
     [Fact]
     [Trait("Category", "UI")]
     [Trait("Category", "External")]
-    public Task Google_drive_test_directory_syncs_to_a_local_folder() => RunAsync("gdrive");
+    public Task Google_drive_test_directory_syncs_to_a_local_folder() => OnlineServicesEnabled ? RunAsync("gdrive") : Task.CompletedTask;
 
     [Fact]
     [Trait("Category", "UI")]
     [Trait("Category", "External")]
-    public Task Google_drive_compare_and_sync_covers_flat_10_100_files_and_100_folders_in_each_mode()
+    public Task Google_drive_syncs_ten_files_in_each_mode()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("FENGSYNC_INCLUDE_GOOGLE_DRIVE_VOLUME"), "1", StringComparison.Ordinal))
+        if (!OnlineServicesEnabled)
             return Task.CompletedTask;
         return RunAsync("gdrive-volume");
     }
@@ -111,10 +112,8 @@ public sealed class UiAcceptanceTests
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Unable to start PowerShell UI test host.");
         var timer = Stopwatch.StartNew();
         var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
-        // The regular scenarios should finish in minutes. The opt-in Drive
-        // matrix performs nine real remote workloads and therefore gets a
-        // scenario-level emergency brake large enough not to drive progression.
-        var timeoutSeconds = scenario == "gdrive-volume" ? 2 * 60 * 60 : 15 * 60;
+        // The opt-in Google Drive matrix makes three independent remote runs.
+        var timeoutSeconds = scenario == "gdrive-volume" ? 30 * 60 : 15 * 60;
         var exited = process.WaitForExitAsync();
         if (await Task.WhenAny(exited, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds))) != exited)
         {

@@ -17,6 +17,7 @@ using System.Windows.Threading;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Diagnostics;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -156,9 +157,9 @@ public partial class MainWindow : Window
             progressDialog.ShowInitialization("1 / 5", "正在准备同步计划…");
             Status.Text = "正在准备同步…";
 
-            progressDialog.ShowInitialization("2 / 5", "正在重新扫描两个端点，确认执行前的最新状态…");
-            var scans = await Task.WhenAll(_left.ScanAsync(_syncCancellation.Token), _right.ScanAsync(_syncCancellation.Token));
-            var leftEntries = scans[0].ToDictionary(x => x.Path, _left.Capabilities.EffectivePaths.CreateComparer()); var rightEntries = scans[1].ToDictionary(x => x.Path, _right.Capabilities.EffectivePaths.CreateComparer());
+            progressDialog.ShowInitialization("2 / 5", "正在确认已捕获的比较快照…");
+            var leftEntries = _snapshot.LeftEntries ?? throw new InvalidOperationException("比较快照缺少左侧条目。");
+            var rightEntries = _snapshot.RightEntries ?? throw new InvalidOperationException("比较快照缺少右侧条目。");
             progressDialog.ShowInitialization("3 / 5", "正在进行删除阈值和目标空间安全检查…");
             var safety = new SafetyValidator().ValidatePlan(current, leftEntries.Count, rightEntries.Count, SelectedMode, profile.MaxDeletes, profile.MaxDeleteRatio)
                 .Combine(new SafetyValidator().ValidateCapacity(current, leftEntries, rightEntries, _left, _right));
@@ -231,9 +232,13 @@ public partial class MainWindow : Window
     {
         var index = _profiles.IndexOf(profile);
         if (index < 0) return;
+        // Replacing an item in an ObservableCollection can clear WPF's current
+        // selection synchronously. Capture the selection first, then restore it
+        // to the updated record so the endpoint workspace stays usable after a run.
+        var wasSelected = (ProfileList.SelectedItem as SyncProfile)?.Id == profile.Id;
         var updated = profile with { LastRunUtc = timestamp };
         _profiles[index] = updated;
-        if ((ProfileList.SelectedItem as SyncProfile)?.Id == profile.Id) ProfileList.SelectedItem = updated;
+        if (wasSelected) ProfileList.SelectedItem = updated;
     }
     private void KeepLeft_Click(object sender, RoutedEventArgs e) => ResolveSelected(true); private void KeepRight_Click(object sender, RoutedEventArgs e) => ResolveSelected(false);
     private void ResolveSelected(bool left)
@@ -396,6 +401,15 @@ public partial class MainWindow : Window
     private void SidebarSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
     {
         _settings = _settings with { MainWindowSidebarWidth = ClampSidebarWidth(SidebarColumn.ActualWidth) };
+    }
+    private void SidebarSplitter_KeyDown(object sender, KeyEventArgs e)
+    {
+        var delta = e.Key switch { Key.Left => -12d, Key.Right => 12d, _ => 0d };
+        if (delta == 0) return;
+        var width = ClampSidebarWidth(SidebarColumn.ActualWidth + delta);
+        SidebarColumn.Width = new GridLength(width);
+        _settings = _settings with { MainWindowSidebarWidth = width };
+        e.Handled = true;
     }
     private static double ClampSidebarWidth(double value) => double.IsNaN(value) || double.IsInfinity(value) ? 248 : Math.Clamp(value, 220, 320);
     private EffectiveProfileSettings CurrentSettings => EffectiveProfileSettings.Resolve(ProfileList?.SelectedItem as SyncProfile ?? SyncProfile.Create("默认", "", ""), _settings);
@@ -564,10 +578,8 @@ public partial class MainWindow : Window
         var (rightTitle, rightIcon) = DescribeEndpoint(RightPath?.Text);
         if (LeftEndpointTitle != null) LeftEndpointTitle.Text = leftTitle;
         if (LeftEndpointIcon != null) LeftEndpointIcon.Icon = leftIcon;
-        if (LeftEndpointPath != null) LeftEndpointPath.Text = LeftPath?.Text ?? "";
         if (RightEndpointTitle != null) RightEndpointTitle.Text = rightTitle;
         if (RightEndpointIcon != null) RightEndpointIcon.Icon = rightIcon;
-        if (RightEndpointPath != null) RightEndpointPath.Text = RightPath?.Text ?? "";
     }
     private static (string Title, FluentIcon Icon) DescribeEndpoint(string? path)
     {
@@ -669,6 +681,10 @@ public partial class MainWindow : Window
 
     private async Task ApplyApplicationSettingsAsync(ApplicationSettings settings)
     {
+        // The sidebar splitter is owned by the main window rather than the
+        // settings dialog. Preserve a resize made immediately before opening
+        // Settings when the dialog applies its own edited settings snapshot.
+        settings = settings with { MainWindowSidebarWidth = ClampSidebarWidth(SidebarColumn.ActualWidth) };
         await new SettingsStore().SaveAsync(settings);
         _settings = settings;
         UpdateSettingsText();

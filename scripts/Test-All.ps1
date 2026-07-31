@@ -1,8 +1,7 @@
 [CmdletBinding()]
 param(
   [ValidateSet('Debug', 'Release')][string]$Configuration = 'Debug',
-  [switch]$SkipGoogleDrive,
-  [switch]$IncludeGoogleDriveVolume
+  [ValidateSet('Core', 'UiOffline', 'Online')][string]$Level = 'UiOffline'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,13 +35,15 @@ try {
   Invoke-Stage 'Build' { & dotnet build .\FengSync.sln -c $Configuration --nologo }
   Invoke-Stage 'Core, CLI and real SFTP protocol tests' { & dotnet test .\tests\FengSync.Tests\FengSync.Tests.csproj -c $Configuration --no-build --nologo }
 
-  $filter = if ($SkipGoogleDrive) { 'Category!=External' } else { '' }
+  if ($Level -eq 'Core') { return }
+
+  $filter = if ($Level -eq 'UiOffline') { 'Category!=External' } else { '' }
   $arguments = @('test', '.\tests\FengSync.UiTests\FengSync.UiTests.csproj', '-c', $Configuration, '--no-build', '--nologo')
   if ($filter) { $arguments += @('--filter', $filter) }
-  $uiName = if ($SkipGoogleDrive) { 'WPF UI acceptance tests (Google Drive excluded)' } else { 'WPF UI acceptance tests (including configured Google Drive; volume matrix opt-in)' }
-  if ($IncludeGoogleDriveVolume) { $env:FENGSYNC_INCLUDE_GOOGLE_DRIVE_VOLUME = '1' }
+  $uiName = if ($Level -eq 'UiOffline') { 'WPF UI acceptance tests (online services excluded)' } else { 'WPF UI acceptance tests (including online services)' }
+  if ($Level -eq 'Online') { $env:FENGSYNC_TEST_ONLINE_SERVICES = '1' }
   try { Invoke-Stage $uiName { & dotnet @arguments } }
-  finally { Remove-Item Env:FENGSYNC_INCLUDE_GOOGLE_DRIVE_VOLUME -ErrorAction SilentlyContinue }
+  finally { Remove-Item Env:FENGSYNC_TEST_ONLINE_SERVICES -ErrorAction SilentlyContinue }
 }
 catch {
   Write-Error $_

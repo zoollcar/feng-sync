@@ -165,6 +165,7 @@ public partial class SettingsWindow : Window
         if (onLaunch is not null)
         {
             var launch = NewButton(null, $"打开 {title}", (Style)Application.Current.Resources["PrimaryButtonStyle"], 140);
+            AutomationProperties.SetAutomationId(launch, title == "运行历史" ? "OpenRunHistory" : "OpenLogViewer");
             launch.Click += (_, _) => onLaunch();
             sp.Children.Add(launch);
         }

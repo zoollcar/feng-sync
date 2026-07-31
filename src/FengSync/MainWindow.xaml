@@ -12,7 +12,7 @@
  <Grid>
   <Grid.ColumnDefinitions>
    <ColumnDefinition x:Name="SidebarColumn" Width="248" MinWidth="220" MaxWidth="320"/>
-   <ColumnDefinition Width="1"/>
+   <ColumnDefinition Width="6"/>
    <ColumnDefinition Width="*"/>
    <ColumnDefinition x:Name="SummaryColumn" Width="272" MinWidth="240"/>
   </Grid.ColumnDefinitions>
@@ -146,7 +146,9 @@
   <Rectangle Grid.Column="1" Grid.Row="0" Grid.RowSpan="4" Fill="{DynamicResource BorderSubtleBrush}"/>
   <GridSplitter x:Name="SidebarSplitter" Grid.Column="1" Grid.Row="0" Grid.RowSpan="4"
                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                Background="Transparent" ShowsPreview="False" DragCompleted="SidebarSplitter_DragCompleted"/>
+                ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                Background="Transparent" ShowsPreview="False" Focusable="True"
+                DragCompleted="SidebarSplitter_DragCompleted" KeyDown="SidebarSplitter_KeyDown"/>
 
   <!-- =================== 中栏：4 个 panel =================== -->
   <Grid Grid.Column="2" Grid.Row="0" Grid.RowSpan="4" Background="{DynamicResource AppCanvasBrush}">
@@ -203,13 +205,12 @@
         </Border>
         <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
         <TextBlock x:Name="LeftEndpointTitle" Text="未选择端点" Style="{StaticResource CaptionTextStyle}"/>
-        <TextBlock x:Name="LeftEndpointPath" AutomationProperties.AutomationId="LeftEndpointPath" Text="选择一个端点" Style="{StaticResource BodyStrongTextStyle}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        <TextBox x:Name="LeftPath" AutomationProperties.AutomationId="LeftPath" AutomationProperties.Name="左侧端点路径" Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="选择一个端点"/>
        </StackPanel>
        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
         <Button AutomationProperties.AutomationId="AddLeftLocalEndpoint" AutomationProperties.Name="选择左侧本地端点" Content="本地" Click="BrowseLeft_Click" Style="{StaticResource TertiaryButtonStyle}"/>
         <Button AutomationProperties.AutomationId="AddLeftCloudEndpoint" AutomationProperties.Name="选择左侧云端端点" Content="云端" Tag="Left" Click="AddCloudEndpoint_Click" Style="{StaticResource TertiaryButtonStyle}"/>
        </StackPanel>
-       <TextBox x:Name="LeftPath" AutomationProperties.AutomationId="LeftPath" Visibility="Collapsed" Width="0" Height="0"/>
       </Grid>
      </Border>
 
@@ -235,13 +236,12 @@
         </Border>
         <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
         <TextBlock x:Name="RightEndpointTitle" Text="未选择端点" Style="{StaticResource CaptionTextStyle}"/>
-        <TextBlock x:Name="RightEndpointPath" AutomationProperties.AutomationId="RightEndpointPath" Text="选择一个端点" Style="{StaticResource BodyStrongTextStyle}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        <TextBox x:Name="RightPath" AutomationProperties.AutomationId="RightPath" AutomationProperties.Name="右侧端点路径" Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="选择一个端点"/>
        </StackPanel>
        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
         <Button AutomationProperties.AutomationId="AddRightLocalEndpoint" AutomationProperties.Name="选择右侧本地端点" Content="本地" Click="BrowseRight_Click" Style="{StaticResource TertiaryButtonStyle}"/>
         <Button AutomationProperties.AutomationId="AddRightCloudEndpoint" AutomationProperties.Name="选择右侧云端端点" Content="云端" Tag="Right" Click="AddCloudEndpoint_Click" Style="{StaticResource TertiaryButtonStyle}"/>
        </StackPanel>
-       <TextBox x:Name="RightPath" AutomationProperties.AutomationId="RightPath" Visibility="Collapsed" Width="0" Height="0"/>
       </Grid>
      </Border>
 
@@ -364,8 +364,9 @@
        <DataGridTemplateColumn Header="操作" Width="88" IsReadOnly="True">
         <DataGridTemplateColumn.CellTemplate>
          <DataTemplate>
-          <Border Background="Transparent" Padding="2">
-           <Border.ContextMenu>
+          <Button Style="{StaticResource TertiaryButtonStyle}"
+                  AutomationProperties.Name="变更操作菜单">
+           <Button.ContextMenu>
             <ContextMenu>
              <MenuItem Header="左侧覆盖右侧" Click="ActionMenu_KeepLeft_Click"/>
              <MenuItem Header="右侧覆盖左侧" Click="ActionMenu_KeepRight_Click"/>
@@ -373,11 +374,11 @@
              <MenuItem Header="忽略此文件" Click="ActionMenu_Ignore_Click"/>
              <MenuItem Header="重新启用此文件" Click="ActionMenu_Enable_Click"/>
             </ContextMenu>
-           </Border.ContextMenu>
+           </Button.ContextMenu>
            <Border Style="{StaticResource StatusChipStyle}" Background="{Binding OperationSeverity, Converter={x:Static views:AppConverters.SeverityBackgroundConverter}}">
             <TextBlock Text="{Binding OperationLabel}" Style="{StaticResource StatusChipTextStyle}"/>
            </Border>
-          </Border>
+          </Button>
          </DataTemplate>
         </DataGridTemplateColumn.CellTemplate>
        </DataGridTemplateColumn>

@@ -82,24 +82,24 @@ CLI 始终输出一行 JSON。退出码区分成功、冲突、配置错误、�
 
 ## 测试
 
-在当前 Windows 开发电脑一键运行完整测试（核心、CLI、真实 SFTP、真实 WPF UI，以及检测到凭据后的 Google Drive）：
+测试入口按依赖范围分为三个级别：
 
 ```powershell
-pwsh -File .\scripts\Test-All.ps1
+# 1. 核心、CLI、真实 SFTP 协议；不启动 WPF UI。
+pwsh -File .\scripts\Test-All.ps1 -Level Core
+
+# 2. 级别 1 + 本地与 SFTP 的 WPF UI；不访问线上服务商（默认）。
+pwsh -File .\scripts\Test-All.ps1 -Level UiOffline
+
+# 3. 级别 2 + 所有标记为 External 的线上服务 UI 测试。
+pwsh -File .\scripts\Test-All.ps1 -Level Online
 ```
 
-可按层单独运行：
-
-```powershell
-dotnet test .\tests\FengSync.Tests                 # 核心、CLI 与真实 SFTP 协议
-dotnet test .\tests\FengSync.UiTests                # 本地、SFTP、Google Drive 的真实 WPF UI
-pwsh -File .\scripts\Test-All.ps1 -SkipGoogleDrive  # 暂不执行外部云端
-pwsh -File .\scripts\Test-All.ps1 -IncludeGoogleDriveVolume # 额外执行 Drive 100 文件/100 文件夹压力矩阵
-```
+也可以单独运行 `dotnet test .\tests\FengSync.Tests` 或 `dotnet test .\tests\FengSync.UiTests`。线上服务 UI 用 `FENGSYNC_TEST_ONLINE_SERVICES=1` 启用；`-Level Online` 会自动设置并在结束后清除该环境变量。
 
 GUI 测试会创建隔离的 `.fengsync-test` 测试数据并保存截图。更详细的手动 GUI 冒烟测试说明见 [docs/GUI_TESTING.md](docs/GUI_TESTING.md)。
 
-Google Drive 回环测试会自动检测当前 Feng Sync 的 rclone 配置；发现 Google Drive 凭据后，它只会在该远端的 `test/FengSync-Automated-Tests/<run-id>` 创建临时目录，UI 上传并下载验证后只清理该子目录。默认只运行单文件回环。100 文件压力矩阵是显式可选项（`-IncludeGoogleDriveVolume`）：它在双向、镜像、更新三种模式下覆盖 10 个扁平小文件、100 个扁平小文件，以及 100 个文件夹各含 1 个文件；每项均输出对比和同步耗时。未发现凭据时，外部场景会显式跳过。失败时，本地 `.fengsync-test` 证据目录会被保留。
+Google Drive 回环测试会自动检测当前 Feng Sync 的 rclone 配置；发现 Google Drive 凭据后，它只会在该远端的 `test/FengSync-Automated-Tests/<run-id>` 创建临时目录，UI 上传并下载验证后只清理该子目录。在线级别还会在双向、镜像、更新三种模式下分别同步并验证 10 个扁平小文件。当前线上 UI 覆盖的是 Google Drive；未来 S3 等服务商的线上 UI 测试也应标记为 `External`，并由 `-Level Online` 统一执行。未发现凭据时，外部场景会显式跳过。失败时，本地 `.fengsync-test` 证据目录会被保留。
 
 ## 项目结构
 

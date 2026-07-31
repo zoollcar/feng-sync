@@ -8,6 +8,7 @@
         MinWidth="900"
         MinHeight="600"
         WindowStartupLocation="CenterOwner"
+        AutomationProperties.AutomationId="RemoteEndpointManagerWindow"
         AutomationProperties.Name="云盘端点与文件管理">
     <Grid Margin="18">
         <Grid.ColumnDefinitions><ColumnDefinition Width="330" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
