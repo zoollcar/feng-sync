@@ -1,7 +1,132 @@
-<Window x:Class="FengSync.Views.SyncConfirmationWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="确认同步操作" Width="540" SizeToContent="Height" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
- <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid Margin="28,24"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-  <StackPanel><TextBlock x:Name="TitleText" Style="{StaticResource PageTitleTextStyle}"/><TextBlock Text="执行前请核对以下受影响范围。" Foreground="{DynamicResource SecondaryForegroundBrush}" Margin="0,5,0,0"/></StackPanel>
-  <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" CornerRadius="{StaticResource RadiusMedium}" BorderThickness="1" Padding="14" Margin="0,16,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel><TextBlock x:Name="CopyText"/><TextBlock x:Name="OverwriteText" Margin="0,5,0,0"/></StackPanel><StackPanel Grid.Column="1"><TextBlock x:Name="DeleteText"/><TextBlock x:Name="TransferText" Margin="0,5,0,0"/></StackPanel></Grid></Border>
-  <StackPanel Grid.Row="2" Margin="0,12,0,0"><TextBlock x:Name="SpaceText" AutomationProperties.AutomationId="SyncSpaceSummary" TextWrapping="Wrap"/><TextBlock x:Name="IssuesText" AutomationProperties.AutomationId="SyncIssues" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/><StackPanel x:Name="ProfileConfirmationPanel" Visibility="Collapsed" Margin="0,12,0,0"><TextBlock x:Name="ProfileConfirmationPrompt" TextWrapping="Wrap"/><TextBox x:Name="ProfileNameInput" AutomationProperties.AutomationId="ProfileNameInput" Margin="0,5,0,0"/></StackPanel></StackPanel>
- </Grid><Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0" Padding="20,12"><StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="返回设置" AutomationProperties.AutomationId="CancelSyncButton" IsCancel="True" Margin="0,0,8,0" Style="{StaticResource GhostButtonStyle}"/><Button x:Name="ConfirmButton" AutomationProperties.AutomationId="ConfirmSyncButton" Content="确认同步" IsDefault="True" Click="Confirm_Click" Style="{StaticResource PrimaryButtonStyle}"/></StackPanel></Border></Grid>
+<Window x:Class="FengSync.Views.SyncConfirmationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="确认同步操作"
+        Width="560"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource AppCanvasBrush}"
+        AutomationProperties.AutomationId="SyncConfirmationWindow"
+        AutomationProperties.Name="确认同步操作">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Margin="28,24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel>
+                <TextBlock x:Name="TitleText" Style="{StaticResource DisplayTitleTextStyle}" />
+                <TextBlock Text="执行前请核对受影响的文件、空间需求和安全提示。"
+                           Style="{StaticResource CaptionTextStyle}"
+                           Margin="0,6,0,0"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+
+            <Border Grid.Row="1"
+                    Margin="0,20,0,0"
+                    Padding="16"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource RadiusMedium}"
+                    AutomationProperties.Name="本次同步操作摘要">
+                <StackPanel>
+                    <TextBlock Text="操作摘要" Style="{StaticResource SectionTitleTextStyle}" />
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock x:Name="CopyText" Style="{StaticResource ChangeSummaryItemTextStyle}" />
+                        <TextBlock x:Name="OverwriteText" Grid.Row="1" Style="{StaticResource ChangeSummaryItemTextStyle}" Margin="0,8,0,0" />
+                        <TextBlock x:Name="DeleteText" Grid.Column="1" Style="{StaticResource ChangeSummaryItemTextStyle}" />
+                        <TextBlock x:Name="TransferText" Grid.Row="1" Grid.Column="1" Style="{StaticResource ChangeSummaryItemTextStyle}" Margin="0,8,0,0" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Grid.Row="2" Margin="0,16,0,0">
+                <Border Style="{StaticResource SafetyCalloutStyle}"
+                        AutomationProperties.AutomationId="SyncSpaceCallout"
+                        AutomationProperties.Name="目标空间检查">
+                    <TextBlock x:Name="SpaceText"
+                               AutomationProperties.AutomationId="SyncSpaceSummary"
+                               Style="{StaticResource BodyTextStyle}"
+                               TextWrapping="Wrap" />
+                </Border>
+
+                <Border x:Name="IssuesCallout"
+                        Visibility="Collapsed"
+                        Style="{StaticResource SafetyCalloutDangerStyle}"
+                        Margin="0,12,0,0"
+                        AutomationProperties.AutomationId="SyncIssuesCallout"
+                        AutomationProperties.Name="同步前需要解决的问题"
+                        AutomationProperties.LiveSetting="Assertive">
+                    <StackPanel>
+                        <TextBlock Text="无法安全开始同步" Style="{StaticResource BodyStrongTextStyle}" />
+                        <TextBlock x:Name="IssuesText"
+                                   AutomationProperties.AutomationId="SyncIssues"
+                                   Style="{StaticResource BodyTextStyle}"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="ProfileConfirmationPanel"
+                        Visibility="Collapsed"
+                        Style="{StaticResource SafetyCalloutWarningStyle}"
+                        Margin="0,12,0,0"
+                        AutomationProperties.AutomationId="ProfileConfirmationCallout"
+                        AutomationProperties.Name="需要输入同步配置名称以确认">
+                    <StackPanel>
+                        <TextBlock Text="需要明确确认" Style="{StaticResource BodyStrongTextStyle}" />
+                        <TextBlock x:Name="ProfileConfirmationPrompt"
+                                   Style="{StaticResource BodyTextStyle}"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap" />
+                        <TextBox x:Name="ProfileNameInput"
+                                 AutomationProperties.AutomationId="ProfileNameInput"
+                                 AutomationProperties.Name="输入同步配置名称以确认"
+                                 AutomationProperties.LabeledBy="{Binding ElementName=ProfileConfirmationPrompt}"
+                                 Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="返回设置"
+                        AutomationProperties.AutomationId="CancelSyncButton"
+                        AutomationProperties.Name="取消同步并返回设置"
+                        IsCancel="True"
+                        Margin="0,0,8,0"
+                        Style="{StaticResource TertiaryButtonStyle}" />
+                <Button x:Name="ConfirmButton"
+                        AutomationProperties.AutomationId="ConfirmSyncButton"
+                        AutomationProperties.Name="确认同步并执行计划"
+                        Content="确认同步"
+                        IsDefault="True"
+                        Click="Confirm_Click"
+                        Style="{StaticResource DangerButtonStyle}" />
+            </StackPanel>
+        </Border>
+    </Grid>
 </Window>

@@ -5,6 +5,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using FengSync.Core;
+using FluentIconSymbol = FluentIcons.Common.Icon;
 using Microsoft.Win32;
 
 namespace FengSync;
@@ -149,12 +150,12 @@ public partial class ProgressWindow : Window
             _bytesPerSecond = transferred / Math.Max(.001, _clock.Elapsed.TotalSeconds);
         UpdateVisualCounters(0);
         var outcome = RunResultPresentation.OutcomeOf(result, cancelled);
-        (StateIcon.Text, StateIcon.Foreground, StateTitle.Text) = outcome switch
+        (StateIcon.Icon, StateIcon.Foreground, StateTitle.Text) = outcome switch
         {
-            RunDisplayOutcome.Succeeded => ("✓", System.Windows.Media.Brushes.ForestGreen, "已成功完成"),
-            RunDisplayOutcome.PartialSuccess => ("!", System.Windows.Media.Brushes.DarkOrange, "已结束（部分成功）"),
-            RunDisplayOutcome.Cancelled => ("⊘", System.Windows.Media.Brushes.DarkOrange, "已取消"),
-            _ => ("!", System.Windows.Media.Brushes.Firebrick, "同步失败")
+            RunDisplayOutcome.Succeeded => (FluentIconSymbol.CheckmarkCircle, (System.Windows.Media.Brush)FindResource("SuccessBrush"), "已成功完成"),
+            RunDisplayOutcome.PartialSuccess => (FluentIconSymbol.Warning, (System.Windows.Media.Brush)FindResource("WarningBrush"), "已结束（部分成功）"),
+            RunDisplayOutcome.Cancelled => (FluentIconSymbol.DismissCircle, (System.Windows.Media.Brush)FindResource("WarningBrush"), "已取消"),
+            _ => (FluentIconSymbol.ErrorCircle, (System.Windows.Media.Brush)FindResource("DangerBrush"), "同步失败")
         };
         StateDescription.Text = text;
         CloseButton.IsEnabled = true;

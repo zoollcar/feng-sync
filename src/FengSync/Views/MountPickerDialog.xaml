@@ -1,37 +1,86 @@
-<Window x:Class="FengSync.Views.MountPickerDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="挂载到…" Width="540" Height="420" MinWidth="420" MinHeight="340" WindowStartupLocation="CenterOwner" Background="{DynamicResource WindowBackgroundBrush}">
- <Grid Margin="24"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+<Window x:Class="FengSync.Views.MountPickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="挂载到…"
+        Width="540"
+        Height="420"
+        MinWidth="420"
+        MinHeight="340"
+        WindowStartupLocation="CenterOwner"
+        AutomationProperties.AutomationId="MountPickerDialog"
+        AutomationProperties.Name="选择挂载位置">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-  <StackPanel>
-   <TextBlock x:Name="HeaderText" Style="{StaticResource SectionTitleTextStyle}"/>
-   <TextBlock x:Name="SubHeaderText" Foreground="{DynamicResource SecondaryForegroundBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-  </StackPanel>
+        <StackPanel>
+            <TextBlock x:Name="HeaderText" Style="{StaticResource DisplayTitleTextStyle}" />
+            <TextBlock x:Name="SubHeaderText" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
+        </StackPanel>
 
-  <TabControl x:Name="ModeTabs" Grid.Row="1" Margin="0,12,0,0" SelectionChanged="ModeTabs_SelectionChanged">
-   <TabItem Header="盘符" AutomationProperties.AutomationId="MountPickerDriveTab">
-    <Grid Margin="8">
-     <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-     <ListBox x:Name="DriveLetterList" AutomationProperties.AutomationId="MountPickerDriveList" SelectionMode="Single" DisplayMemberPath="Letter" SelectionChanged="DriveLetterList_SelectionChanged"/>
-     <TextBlock Grid.Row="1" x:Name="DriveHint" Foreground="{DynamicResource SecondaryForegroundBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+        <TabControl x:Name="ModeTabs" Grid.Row="1" Margin="0,12,0,0" SelectionChanged="ModeTabs_SelectionChanged" AutomationProperties.Name="挂载位置类型">
+            <TabItem Header="盘符" AutomationProperties.AutomationId="MountPickerDriveTab" AutomationProperties.Name="选择盘符挂载位置">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <ListBox x:Name="DriveLetterList"
+                             AutomationProperties.AutomationId="MountPickerDriveList"
+                             AutomationProperties.Name="可用盘符"
+                             SelectionMode="Single"
+                             DisplayMemberPath="Letter"
+                             SelectionChanged="DriveLetterList_SelectionChanged" />
+                    <TextBlock Grid.Row="1" x:Name="DriveHint" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="目录" AutomationProperties.AutomationId="MountPickerDirectoryTab" AutomationProperties.Name="选择目录挂载位置">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Content="浏览…"
+                                Click="BrowseDirectory_Click"
+                                Margin="8,0,0,0"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                AutomationProperties.Name="浏览并选择挂载目录" />
+                        <TextBox x:Name="DirectoryPathBox"
+                                 AutomationProperties.AutomationId="MountPickerDirectoryPath"
+                                 AutomationProperties.Name="挂载目录路径"
+                                 TextChanged="DirectoryPathBox_TextChanged" />
+                    </DockPanel>
+                    <TextBlock Grid.Row="1" x:Name="DirectoryHint" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <DockPanel Grid.Row="2" Margin="0,14,0,0">
+            <TextBlock x:Name="StatusText"
+                       AutomationProperties.AutomationId="MountPickerStatus"
+                       AutomationProperties.Name="挂载位置状态"
+                       Style="{StaticResource CaptionTextStyle}"
+                       TextWrapping="Wrap"
+                       VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                <Button x:Name="OkButton"
+                        AutomationProperties.AutomationId="MountPickerOk"
+                        AutomationProperties.Name="确认挂载到所选位置"
+                        Content="挂载"
+                        IsDefault="True"
+                        Click="Ok_Click"
+                        Style="{StaticResource PrimaryButtonStyle}" />
+                <Button Content="取消"
+                        AutomationProperties.Name="取消选择挂载位置"
+                        IsCancel="True"
+                        Margin="8,0,0,0"
+                        Style="{StaticResource TertiaryButtonStyle}" />
+            </StackPanel>
+        </DockPanel>
     </Grid>
-   </TabItem>
-   <TabItem Header="目录" AutomationProperties.AutomationId="MountPickerDirectoryTab">
-    <Grid Margin="8">
-     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-     <DockPanel>
-      <Button DockPanel.Dock="Right" Content="浏览…" Click="BrowseDirectory_Click" MinWidth="72" Margin="8,0,0,0"/>
-      <TextBox x:Name="DirectoryPathBox" AutomationProperties.AutomationId="MountPickerDirectoryPath" VerticalContentAlignment="Center" TextChanged="DirectoryPathBox_TextChanged"/>
-     </DockPanel>
-     <TextBlock Grid.Row="1" x:Name="DirectoryHint" Foreground="{DynamicResource SecondaryForegroundBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
-    </Grid>
-   </TabItem>
-  </TabControl>
-
-  <DockPanel Grid.Row="2" Margin="0,14,0,0">
-   <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="MountPickerStatus" Foreground="{DynamicResource SecondaryForegroundBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
-   <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
-    <Button x:Name="OkButton" AutomationProperties.AutomationId="MountPickerOk" Content="挂载" IsDefault="True" Click="Ok_Click" MinWidth="86" Style="{StaticResource PrimaryButtonStyle}"/>
-    <Button Content="取消" IsCancel="True" Margin="8,0,0,0" MinWidth="72" Style="{StaticResource GhostButtonStyle}"/>
-   </StackPanel>
-  </DockPanel>
- </Grid>
 </Window>

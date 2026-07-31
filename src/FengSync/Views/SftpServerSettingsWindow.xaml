@@ -1,14 +1,137 @@
-<Window x:Class="FengSync.Views.SftpServerSettingsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="SFTP 服务器设置" Width="620" Height="430" WindowStartupLocation="CenterOwner" Background="{DynamicResource WindowBackgroundBrush}">
- <Grid Margin="18"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-  <TextBlock Text="内置 SFTP 服务器（rclone）" Style="{StaticResource PageTitleTextStyle}"/>
-  <Grid Grid.Row="1" Margin="0,12,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-   <CheckBox x:Name="EnabledBox" Content="启用服务" AutomationProperties.AutomationId="SftpEnabled"/><CheckBox Grid.Column="1" x:Name="AutoStartBox" Content="随 Feng Sync 自动启动" AutomationProperties.AutomationId="SftpAutoStart"/>
-   <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="监听地址 / 端口"/><StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"><TextBox x:Name="AddressBox" Width="180" AutomationProperties.AutomationId="SftpListenAddress"/><TextBox x:Name="PortBox" Width="95" Margin="8,0,0,0" AutomationProperties.AutomationId="SftpPort"/></StackPanel>
-   <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="共享根目录"/><TextBox Grid.Row="2" Grid.Column="1" x:Name="RootPathBox" AutomationProperties.AutomationId="SftpRootPath"/>
-   <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="用户名"/><TextBox Grid.Row="3" Grid.Column="1" x:Name="UserNameBox" AutomationProperties.AutomationId="SftpUserName"/>
-   <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="缓存上限（GiB）"/><TextBox Grid.Row="4" Grid.Column="1" x:Name="CacheSizeBox" Width="95" HorizontalAlignment="Left" AutomationProperties.AutomationId="SftpCacheSize"/>
-  </Grid>
-  <StackPanel Grid.Row="2" Margin="0,12,0,0"><StackPanel Orientation="Horizontal"><TextBlock x:Name="PasswordStateText" VerticalAlignment="Center"/><Button Click="SetPassword_Click" Margin="12,0,0,0" AutomationProperties.AutomationId="SetSftpPassword">设置或重置密码…</Button></StackPanel><TextBlock x:Name="FingerprintText" AutomationProperties.AutomationId="SftpHostFingerprint" TextWrapping="Wrap" Margin="0,12,0,0"/><TextBlock Text="此版本仅提供一个可读写共享根目录和一个密码账号；旧版多账号配置不会迁移。" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource SecondaryForegroundBrush}"/><TextBlock x:Name="StatusText" AutomationProperties.AutomationId="SftpServerStatus" Foreground="{DynamicResource SecondaryForegroundBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/></StackPanel>
-  <Border Grid.Row="3" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0"><StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button Click="Diagnose_Click" AutomationProperties.AutomationId="DiagnoseSftpServer" Style="{StaticResource SecondaryButtonStyle}">诊断</Button><Button Click="Start_Click" AutomationProperties.AutomationId="StartSftpServer" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}">启动</Button><Button Click="Stop_Click" AutomationProperties.AutomationId="StopSftpServer" Margin="8,0,0,0" Style="{StaticResource GhostButtonStyle}">停止</Button><Button Click="Save_Click" Margin="8,0,0,0" IsDefault="True" AutomationProperties.AutomationId="SaveSftpServerSettings" Style="{StaticResource PrimaryButtonStyle}">保存</Button><Button IsCancel="True" Margin="8,0,0,0" Style="{StaticResource GhostButtonStyle}">关闭</Button></StackPanel></Border>
- </Grid>
+<Window x:Class="FengSync.Views.SftpServerSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SFTP 服务器设置"
+        Width="620"
+        Height="430"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        AutomationProperties.AutomationId="SftpServerSettingsWindow"
+        AutomationProperties.Name="SFTP 服务器设置">
+    <Grid Margin="24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="内置 SFTP 服务器（rclone）" Style="{StaticResource PageTitleTextStyle}" />
+
+        <Grid Grid.Row="1" Margin="0,16,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <CheckBox x:Name="EnabledBox"
+                      Content="启用服务"
+                      AutomationProperties.AutomationId="SftpEnabled"
+                      AutomationProperties.Name="启用内置 SFTP 服务" />
+            <CheckBox Grid.Column="1"
+                      x:Name="AutoStartBox"
+                      Content="随 Feng Sync 自动启动"
+                      AutomationProperties.AutomationId="SftpAutoStart"
+                      AutomationProperties.Name="随 Feng Sync 自动启动 SFTP 服务" />
+            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="监听地址 / 端口" Style="{StaticResource BodyTextStyle}" />
+            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
+                <TextBox x:Name="AddressBox"
+                         Width="180"
+                         AutomationProperties.AutomationId="SftpListenAddress"
+                         AutomationProperties.Name="SFTP 监听地址" />
+                <TextBox x:Name="PortBox"
+                         Width="95"
+                         Margin="8,0,0,0"
+                         AutomationProperties.AutomationId="SftpPort"
+                         AutomationProperties.Name="SFTP 监听端口" />
+            </StackPanel>
+            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="共享根目录" Style="{StaticResource BodyTextStyle}" />
+            <TextBox Grid.Row="2"
+                     Grid.Column="1"
+                     x:Name="RootPathBox"
+                     AutomationProperties.AutomationId="SftpRootPath"
+                     AutomationProperties.Name="SFTP 共享根目录" />
+            <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="用户名" Style="{StaticResource BodyTextStyle}" />
+            <TextBox Grid.Row="3"
+                     Grid.Column="1"
+                     x:Name="UserNameBox"
+                     AutomationProperties.AutomationId="SftpUserName"
+                     AutomationProperties.Name="SFTP 用户名" />
+            <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="缓存上限（GiB）" Style="{StaticResource BodyTextStyle}" />
+            <TextBox Grid.Row="4"
+                     Grid.Column="1"
+                     x:Name="CacheSizeBox"
+                     Width="95"
+                     HorizontalAlignment="Left"
+                     AutomationProperties.AutomationId="SftpCacheSize"
+                     AutomationProperties.Name="SFTP 缓存容量上限，单位 GiB" />
+        </Grid>
+
+        <StackPanel Grid.Row="2" Margin="0,12,0,0">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="PasswordStateText" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                <Button Click="SetPassword_Click"
+                        Margin="12,0,0,0"
+                        AutomationProperties.AutomationId="SetSftpPassword"
+                        AutomationProperties.Name="设置或重置 SFTP 密码"
+                        Style="{StaticResource SecondaryButtonStyle}">设置或重置密码…</Button>
+            </StackPanel>
+            <TextBlock x:Name="FingerprintText"
+                       AutomationProperties.AutomationId="SftpHostFingerprint"
+                       AutomationProperties.Name="SFTP 主机指纹"
+                       TextWrapping="Wrap"
+                       Style="{StaticResource CaptionTextStyle}"
+                       Margin="0,12,0,0" />
+            <TextBlock Text="此版本仅提供一个可读写共享根目录和一个密码账号；旧版多账号配置不会迁移。"
+                       TextWrapping="Wrap"
+                       Style="{StaticResource CaptionTextStyle}"
+                       Margin="0,8,0,0" />
+            <TextBlock x:Name="StatusText"
+                       AutomationProperties.AutomationId="SftpServerStatus"
+                       AutomationProperties.Name="SFTP 服务器状态"
+                       TextWrapping="Wrap"
+                       Style="{StaticResource CaptionTextStyle}"
+                       Margin="0,8,0,0" />
+        </StackPanel>
+
+        <Border Grid.Row="3"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="0,12,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button IsCancel="True"
+                        Margin="0,0,8,0"
+                        Style="{StaticResource TertiaryButtonStyle}"
+                        AutomationProperties.Name="关闭 SFTP 服务器设置">关闭</Button>
+                <Button Click="Stop_Click"
+                        AutomationProperties.AutomationId="StopSftpServer"
+                        AutomationProperties.Name="停止 SFTP 服务器"
+                        Margin="0,0,8,0"
+                        Style="{StaticResource TertiaryButtonStyle}">停止</Button>
+                <Button Click="Diagnose_Click"
+                        AutomationProperties.AutomationId="DiagnoseSftpServer"
+                        AutomationProperties.Name="诊断 SFTP 服务器"
+                        Margin="0,0,8,0"
+                        Style="{StaticResource TertiaryButtonStyle}">诊断</Button>
+                <Button Click="Start_Click"
+                        AutomationProperties.AutomationId="StartSftpServer"
+                        AutomationProperties.Name="启动 SFTP 服务器"
+                        Margin="0,0,8,0"
+                        Style="{StaticResource SecondaryButtonStyle}">启动</Button>
+                <Button Click="Save_Click"
+                        IsDefault="True"
+                        AutomationProperties.AutomationId="SaveSftpServerSettings"
+                        AutomationProperties.Name="保存 SFTP 服务器设置"
+                        Style="{StaticResource PrimaryButtonStyle}">保存</Button>
+            </StackPanel>
+        </Border>
+    </Grid>
 </Window>

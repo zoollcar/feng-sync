@@ -1,16 +1,67 @@
-<Window x:Class="FengSync.Views.RemoteEndpointManagerWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:fluent="clr-namespace:FluentIcons.Wpf;assembly=FluentIcons.Wpf" Title="云盘管理" Width="1200" Height="760" MinWidth="900" MinHeight="600" WindowStartupLocation="CenterOwner" Background="{DynamicResource WindowBackgroundBrush}">
- <Grid Margin="18"><Grid.ColumnDefinitions><ColumnDefinition Width="330"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-  <Grid Grid.Column="0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-   <StackPanel><TextBlock Text="云盘管理" Style="{StaticResource PageTitleTextStyle}"/><TextBlock Text="管理云盘端点与挂载，并浏览和传输文件。" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryForegroundBrush}" Margin="0,4,0,0"/></StackPanel>
-   <GroupBox Grid.Row="1" Header="云盘端点" Margin="0,12,0,0"><ListBox x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" BorderThickness="0" DisplayMemberPath="Display" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged"/></GroupBox>
-   <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0"><Button x:Name="RefreshButton" Content="刷新列表" Click="Refresh_Click"/><Button x:Name="NewButton" Content="新建端点" Click="New_Click" Margin="8,0,0,0"/><Button x:Name="ReconnectButton" Content="重新登录" Click="Reconnect_Click" Margin="8,0,0,0"/><Button x:Name="DeleteButton" Content="删除" Click="Delete_Click" Margin="8,0,0,0"/></StackPanel>
-   <GroupBox Grid.Row="3" Header="挂载管理" Margin="0,14,0,0"><StackPanel Margin="4"><ListBox x:Name="MountsList" Height="110" SelectionChanged="MountsList_SelectionChanged" DisplayMemberPath="Display"/><StackPanel Orientation="Horizontal" Margin="0,8,0,0"><Button x:Name="RefreshMountsButton" Content="刷新" Click="RefreshMounts_Click"/><Button x:Name="MountSelectedEndpointButton" Content="挂载选中端点…" Click="MountSelectedEndpoint_Click" Margin="8,0,0,0"/><Button x:Name="UnmountMountButton" Content="取消挂载" Click="UnmountMount_Click" Margin="8,0,0,0"/></StackPanel><TextBlock x:Name="MountStatus" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryForegroundBrush}" Margin="0,6,0,0"/></StackPanel></GroupBox>
-  </Grid>
-  <Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-   <TextBlock Text="文件浏览器" Style="{StaticResource PageTitleTextStyle}"/>
-   <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,8"><Button x:Name="BackButton" Content="← 返回上一级" Click="Back_Click"/><Button Content="刷新" Click="BrowseRefresh_Click" Margin="8,0,0,0"/><TextBlock x:Name="PathText" VerticalAlignment="Center" Margin="14,0,0,0" FontWeight="SemiBold"/><Button Content="上传文件" Click="UploadFiles_Click" Margin="20,0,0,0"/><Button Content="上传文件夹" Click="UploadFolder_Click" Margin="8,0,0,0"/><Button Content="断点续传" Click="Resume_Click" Margin="8,0,0,0"/></StackPanel>
-   <ListView x:Name="FileList" Grid.Row="2" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening"><ListView.View><GridView><GridViewColumn Header="名称" Width="310"><GridViewColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="{Binding Icon}" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource LibraryIconStyle}"/><TextBlock Text="{Binding Name}" VerticalAlignment="Center"/></StackPanel></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn><GridViewColumn Header="类型" Width="90" DisplayMemberBinding="{Binding Type}"/><GridViewColumn Header="大小" Width="100" DisplayMemberBinding="{Binding SizeDisplay}"/><GridViewColumn Header="修改时间" Width="150" DisplayMemberBinding="{Binding ModifiedDisplay}"/></GridView></ListView.View></ListView>
-   <StackPanel Grid.Row="3" Margin="0,8,0,0"><ProgressBar x:Name="TransferProgress" Height="8" Minimum="0" Maximum="100"/><TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryForegroundBrush}" Margin="0,5,0,0"/></StackPanel>
-  </Grid>
- </Grid>
+<Window x:Class="FengSync.Views.RemoteEndpointManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fluent="clr-namespace:FluentIcons.Wpf;assembly=FluentIcons.Wpf"
+        Title="云盘管理"
+        Width="1200"
+        Height="760"
+        MinWidth="900"
+        MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        AutomationProperties.Name="云盘端点与文件管理">
+    <Grid Margin="18">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="330" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+        <Grid Grid.Column="0">
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <StackPanel>
+                <TextBlock Text="云盘管理" Style="{StaticResource DisplayTitleTextStyle}" />
+                <TextBlock Text="管理云盘端点与挂载，并浏览和传输文件。" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
+            </StackPanel>
+            <GroupBox Grid.Row="1" Header="云盘端点" Margin="0,12,0,0">
+                <ListBox x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="云盘端点列表" BorderThickness="0" DisplayMemberPath="Display" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged" />
+            </GroupBox>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
+                <Button x:Name="RefreshButton" AutomationProperties.Name="刷新云盘端点列表" Content="刷新列表" Click="Refresh_Click" Style="{StaticResource TertiaryButtonStyle}" />
+                <Button x:Name="NewButton" AutomationProperties.Name="新建云盘端点" Content="新建端点" Click="New_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
+                <Button x:Name="ReconnectButton" AutomationProperties.Name="重新登录所选云盘端点" Content="重新登录" Click="Reconnect_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="DeleteButton" AutomationProperties.Name="删除所选云盘端点" Content="删除" Click="Delete_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+            </StackPanel>
+            <GroupBox Grid.Row="3" Header="挂载管理" Margin="0,14,0,0">
+                <StackPanel Margin="4">
+                    <ListBox x:Name="MountsList" AutomationProperties.Name="当前挂载列表" Height="110" SelectionChanged="MountsList_SelectionChanged" DisplayMemberPath="Display" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button x:Name="RefreshMountsButton" AutomationProperties.Name="刷新挂载列表" Content="刷新" Click="RefreshMounts_Click" Style="{StaticResource TertiaryButtonStyle}" />
+                        <Button x:Name="MountSelectedEndpointButton" AutomationProperties.Name="挂载所选云盘端点" Content="挂载选中端点…" Click="MountSelectedEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
+                        <Button x:Name="UnmountMountButton" AutomationProperties.Name="取消所选挂载" Content="取消挂载" Click="UnmountMount_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+                    </StackPanel>
+                    <TextBlock x:Name="MountStatus" AutomationProperties.Name="挂载状态" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                </StackPanel>
+            </GroupBox>
+        </Grid>
+
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <TextBlock Text="文件浏览器" Style="{StaticResource DisplayTitleTextStyle}" />
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,8">
+                <Button x:Name="BackButton" AutomationProperties.Name="返回上一级目录" Content="返回上一级" Click="Back_Click" Style="{StaticResource TertiaryButtonStyle}" />
+                <Button AutomationProperties.Name="刷新当前目录" Content="刷新" Click="BrowseRefresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <TextBlock x:Name="PathText" AutomationProperties.Name="当前远程路径" VerticalAlignment="Center" Margin="14,0,0,0" Style="{StaticResource BodyStrongTextStyle}" />
+                <Button AutomationProperties.Name="上传文件到当前目录" Content="上传文件" Click="UploadFiles_Click" Margin="20,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
+                <Button AutomationProperties.Name="上传文件夹到当前目录" Content="上传文件夹" Click="UploadFolder_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button AutomationProperties.Name="继续未完成的传输" Content="断点续传" Click="Resume_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+            </StackPanel>
+            <ListView x:Name="FileList" Grid.Row="2" AutomationProperties.Name="当前目录中的文件" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening">
+                <ListView.View><GridView>
+                    <GridViewColumn Header="名称" Width="310"><GridViewColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="{Binding Icon}" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource LibraryIconStyle}" /><TextBlock Text="{Binding Name}" VerticalAlignment="Center" /></StackPanel></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
+                    <GridViewColumn Header="类型" Width="90" DisplayMemberBinding="{Binding Type}" />
+                    <GridViewColumn Header="大小" Width="100" DisplayMemberBinding="{Binding SizeDisplay}" />
+                    <GridViewColumn Header="修改时间" Width="150" DisplayMemberBinding="{Binding ModifiedDisplay}" />
+                </GridView></ListView.View>
+            </ListView>
+            <StackPanel Grid.Row="3" Margin="0,8,0,0">
+                <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" AutomationProperties.Name="文件传输进度" />
+                <TextBlock x:Name="StatusText" AutomationProperties.Name="文件传输状态" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,5,0,0" />
+            </StackPanel>
+        </Grid>
+    </Grid>
 </Window>

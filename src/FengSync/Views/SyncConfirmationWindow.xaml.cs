@@ -16,6 +16,7 @@ public partial class SyncConfirmationWindow : Window
         DeleteText.Text = $"删除：{summary.Deletes} 项"; TransferText.Text = $"传输：{FormatBytes(summary.TransferBytes)}";
         SpaceText.Text = requiredBytes > 0 ? $"估算目标空间需求：{FormatBytes(requiredBytes)}" : "空间检查：已按本地目标可用空间验证。";
         IssuesText.Text = string.Join(Environment.NewLine, safety.Issues.Select(x => x.Message));
+        IssuesCallout.Visibility = safety.Issues.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_requiresProfileName) { ProfileConfirmationPanel.Visibility = Visibility.Visible; ProfileConfirmationPrompt.Text = $"要一次性放行删除阈值，请输入 Profile 名称“{profileName}”。"; }
     }
     private void Confirm_Click(object sender, RoutedEventArgs e)

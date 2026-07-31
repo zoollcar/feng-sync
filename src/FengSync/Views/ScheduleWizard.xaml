@@ -1,8 +1,115 @@
-<Window x:Class="FengSync.Views.ScheduleWizard" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="计划任务" Width="530" Height="350" WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="{DynamicResource WindowBackgroundBrush}">
- <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Border Background="{DynamicResource SurfaceBrush}" Padding="24,20" Grid.RowSpan="2"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="115"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-  <StackPanel Grid.Row="0" Grid.ColumnSpan="2"><TextBlock Text="计划任务" Style="{StaticResource PageTitleTextStyle}"/><TextBlock x:Name="ProfileText" TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}" Margin="0,4,0,18"/></StackPanel>
-  <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="任务名称"/><TextBox Grid.Row="1" Grid.Column="1" x:Name="TaskNameBox" AutomationProperties.AutomationId="ScheduleTaskName"/>
-  <TextBlock Grid.Row="2" VerticalAlignment="Center" Margin="0,12,0,0" Text="频率"/><ComboBox Grid.Row="2" Grid.Column="1" x:Name="ScheduleBox" AutomationProperties.AutomationId="ScheduleFrequency" Margin="0,12,0,0" SelectedIndex="0"><ComboBoxItem Content="DAILY"/><ComboBoxItem Content="WEEKLY"/><ComboBoxItem Content="MONTHLY"/><ComboBoxItem Content="ONLOGON"/><ComboBoxItem Content="ONSTART"/></ComboBox>
-  <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="0,16,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Text="将以无人值守 JSON 模式运行。任务只保存 Profile ID；密码和其他凭据不会写进任务参数。需要将 FengSync.Cli.exe 与应用安装在同一目录。"/></Grid></Border>
-  <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0" Padding="20,12"><StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><TextBlock x:Name="ResultText" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" Margin="0,0,12,0"/><Button x:Name="CreateButton" AutomationProperties.AutomationId="CreateScheduleButton" Click="Create_Click" Style="{StaticResource PrimaryButtonStyle}">创建或更新</Button><Button x:Name="TestButton" AutomationProperties.AutomationId="TestScheduleButton" Click="Test_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}">测试运行</Button><Button x:Name="DeleteButton" AutomationProperties.AutomationId="DeleteScheduleButton" Click="Delete_Click" Margin="8,0,0,0" Style="{StaticResource GhostButtonStyle}" Foreground="{DynamicResource DangerBrush}">删除</Button><Button IsCancel="True" Margin="8,0,0,0" Style="{StaticResource GhostButtonStyle}">关闭</Button></StackPanel></Border></Grid>
+<Window x:Class="FengSync.Views.ScheduleWizard"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="计划任务"
+        Width="530"
+        Height="350"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        AutomationProperties.AutomationId="ScheduleWizard"
+        AutomationProperties.Name="计划任务">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.RowSpan="2" Background="{DynamicResource SurfaceBrush}" Padding="24,20">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="115" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Row="0" Grid.ColumnSpan="2">
+                    <TextBlock Text="计划任务" Style="{StaticResource PageTitleTextStyle}" />
+                    <TextBlock x:Name="ProfileText"
+                               TextWrapping="Wrap"
+                               Style="{StaticResource CaptionTextStyle}"
+                               Margin="0,4,0,18" />
+                </StackPanel>
+                <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="任务名称" Style="{StaticResource BodyTextStyle}" />
+                <TextBox Grid.Row="1"
+                         Grid.Column="1"
+                         x:Name="TaskNameBox"
+                         AutomationProperties.AutomationId="ScheduleTaskName"
+                         AutomationProperties.Name="计划任务名称" />
+                <TextBlock Grid.Row="2"
+                           VerticalAlignment="Center"
+                           Margin="0,12,0,0"
+                           Text="频率"
+                           Style="{StaticResource BodyTextStyle}" />
+                <ComboBox Grid.Row="2"
+                          Grid.Column="1"
+                          x:Name="ScheduleBox"
+                          AutomationProperties.AutomationId="ScheduleFrequency"
+                          AutomationProperties.Name="计划任务频率"
+                          Margin="0,12,0,0"
+                          SelectedIndex="0">
+                    <ComboBoxItem Content="DAILY" />
+                    <ComboBoxItem Content="WEEKLY" />
+                    <ComboBoxItem Content="MONTHLY" />
+                    <ComboBoxItem Content="ONLOGON" />
+                    <ComboBoxItem Content="ONSTART" />
+                </ComboBox>
+                <TextBlock Grid.Row="3"
+                           Grid.ColumnSpan="2"
+                           Margin="0,16,0,0"
+                           TextWrapping="Wrap"
+                           Style="{StaticResource CaptionTextStyle}"
+                           Text="将以无人值守 JSON 模式运行。任务只保存 Profile ID；密码和其他凭据不会写进任务参数。需要将 FengSync.Cli.exe 与应用安装在同一目录。" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="ResultText"
+                           Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Style="{StaticResource CaptionTextStyle}"
+                           TextTrimming="CharacterEllipsis"
+                           Margin="0,0,12,0" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button IsCancel="True"
+                            Margin="0,0,8,0"
+                            Style="{StaticResource TertiaryButtonStyle}"
+                            AutomationProperties.Name="关闭计划任务窗口">关闭</Button>
+                    <Button x:Name="DeleteButton"
+                            AutomationProperties.AutomationId="DeleteScheduleButton"
+                            AutomationProperties.Name="删除此计划任务"
+                            Click="Delete_Click"
+                            Margin="0,0,8,0"
+                            Style="{StaticResource DangerButtonStyle}">删除</Button>
+                    <Button x:Name="TestButton"
+                            AutomationProperties.AutomationId="TestScheduleButton"
+                            AutomationProperties.Name="测试运行计划任务"
+                            Click="Test_Click"
+                            Margin="0,0,8,0"
+                            Style="{StaticResource SecondaryButtonStyle}">测试运行</Button>
+                    <Button x:Name="CreateButton"
+                            AutomationProperties.AutomationId="CreateScheduleButton"
+                            AutomationProperties.Name="创建或更新计划任务"
+                            Click="Create_Click"
+                            IsDefault="True"
+                            Style="{StaticResource PrimaryButtonStyle}">创建或更新</Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
 </Window>

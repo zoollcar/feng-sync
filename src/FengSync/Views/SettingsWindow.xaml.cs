@@ -129,10 +129,10 @@ public partial class SettingsWindow : Window
         sp.Children.Add(NewLabeledRow("网络失败重试次数", NewTextBox("SettingsNetworkRetry", _initial.NetworkRetryCount.ToString()), caption));
 
         sp.Children.Add(NewHeader("维护", section));
-        var sftpBtn = NewButton("SftpServerSettingsButton", "SFTP 服务器设置…", SecondaryStyle(), 36, 180);
+        var sftpBtn = NewButton("SftpServerSettingsButton", "SFTP 服务器设置…", SecondaryStyle(), 180);
         sftpBtn.Click += async (_, _) => await _configureSftp();
         sp.Children.Add(sftpBtn);
-        var cleanupBtn = NewButton(null, "清理过期本地临时文件", SecondaryStyle(), 36, 200);
+        var cleanupBtn = NewButton(null, "清理过期本地临时文件", SecondaryStyle(), 200);
         cleanupBtn.Click += CleanupTemporaryFiles_Click;
         sp.Children.Add(cleanupBtn);
         sp.Children.Add(new TextBlock
@@ -164,7 +164,7 @@ public partial class SettingsWindow : Window
         }
         if (onLaunch is not null)
         {
-            var launch = NewButton(null, $"打开 {title}", (Style)Application.Current.Resources["PrimaryButtonStyle"], 40, 140);
+            var launch = NewButton(null, $"打开 {title}", (Style)Application.Current.Resources["PrimaryButtonStyle"], 140);
             launch.Click += (_, _) => onLaunch();
             sp.Children.Add(launch);
         }
@@ -211,9 +211,9 @@ public partial class SettingsWindow : Window
 
     private Style SecondaryStyle() => (Style)Application.Current.Resources["SecondaryButtonStyle"];
 
-    private Button NewButton(string? id, string text, Style style, double height, double minWidth)
+    private Button NewButton(string? id, string text, Style style, double minWidth)
     {
-        var btn = new Button { Content = text, Style = style, Height = height, MinWidth = minWidth, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 8) };
+        var btn = new Button { Content = text, Style = style, MinWidth = minWidth, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 8) };
         if (id is not null) btn.SetValue(AutomationProperties.AutomationIdProperty, id);
         return btn;
     }

@@ -1,48 +1,58 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:sys="clr-namespace:System;assembly=mscorlib">
  <!-- Spacing scale -->
  <sys:Double x:Key="Space2">2</sys:Double><sys:Double x:Key="Space4">4</sys:Double><sys:Double x:Key="Space8">8</sys:Double><sys:Double x:Key="Space12">12</sys:Double><sys:Double x:Key="Space16">16</sys:Double><sys:Double x:Key="Space24">24</sys:Double>
- <!-- Component sizing (existing keys preserved) -->
- <sys:Double x:Key="ControlHeight">32</sys:Double><sys:Double x:Key="ToolbarButtonHeight">48</sys:Double><sys:Double x:Key="PrimaryButtonHeight">56</sys:Double><sys:Double x:Key="IconSmall">16</sys:Double><sys:Double x:Key="IconMedium">20</sys:Double><sys:Double x:Key="IconLarge">24</sys:Double><sys:Double x:Key="SidebarMinWidth">220</sys:Double><sys:Double x:Key="SidebarDefaultWidth">260</sys:Double><sys:Double x:Key="SidebarMaxWidth">380</sys:Double><sys:Double x:Key="PreviewMinHeight">48</sys:Double><sys:Double x:Key="StatusBarMinHeight">32</sys:Double>
+ <!-- Component sizing. Pages select a named size variant instead of overriding Height. -->
+ <sys:Double x:Key="ControlHeight">32</sys:Double><sys:Double x:Key="IconSmall">16</sys:Double><sys:Double x:Key="IconMedium">20</sys:Double><sys:Double x:Key="IconLarge">24</sys:Double><sys:Double x:Key="SidebarMinWidth">220</sys:Double><sys:Double x:Key="SidebarDefaultWidth">260</sys:Double><sys:Double x:Key="SidebarMaxWidth">380</sys:Double><sys:Double x:Key="PreviewMinHeight">48</sys:Double><sys:Double x:Key="StatusBarMinHeight">32</sys:Double>
  <!-- Documented corner radii -->
  <CornerRadius x:Key="RadiusSmall">4</CornerRadius><CornerRadius x:Key="RadiusMedium">8</CornerRadius><CornerRadius x:Key="RadiusLarge">12</CornerRadius>
  <!-- Documented component heights and sizes -->
- <sys:Double x:Key="CompactControlHeight">28</sys:Double><sys:Double x:Key="PrimaryActionHeight">40</sys:Double><sys:Double x:Key="ListRowHeight">40</sys:Double><sys:Double x:Key="TableRowHeight">32</sys:Double><sys:Double x:Key="TableHeaderHeight">36</sys:Double><sys:Double x:Key="EndpointSelectorHeight">56</sys:Double><sys:Double x:Key="EndpointSwapButtonSize">32</sys:Double><sys:Double x:Key="StatusChipHeight">22</sys:Double><sys:Double x:Key="SummaryWidth">272</sys:Double><sys:Double x:Key="MinHitTarget">32</sys:Double><sys:Double x:Key="FocusVisualStrokeThickness">2</sys:Double><sys:Double x:Key="FocusVisualStrokeOffset">2</sys:Double><sys:Double x:Key="DisabledOpacity">0.45</sys:Double>
+ <sys:Double x:Key="CompactControlHeight">28</sys:Double><sys:Double x:Key="ListRowHeight">40</sys:Double><sys:Double x:Key="TableRowHeight">32</sys:Double><sys:Double x:Key="TableHeaderHeight">36</sys:Double><sys:Double x:Key="EndpointSelectorHeight">56</sys:Double><sys:Double x:Key="EndpointSwapButtonSize">32</sys:Double><sys:Double x:Key="StatusChipHeight">22</sys:Double><sys:Double x:Key="SummaryWidth">272</sys:Double><sys:Double x:Key="MinHitTarget">32</sys:Double><sys:Double x:Key="FocusVisualStrokeThickness">2</sys:Double><sys:Double x:Key="FocusVisualStrokeOffset">2</sys:Double><sys:Double x:Key="DisabledOpacity">0.65</sys:Double>
  <!-- Documented thicknesses and corner radii -->
  <Thickness x:Key="BorderThicknessSubtle">1</Thickness>
  <Thickness x:Key="LeftIndicatorThickness">3,0,0,0</Thickness>
  <CornerRadius x:Key="StatusChipCornerRadius">4</CornerRadius>
- <!-- System brushes (preserved for DynamicResource system / high-contrast behavior) -->
- <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}"/>
- <SolidColorBrush x:Key="ControlBackgroundBrush" Color="{DynamicResource {x:Static SystemColors.ControlColorKey}}"/>
- <SolidColorBrush x:Key="BodyForegroundBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}"/>
- <SolidColorBrush x:Key="ControlForegroundBrush" Color="{DynamicResource {x:Static SystemColors.ControlTextColorKey}}"/>
- <SolidColorBrush x:Key="SecondaryForegroundBrush" Color="{DynamicResource {x:Static SystemColors.GrayTextColorKey}}"/>
+ <!--
+   Feng Sync light palette.  Do not map the semantic roles directly to Window/Control
+   system colours: on current Windows builds those values are often almost identical,
+   which removes hierarchy and makes secondary copy disappear.  A later dark palette
+   can replace these role keys without changing any page markup.
+ -->
+ <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F5F7FA"/>
+ <SolidColorBrush x:Key="ControlBackgroundBrush" Color="#FFFFFF"/>
+ <SolidColorBrush x:Key="BodyForegroundBrush" Color="#1F2328"/>
+ <SolidColorBrush x:Key="ControlForegroundBrush" Color="#1F2328"/>
+ <SolidColorBrush x:Key="SecondaryForegroundBrush" Color="#505965"/>
+ <SolidColorBrush x:Key="DisabledForegroundBrush" Color="#737A85"/>
  <SolidColorBrush x:Key="SelectedBackgroundBrush" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}"/>
  <SolidColorBrush x:Key="SelectedForegroundBrush" Color="{DynamicResource {x:Static SystemColors.HighlightTextColorKey}}"/>
- <SolidColorBrush x:Key="ControlBorderBrush" Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
- <!-- Documented semantic surface and text brushes (light defaults; overridable for dark/high-contrast) -->
- <SolidColorBrush x:Key="AppCanvasBrush" Color="#F3F3F3"/>
- <SolidColorBrush x:Key="SurfaceBrush" Color="#FBFBFB"/>
- <SolidColorBrush x:Key="SurfaceSubtleBrush" Color="#F5F5F5"/>
- <SolidColorBrush x:Key="BorderSubtleBrush" Color="#E5E5E5"/>
- <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1B1B1F"/>
- <SolidColorBrush x:Key="TextSecondaryBrush" Color="#616161"/>
+ <SolidColorBrush x:Key="ControlBorderBrush" Color="#CDD5DF"/>
+ <!-- Semantic role aliases used by pages and reusable controls. -->
+ <SolidColorBrush x:Key="AppCanvasBrush" Color="#F5F7FA"/>
+ <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF"/>
+ <SolidColorBrush x:Key="SurfaceElevatedBrush" Color="#FFFFFF"/>
+ <SolidColorBrush x:Key="SurfaceSubtleBrush" Color="#F3F5F7"/>
+ <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#E8EDF3"/>
+ <SolidColorBrush x:Key="BorderSubtleBrush" Color="#CDD5DF"/>
+ <SolidColorBrush x:Key="BorderDividerBrush" Color="#DEE2E7"/>
+ <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1F2328"/>
+ <SolidColorBrush x:Key="TextSecondaryBrush" Color="#505965"/>
+ <SolidColorBrush x:Key="TextDisabledBrush" Color="#737A85"/>
  <SolidColorBrush x:Key="TextOnAccentBrush" Color="#FFFFFF"/>
  <SolidColorBrush x:Key="AccentForegroundBrush" Color="#FFFFFF"/>
- <!-- Documented accent family -->
+ <!-- Stable application accent family; every state keeps white-label contrast. -->
  <SolidColorBrush x:Key="AccentBrush" Color="#0F6CBD"/>
  <SolidColorBrush x:Key="AccentHoverBrush" Color="#115EA3"/>
  <SolidColorBrush x:Key="AccentPressedBrush" Color="#0F548C"/>
- <SolidColorBrush x:Key="AccentSubtleBackgroundBrush" Color="#E0F2FF"/>
+ <SolidColorBrush x:Key="AccentSubtleBackgroundBrush" Color="#E8F2FF"/>
  <!-- Documented semantic status brushes (existing keys kept, values aligned to spec) -->
  <SolidColorBrush x:Key="InfoBrush" Color="#2563EB"/>
  <SolidColorBrush x:Key="SuccessBrush" Color="#16803C"/>
  <SolidColorBrush x:Key="WarningBrush" Color="#B54708"/>
  <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C"/>
- <!-- Subtle tints used by chips, callouts, and selection backgrounds -->
- <SolidColorBrush x:Key="SuccessSubtleBackgroundBrush" Color="#E5F4EB"/>
- <SolidColorBrush x:Key="InfoSubtleBackgroundBrush" Color="#E6EFFB"/>
- <SolidColorBrush x:Key="WarningSubtleBackgroundBrush" Color="#FCEEDC"/>
- <SolidColorBrush x:Key="DangerSubtleBackgroundBrush" Color="#FBE4DF"/>
- <SolidColorBrush x:Key="NeutralSubtleBackgroundBrush" Color="#EDEFF2"/>
+ <!-- Status surfaces retain meaning at a glance; icons and labels remain mandatory. -->
+ <SolidColorBrush x:Key="SuccessSubtleBackgroundBrush" Color="#E7F6EC"/>
+ <SolidColorBrush x:Key="InfoSubtleBackgroundBrush" Color="#E8F2FF"/>
+ <SolidColorBrush x:Key="WarningSubtleBackgroundBrush" Color="#FFF4E5"/>
+ <SolidColorBrush x:Key="DangerSubtleBackgroundBrush" Color="#FDECEC"/>
+ <SolidColorBrush x:Key="NeutralSubtleBackgroundBrush" Color="#F0F2F5"/>
 </ResourceDictionary>

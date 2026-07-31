@@ -3,7 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="设置中心" Width="900" Height="640" MinWidth="720" MinHeight="520"
         WindowStartupLocation="CenterOwner" Background="{DynamicResource AppCanvasBrush}"
-        FontFamily="{StaticResource DefaultFontFamily}">
+        FontFamily="{StaticResource DefaultFontFamily}"
+        AutomationProperties.AutomationId="SettingsWindow"
+        AutomationProperties.Name="设置中心">
  <Grid>
   <Grid.ColumnDefinitions>
    <ColumnDefinition Width="220"/>
@@ -15,15 +17,15 @@
   <Border Grid.Column="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,1,0">
    <StackPanel Margin="8,16">
     <TextBlock Text="设置" Style="{StaticResource SectionTitleTextStyle}" Margin="12,0,12,16"/>
-    <ListBox x:Name="Navigation" AutomationProperties.AutomationId="SettingsNavigation" Background="Transparent" BorderThickness="0" SelectionChanged="Navigation_SelectionChanged" SelectedIndex="0">
+     <ListBox x:Name="Navigation" AutomationProperties.AutomationId="SettingsNavigation" AutomationProperties.Name="设置分类" Background="Transparent" BorderThickness="0" SelectionChanged="Navigation_SelectionChanged" SelectedIndex="0">
      <ListBox.ItemContainerStyle>
       <Style TargetType="ListBoxItem" BasedOn="{StaticResource ProfileListItemStyle}">
        <Setter Property="Height" Value="40"/>
       </Style>
      </ListBox.ItemContainerStyle>
-     <ListBoxItem AutomationProperties.AutomationId="SettingsGeneralNav" Content="常规"/>
-     <ListBoxItem AutomationProperties.AutomationId="RunHistoryNav" Content="运行历史"/>
-     <ListBoxItem AutomationProperties.AutomationId="LogsNav" Content="查看日志"/>
+     <ListBoxItem AutomationProperties.AutomationId="SettingsGeneralNav" AutomationProperties.Name="常规设置" Content="常规"/>
+     <ListBoxItem AutomationProperties.AutomationId="RunHistoryNav" AutomationProperties.Name="运行历史" Content="运行历史"/>
+     <ListBoxItem AutomationProperties.AutomationId="LogsNav" AutomationProperties.Name="查看日志" Content="查看日志"/>
     </ListBox>
    </StackPanel>
   </Border>
@@ -47,12 +49,12 @@
       <ColumnDefinition Width="*"/>
       <ColumnDefinition Width="Auto"/>
      </Grid.ColumnDefinitions>
-     <TextBlock x:Name="DirtyLabel" AutomationProperties.AutomationId="SettingsDirtyLabel" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center"/>
+     <TextBlock x:Name="DirtyLabel" AutomationProperties.AutomationId="SettingsDirtyLabel" AutomationProperties.Name="设置更改状态" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center"/>
      <StackPanel Grid.Column="1" Orientation="Horizontal">
-      <Button Content="恢复本页默认值" AutomationProperties.AutomationId="SettingsResetPage" Click="ResetPage_Click" Style="{StaticResource GhostButtonStyle}" Height="36" Margin="0,0,16,0"/>
-      <Button x:Name="ApplyButton" Content="应用" AutomationProperties.AutomationId="SettingsApply" Click="Apply_Click" Style="{StaticResource SecondaryButtonStyle}" Height="36" MinWidth="80" Margin="0,0,8,0"/>
-      <Button x:Name="OkButton" Content="确定" AutomationProperties.AutomationId="SettingsOk" IsDefault="True" Click="Ok_Click" Style="{StaticResource PrimaryButtonStyle}" Height="36" MinWidth="80"/>
-      <Button Content="取消" AutomationProperties.AutomationId="SettingsCancel" IsCancel="True" Style="{StaticResource GhostButtonStyle}" Height="36" Margin="8,0,0,0"/>
+      <Button Content="恢复本页默认值" AutomationProperties.AutomationId="SettingsResetPage" AutomationProperties.Name="恢复当前设置页的默认值" Click="ResetPage_Click" Style="{StaticResource TertiaryButtonStyle}" Margin="0,0,16,0"/>
+      <Button Content="取消" AutomationProperties.AutomationId="SettingsCancel" AutomationProperties.Name="取消设置更改" IsCancel="True" Style="{StaticResource TertiaryButtonStyle}" Margin="0,0,8,0"/>
+      <Button x:Name="ApplyButton" Content="应用" AutomationProperties.AutomationId="SettingsApply" AutomationProperties.Name="应用设置更改" Click="Apply_Click" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"/>
+      <Button x:Name="OkButton" Content="确定" AutomationProperties.AutomationId="SettingsOk" AutomationProperties.Name="保存设置并关闭" IsDefault="True" Click="Ok_Click" Style="{StaticResource PrimaryButtonStyle}"/>
      </StackPanel>
     </Grid>
    </Border>

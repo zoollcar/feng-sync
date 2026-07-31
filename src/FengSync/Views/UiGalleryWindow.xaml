@@ -1,0 +1,113 @@
+<Window x:Class="FengSync.Views.UiGalleryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fluent="clr-namespace:FluentIcons.Wpf;assembly=FluentIcons.Wpf"
+        Title="Feng Sync UI 样式库"
+        Width="920" Height="760" MinWidth="760" MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        AutomationProperties.AutomationId="UiGalleryWindow"
+        AutomationProperties.Name="Feng Sync UI 样式库">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Padding="28,24,28,20" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <TextBlock Text="Feng Sync UI 样式库" Style="{StaticResource DisplayTitleTextStyle}" />
+                <TextBlock Text="开发预览：控件应优先使用语义化公共样式，避免页面内重复定义颜色、间距和交互状态。" Style="{StaticResource CaptionTextStyle}" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="28,22">
+            <StackPanel>
+                <TextBlock Text="操作按钮" Style="{StaticResource SectionTitleTextStyle}" />
+                <TextBlock Text="每个工作区只放置一个主操作；危险操作必须清晰标记，且不能仅依赖颜色表达含义。" Style="{StaticResource SecondaryTextStyle}" Margin="0,4,0,12" />
+                <UniformGrid Columns="2" Margin="0,0,0,24">
+                    <StackPanel Margin="0,0,20,16">
+                        <TextBlock Text="可用状态" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,8" />
+                        <WrapPanel>
+                            <Button Content="开始同步" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" AutomationProperties.AutomationId="GalleryPrimaryButton" AutomationProperties.Name="主按钮：开始同步" />
+                            <Button Content="比较" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,8" AutomationProperties.AutomationId="GallerySecondaryButton" AutomationProperties.Name="次按钮：比较" />
+                            <Button Content="查看详情" Style="{StaticResource TertiaryButtonStyle}" Margin="0,0,8,8" AutomationProperties.AutomationId="GalleryGhostButton" AutomationProperties.Name="三级按钮：查看详情" />
+                            <Button Style="{StaticResource IconButtonStyle}" Margin="0,0,8,8" AutomationProperties.AutomationId="GalleryIconButton" AutomationProperties.Name="图标按钮：更多选项" ToolTip="更多选项"><fluent:FluentIcon Icon="MoreHorizontal" Width="16" Height="16" FontSize="16" Style="{StaticResource LibraryIconStyle}"/></Button>
+                            <Button Content="删除配置" Style="{StaticResource DangerButtonStyle}" Margin="0,0,8,8" AutomationProperties.AutomationId="GalleryDangerButton" AutomationProperties.Name="危险按钮：删除配置" />
+                            <Button Style="{StaticResource DangerIconButtonStyle}" Margin="0,0,8,8" AutomationProperties.AutomationId="GalleryDangerIconButton" AutomationProperties.Name="危险图标按钮：删除配置" ToolTip="删除配置"><fluent:FluentIcon Icon="Delete" Width="16" Height="16" FontSize="16" Style="{StaticResource LibraryIconStyle}"/></Button>
+                        </WrapPanel>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,0,16">
+                        <TextBlock Text="禁用状态" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,8" />
+                        <WrapPanel>
+                            <Button Content="开始同步" Style="{StaticResource PrimaryButtonStyle}" IsEnabled="False" Margin="0,0,8,8" AutomationProperties.AutomationId="GalleryDisabledPrimaryButton" AutomationProperties.Name="已禁用主按钮：开始同步" />
+                            <Button Content="比较" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="False" Margin="0,0,8,8" AutomationProperties.AutomationId="GalleryDisabledSecondaryButton" AutomationProperties.Name="已禁用次按钮：比较" />
+                            <Button Content="查看详情" Style="{StaticResource TertiaryButtonStyle}" IsEnabled="False" Margin="0,0,8,8" AutomationProperties.AutomationId="GalleryDisabledGhostButton" AutomationProperties.Name="已禁用三级按钮：查看详情" />
+                            <Button Style="{StaticResource IconButtonStyle}" IsEnabled="False" Margin="0,0,8,8" AutomationProperties.AutomationId="GalleryDisabledIconButton" AutomationProperties.Name="已禁用图标按钮：更多选项" ToolTip="更多选项"><fluent:FluentIcon Icon="MoreHorizontal" Width="16" Height="16" FontSize="16" Style="{StaticResource LibraryIconStyle}"/></Button>
+                        </WrapPanel>
+                    </StackPanel>
+                </UniformGrid>
+
+                <Separator Margin="0,0,0,20" />
+                <TextBlock Text="输入与选择" Style="{StaticResource SectionTitleTextStyle}" />
+                <TextBlock Text="标签说明输入目的；占位文字只作示例，不能代替标签。" Style="{StaticResource SecondaryTextStyle}" Margin="0,4,0,12" />
+                <UniformGrid Columns="2" Margin="0,0,0,24">
+                    <StackPanel Margin="0,0,20,0">
+                        <TextBlock Text="同步名称" Style="{StaticResource BodyStrongTextStyle}" />
+                        <TextBox Text="照片备份" Margin="0,5,0,12" AutomationProperties.AutomationId="GallerySyncNameInput" AutomationProperties.Name="同步名称" />
+                        <TextBlock Text="同步模式" Style="{StaticResource BodyStrongTextStyle}" />
+                        <ComboBox SelectedIndex="0" Margin="0,5,0,0" AutomationProperties.AutomationId="GallerySyncModeInput" AutomationProperties.Name="同步模式">
+                            <ComboBoxItem Content="双向同步" />
+                            <ComboBoxItem Content="镜像到右侧" />
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="禁用：等待选择端点" Style="{StaticResource BodyStrongTextStyle}" />
+                        <TextBox Text="请先选择左侧端点" IsEnabled="False" Margin="0,5,0,12" AutomationProperties.AutomationId="GalleryDisabledInput" AutomationProperties.Name="已禁用的端点路径" />
+                        <TextBlock Text="筛选条件" Style="{StaticResource BodyStrongTextStyle}" />
+                        <ComboBox SelectedIndex="0" IsEnabled="False" Margin="0,5,0,0" AutomationProperties.AutomationId="GalleryDisabledSelect" AutomationProperties.Name="已禁用的筛选条件">
+                            <ComboBoxItem Content="全部变更" />
+                        </ComboBox>
+                    </StackPanel>
+                </UniformGrid>
+
+                <Separator Margin="0,0,0,20" />
+                <TextBlock Text="状态与安全提示" Style="{StaticResource SectionTitleTextStyle}" />
+                <TextBlock Text="状态始终配合文字；安全提示必须说明影响、原因以及下一步。" Style="{StaticResource SecondaryTextStyle}" Margin="0,4,0,12" />
+                <WrapPanel Margin="0,0,0,16" AutomationProperties.AutomationId="GalleryStatusChips" AutomationProperties.Name="状态标签示例">
+                    <Border Style="{StaticResource StatusChipSuccessStyle}" Margin="0,0,8,8"><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="CheckmarkCircle" Width="14" Height="14" FontSize="14" Margin="0,0,4,0" Foreground="{DynamicResource SuccessBrush}" Style="{StaticResource LibraryIconStyle}"/><TextBlock Text="已验证" Style="{StaticResource StatusChipTextStyle}" /></StackPanel></Border>
+                    <Border Style="{StaticResource StatusChipInfoStyle}" Margin="0,0,8,8"><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="Info" Width="14" Height="14" FontSize="14" Margin="0,0,4,0" Foreground="{DynamicResource InfoBrush}" Style="{StaticResource LibraryIconStyle}"/><TextBlock Text="比较完成" Style="{StaticResource StatusChipTextStyle}" /></StackPanel></Border>
+                    <Border Style="{StaticResource StatusChipWarningStyle}" Margin="0,0,8,8"><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="Warning" Width="14" Height="14" FontSize="14" Margin="0,0,4,0" Foreground="{DynamicResource WarningBrush}" Style="{StaticResource LibraryIconStyle}"/><TextBlock Text="需要确认" Style="{StaticResource StatusChipTextStyle}" /></StackPanel></Border>
+                    <Border Style="{StaticResource StatusChipDangerStyle}" Margin="0,0,8,8"><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="ErrorCircle" Width="14" Height="14" FontSize="14" Margin="0,0,4,0" Foreground="{DynamicResource DangerBrush}" Style="{StaticResource LibraryIconStyle}"/><TextBlock Text="运行失败" Style="{StaticResource StatusChipTextStyle}" /></StackPanel></Border>
+                    <Border Style="{StaticResource StatusChipNeutralStyle}" Margin="0,0,8,8"><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="Circle" Width="14" Height="14" FontSize="14" Margin="0,0,4,0" Style="{StaticResource LibraryIconStyle}"/><TextBlock Text="尚未运行" Style="{StaticResource StatusChipTextStyle}" /></StackPanel></Border>
+                </WrapPanel>
+                <UniformGrid Columns="2" Margin="0,0,0,24">
+                    <Border Style="{StaticResource SafetyCalloutSuccessStyle}" Margin="0,0,20,12" AutomationProperties.AutomationId="GallerySuccessCallout" AutomationProperties.Name="成功安全提示">
+                        <StackPanel><TextBlock Text="端点可以安全同步" Style="{StaticResource BodyStrongTextStyle}" /><TextBlock Text="两个端点均可访问，且没有待处理的冲突。" Style="{StaticResource SecondaryTextStyle}" Margin="0,4,0,0" /></StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource SafetyCalloutWarningStyle}" Margin="0,0,0,12" AutomationProperties.AutomationId="GalleryWarningCallout" AutomationProperties.Name="警告安全提示">
+                        <StackPanel><TextBlock Text="此次同步将删除 12 个文件" Style="{StaticResource BodyStrongTextStyle}" /><TextBlock Text="请在开始前确认删除列表与同步方向。" Style="{StaticResource SecondaryTextStyle}" Margin="0,4,0,0" /></StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <Separator Margin="0,0,0,20" />
+                <TextBlock Text="排版层级" Style="{StaticResource SectionTitleTextStyle}" />
+                <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="{StaticResource RadiusMedium}" Padding="18" Margin="0,12,0,4">
+                    <StackPanel>
+                        <TextBlock Text="工作区标题" Style="{StaticResource DisplayTitleTextStyle}" />
+                        <TextBlock Text="区块标题" Style="{StaticResource SectionTitleTextStyle}" Margin="0,14,0,0" />
+                        <TextBlock Text="正文用于解释操作、状态和后续影响。重点信息使用正文加粗，而不是任意增加字号。" Style="{StaticResource BodyTextStyle}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                        <TextBlock Text="辅助说明、时间与次要元数据使用说明文字。" Style="{StaticResource CaptionTextStyle}" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0" Padding="20,12">
+            <DockPanel>
+                <TextBlock Text="仅供开发与验收使用；不会写入配置或执行同步。" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
+                <Button DockPanel.Dock="Right" Content="关闭" Click="Close_Click" Style="{StaticResource PrimaryButtonStyle}" IsCancel="True" AutomationProperties.AutomationId="GalleryCloseButton" AutomationProperties.Name="关闭 UI 样式库" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -1,14 +1,9 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
- <!-- Existing styles preserved -->
- <Style x:Key="ToolbarButtonStyle" TargetType="Button"><Setter Property="Height" Value="{StaticResource ToolbarButtonHeight}"/><Setter Property="Padding" Value="10,4"/><Setter Property="Margin" Value="2"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
- <Style x:Key="IconButtonStyle" TargetType="Button"><Setter Property="Width" Value="36"/><Setter Property="Height" Value="36"/><Setter Property="Padding" Value="7"/><Setter Property="Margin" Value="2"/><Setter Property="Foreground" Value="{DynamicResource ControlForegroundBrush}"/></Style>
+ <Style x:Key="IconButtonStyle" TargetType="Button"><Setter Property="Width" Value="{StaticResource MinHitTarget}"/><Setter Property="Height" Value="{StaticResource MinHitTarget}"/><Setter Property="Padding" Value="6"/><Setter Property="Foreground" Value="{DynamicResource ControlForegroundBrush}"/><Setter Property="FocusVisualStyle" Value="{DynamicResource FocusVisualStyle}"/></Style>
  <Style x:Key="DangerIconButtonStyle" TargetType="Button" BasedOn="{StaticResource IconButtonStyle}"><Setter Property="Foreground" Value="{StaticResource DangerBrush}"/></Style>
- <Style x:Key="PrimaryActionButtonStyle" TargetType="Button" BasedOn="{StaticResource ToolbarButtonStyle}"><Setter Property="Height" Value="{StaticResource PrimaryButtonHeight}"/><Setter Property="FontSize" Value="16"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
- <Style x:Key="EndpointTextBoxStyle" TargetType="TextBox"><Setter Property="Height" Value="{StaticResource ControlHeight}"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
- <Style x:Key="EndpointButtonStyle" TargetType="Button"><Setter Property="Height" Value="{StaticResource ControlHeight}"/><Setter Property="Margin" Value="2,0,0,0"/></Style>
- <Style x:Key="ComparisonDataGridStyle" TargetType="DataGrid"><Setter Property="RowHeight" Value="30"/><Setter Property="AlternatingRowBackground" Value="{DynamicResource ControlBackgroundBrush}"/><Setter Property="GridLinesVisibility" Value="Horizontal"/><Setter Property="RowHeaderWidth" Value="30"/></Style>
- <Style x:Key="StatusBarStyle" TargetType="Border"><Setter Property="MinHeight" Value="{StaticResource StatusBarMinHeight}"/><Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/><Setter Property="Padding" Value="8,4"/></Style>
- <Style x:Key="PreviewPanelStyle" TargetType="Border"><Setter Property="MinHeight" Value="{StaticResource PreviewMinHeight}"/><Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/><Setter Property="Padding" Value="8,6"/></Style>
+ <Style x:Key="ComparisonDataGridStyle" TargetType="DataGrid"><Setter Property="RowHeight" Value="{StaticResource TableRowHeight}"/><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="AlternatingRowBackground" Value="{DynamicResource SurfaceSubtleBrush}"/><Setter Property="GridLinesVisibility" Value="Horizontal"/><Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BorderDividerBrush}"/><Setter Property="RowHeaderWidth" Value="30"/></Style>
+ <Style x:Key="StatusBarStyle" TargetType="Border"><Setter Property="MinHeight" Value="{StaticResource StatusBarMinHeight}"/><Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}"/><Setter Property="Padding" Value="8,4"/></Style>
+ <Style x:Key="PreviewPanelStyle" TargetType="Border"><Setter Property="MinHeight" Value="{StaticResource PreviewMinHeight}"/><Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}"/><Setter Property="Padding" Value="8,6"/></Style>
 
  <!-- Keyboard focus treatment: 2 DIP AccentBrush outline with 2 DIP offset; visible on keyboard nav, not just mouse hover -->
  <Style x:Key="FocusVisualStyle" TargetType="{x:Type Control}">
@@ -38,9 +33,9 @@
   </Style.Triggers>
  </Style>
 
- <!-- Primary action: solid AccentBrush, 40 DIP high, white text; reserved for the most important action on the surface -->
+ <!-- Primary differs by colour and weight, not size; every standard action is 32 DIP high. -->
  <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
-  <Setter Property="Height" Value="{StaticResource PrimaryActionHeight}"/>
+  <Setter Property="Height" Value="{StaticResource ControlHeight}"/>
   <Setter Property="Padding" Value="16,0"/>
   <Setter Property="FontWeight" Value="SemiBold"/>
   <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
@@ -79,8 +74,22 @@
   </Style.Triggers>
  </Style>
 
- <!-- Ghost / tertiary: transparent, no border; for inline row actions like Edit, More, kebab -->
- <Style x:Key="GhostButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+ <!-- Destructive actions are explicit roles and never page-local colour overrides. -->
+ <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+  <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
+  <Style.Triggers>
+   <Trigger Property="IsMouseOver" Value="True">
+    <Setter Property="Background" Value="{DynamicResource DangerSubtleBackgroundBrush}"/>
+   </Trigger>
+   <Trigger Property="IsPressed" Value="True">
+    <Setter Property="Background" Value="{DynamicResource DangerSubtleBackgroundBrush}"/>
+   </Trigger>
+  </Style.Triggers>
+ </Style>
+
+ <!-- Tertiary: transparent, no border; for inline row actions like Edit and More. -->
+ <Style x:Key="TertiaryButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
   <Setter Property="Height" Value="{StaticResource ControlHeight}"/>
   <Setter Property="MinWidth" Value="0"/>
   <Setter Property="Padding" Value="8,0"/>
@@ -93,7 +102,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}"/>
    </Trigger>
    <Trigger Property="IsPressed" Value="True">
-    <Setter Property="Background" Value="{DynamicResource BorderSubtleBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
    </Trigger>
   </Style.Triggers>
  </Style>
@@ -277,19 +286,44 @@
  <Style TargetType="TextBox">
   <Setter Property="MinHeight" Value="32"/><Setter Property="Padding" Value="10,4"/>
   <Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
-  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisualStyle}"/>
  </Style>
  <Style TargetType="PasswordBox">
   <Setter Property="MinHeight" Value="32"/><Setter Property="Padding" Value="10,4"/>
-  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisualStyle}"/>
  </Style>
  <Style TargetType="ComboBox">
   <Setter Property="MinHeight" Value="32"/><Setter Property="Padding" Value="8,3"/>
-  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisualStyle}"/>
  </Style>
  <Style TargetType="CheckBox"><Setter Property="MinHeight" Value="28"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/></Style>
  <Style TargetType="GroupBox"><Setter Property="Padding" Value="14"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/></Style>
- <Style TargetType="DataGrid" BasedOn="{StaticResource ComparisonDataGridStyle}"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="RowBackground" Value="{DynamicResource SurfaceBrush}"/><Setter Property="AlternatingRowBackground" Value="{DynamicResource SurfaceSubtleBrush}"/><Setter Property="HeadersVisibility" Value="Column"/></Style>
+ <Style TargetType="DataGrid" BasedOn="{StaticResource ComparisonDataGridStyle}"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="RowBackground" Value="{DynamicResource SurfaceBrush}"/><Setter Property="AlternatingRowBackground" Value="{DynamicResource SurfaceSubtleBrush}"/><Setter Property="HeadersVisibility" Value="Column"/></Style>
+ <Style TargetType="DataGridColumnHeader">
+  <Setter Property="Height" Value="{StaticResource TableHeaderHeight}"/>
+  <Setter Property="Padding" Value="12,0"/>
+  <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+  <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>
+  <Setter Property="FontSize" Value="13"/>
+  <Setter Property="FontWeight" Value="SemiBold"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource BorderDividerBrush}"/>
+  <Setter Property="BorderThickness" Value="0,0,1,1"/>
+  <Setter Property="HorizontalContentAlignment" Value="Left"/>
+  <Setter Property="VerticalContentAlignment" Value="Center"/>
+  <Style.Triggers>
+   <Trigger Property="IsEnabled" Value="False">
+    <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}"/>
+   </Trigger>
+  </Style.Triggers>
+ </Style>
+ <Style TargetType="DataGridCell">
+  <Setter Property="Padding" Value="12,0"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource BorderDividerBrush}"/>
+  <Setter Property="BorderThickness" Value="0,0,0,1"/>
+  <Setter Property="VerticalContentAlignment" Value="Center"/>
+ </Style>
  <Style TargetType="ListBox"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/></Style>
  <Style TargetType="Separator"><Setter Property="Background" Value="{DynamicResource BorderSubtleBrush}"/></Style>
 </ResourceDictionary>
