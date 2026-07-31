@@ -129,6 +129,18 @@ public sealed class RcloneEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Rclone_http_timeout_is_reported_as_a_connection_failure_not_cancellation()
+    {
+        using var http = new HttpClient(new TimeoutHandler()) { BaseAddress = new Uri("http://rc.test/") };
+        var client = new RcloneRcClient(http, http.BaseAddress!, "user", "pass");
+
+        var error = await Assert.ThrowsAsync<TimeoutException>(() => client.CallAsync("operations/list", new { }));
+
+        Assert.Contains("operations/list", error.Message);
+        Assert.Contains("Google Drive", error.Message);
+    }
+
+    [Fact]
     public async Task Google_drive_directory_move_uses_one_sync_move_request_with_root_qualified_filesystems()
     {
         await Remote(EndpointType.GoogleDrive).MoveDirectoryAsync("old-dir", "new-dir");
@@ -319,5 +331,11 @@ public sealed class RcloneEndpointTests : IDisposable
         }
 
         private static string Relative(string remote) => remote.Trim('/').StartsWith("root/", StringComparison.Ordinal) ? remote.Trim('/')[5..] : remote.Trim('/');
+    }
+
+    private sealed class TimeoutHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => throw new OperationCanceledException("simulated transport timeout");
     }
 }

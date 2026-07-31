@@ -197,7 +197,7 @@ public sealed class SyncExecutorV2
                         // endpoint, then delete its still-validated old object.
                         var temporary = move.ToPath + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial";
                         await EnsureCopyParentAsync(target, move.ToPath, ct);
-                        await CopyAsync(source, target, move.ToPath, temporary, ct);
+                        await CopyAsync(source, target, move.ToPath, temporary, null, ct);
                         await target.MoveAsync(temporary, move.ToPath, ct);
                         await target.DeleteAsync(move.FromPath, move.Kind == EntryKind.Directory, ct);
                     }
@@ -317,9 +317,10 @@ public sealed class SyncExecutorV2
                 var (temporary, _) = await TransferResume.PrepareAsync(source, target, op.Path, ct);
                 await ensureCopyParent(target, op.Path, ct);
                 if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget)
-                    await TransferResume.AppendLocalAsync(localSource, localTarget, op.Path, temporary, ct);
+                    await TransferResume.AppendLocalAsync(localSource, localTarget, op.Path, temporary,
+                        completed => progress?.Report(new(op.OperationId, op.Path, TransferStage.Transferring, completed, bytes, nowActive)), ct);
                 else
-                    await CopyAsync(source, target, op.Path, temporary, ct);
+                    await CopyRemoteWithProgressAsync(source, target, op.Path, temporary, op.OperationId, bytes, nowActive, progress, ct);
                 await mark(op, JournalState.Transferred, TransferStage.Transferring, bytes, null);
                 progress?.Report(new(op.OperationId, op.Path, TransferStage.Transferring, bytes, bytes, nowActive));
                 if (verifyCopies)
@@ -408,7 +409,30 @@ public sealed class SyncExecutorV2
         _ => new PermanentDeleteStrategy()
     };
 
-    private static async Task CopyAsync(IEndpoint source, IEndpoint target, string path, string temporary, CancellationToken ct)
+    private static async Task CopyRemoteWithProgressAsync(IEndpoint source, IEndpoint target, string path, string temporary, Guid operationId, long totalBytes, int activeTransfers, IProgress<TransferProgress>? progress, CancellationToken ct)
+    {
+        var remote = source as RcloneEndpoint ?? target as RcloneEndpoint ?? throw new NotSupportedException("不支持的端点组合。");
+        var statsGroup = "fengsync-" + operationId.ToString("N");
+        var copy = CopyAsync(source, target, path, temporary, statsGroup, ct);
+        while (!copy.IsCompleted)
+        {
+            await Task.WhenAny(copy, Task.Delay(TimeSpan.FromMilliseconds(350), ct));
+            if (copy.IsCompleted) break;
+            try
+            {
+                var stats = await remote.Client.GetTransferStatsAsync(statsGroup, ct);
+                if (stats is not null)
+                    progress?.Report(new(operationId, path, TransferStage.Transferring, stats.BytesTransferred, totalBytes > 0 ? totalBytes : stats.TotalBytes, activeTransfers));
+            }
+            catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+            {
+                // Progress telemetry must never interrupt a healthy transfer.
+            }
+        }
+        await copy;
+    }
+
+    private static async Task CopyAsync(IEndpoint source, IEndpoint target, string path, string temporary, string? statsGroup, CancellationToken ct)
     {
         if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget)
         {
@@ -421,7 +445,7 @@ public sealed class SyncExecutorV2
             source is LocalEndpoint ? RcloneLocalPathEncoding.ToRclonePath(path) : ((RcloneEndpoint)source).RemotePath(path),
             target is LocalEndpoint tl ? tl.Root : ((RcloneEndpoint)target).FileSystem,
             target is LocalEndpoint ? temporary : ((RcloneEndpoint)target).RemotePath(temporary),
-            ct);
+            ct, statsGroup);
     }
 
     private static IReadOnlyList<string> LocalRoots(IEndpoint left, IEndpoint right) =>

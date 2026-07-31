@@ -106,7 +106,20 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, operation))
         { Content = JsonContent.Create(payload) };
         request.Headers.Authorization = new("Basic", Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{user}:{password}")));
-        using var response = await http.SendAsync(request, ct);
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.SendAsync(request, ct);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            // HttpClient represents its own timeout as OperationCanceledException.
+            // It is not a user-requested cancellation, and treating it as one hides
+            // transient Google Drive/network failures from both the UI and the log.
+            throw new TimeoutException($"rclone RC 请求超时或连接中断：{operation}。请检查网络和 Google Drive 连接后重试。", ex);
+        }
+        using (response)
+        {
         if (!response.IsSuccessStatusCode)
         {
             var detail = await response.Content.ReadAsStringAsync(ct);
@@ -114,6 +127,7 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
         }
         using var body = await response.Content.ReadAsStreamAsync(ct); using var doc = await JsonDocument.ParseAsync(body, cancellationToken: ct);
         return doc.RootElement.Clone();
+        }
     }
     public Task<JsonElement> ListAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/list", new { fs, remote, opt = new { recurse = true } }, ct);
     public async Task<IReadOnlyList<string>> ListDirectoriesAsync(string fs, string remote, bool recurse = false, CancellationToken ct = default)
@@ -131,7 +145,18 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
         }
         return paths.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
     }
-    public Task CopyFileAsync(string sourceFs, string sourceRemote, string targetFs, string targetRemote, CancellationToken ct = default) => CallAsync("operations/copyfile", new { srcFs = sourceFs, srcRemote = sourceRemote, dstFs = targetFs, dstRemote = targetRemote }, ct);
+    public Task CopyFileAsync(string sourceFs, string sourceRemote, string targetFs, string targetRemote, CancellationToken ct = default, string? statsGroup = null) =>
+        CallAsync("operations/copyfile", statsGroup is null
+            ? new { srcFs = sourceFs, srcRemote = sourceRemote, dstFs = targetFs, dstRemote = targetRemote }
+            : new { srcFs = sourceFs, srcRemote = sourceRemote, dstFs = targetFs, dstRemote = targetRemote, _group = statsGroup }, ct);
+    public async Task<RcloneTransferStats?> GetTransferStatsAsync(string statsGroup, CancellationToken ct = default)
+    {
+        var response = await CallAsync("core/stats", new { group = statsGroup, @short = true }, ct);
+        if (!response.TryGetProperty("bytes", out var bytes) || !bytes.TryGetInt64(out var transferred)) return null;
+        var total = response.TryGetProperty("totalBytes", out var totalBytes) && totalBytes.TryGetInt64(out var value) ? value : 0;
+        var speed = response.TryGetProperty("speed", out var speedValue) && speedValue.TryGetDouble(out var rate) ? rate : 0;
+        return new(transferred, total, speed);
+    }
     public Task MoveFileAsync(string fs, string source, string target, CancellationToken ct = default) => CallAsync("operations/movefile", new { srcFs = fs, srcRemote = source, dstFs = fs, dstRemote = target }, ct);
     public Task MoveDirectoryAsync(string sourceFs, string targetFs, CancellationToken ct = default) =>
         CallAsync("sync/move", new { srcFs = sourceFs, dstFs = targetFs, createEmptySrcDirs = true, deleteEmptySrcDirs = true }, ct);
@@ -139,6 +164,8 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     public Task MakeDirectoryAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/mkdir", new { fs, remote }, ct);
     public Task PurgeAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/purge", new { fs, remote }, ct);
 }
+
+public sealed record RcloneTransferStats(long BytesTransferred, long TotalBytes, double BytesPerSecond);
 
 /// <summary>rclone-backed SFTP, Google Drive, or S3 endpoint. Authentication is supplied exclusively by rclone.conf.</summary>
 public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profile, EndpointCapabilities capabilities) : IEndpoint, IEndpointStateStorage

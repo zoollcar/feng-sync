@@ -301,6 +301,16 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         Assert.Contains("失败", log);
     }
 
+    [Fact] public void Run_result_log_preserves_a_cancelled_outcome_and_summary_when_no_operation_started()
+    {
+        var result = new SyncRunResult(Guid.NewGuid(), []);
+
+        var log = RunResultPresentation.ToLog(result, cancelled: true, summary: "用户请求停止同步。");
+
+        Assert.Contains("结果：Cancelled", log);
+        Assert.Contains("摘要：用户请求停止同步。", log);
+    }
+
     [Fact] public void Risk_summary_counts_overwrites_deletes_transfer_and_only_allows_threshold_override()
     {
         var copy = new SyncOperation("overwrite.txt", OperationKind.CopyLeftToRight, "copy");

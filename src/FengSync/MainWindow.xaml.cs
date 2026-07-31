@@ -110,7 +110,19 @@ public partial class MainWindow : Window
             await AppendRunHistoryAsync(profile, operations, run, RunOutcome.Succeeded, null);
             Status.Text = "同步完成。"; progressDialog.Complete(run, "所有选中的操作已完成；双向基线已安全提交。");
         }
-        catch (OperationCanceledException) { Status.Text = "同步已取消。"; progressDialog?.Complete(new SyncRunResult(Guid.NewGuid(), []), "同步已取消。", cancelled: true); }
+        catch (OperationCanceledException) when (_syncCancellation?.IsCancellationRequested == true)
+        {
+            Status.Text = "同步已取消。";
+            progressDialog?.Complete(new SyncRunResult(Guid.NewGuid(), []), "同步已取消。", cancelled: true);
+        }
+        catch (OperationCanceledException ex)
+        {
+            // A dependency can throw OperationCanceledException without our CTS
+            // being cancelled.  This is a failure, not a user cancellation.
+            var message = "同步失败：操作意外中断。" + ex.Message;
+            Status.Text = message;
+            progressDialog?.Complete(false, message);
+        }
         catch (Exception ex) { Status.Text = "同步失败：" + ex.Message; progressDialog?.Complete(false, ex.Message); }
         finally { _syncCancellation?.Dispose(); _syncCancellation = null; _syncInProgress = false; RefreshSummary(); UpdateActionButtons(); _ = _updates?.CheckDeferredAsync(this, _syncInProgress || _compareInProgress); }
     }
@@ -487,11 +499,21 @@ public sealed class ComparisonRow : INotifyPropertyChanged
 {
     public ComparisonRow(SyncOperation operation, EntrySnapshot? left, EntrySnapshot? right, bool isFilterExcluded = false) { Operation = operation; Left = left; Right = right; IsFilterExcluded = isFilterExcluded; Refresh(); }
     public SyncOperation Operation { get; } public EntrySnapshot? Left { get; } public EntrySnapshot? Right { get; } public bool IsFilterExcluded { get; private set; } public bool IsIgnored { get; set; } public bool Selected { get => Operation.Selected; set { if (IsIgnored || IsFilterExcluded || Operation.Selected == value) return; Operation.Selected = value; OnPropertyChanged(); } } public string LeftDisplay { get; private set; } = ""; public string RightDisplay { get; private set; } = ""; public string LeftSize { get; private set; } = ""; public string RightSize { get; private set; } = ""; public string ActionDisplay { get; private set; } = ""; public Brush ActionBrush { get; private set; } = Brushes.DimGray; public string Reason => Operation.Reason;
+    public string? ConflictToolTip => Operation.IsConflict && !IsIgnored && !IsFilterExcluded
+        ? $"冲突原因：{Operation.Reason}{Environment.NewLine}左侧修改时间：{ModifiedTime(Left)}{Environment.NewLine}右侧修改时间：{ModifiedTime(Right)}"
+        : null;
     /// <summary>Explicit toolbar coverage overrides this comparison's temporary exclusions without editing the persisted Profile.</summary>
     public void EnableForCurrentPlan() { IsIgnored = false; IsFilterExcluded = false; Operation.Selected = true; OnPropertyChanged(nameof(Selected)); }
     public void Refresh() { LeftDisplay = Describe(Left); RightDisplay = Describe(Right); LeftSize = Size(Left); RightSize = Size(Right); (ActionDisplay, ActionBrush) = IsIgnored || IsFilterExcluded ? ("⊘", Brushes.DimGray) : Operation.IsConflict ? ("⚠", Brushes.DarkOrange) : Operation.Kind switch { OperationKind.CopyLeftToRight => ("✚→", Brushes.ForestGreen), OperationKind.CopyRightToLeft => ("←✚", Brushes.ForestGreen), OperationKind.DeleteLeft => ("←✖", Brushes.Firebrick), OperationKind.DeleteRight => ("✖→", Brushes.Firebrick), OperationKind.CreateLeftDirectory => ("←✚", Brushes.ForestGreen), OperationKind.CreateRightDirectory => ("✚→", Brushes.ForestGreen), OperationKind.Blocked => ("⛔", Brushes.Firebrick), _ => ("=", Brushes.DimGray) }; }
     private static string Describe(EntrySnapshot? e) => e is null ? "" : e.Kind == EntryKind.Directory ? "▰ " + e.Path : "▱ " + e.Path;
     private static string Size(EntrySnapshot? e) => e?.Fingerprint is null ? "" : e.Fingerprint.Size.ToString("N0");
+    private static string ModifiedTime(EntrySnapshot? entry) => entry switch
+    {
+        null => "不存在或已删除",
+        { Kind: EntryKind.Directory } => "目录（无修改时间）",
+        { Fingerprint: { } fingerprint } => fingerprint.ModifiedUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+        _ => "未知"
+    };
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) => PropertyChanged?.Invoke(this, new(propertyName));
 }

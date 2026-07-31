@@ -35,7 +35,7 @@ internal static class TransferResume
         return (path + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial", false);
     }
 
-    public static async Task AppendLocalAsync(LocalEndpoint source, LocalEndpoint target, string path, string temporaryPath, CancellationToken ct)
+    public static async Task AppendLocalAsync(LocalEndpoint source, LocalEndpoint target, string path, string temporaryPath, Action<long>? progress, CancellationToken ct)
     {
         var sourcePath = source.PhysicalPath(path);
         var destinationPath = target.PhysicalPath(temporaryPath);
@@ -45,7 +45,16 @@ internal static class TransferResume
         await using (var output = new FileStream(destinationPath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
         {
             input.Seek(offset, SeekOrigin.Begin); output.Seek(offset, SeekOrigin.Begin);
-            await input.CopyToAsync(output, 128 * 1024, ct);
+            var buffer = new byte[128 * 1024];
+            var copied = offset;
+            progress?.Invoke(copied);
+            int read;
+            while ((read = await input.ReadAsync(buffer, ct)) > 0)
+            {
+                await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                copied += read;
+                progress?.Invoke(copied);
+            }
         }
         File.SetLastWriteTimeUtc(destinationPath, File.GetLastWriteTimeUtc(sourcePath));
     }

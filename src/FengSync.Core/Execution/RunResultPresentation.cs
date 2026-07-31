@@ -14,11 +14,12 @@ public static class RunResultPresentation
         return result.SucceededOperations > 0 ? RunDisplayOutcome.PartialSuccess : RunDisplayOutcome.Failed;
     }
 
-    public static string ToLog(SyncRunResult result)
+    public static string ToLog(SyncRunResult result, bool cancelled = false, string? summary = null)
     {
         var builder = new StringBuilder();
         builder.AppendLine($"运行 {result.RunId:N}");
-        builder.AppendLine($"结果：{OutcomeOf(result)}；成功 {result.SucceededOperations}，失败 {result.FailedOperations}。");
+        builder.AppendLine($"结果：{OutcomeOf(result, cancelled)}；成功 {result.SucceededOperations}，失败 {result.FailedOperations}。");
+        if (!string.IsNullOrWhiteSpace(summary)) builder.AppendLine($"摘要：{summary}");
         foreach (var item in result.Operations.OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase))
         {
             builder.Append(item.Stage).Append("\t").Append(item.Kind).Append("\t").Append(item.Path);

@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using FengSync.Core;
 using Microsoft.Win32;
 
@@ -13,9 +14,17 @@ public partial class ProgressWindow : Window
     private readonly ObservableCollection<ProgressOperationRow> _rows = [];
     private readonly Dictionary<Guid, ProgressOperationRow> _rowsById = [];
     private readonly Stopwatch _clock = new();
+    private readonly DispatcherTimer _refreshTimer;
     private int _total;
     private int _copyTotal;
+    private long _copyTotalBytes;
+    private int _activeTransfers;
+    private long _speedSampleBytes;
+    private TimeSpan _speedSampleElapsed;
+    private double _bytesPerSecond;
     private SyncRunResult? _result;
+    private bool _cancelled;
+    private string? _completionSummary;
     private IReadOnlyList<SyncOperation> _originalOperations = [];
     private Func<SyncPlan, Task<SyncRunResult>>? _retry;
 
@@ -24,6 +33,9 @@ public partial class ProgressWindow : Window
         InitializeComponent();
         AutoClose.IsChecked = autoClose;
         OperationResults.ItemsSource = _rows;
+        _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _refreshTimer.Tick += (_, _) => UpdateVisualCounters(_activeTransfers);
+        Closed += (_, _) => _refreshTimer.Stop();
         BeginRun(operations);
     }
 
@@ -39,6 +51,7 @@ public partial class ProgressWindow : Window
         }
         _total = _rows.Count;
         _copyTotal = _rows.Count(x => x.IsCopy);
+        _copyTotalBytes = 0;
         FileProgress.Maximum = Math.Max(1, _total);
         FileProgress.Value = 0;
         BytesGraph.Maximum = Math.Max(1, _copyTotal);
@@ -47,6 +60,11 @@ public partial class ProgressWindow : Window
         BytesText.Text = _copyTotal == 0 ? "本次没有文件传输" : $"已完成 0 / {_copyTotal} 个文件，0 B";
         SpeedText.Text = "等待传输";
         _clock.Restart();
+        _activeTransfers = 0;
+        _speedSampleBytes = 0;
+        _speedSampleElapsed = TimeSpan.Zero;
+        _bytesPerSecond = 0;
+        _refreshTimer.Start();
     }
 
     private static bool IsExecutable(SyncOperation operation) => operation.Selected && !operation.IsConflict;
@@ -70,23 +88,34 @@ public partial class ProgressWindow : Window
 
     public void Report(TransferProgress progress)
     {
+        _activeTransfers = progress.ActiveTransfers;
         CurrentFile.Text = progress.Path;
         if (!_rowsById.TryGetValue(progress.OperationId, out var row)) return;
         row.Update(progress);
-        UpdateVisualCounters(progress.ActiveTransfers);
-        UpdateLiveSummary(progress.ActiveTransfers);
+        UpdateVisualCounters(_activeTransfers);
+        UpdateLiveSummary(_activeTransfers);
     }
 
     private void UpdateVisualCounters(int activeTransfers)
     {
         var completed = _rows.Count(x => x.IsTerminal);
         var completedCopies = _rows.Count(x => x.IsCopy && x.Stage == TransferStage.Committed);
-        var bytes = _rows.Where(x => x.IsCopy && x.Stage == TransferStage.Committed).Sum(x => x.BytesCompleted);
+        var bytes = _rows.Where(x => x.IsCopy).Sum(x => x.BytesCompleted);
+        _copyTotalBytes = Math.Max(_copyTotalBytes, _rows.Where(x => x.IsCopy).Sum(x => x.TotalBytes));
         FileProgress.Value = Math.Min(completed, _total);
         Counter.Text = $"{completed} / {_total}";
         BytesGraph.Value = Math.Min(completedCopies, _copyTotal);
-        BytesText.Text = $"已完成 {completedCopies} / {_copyTotal} 个文件，{bytes:N0} B";
-        SpeedText.Text = $"{bytes / Math.Max(.1, _clock.Elapsed.TotalSeconds) / 1024 / 1024:N1} MB/秒 · {activeTransfers} 项并发 · 用时 {_clock.Elapsed:mm\\:ss}";
+        BytesText.Text = $"已完成 {completedCopies} / {_copyTotal} 个文件，{FormatBytes(bytes)} / {FormatBytes(_copyTotalBytes)}";
+        var elapsed = _clock.Elapsed;
+        if (elapsed - _speedSampleElapsed >= TimeSpan.FromMilliseconds(250))
+        {
+            _bytesPerSecond = Math.Max(0, bytes - _speedSampleBytes) / Math.Max(.001, (elapsed - _speedSampleElapsed).TotalSeconds);
+            _speedSampleBytes = bytes;
+            _speedSampleElapsed = elapsed;
+        }
+        var remaining = _bytesPerSecond > 0 && _copyTotalBytes > bytes ? TimeSpan.FromSeconds((_copyTotalBytes - bytes) / _bytesPerSecond) : (TimeSpan?)null;
+        SpeedText.Text = $"{FormatBytes((long)_bytesPerSecond)}/秒 · {activeTransfers} 项并发 · 已用 {elapsed:mm\\:ss}" +
+            (remaining is { } eta ? $" · 预计剩余 {eta:mm\\:ss}" : "");
     }
 
     private void UpdateLiveSummary(int activeTransfers)
@@ -102,8 +131,12 @@ public partial class ProgressWindow : Window
 
     public void Complete(SyncRunResult result, string text, bool cancelled = false)
     {
+        _refreshTimer.Stop();
+        _activeTransfers = 0;
         FileProgress.IsIndeterminate = false;
         _result = result;
+        _cancelled = cancelled;
+        _completionSummary = text;
         foreach (var item in result.Operations)
             if (_rowsById.TryGetValue(item.OperationId, out var row)) row.Complete(item);
 
@@ -111,6 +144,9 @@ public partial class ProgressWindow : Window
             row.ForceTerminal(cancelled ? TransferStage.Cancelled : TransferStage.Failed,
                 cancelled ? "同步已取消。" : "因其他操作失败而未执行。");
 
+        var transferred = _rows.Where(x => x.IsCopy).Sum(x => x.BytesCompleted);
+        if (_bytesPerSecond == 0 && transferred > 0)
+            _bytesPerSecond = transferred / Math.Max(.001, _clock.Elapsed.TotalSeconds);
         UpdateVisualCounters(0);
         var outcome = RunResultPresentation.OutcomeOf(result, cancelled);
         (StateIcon.Text, StateIcon.Foreground, StateTitle.Text) = outcome switch
@@ -152,11 +188,13 @@ public partial class ProgressWindow : Window
         if (_result is null) return;
         var dialog = new SaveFileDialog { Filter = "Text log (*.log)|*.log|Text file (*.txt)|*.txt", FileName = $"fengsync-run-{_result.RunId:N}.log" };
         if (dialog.ShowDialog(this) != true) return;
-        await File.WriteAllTextAsync(dialog.FileName, RunResultPresentation.ToLog(_result));
+        await File.WriteAllTextAsync(dialog.FileName, RunResultPresentation.ToLog(_result, _cancelled, _completionSummary));
         StateDescription.Text = "运行日志已保存：" + dialog.FileName;
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private static string FormatBytes(long bytes) => bytes < 1024 ? $"{bytes:N0} B" : bytes < 1024 * 1024 ? $"{bytes / 1024d:N1} KB" : bytes < 1024L * 1024 * 1024 ? $"{bytes / 1024d / 1024:N1} MB" : $"{bytes / 1024d / 1024 / 1024:N2} GB";
 }
 
 public sealed class ProgressOperationRow : INotifyPropertyChanged
@@ -177,6 +215,7 @@ public sealed class ProgressOperationRow : INotifyPropertyChanged
     };
     public string? Error { get; private set; }
     public long BytesCompleted { get; private set; }
+    public long TotalBytes { get; private set; }
     public bool IsTerminal => Stage is TransferStage.Committed or TransferStage.Failed or TransferStage.Cancelled;
     public bool IsExecuting => Stage is TransferStage.Preparing or TransferStage.Transferring or TransferStage.Verifying or TransferStage.Deleting;
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -185,8 +224,9 @@ public sealed class ProgressOperationRow : INotifyPropertyChanged
     {
         Stage = progress.Stage;
         BytesCompleted = Math.Max(BytesCompleted, progress.BytesCompleted);
+        TotalBytes = Math.Max(TotalBytes, progress.TotalBytes);
         if (progress.Stage == TransferStage.Failed) Error = Summarize(progress.Error);
-        Notify(nameof(Stage), nameof(StageText), nameof(BytesCompleted), nameof(Error), nameof(IsTerminal), nameof(IsExecuting));
+        Notify(nameof(Stage), nameof(StageText), nameof(BytesCompleted), nameof(TotalBytes), nameof(Error), nameof(IsTerminal), nameof(IsExecuting));
     }
 
     public void Complete(OperationRunResult result)

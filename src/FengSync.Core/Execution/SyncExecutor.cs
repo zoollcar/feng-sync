@@ -77,7 +77,8 @@ public sealed class SyncExecutor
                     var (temporary, _) = await Execution.TransferResume.PrepareAsync(source, target, op.Path, ct);
                     await EnsureCopyParentAsync(target, op.Path, ct);
                     if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget)
-                        await Execution.TransferResume.AppendLocalAsync(localSource, localTarget, op.Path, temporary, ct);
+                        await Execution.TransferResume.AppendLocalAsync(localSource, localTarget, op.Path, temporary,
+                            completed => progress?.Report(new(op.OperationId, op.Path, TransferStage.Transferring, completed, bytes, nowActive)), ct);
                     else
                         await CopyAsync(source, target, op.Path, temporary, ct);
                     await Mark(op, JournalState.Transferred, TransferStage.Transferring, bytes); progress?.Report(new(op.OperationId, op.Path, TransferStage.Transferring, bytes, bytes, nowActive));
