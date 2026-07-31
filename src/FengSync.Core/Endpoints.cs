@@ -100,6 +100,20 @@ public interface IEndpointStateStorage
 /// <summary>Minimal strongly typed wrapper around rclone's loopback RC API. It deliberately never puts credentials in command lines.</summary>
 public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, string password)
 {
+    /// <summary>Lists one directory level for file-manager style views.  Unlike <see cref="ListAsync"/>, this must never recurse.</summary>
+    public async Task<IReadOnlyList<RcloneDirectoryEntry>> ListDirectoryAsync(string fs, string remote, CancellationToken ct = default)
+    {
+        var response = await CallAsync("operations/list", new { fs, remote, opt = new { recurse = false } }, ct);
+        if (!response.TryGetProperty("list", out var list)) return [];
+        return list.EnumerateArray().Select(item =>
+        {
+            var path = item.TryGetProperty("Path", out var pathValue) ? pathValue.GetString() ?? "" : "";
+            var directory = item.TryGetProperty("IsDir", out var directoryValue) && directoryValue.GetBoolean();
+            var size = item.TryGetProperty("Size", out var sizeValue) ? sizeValue.GetInt64() : 0;
+            var modified = item.TryGetProperty("ModTime", out var modifiedValue) && DateTimeOffset.TryParse(modifiedValue.GetString(), out var parsed) ? parsed : (DateTimeOffset?)null;
+            return new RcloneDirectoryEntry(path.Trim('/'), directory, size, modified);
+        }).Where(x => !string.IsNullOrWhiteSpace(x.Path)).ToList();
+    }
     public async Task<JsonElement> CallAsync(string operation, object payload, CancellationToken ct = default)
     {
         SyncRunMetricsHub.Current.IncrementRcRequest();
@@ -166,6 +180,7 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
 }
 
 public sealed record RcloneTransferStats(long BytesTransferred, long TotalBytes, double BytesPerSecond);
+public sealed record RcloneDirectoryEntry(string Path, bool IsDirectory, long Size, DateTimeOffset? ModifiedUtc);
 
 /// <summary>rclone-backed SFTP, Google Drive, or S3 endpoint. Authentication is supplied exclusively by rclone.conf.</summary>
 public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profile, EndpointCapabilities capabilities) : IEndpoint, IEndpointStateStorage

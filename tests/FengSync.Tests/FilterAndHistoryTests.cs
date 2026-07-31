@@ -102,6 +102,19 @@ public sealed class FilterAndHistoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Profile_runner_persists_a_failed_attempt_before_execution_starts()
+    {
+        var profile = SyncProfile.Create("disabled", Path.Combine(_root, "left"), Path.Combine(_root, "right")) with { Enabled = false };
+        var history = new RunHistoryRepository(Path.Combine(_root, "failed-runs.json"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new ProfileRunner(history).RunAsync(profile));
+
+        var record = Assert.Single(await history.QueryAsync(profile.Id));
+        Assert.Equal(RunOutcome.Failed, record.Outcome);
+        Assert.NotEqual(default, record.CompletedUtc);
+    }
+
+    [Fact]
     public async Task Run_history_applies_retention_before_persisting()
     {
         var store = new RunHistoryRepository(Path.Combine(_root, "retention.json"), maximumEntries: 2);

@@ -46,6 +46,20 @@ public sealed class RcloneEndpointTests : IDisposable
         Assert.Equal(["empty", "one"], tree.Children.Select(x => x.Name)); Assert.Equal("one/two", Assert.Single(tree.Children.Single(x => x.Name == "one").Children).Path);
     }
 
+    [Fact]
+    public async Task File_manager_directory_listing_is_non_recursive_and_preserves_metadata()
+    {
+        _handler.ListJson = "{\"list\":[{\"Path\":\"report.xlsx\",\"IsDir\":false,\"Size\":42,\"ModTime\":\"2026-01-01T00:00:00Z\"},{\"Path\":\"archive\",\"IsDir\":true}]}";
+        var client = new RcloneRcClient(_http, _http.BaseAddress!, "user", "pass");
+
+        var entries = await client.ListDirectoryAsync("remote:", "documents");
+
+        Assert.Equal(2, entries.Count);
+        Assert.Equal("report.xlsx", entries[0].Path); Assert.Equal(42, entries[0].Size); Assert.False(entries[0].IsDirectory);
+        Assert.True(entries[1].IsDirectory);
+        Assert.Contains(_handler.Bodies, x => x.Contains("\"remote\":\"documents\"", StringComparison.Ordinal) && x.Contains("\"recurse\":false", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("cloudfile/入职", "cloudfile", "入职")]
     [InlineData("入职", "cloudfile", "入职")]

@@ -9,6 +9,9 @@
     <None Remove="Assets\rclone\rclone.exe" />
     <Content Include="Assets\rclone\rclone.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentIcons.Wpf" Version="2.1.333" />
+  </ItemGroup>
   <Target Name="CopyAutomationCliToBuild" AfterTargets="Build">
     <ItemGroup>
       <AutomationCliFiles Include="$(MSBuildProjectDirectory)\..\FengSync.Cli\bin\$(Configuration)\net10.0\FengSync.Cli.*" />

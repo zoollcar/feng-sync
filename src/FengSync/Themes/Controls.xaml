@@ -1,7 +1,295 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <!-- Existing styles preserved -->
  <Style x:Key="ToolbarButtonStyle" TargetType="Button"><Setter Property="Height" Value="{StaticResource ToolbarButtonHeight}"/><Setter Property="Padding" Value="10,4"/><Setter Property="Margin" Value="2"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
- <Style x:Key="IconButtonStyle" TargetType="Button"><Setter Property="Width" Value="36"/><Setter Property="Height" Value="36"/><Setter Property="Padding" Value="7"/><Setter Property="Margin" Value="2"/><Setter Property="Foreground" Value="{DynamicResource ControlForegroundBrush}"/></Style><Style x:Key="DangerIconButtonStyle" TargetType="Button" BasedOn="{StaticResource IconButtonStyle}"><Setter Property="Foreground" Value="{StaticResource DangerBrush}"/></Style>
+ <Style x:Key="IconButtonStyle" TargetType="Button"><Setter Property="Width" Value="36"/><Setter Property="Height" Value="36"/><Setter Property="Padding" Value="7"/><Setter Property="Margin" Value="2"/><Setter Property="Foreground" Value="{DynamicResource ControlForegroundBrush}"/></Style>
+ <Style x:Key="DangerIconButtonStyle" TargetType="Button" BasedOn="{StaticResource IconButtonStyle}"><Setter Property="Foreground" Value="{StaticResource DangerBrush}"/></Style>
  <Style x:Key="PrimaryActionButtonStyle" TargetType="Button" BasedOn="{StaticResource ToolbarButtonStyle}"><Setter Property="Height" Value="{StaticResource PrimaryButtonHeight}"/><Setter Property="FontSize" Value="16"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
- <Style x:Key="EndpointTextBoxStyle" TargetType="TextBox"><Setter Property="Height" Value="{StaticResource ControlHeight}"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style><Style x:Key="EndpointButtonStyle" TargetType="Button"><Setter Property="Height" Value="{StaticResource ControlHeight}"/><Setter Property="Margin" Value="2,0,0,0"/></Style>
- <Style x:Key="ComparisonDataGridStyle" TargetType="DataGrid"><Setter Property="RowHeight" Value="30"/><Setter Property="AlternatingRowBackground" Value="{DynamicResource ControlBackgroundBrush}"/><Setter Property="GridLinesVisibility" Value="Horizontal"/><Setter Property="RowHeaderWidth" Value="30"/></Style><Style x:Key="StatusBarStyle" TargetType="Border"><Setter Property="MinHeight" Value="{StaticResource StatusBarMinHeight}"/><Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/><Setter Property="Padding" Value="8,4"/></Style><Style x:Key="PreviewPanelStyle" TargetType="Border"><Setter Property="MinHeight" Value="{StaticResource PreviewMinHeight}"/><Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/><Setter Property="Padding" Value="8,6"/></Style>
+ <Style x:Key="EndpointTextBoxStyle" TargetType="TextBox"><Setter Property="Height" Value="{StaticResource ControlHeight}"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
+ <Style x:Key="EndpointButtonStyle" TargetType="Button"><Setter Property="Height" Value="{StaticResource ControlHeight}"/><Setter Property="Margin" Value="2,0,0,0"/></Style>
+ <Style x:Key="ComparisonDataGridStyle" TargetType="DataGrid"><Setter Property="RowHeight" Value="30"/><Setter Property="AlternatingRowBackground" Value="{DynamicResource ControlBackgroundBrush}"/><Setter Property="GridLinesVisibility" Value="Horizontal"/><Setter Property="RowHeaderWidth" Value="30"/></Style>
+ <Style x:Key="StatusBarStyle" TargetType="Border"><Setter Property="MinHeight" Value="{StaticResource StatusBarMinHeight}"/><Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/><Setter Property="Padding" Value="8,4"/></Style>
+ <Style x:Key="PreviewPanelStyle" TargetType="Border"><Setter Property="MinHeight" Value="{StaticResource PreviewMinHeight}"/><Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/><Setter Property="Padding" Value="8,6"/></Style>
+
+ <!-- Keyboard focus treatment: 2 DIP AccentBrush outline with 2 DIP offset; visible on keyboard nav, not just mouse hover -->
+ <Style x:Key="FocusVisualStyle" TargetType="{x:Type Control}">
+  <Setter Property="Control.Template">
+   <Setter.Value>
+    <ControlTemplate>
+     <Rectangle Margin="-2" StrokeThickness="2" Stroke="{DynamicResource AccentBrush}" StrokeDashArray="1 2" SnapsToDevicePixels="True"/>
+    </ControlTemplate>
+   </Setter.Value>
+  </Setter>
+ </Style>
+
+ <!-- Shared chrome for documented buttons (tokens only, no inline colors) -->
+ <Style x:Key="BaseButtonStyle" TargetType="Button">
+  <Setter Property="MinHeight" Value="{StaticResource ControlHeight}"/>
+  <Setter Property="MinWidth" Value="{StaticResource MinHitTarget}"/>
+  <Setter Property="Padding" Value="16,0"/>
+  <Setter Property="HorizontalContentAlignment" Value="Center"/>
+  <Setter Property="VerticalContentAlignment" Value="Center"/>
+  <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>
+  <Setter Property="FontSize" Value="13"/>
+  <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisualStyle}"/>
+  <Style.Triggers>
+   <Trigger Property="IsEnabled" Value="False">
+    <Setter Property="Opacity" Value="{StaticResource DisabledOpacity}"/>
+   </Trigger>
+  </Style.Triggers>
+ </Style>
+
+ <!-- Primary action: solid AccentBrush, 40 DIP high, white text; reserved for the most important action on the surface -->
+ <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+  <Setter Property="Height" Value="{StaticResource PrimaryActionHeight}"/>
+  <Setter Property="Padding" Value="16,0"/>
+  <Setter Property="FontWeight" Value="SemiBold"/>
+  <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+  <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  <Setter Property="BorderThickness" Value="1"/>
+  <Style.Triggers>
+   <Trigger Property="IsMouseOver" Value="True">
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}"/>
+   </Trigger>
+   <Trigger Property="IsPressed" Value="True">
+    <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentPressedBrush}"/>
+   </Trigger>
+  </Style.Triggers>
+ </Style>
+
+ <!-- Secondary: Surface background with subtle border; used for "Compare" and other supporting actions -->
+ <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+  <Setter Property="Height" Value="{StaticResource ControlHeight}"/>
+  <Setter Property="Padding" Value="16,0"/>
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
+  <Setter Property="BorderThickness" Value="1"/>
+  <Style.Triggers>
+   <Trigger Property="IsMouseOver" Value="True">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+   </Trigger>
+   <Trigger Property="IsPressed" Value="True">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}"/>
+   </Trigger>
+  </Style.Triggers>
+ </Style>
+
+ <!-- Ghost / tertiary: transparent, no border; for inline row actions like Edit, More, kebab -->
+ <Style x:Key="GhostButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
+  <Setter Property="Height" Value="{StaticResource ControlHeight}"/>
+  <Setter Property="MinWidth" Value="0"/>
+  <Setter Property="Padding" Value="8,0"/>
+  <Setter Property="Background" Value="Transparent"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+  <Setter Property="BorderBrush" Value="Transparent"/>
+  <Setter Property="BorderThickness" Value="0"/>
+  <Style.Triggers>
+   <Trigger Property="IsMouseOver" Value="True">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}"/>
+   </Trigger>
+   <Trigger Property="IsPressed" Value="True">
+    <Setter Property="Background" Value="{DynamicResource BorderSubtleBrush}"/>
+   </Trigger>
+  </Style.Triggers>
+ </Style>
+
+ <!-- Profile list item: 76 DIP high, 3 DIP AccentBrush left indicator when selected.
+      The selected state must be visible so the user can tell which Profile is active; we therefore
+      restyle the template to render the indicator as a dedicated left bar instead of relying on
+      the default ListBoxItem BorderBrush, which paints inside the content area. -->
+ <Style x:Key="ProfileListItemStyle" TargetType="ListBoxItem">
+  <Setter Property="MinHeight" Value="76"/>
+  <Setter Property="Height" Value="76"/>
+  <Setter Property="Padding" Value="0"/>
+  <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  <Setter Property="VerticalContentAlignment" Value="Center"/>
+  <Setter Property="Background" Value="Transparent"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+  <Setter Property="BorderBrush" Value="Transparent"/>
+  <Setter Property="BorderThickness" Value="0"/>
+  <Setter Property="SnapsToDevicePixels" Value="True"/>
+  <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisualStyle}"/>
+  <Setter Property="Template">
+   <Setter.Value>
+    <ControlTemplate TargetType="ListBoxItem">
+     <Border x:Name="ItemBorder" Margin="8,2" CornerRadius="{StaticResource RadiusSmall}" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="1">
+      <Grid>
+       <Border x:Name="SelectionBar" Width="3" HorizontalAlignment="Left" Background="Transparent" CornerRadius="{StaticResource RadiusSmall}"/>
+       <Border Padding="12,0,10,0">
+       <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+       </Border>
+      </Grid>
+     </Border>
+     <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+       <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource SurfaceSubtleBrush}"/>
+      </Trigger>
+      <Trigger Property="IsSelected" Value="True">
+       <Setter TargetName="SelectionBar" Property="Background" Value="{DynamicResource AccentBrush}"/>
+       <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource AccentSubtleBackgroundBrush}"/>
+       <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+       <Setter Property="Opacity" Value="{StaticResource DisabledOpacity}"/>
+      </Trigger>
+     </ControlTemplate.Triggers>
+    </ControlTemplate>
+   </Setter.Value>
+  </Setter>
+ </Style>
+
+ <!-- Endpoint selector card: 56 DIP high, light border, hover/selected/error all conveyed by token-driven borders and inner semantic icon text -->
+ <Style x:Key="EndpointSelectorStyle" TargetType="Border">
+  <Setter Property="MinHeight" Value="{StaticResource EndpointSelectorHeight}"/>
+  <Setter Property="Height" Value="{StaticResource EndpointSelectorHeight}"/>
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
+  <Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
+  <Setter Property="Padding" Value="16"/>
+  <Setter Property="SnapsToDevicePixels" Value="True"/>
+ </Style>
+ <Style x:Key="EndpointSelectorHoverStyle" TargetType="Border" BasedOn="{StaticResource EndpointSelectorStyle}">
+  <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+ </Style>
+ <Style x:Key="EndpointSelectorErrorStyle" TargetType="Border" BasedOn="{StaticResource EndpointSelectorStyle}">
+  <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
+ </Style>
+
+ <!-- Endpoint swap button: fixed 32x32, equal to MinHitTarget so the swap control never visually competes with the endpoints -->
+ <Style x:Key="EndpointSwapButtonStyle" TargetType="Button">
+  <Setter Property="Width" Value="{StaticResource EndpointSwapButtonSize}"/>
+  <Setter Property="Height" Value="{StaticResource EndpointSwapButtonSize}"/>
+  <Setter Property="MinWidth" Value="{StaticResource EndpointSwapButtonSize}"/>
+  <Setter Property="MinHeight" Value="{StaticResource EndpointSwapButtonSize}"/>
+  <Setter Property="Padding" Value="0"/>
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
+  <Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisualStyle}"/>
+  <Style.Triggers>
+   <Trigger Property="IsMouseOver" Value="True">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}"/>
+   </Trigger>
+   <Trigger Property="IsPressed" Value="True">
+    <Setter Property="Background" Value="{DynamicResource BorderSubtleBrush}"/>
+   </Trigger>
+   <Trigger Property="IsEnabled" Value="False">
+    <Setter Property="Opacity" Value="{StaticResource DisabledOpacity}"/>
+   </Trigger>
+  </Style.Triggers>
+ </Style>
+
+ <!-- Status chip base: 22 DIP high, radius 4, 6 DIP horizontal padding; semantic variants pair with an icon and label, never color alone -->
+ <Style x:Key="StatusChipStyle" TargetType="Border">
+  <Setter Property="MinHeight" Value="{StaticResource StatusChipHeight}"/>
+  <Setter Property="Height" Value="{StaticResource StatusChipHeight}"/>
+  <Setter Property="CornerRadius" Value="{StaticResource StatusChipCornerRadius}"/>
+  <Setter Property="Padding" Value="6,0"/>
+  <Setter Property="HorizontalAlignment" Value="Left"/>
+  <Setter Property="VerticalAlignment" Value="Center"/>
+  <Setter Property="Background" Value="{DynamicResource NeutralSubtleBackgroundBrush}"/>
+  <Setter Property="BorderBrush" Value="Transparent"/>
+  <Setter Property="BorderThickness" Value="0"/>
+ </Style>
+ <Style x:Key="StatusChipSuccessStyle" TargetType="Border" BasedOn="{StaticResource StatusChipStyle}">
+  <Setter Property="Background" Value="{DynamicResource SuccessSubtleBackgroundBrush}"/>
+ </Style>
+ <Style x:Key="StatusChipInfoStyle" TargetType="Border" BasedOn="{StaticResource StatusChipStyle}">
+  <Setter Property="Background" Value="{DynamicResource InfoSubtleBackgroundBrush}"/>
+ </Style>
+ <Style x:Key="StatusChipWarningStyle" TargetType="Border" BasedOn="{StaticResource StatusChipStyle}">
+  <Setter Property="Background" Value="{DynamicResource WarningSubtleBackgroundBrush}"/>
+ </Style>
+ <Style x:Key="StatusChipDangerStyle" TargetType="Border" BasedOn="{StaticResource StatusChipStyle}">
+  <Setter Property="Background" Value="{DynamicResource DangerSubtleBackgroundBrush}"/>
+ </Style>
+ <Style x:Key="StatusChipNeutralStyle" TargetType="Border" BasedOn="{StaticResource StatusChipStyle}">
+  <Setter Property="Background" Value="{DynamicResource NeutralSubtleBackgroundBrush}"/>
+ </Style>
+ <Style x:Key="StatusChipTextStyle" TargetType="TextBlock">
+  <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>
+  <Setter Property="FontSize" Value="12"/>
+  <Setter Property="LineHeight" Value="18"/>
+  <Setter Property="VerticalAlignment" Value="Center"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+ </Style>
+
+ <!-- Change summary item: 16 DIP vertical gap to neighbour; total row separated by top divider and uses Metric text -->
+ <Style x:Key="ChangeSummaryItemStyle" TargetType="StackPanel">
+  <Setter Property="Margin" Value="0,0,0,16"/>
+  <Setter Property="Orientation" Value="Horizontal"/>
+ </Style>
+ <Style x:Key="ChangeSummaryItemTextStyle" TargetType="TextBlock">
+  <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>
+  <Setter Property="FontSize" Value="13"/>
+  <Setter Property="LineHeight" Value="20"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+ </Style>
+ <Style x:Key="ChangeSummaryItemCaptionStyle" TargetType="TextBlock">
+  <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>
+  <Setter Property="FontSize" Value="12"/>
+  <Setter Property="LineHeight" Value="18"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+ </Style>
+ <Style x:Key="ChangeSummaryTotalStyle" TargetType="Border">
+  <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
+  <Setter Property="BorderThickness" Value="0,1,0,0"/>
+  <Setter Property="Padding" Value="0,12,0,0"/>
+  <Setter Property="Margin" Value="0,8,0,0"/>
+ </Style>
+
+ <!-- Safety callout: 1 DIP semantic border surrounding a tinted region; contains the conclusion, the reason, and an actionable link -->
+ <Style x:Key="SafetyCalloutStyle" TargetType="Border">
+  <Setter Property="Padding" Value="12"/>
+  <Setter Property="CornerRadius" Value="{StaticResource RadiusSmall}"/>
+  <Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
+ </Style>
+ <Style x:Key="SafetyCalloutSuccessStyle" TargetType="Border" BasedOn="{StaticResource SafetyCalloutStyle}">
+  <Setter Property="Background" Value="{DynamicResource SuccessSubtleBackgroundBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource SuccessBrush}"/>
+ </Style>
+ <Style x:Key="SafetyCalloutWarningStyle" TargetType="Border" BasedOn="{StaticResource SafetyCalloutStyle}">
+  <Setter Property="Background" Value="{DynamicResource WarningSubtleBackgroundBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/>
+ </Style>
+ <Style x:Key="SafetyCalloutDangerStyle" TargetType="Border" BasedOn="{StaticResource SafetyCalloutStyle}">
+  <Setter Property="Background" Value="{DynamicResource DangerSubtleBackgroundBrush}"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
+ </Style>
+
+ <!-- Fluent form foundation: keeps every dialog visually aligned with the workspace shell. -->
+ <Style TargetType="Window">
+  <Setter Property="Background" Value="{DynamicResource AppCanvasBrush}"/>
+  <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>
+  <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+  <Setter Property="UseLayoutRounding" Value="True"/>
+ </Style>
+ <Style TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}"/>
+ <Style TargetType="TextBox">
+  <Setter Property="MinHeight" Value="32"/><Setter Property="Padding" Value="10,4"/>
+  <Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/>
+ </Style>
+ <Style TargetType="PasswordBox">
+  <Setter Property="MinHeight" Value="32"/><Setter Property="Padding" Value="10,4"/>
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/>
+ </Style>
+ <Style TargetType="ComboBox">
+  <Setter Property="MinHeight" Value="32"/><Setter Property="Padding" Value="8,3"/>
+  <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/>
+ </Style>
+ <Style TargetType="CheckBox"><Setter Property="MinHeight" Value="28"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/></Style>
+ <Style TargetType="GroupBox"><Setter Property="Padding" Value="14"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/></Style>
+ <Style TargetType="DataGrid" BasedOn="{StaticResource ComparisonDataGridStyle}"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="RowBackground" Value="{DynamicResource SurfaceBrush}"/><Setter Property="AlternatingRowBackground" Value="{DynamicResource SurfaceSubtleBrush}"/><Setter Property="HeadersVisibility" Value="Column"/></Style>
+ <Style TargetType="ListBox"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/></Style>
+ <Style TargetType="Separator"><Setter Property="Background" Value="{DynamicResource BorderSubtleBrush}"/></Style>
 </ResourceDictionary>

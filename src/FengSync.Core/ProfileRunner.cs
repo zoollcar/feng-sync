@@ -25,6 +25,9 @@ public sealed class ProfileRunner
 
     public async Task<ProfileRunResult> RunAsync(SyncProfile profile, IProgress<string>? progress = null, CancellationToken ct = default)
     {
+        var historyLogged = false;
+        try
+        {
         await using var prepared = await PrepareAsync(profile, ct);
         if (!prepared.Plan.CanExecute && prepared.Plan.Operations.Any()) throw new InvalidOperationException("批处理遇到未裁决冲突；请先在界面中处理。 ");
         var selected = prepared.Plan.Operations.Count(x => x.Selected);
@@ -59,9 +62,21 @@ public sealed class ProfileRunner
         var transferred = run?.Operations.Sum(x => x.BytesTransferred) ?? 0;
         var outcome = failed > 0 ? (succeeded > 0 ? RunOutcome.PartialSuccess : RunOutcome.Failed) : RunOutcome.Succeeded;
         var detail = run?.Operations.FirstOrDefault(x => x.Error is not null)?.Error;
-        await _history.AppendAsync(new(profile.Id, outcome, DateTimeOffset.UtcNow, prepared.Plan.Operations.Count, succeeded, failed, transferred, detail, run?.RunId), ct);
+        await _history.AppendAsync(new(profile.Id, outcome, DateTimeOffset.UtcNow, prepared.Plan.Operations.Count, succeeded, failed, transferred, detail, run?.RunId), CancellationToken.None);
+        historyLogged = true;
         if (run is { Succeeded: false }) throw new IOException($"同步有 {run.FailedOperations} 个操作失败；正式基线未变更。{detail}");
         return new(profile.Id, prepared.Plan.Operations.Count, selected, DateTimeOffset.UtcNow);
+        }
+        catch (OperationCanceledException) when (!historyLogged)
+        {
+            await _history.AppendAsync(new(profile.Id, RunOutcome.Cancelled, DateTimeOffset.UtcNow, 0, 0, 0, 0, "同步已取消。"), CancellationToken.None);
+            throw;
+        }
+        catch (Exception ex) when (!historyLogged)
+        {
+            await _history.AppendAsync(new(profile.Id, RunOutcome.Failed, DateTimeOffset.UtcNow, 0, 0, 0, 0, ex.Message), CancellationToken.None);
+            throw;
+        }
     }
 
     /// <summary>

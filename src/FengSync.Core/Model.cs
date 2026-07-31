@@ -56,7 +56,7 @@ public sealed record VersioningPolicy(VersioningMode Mode = VersioningMode.None,
 {
     public RetentionPolicy ToRetentionPolicy() => new(KeepDays, MaxVersionsPerFile, MaxTotalBytes);
 }
-public sealed record SyncProfile(
+public sealed partial record SyncProfile(
     string Id, string Name, string LeftPath, string RightPath,
     SyncMode Mode = SyncMode.TwoWay, SyncFilter? Filter = null,
     VersioningPolicy? Versioning = null, int MaxConcurrentCopies = 3,
@@ -65,6 +65,17 @@ public sealed record SyncProfile(
     int MaxDeletes = int.MaxValue, double MaxDeleteRatio = 1)
 {
     public static SyncProfile Create(string name, string left, string right) => new(Guid.NewGuid().ToString("N"), name, left, right);
+    /// <summary>Human-readable mode label used as the secondary line in the Profile list.</summary>
+    public string ModeLabel => Mode switch
+    {
+        SyncMode.Mirror => "镜像模式",
+        SyncMode.Update => "更新模式",
+        SyncMode.Custom => "自定义模式",
+        _ => "双向同步"
+    };
+    /// <summary>Latest completed sync attempt, regardless of its outcome. Populated from durable run history for display.</summary>
+    public DateTimeOffset? LastRunUtc { get; init; }
+    public string LastRunLabel => LastRunUtc is null ? "尚未运行" : $"上次运行 · {LastRunUtc.Value.ToLocalTime():yyyy-MM-dd HH:mm}";
 }
 public sealed class SyncOperation
 {

@@ -1,9 +1,12 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using FengSync.Core;
 using FengSync.Core.Mount;
 using FengSync.Services;
+using Microsoft.Win32;
 
 namespace FengSync.Views;
 
@@ -19,6 +22,9 @@ public partial class RemoteEndpointManagerWindow : Window
     private readonly ObservableCollection<RcloneAccount> _accounts = [];
     private readonly ObservableCollection<MountInfo> _mounts = [];
     private readonly RcloneMountService _mountService = new();
+    private readonly CloudFileManagerService _files = new();
+    private readonly ObservableCollection<CloudFileEntry> _entries = [];
+    private string _currentPath = "";
     private bool _busy;
     private bool _mountBusy;
 
@@ -27,6 +33,7 @@ public partial class RemoteEndpointManagerWindow : Window
         InitializeComponent();
         EndpointList.ItemsSource = _accounts;
         MountsList.ItemsSource = _mounts;
+        FileList.ItemsSource = _entries;
         Loaded += async (_, _) => await RefreshAsync();
     }
 
@@ -71,7 +78,12 @@ public partial class RemoteEndpointManagerWindow : Window
         RefreshMountsButton.IsEnabled = !_mountBusy;
     }
 
-    private void EndpointList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateMountButtons();
+    private async void EndpointList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _currentPath = "";
+        UpdateMountButtons();
+        await BrowseAsync();
+    }
     private void MountsList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateMountButtons();
 
     private async void Refresh_Click(object sender, RoutedEventArgs e)
@@ -195,5 +207,138 @@ public partial class RemoteEndpointManagerWindow : Window
             MessageBox.Show(ex.Message, "取消挂载", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally { _mountBusy = false; UpdateMountButtons(); }
+    }
+
+    private async Task BrowseAsync()
+    {
+        if (Selected is not RcloneAccount account) { _entries.Clear(); PathText.Text = "请选择一个云盘"; return; }
+        try
+        {
+            StatusText.Text = "正在读取目录…";
+            var items = await _files.ListAsync(account.Name, _currentPath);
+            _entries.Clear(); foreach (var item in items) _entries.Add(item);
+            PathText.Text = $"{account.Name}:/{_currentPath}";
+            BackButton.IsEnabled = !string.IsNullOrEmpty(_currentPath);
+            StatusText.Text = $"共 {_entries.Count} 项。";
+        }
+        catch (Exception ex) { StatusText.Text = "无法读取目录：" + ex.Message; }
+    }
+
+    private async void BrowseRefresh_Click(object sender, RoutedEventArgs e) => await BrowseAsync();
+    private async void Back_Click(object sender, RoutedEventArgs e) { _currentPath = CloudFileManagerService.Parent(_currentPath); await BrowseAsync(); }
+
+    private async void FileList_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (FileList.SelectedItem is not CloudFileEntry entry) return;
+        if (entry.IsDirectory) { _currentPath = entry.Path; await BrowseAsync(); }
+        else await OpenAsync(entry);
+    }
+
+    private void FileList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (FileList.SelectedItem is not CloudFileEntry entry || entry.IsDirectory) { e.Handled = true; return; }
+        var menu = new ContextMenu();
+        var download = new MenuItem { Header = "下载…" }; download.Click += async (_, _) => await DownloadAsync(entry); menu.Items.Add(download);
+        var open = new MenuItem { Header = "打开" }; open.Click += async (_, _) => await OpenAsync(entry); menu.Items.Add(open);
+        FileList.ContextMenu = menu;
+    }
+
+    private async void UploadFiles_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected is null) { StatusText.Text = "请先选择云盘。"; return; }
+        var dialog = new OpenFileDialog { Multiselect = true, Title = "选择要上传的文件" };
+        if (dialog.ShowDialog(this) != true) return;
+        foreach (var path in dialog.FileNames) if (!await UploadOneAsync(path)) break;
+        await BrowseAsync();
+    }
+
+    private async void UploadFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected is null) { StatusText.Text = "请先选择云盘。"; return; }
+        var dialog = new OpenFolderDialog { Title = "选择要上传的文件夹" };
+        if (dialog.ShowDialog(this) != true) return;
+        var root = dialog.FolderName; var files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).ToList();
+        var applyAll = false; var overwriteAll = false;
+        foreach (var local in files)
+        {
+            var relative = Path.GetRelativePath(root, local).Replace('\\', '/');
+            var parent = relative.Contains('/') ? relative[..relative.LastIndexOf('/')] : "";
+            var old = _currentPath; _currentPath = CloudFileManagerService.Join(old, parent);
+            var proceed = await UploadOneAsync(local, applyAll ? overwriteAll : null);
+            _currentPath = old;
+            if (!proceed) break;
+            // The first conflict dialog may set a session-wide policy through the status tag.
+            if (Tag is bool policy) { applyAll = true; overwriteAll = policy; Tag = null; }
+        }
+        await BrowseAsync();
+    }
+
+    private async Task<bool> UploadOneAsync(string localPath, bool? forceOverwrite = null)
+    {
+        if (Selected is not RcloneAccount account) return false;
+        var exists = (await _files.ListAsync(account.Name, _currentPath)).Any(x => !x.IsDirectory && x.Name.Equals(Path.GetFileName(localPath), StringComparison.OrdinalIgnoreCase));
+        var overwrite = forceOverwrite ?? false;
+        if (exists && forceOverwrite is null)
+        {
+            var answer = MessageBox.Show($"“{Path.GetFileName(localPath)}”已存在。\n是：覆盖；否：跳过；取消：取消上传。", "文件已存在", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+            if (answer == MessageBoxResult.Cancel) return false;
+            overwrite = answer == MessageBoxResult.Yes;
+            if (!overwrite) return true;
+        }
+        try
+        {
+            TransferProgress.Value = 0; StatusText.Text = "正在上传：" + Path.GetFileName(localPath);
+            await _files.UploadAsync(account.Name, _currentPath, localPath, new Progress<CloudTransferProgress>(p =>
+            { TransferProgress.Value = p.Percentage; StatusText.Text = $"正在上传：{Path.GetFileName(localPath)}  {p.Percentage:N1}%  {p.CompletedBytes / 1024d / 1024d:N1} MB"; }));
+            StatusText.Text = (overwrite ? "已覆盖：" : "已上传：") + Path.GetFileName(localPath); return true;
+        }
+        catch (Exception ex) { StatusText.Text = "上传失败：" + ex.Message; return false; }
+    }
+
+    private async Task DownloadAsync(CloudFileEntry entry)
+    {
+        if (Selected is not RcloneAccount account) return;
+        var dialog = new SaveFileDialog { FileName = entry.Name, Title = "下载文件" };
+        if (dialog.ShowDialog(this) != true) return;
+        await DownloadToAsync(account.Name, entry, dialog.FileName);
+    }
+
+    private async Task OpenAsync(CloudFileEntry entry)
+    {
+        if (Selected is not RcloneAccount account) return;
+        var folder = Path.Combine(Path.GetTempPath(), "FengSync", "cloud-open", Guid.NewGuid().ToString("N"));
+        var local = Path.Combine(folder, entry.Name);
+        if (await DownloadToAsync(account.Name, entry, local)) Process.Start(new ProcessStartInfo(local) { UseShellExecute = true });
+    }
+
+    private async Task<bool> DownloadToAsync(string remote, CloudFileEntry entry, string local)
+    {
+        try { TransferProgress.Value = 0; await _files.DownloadAsync(remote, entry.Path, local, new Progress<CloudTransferProgress>(p => TransferProgress.Value = p.Percentage)); StatusText.Text = "已下载：" + entry.Name; return true; }
+        catch (Exception ex) { StatusText.Text = "下载失败：" + ex.Message; return false; }
+    }
+
+    private void Resume_Click(object sender, RoutedEventArgs e)
+    {
+        var tasks = new ListBox { Margin = new Thickness(16), MinWidth = 520, MinHeight = 260 };
+        tasks.Items.Add(new TextBlock
+        {
+            Text = "没有可断点续传的上传任务。\n\n上传被取消或连接失败后，可恢复任务会显示在这里。",
+            Foreground = System.Windows.Media.Brushes.Gray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(8)
+        });
+        var close = new Button { Content = "关闭", IsCancel = true, MinWidth = 80, Margin = new Thickness(0, 0, 16, 16), HorizontalAlignment = HorizontalAlignment.Right };
+        var layout = new DockPanel(); DockPanel.SetDock(close, Dock.Bottom); layout.Children.Add(close); layout.Children.Add(tasks);
+        var window = new Window
+        {
+            Title = "断点续传",
+            Owner = this,
+            Content = layout,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            ResizeMode = ResizeMode.CanResize
+        };
+        close.Click += (_, _) => window.Close();
+        window.ShowDialog();
     }
 }
