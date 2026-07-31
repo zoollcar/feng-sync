@@ -46,13 +46,6 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-          cache: npm
-          cache-dependency-path: src/FengSync.Core/SftpServer/package-lock.json
-
       - name: Publish release package
         id: package
         shell: pwsh
@@ -73,16 +66,11 @@ jobs:
           dotnet publish ./src/FengSync/FengSync.csproj -c $env:CONFIGURATION -r $env:RUNTIME_IDENTIFIER --self-contained true -p:Version=$version -p:InformationalVersion=$version -p:IncludeSourceRevisionInInformationalVersion=false -o $publishDir
           if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 
-          # Bundle the pinned SFTP server dependency next to the protocol host.
-          $sftpDir = Join-Path $publishDir 'SftpServer'
-          npm ci --omit=dev --prefix $sftpDir
-          if ($LASTEXITCODE -ne 0) { throw 'Installing the bundled SFTP dependency failed.' }
-
           dotnet publish ./src/FengSync.Updater/FengSync.Updater.csproj -c $env:CONFIGURATION -r $env:RUNTIME_IDENTIFIER --self-contained true -p:Version=$version -p:InformationalVersion=$version -p:IncludeSourceRevisionInInformationalVersion=false -o $updaterDir
           if ($LASTEXITCODE -ne 0) { throw 'Updater publish failed.' }
           Copy-Item -LiteralPath (Join-Path $updaterDir 'FengSync.Updater.exe') -Destination (Join-Path $publishDir 'FengSync.Updater.exe') -Force
           ./scripts/New-ReleaseManifest.ps1 -PublishDirectory $publishDir -Version $version
-          foreach ($required in @('FengSync.exe', 'FengSync.Updater.exe', 'release-manifest.json', 'SftpServer/node-sftp-host.cjs', 'SftpServer/node_modules')) { if (!(Test-Path (Join-Path $publishDir $required))) { throw "Release output missing: $required" } }
+          foreach ($required in @('FengSync.exe', 'FengSync.Updater.exe', 'release-manifest.json', 'Assets/rclone/rclone.exe')) { if (!(Test-Path (Join-Path $publishDir $required))) { throw "Release output missing: $required" } }
           New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
           Copy-Item -Path (Join-Path $publishDir '*') -Destination $packageRoot -Recurse -Force
           Compress-Archive -Path $packageRoot -DestinationPath $zipPath -CompressionLevel Optimal
