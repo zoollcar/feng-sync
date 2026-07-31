@@ -30,6 +30,20 @@ public sealed class SyncExecutorV2
         var journalLock = new SemaphoreSlim(1, 1);
         var governor = resourceGovernor ?? new ResourceGovernor();
         var capacity = channelCapacity ?? DefaultChannelCapacity;
+        // A plan normally contains explicit directory operations.  Do not rely
+        // on that, though: some remote backends do not list empty directories,
+        // and a move can introduce a new parent path without a structural
+        // operation.  Cache mkdirs per target/path so concurrent file copies
+        // still issue at most one request for each parent directory.
+        var ensuredParents = new System.Collections.Concurrent.ConcurrentDictionary<string, Task>(StringComparer.Ordinal);
+
+        Task EnsureCopyParentAsync(IEndpoint target, string path, CancellationToken token)
+        {
+            var parent = ParentDirectory(path);
+            if (parent is null) return Task.CompletedTask;
+            var key = $"{ResourceKey.For(target)}\u001f{parent}";
+            return ensuredParents.GetOrAdd(key, _ => target.CreateDirectoryAsync(parent, token));
+        }
 
         async Task Mark(SyncOperation op, JournalState state, TransferStage stage, long bytes = 0, string? error = null)
         {
@@ -182,6 +196,7 @@ public sealed class SyncExecutorV2
                         // content. Publish a no-overwrite copy to the execution
                         // endpoint, then delete its still-validated old object.
                         var temporary = move.ToPath + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial";
+                        await EnsureCopyParentAsync(target, move.ToPath, ct);
                         await CopyAsync(source, target, move.ToPath, temporary, ct);
                         await target.MoveAsync(temporary, move.ToPath, ct);
                         await target.DeleteAsync(move.FromPath, move.Kind == EntryKind.Directory, ct);
@@ -217,7 +232,7 @@ public sealed class SyncExecutorV2
                 {
                     var nowActive = 0;
                     lock (activeLock) nowActive = ++active;
-                    try { await RunOneCopyAsync(op, nowActive, verifyCopies, snapshot, left, right, governor, progress, Mark, Record, ct); }
+                    try { await RunOneCopyAsync(op, nowActive, verifyCopies, snapshot, left, right, governor, EnsureCopyParentAsync, progress, Mark, Record, ct); }
                     finally { lock (activeLock) active--; }
                 }
             }
@@ -270,7 +285,8 @@ public sealed class SyncExecutorV2
     }
 
     private async Task RunOneCopyAsync(SyncOperation op, int nowActive, bool verifyCopies, PlanSnapshot snapshot, IEndpoint left, IEndpoint right,
-        ResourceGovernor governor, IProgress<TransferProgress>? progress,
+        ResourceGovernor governor, Func<IEndpoint, string, CancellationToken, Task> ensureCopyParent,
+        IProgress<TransferProgress>? progress,
         Func<SyncOperation, JournalState, TransferStage, long, string?, Task> mark,
         Func<SyncOperation, TransferStage, long, Fingerprint?, Fingerprint?, bool, string?, Task> record,
         CancellationToken ct)
@@ -299,6 +315,7 @@ public sealed class SyncExecutorV2
                     throw new IOException($"复制目标在比较后已改变：{op.Path}");
                 }
                 var (temporary, _) = await TransferResume.PrepareAsync(source, target, op.Path, ct);
+                await ensureCopyParent(target, op.Path, ct);
                 if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget)
                     await TransferResume.AppendLocalAsync(localSource, localTarget, op.Path, temporary, ct);
                 else
@@ -371,6 +388,13 @@ public sealed class SyncExecutorV2
 
     private static TimeSpan MoveTolerance(IEndpoint endpoint) => endpoint is RcloneEndpoint ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(2);
 
+    private static string? ParentDirectory(string path)
+    {
+        var normalized = path.Replace('\\', '/').Trim('/');
+        var separator = normalized.LastIndexOf('/');
+        return separator <= 0 ? null : normalized[..separator];
+    }
+
     private static Task PublishStagedAsync(IEndpoint target, string temporary, string destination, bool overwrite, CancellationToken ct) =>
         target is IStagedPublishEndpoint publisher
             ? publisher.PublishStagedAsync(temporary, destination, overwrite, ct)
@@ -394,7 +418,7 @@ public sealed class SyncExecutorV2
         var remote = source as RcloneEndpoint ?? target as RcloneEndpoint ?? throw new NotSupportedException("不支持的端点组合。");
         await remote.Client.CopyFileAsync(
             source is LocalEndpoint sl ? sl.Root : ((RcloneEndpoint)source).FileSystem,
-            source is LocalEndpoint ? path : ((RcloneEndpoint)source).RemotePath(path),
+            source is LocalEndpoint ? RcloneLocalPathEncoding.ToRclonePath(path) : ((RcloneEndpoint)source).RemotePath(path),
             target is LocalEndpoint tl ? tl.Root : ((RcloneEndpoint)target).FileSystem,
             target is LocalEndpoint ? temporary : ((RcloneEndpoint)target).RemotePath(temporary),
             ct);

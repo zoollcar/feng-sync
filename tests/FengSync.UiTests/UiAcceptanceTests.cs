@@ -93,14 +93,6 @@ public sealed class UiAcceptanceTests
         return RunAsync("gdrive-volume");
     }
 
-    // The SFTP server settings dialog has specialized host lifecycle setup and
-    // remains a dedicated compatibility scenario until it is folded into the
-    // unified host. Profile editing is already covered by the unified `profile`
-    // lifecycle scenario above.
-    [Fact]
-    [Trait("Category", "UI")]
-    public Task Sftp_server_settings_can_start_and_stop_the_real_host() => RunCompatibilityAsync("Run-SftpServerSettingsAcceptance.ps1");
-
     private async Task RunAsync(string scenario)
     {
         var root = FindRepositoryRoot();
@@ -137,32 +129,6 @@ public sealed class UiAcceptanceTests
         if (process.ExitCode == 77 && output.Contains("SKIPPED:", StringComparison.Ordinal))
             throw SkipException.ForSkip(output.Trim());
         Assert.True(process.ExitCode == 0, $"UI scenario '{scenario}' failed (exit {process.ExitCode}).{Environment.NewLine}{output}");
-    }
-
-    private async Task RunCompatibilityAsync(string scriptName, bool skipBuild = false)
-    {
-        var root = FindRepositoryRoot();
-        var script = Path.Combine(root, "tests", "FengSync.UiTests", "Scripts", "Legacy", scriptName);
-        if (!File.Exists(script)) throw new FileNotFoundException("UI compatibility scenario script was not found.", script);
-        var start = new ProcessStartInfo("pwsh") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
-        start.ArgumentList.Add("-NoProfile"); start.ArgumentList.Add("-File"); start.ArgumentList.Add(script);
-        if (skipBuild) start.ArgumentList.Add("-SkipBuild");
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Unable to start UI compatibility scenario host.");
-        var timer = Stopwatch.StartNew();
-        var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
-        const int timeoutSeconds = 15 * 60;
-        var exited = process.WaitForExitAsync();
-        if (await Task.WhenAny(exited, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds))) != exited)
-        {
-            await TerminateProcessTreeAsync(process);
-            var timedOutOutput = (await stdout) + Environment.NewLine + (await stderr);
-            _output.WriteLine($"UI compatibility={scriptName}; timeout={timeoutSeconds}s; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{timedOutOutput}");
-            throw new TimeoutException($"UI compatibility scenario '{scriptName}' exceeded {timeoutSeconds}s. Output:{Environment.NewLine}{timedOutOutput}");
-        }
-        timer.Stop();
-        var output = (await stdout) + Environment.NewLine + (await stderr);
-        _output.WriteLine($"UI compatibility={scriptName}; exit={process.ExitCode}; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{output}");
-        Assert.True(process.ExitCode == 0, $"UI compatibility scenario '{scriptName}' failed (exit {process.ExitCode}).{Environment.NewLine}{output}");
     }
 
     private static async Task TerminateProcessTreeAsync(Process process)

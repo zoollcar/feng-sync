@@ -75,6 +75,7 @@ public sealed class SyncExecutor
                     var source = op.Kind == OperationKind.CopyLeftToRight ? left : right;
                     progress?.Report(new(op.OperationId, op.Path, TransferStage.Preparing, 0, bytes, nowActive)); await Mark(op, JournalState.Running, TransferStage.Transferring);
                     var (temporary, _) = await Execution.TransferResume.PrepareAsync(source, target, op.Path, ct);
+                    await EnsureCopyParentAsync(target, op.Path, ct);
                     if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget)
                         await Execution.TransferResume.AppendLocalAsync(localSource, localTarget, op.Path, temporary, ct);
                     else
@@ -123,7 +124,13 @@ public sealed class SyncExecutor
     {
         if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget) { await localSource.CopyToAsync(path, localTarget, temporary, ct); return; }
         var remote = source as RcloneEndpoint ?? target as RcloneEndpoint ?? throw new NotSupportedException("不支持的端点组合。");
-        await remote.Client.CopyFileAsync(source is LocalEndpoint sl ? sl.Root : ((RcloneEndpoint)source).FileSystem, source is LocalEndpoint ? path : ((RcloneEndpoint)source).RemotePath(path), target is LocalEndpoint tl ? tl.Root : ((RcloneEndpoint)target).FileSystem, target is LocalEndpoint ? temporary : ((RcloneEndpoint)target).RemotePath(temporary), ct);
+        await remote.Client.CopyFileAsync(source is LocalEndpoint sl ? sl.Root : ((RcloneEndpoint)source).FileSystem, source is LocalEndpoint ? RcloneLocalPathEncoding.ToRclonePath(path) : ((RcloneEndpoint)source).RemotePath(path), target is LocalEndpoint tl ? tl.Root : ((RcloneEndpoint)target).FileSystem, target is LocalEndpoint ? temporary : ((RcloneEndpoint)target).RemotePath(temporary), ct);
+    }
+    private static Task EnsureCopyParentAsync(IEndpoint target, string path, CancellationToken ct)
+    {
+        var normalized = path.Replace('\\', '/').Trim('/');
+        var separator = normalized.LastIndexOf('/');
+        return separator <= 0 ? Task.CompletedTask : target.CreateDirectoryAsync(normalized[..separator], ct);
     }
     private static IReadOnlyList<string> LocalRoots(IEndpoint left, IEndpoint right) => new[] { left, right }.OfType<LocalEndpoint>().Select(x => x.Root).ToList();
 }

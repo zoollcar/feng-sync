@@ -1,8 +1,0 @@
-{
-  "name": "fengsync-sftp-protocol-host",
-  "private": true,
-  "description": "Pinned runtime dependency for Feng Sync's isolated SSH/SFTP protocol host.",
-  "dependencies": {
-    "ssh2": "1.17.0"
-  }
-}

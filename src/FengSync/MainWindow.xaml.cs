@@ -385,19 +385,19 @@ public partial class MainWindow : Window
     private static EndpointType CloudEndpointType(string scheme) => scheme.ToLowerInvariant() switch { "gdrive" => EndpointType.GoogleDrive, "sftp" => EndpointType.Sftp, "s3" => EndpointType.S3, _ => throw new InvalidOperationException("不支持的云端端点协议。") };
     private static bool IsCloud(string value) => value.StartsWith("gdrive://", StringComparison.OrdinalIgnoreCase) || value.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase) || value.StartsWith("s3://", StringComparison.OrdinalIgnoreCase);
     private async Task DisposeRcloneAsync() { if (_rclone is not null) { await _rclone.DisposeAsync(); _rclone = null; } }
-    // Cloud endpoint management now lives in a dedicated modal (issue #1): a clean list + 刷新/新建/重新登录/删除
-    // actions, a "浏览远程目录" panel, and a "新建端点" editor. The ☁ buttons beside each endpoint box and the
-    // "工具 → 云端端点管理…" menu both open it; the manager itself reports which side the chosen URI fills.
-    private void AddCloudEndpoint_Click(object s, RoutedEventArgs e) => OpenCloudEndpointManager();
-    private void ManageCloudEndpoints_Click(object s, RoutedEventArgs e) => OpenCloudEndpointManager();
-    private void OpenCloudEndpointManager()
+    // The cloud endpoint UX is split into two windows: the picker (opened by each ☁ button) is a
+    // focused "add an endpoint to this side" flow with no admin affordances; the manager (opened
+    // from 工具 → 远程端点管理…) handles create / re-login / delete and rclone mount lifecycle.
+    private void AddCloudEndpoint_Click(object sender, RoutedEventArgs e)
     {
-        var manager = new CloudEndpointManagerWindow { Owner = this };
-        if (manager.ShowDialog() != true || manager.ResultUri is null) return;
-        var target = manager.ResultSide == "Right" ? RightPath : LeftPath;
-        target.Text = manager.ResultUri;
-        Status.Text = $"已将云端端点添加到{(manager.ResultSide == "Right" ? "右" : "左")}侧：{manager.ResultUri}";
+        var side = (sender as FrameworkElement)?.Tag as string;
+        var picker = new RemoteEndpointPickerWindow(side ?? "Left") { Owner = this };
+        if (picker.ShowDialog() != true || picker.ResultUri is null) return;
+        var resolvedSide = side == "Right" ? "右" : "左";
+        (side == "Right" ? RightPath : LeftPath).Text = picker.ResultUri;
+        Status.Text = $"已将云端端点添加到{resolvedSide}侧：{picker.ResultUri}";
     }
+    private void ManageRemoteEndpoints_Click(object sender, RoutedEventArgs e) => new RemoteEndpointManagerWindow { Owner = this }.ShowDialog();
     private void Options_Click(object s, RoutedEventArgs e)
     {
         var dialog = new SettingsWindow(_settings, ApplyApplicationSettingsAsync, ShowSftpServerSettingsAsync, CleanupExpiredLocalTemporaryFilesAsync) { Owner = this };

@@ -373,23 +373,15 @@ function Assert-VisualMatrixGeometry { param($main, [string]$label)
 $process = $null; $server = $null; $remoteCleanup = $null; $sftpUri = $null; $driveUri = $null; $driveChild = $null; $scheduledTask = $null; $passed = $false
 try {
   if ($Scenario -in @('sftp-to-local', 'sftp-ui')) {
-    $fixture = Join-Path $root 'sftp'; $share = Join-Path $fixture 'share'; $modules = Join-Path $Workspace '.fengsync-test\sftp-node\node_modules'
+    $fixture = Join-Path $root 'sftp'; $share = Join-Path $fixture 'share'
     New-Item -ItemType Directory -Force -Path $share | Out-Null
-    if (-not (Test-Path (Join-Path $modules 'ssh2\package.json'))) {
-      $moduleRoot = Split-Path $modules -Parent; New-Item -ItemType Directory -Force -Path $moduleRoot | Out-Null
-      Copy-Item (Join-Path $Workspace 'src\FengSync.Core\SftpServer\package.json') (Join-Path $moduleRoot 'package.json') -Force
-      Copy-Item (Join-Path $Workspace 'src\FengSync.Core\SftpServer\package-lock.json') (Join-Path $moduleRoot 'package-lock.json') -Force
-      & npm ci --omit=dev --prefix $moduleRoot; if ($LASTEXITCODE -ne 0) { throw 'Unable to install pinned SFTP fixture dependency.' }
-    }
     [IO.File]::WriteAllText((Join-Path $share 'remote-proof.txt'), 'from-sftp')
     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0); $listener.Start(); $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port; $listener.Stop()
-    $password = 'ui-sftp-password'; $salt = [Security.Cryptography.RandomNumberGenerator]::GetBytes(16); $hash = [Security.Cryptography.Rfc2898DeriveBytes]::Pbkdf2($password, $salt, 210000, [Security.Cryptography.HashAlgorithmName]::SHA256, 32)
-    $options = @{ Enabled=$true; ListenAddress='127.0.0.1'; Port=$port; MaxConnections=2; Accounts=@(@{UserName='ui';Enabled=$true;PasswordSalt=[Convert]::ToBase64String($salt);PasswordHash=[Convert]::ToBase64String($hash);PasswordIterations=210000;PublicKeys=@()}); Shares=@(@{VirtualName='docs';PhysicalPath=$share;Permission='ReadWrite'}) }
-    $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((@{ Options=$options; HostKeyPath=(Join-Path $Workspace '.fengsync-test\real-sftp-host.pem') } | ConvertTo-Json -Depth 8 -Compress)))
-    $start = [Diagnostics.ProcessStartInfo]::new((Get-Command node -ErrorAction Stop).Source); $start.Arguments = '"' + (Join-Path $Workspace 'src\FengSync.Core\SftpServer\node-sftp-host.cjs') + '" --fengsync-test-run-id ' + $stamp; $start.UseShellExecute=$false; $start.CreateNoWindow=$true; $start.EnvironmentVariables['FENGSYNC_SFTP_CONFIG']=$payload; $start.EnvironmentVariables['NODE_PATH']=$modules
+    $password = 'ui-sftp-password'; $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'
+    $start = [Diagnostics.ProcessStartInfo]::new($rclone); $start.Arguments = 'serve sftp ":local:' + $share + '" --addr 127.0.0.1:' + $port + ' --user ui --key "' + (Join-Path $root 'host-key.pem') + '" --vfs-cache-mode writes --cache-dir "' + (Join-Path $root 'sftp-cache') + '"'; $start.UseShellExecute=$false; $start.CreateNoWindow=$true; $start.EnvironmentVariables['RCLONE_PASS']=$password
     $server = [Diagnostics.Process]::Start($start); Wait-Until { try { $tcp=[Net.Sockets.TcpClient]::new();$tcp.Connect('127.0.0.1',$port);$tcp.Dispose();$true } catch {$false} } 'SFTP fixture did not start'
-    if ($Scenario -eq 'sftp-to-local') { $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'; $config = Join-Path $appData 'rclone\rclone.conf'; New-Item -ItemType Directory -Force -Path (Split-Path $config) | Out-Null
-      & $rclone config create ui_sftp sftp host 127.0.0.1 user ui port "$port" pass $password --config $config; if ($LASTEXITCODE -ne 0) { throw 'Could not configure isolated SFTP remote.' }; $sftpUri='sftp://ui_sftp/docs' }
+    if ($Scenario -eq 'sftp-to-local') { $config = Join-Path $appData 'rclone\rclone.conf'; New-Item -ItemType Directory -Force -Path (Split-Path $config) | Out-Null
+      & $rclone config create ui_sftp sftp host 127.0.0.1 user ui port "$port" pass $password --config $config; if ($LASTEXITCODE -ne 0) { throw 'Could not configure isolated SFTP remote.' }; $sftpUri='sftp://ui_sftp' }
   }
   if ($Scenario -in @('gdrive', 'gdrive-volume')) {
     # Discover the currently configured Feng Sync Google Drive credential.  The test
@@ -541,7 +533,7 @@ try {
       Open-Menu (Find-Id $main 'ToolsMenu'); Click (Find-Id $main 'CloudEndpointManager')
       $manager = Find-WindowLike '端点管理'; Click (Find-Id $manager 'NewCloudEndpoint')
       $editor = Find-WindowLike '新建云端'; $service = Find-Id $editor 'CloudServiceType'; $expand = $null; $service.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null; $expand.Expand(); Select-Ui (Find-Name $service 'SFTP')
-      Set-Text (Find-Id $editor 'SftpRemoteName') $remoteName; Set-Text (Find-Id $editor 'SftpRemoteHost') '127.0.0.1'; Set-Text (Find-Id $editor 'SftpRemotePort') "$port"; Set-Text (Find-Id $editor 'SftpRemoteUser') 'ui'; Set-Password (Find-Id $editor 'SftpRemotePassword') $password; Set-Text (Find-Id $editor 'SftpRemoteRoot') 'docs'
+      Set-Text (Find-Id $editor 'SftpRemoteName') $remoteName; Set-Text (Find-Id $editor 'SftpRemoteHost') '127.0.0.1'; Set-Text (Find-Id $editor 'SftpRemotePort') "$port"; Set-Text (Find-Id $editor 'SftpRemoteUser') 'ui'; Set-Password (Find-Id $editor 'SftpRemotePassword') $password; Set-Text (Find-Id $editor 'SftpRemoteRoot') ''
       Click (Find-Id $editor 'SaveCloudEndpoint'); Wait-Until { (Find-Id $manager 'CloudEndpointStatus').Current.Name -match '已创建' } 'SFTP endpoint was not created by the UI.' 60
       Click (Find-Id $manager 'AddCloudEndpointRight')
       $upload = Join-Path $root 'ui-upload'; New-Item -ItemType Directory -Force -Path $upload | Out-Null; [IO.File]::WriteAllText((Join-Path $upload 'created-through-ui.txt'), 'endpoint-ui-proof')

@@ -68,6 +68,59 @@ public sealed class RcloneEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Local_to_remote_creates_an_unplanned_parent_directory_before_copying()
+    {
+        var directory = Path.Combine(_root, "new-parent");
+        Directory.CreateDirectory(directory);
+        await File.WriteAllTextAsync(Path.Combine(directory, "file.txt"), "content");
+        var local = new LocalEndpoint(_root); var remote = Remote(EndpointType.GoogleDrive);
+        // This intentionally models a move-derived copy, where a structural
+        // directory operation was absent from the original plan.
+        var plan = new SyncPlan([new SyncOperation("new-parent/file.txt", OperationKind.CopyLeftToRight, "test")]);
+
+        var result = await new SyncExecutorV2().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, local, remote), local, remote);
+
+        AssertSucceeded(result, _handler);
+        var mkdir = _handler.Requests.FindIndex(x => x.AbsolutePath.EndsWith("operations/mkdir"));
+        var copy = _handler.Requests.FindIndex(x => x.AbsolutePath.EndsWith("operations/copyfile"));
+        Assert.True(mkdir >= 0 && mkdir < copy);
+        Assert.Contains(_handler.Bodies, x => x.Contains("\"remote\":\"root/new-parent\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Local_to_remote_uses_rclones_logical_colon_for_a_windows_full_width_colon_filename()
+    {
+        const string physicalName = "文件：一.doc";
+        await File.WriteAllTextAsync(Path.Combine(_root, physicalName), "content");
+        var local = new LocalEndpoint(_root); var remote = Remote(EndpointType.GoogleDrive);
+        var plan = new SyncPlan([new SyncOperation(physicalName, OperationKind.CopyLeftToRight, "test")]);
+
+        var result = await new SyncExecutorV2().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, local, remote), local, remote);
+
+        AssertSucceeded(result, _handler);
+        Assert.Contains(_handler.Bodies, body =>
+        {
+            using var request = JsonDocument.Parse(body);
+            return request.RootElement.TryGetProperty("srcRemote", out var source) && source.GetString() == "文件:一.doc";
+        });
+    }
+
+    [Fact]
+    public async Task Comparison_keeps_a_local_directory_as_a_visible_create_operation_before_its_file_copy()
+    {
+        var directory = Path.Combine(_root, "new-parent");
+        Directory.CreateDirectory(directory);
+        await File.WriteAllTextAsync(Path.Combine(directory, "file.txt"), "content");
+        var local = new LocalEndpoint(_root); var remote = Remote(EndpointType.GoogleDrive);
+
+        var plan = new ModePlanner().Build(SyncMode.Update, await local.ScanAsync(), await remote.ScanAsync(),
+            leftCapabilities: local.Capabilities, rightCapabilities: remote.Capabilities);
+
+        Assert.Contains(plan.Operations, operation => operation.Path == "new-parent" && operation.Kind == OperationKind.CreateRightDirectory);
+        Assert.Contains(plan.Operations, operation => operation.Path == "new-parent/file.txt" && operation.Kind == OperationKind.CopyLeftToRight);
+    }
+
+    [Fact]
     public async Task Remote_calls_use_a_colon_qualified_rclone_filesystem()
     {
         _handler.ListJson = "{\"list\":[]}";
@@ -229,8 +282,9 @@ public sealed class RcloneEndpointTests : IDisposable
                 var remote = request.RootElement.GetProperty("remote").GetString() ?? "";
                 var prefix = remote.Trim('/');
                 if (prefix == "root") prefix = "";
+                else if (prefix.StartsWith("root/", StringComparison.Ordinal)) prefix = prefix[5..];
                 var values = _objects.Where(x => string.IsNullOrEmpty(prefix) || x.Key.StartsWith(prefix + "/", StringComparison.Ordinal) || x.Key == prefix)
-                    .Select(x => new { Path = x.Key, IsDir = false, Size = x.Value.Size, ModTime = x.Value.Modified.ToString("O") });
+                    .Select(x => new { Path = x.Key, Name = x.Key[(x.Key.LastIndexOf('/') + 1)..], IsDir = false, Size = x.Value.Size, ModTime = x.Value.Modified.ToString("O") });
                 return JsonSerializer.Serialize(new { list = values });
             }
         }
@@ -249,7 +303,11 @@ public sealed class RcloneEndpointTests : IDisposable
                 {
                     var sourceFs = root.TryGetProperty("srcFs", out var fs) ? fs.GetString() : null;
                     var physical = string.IsNullOrEmpty(sourceFs) ? null : Path.Combine(sourceFs, source.Replace('/', Path.DirectorySeparatorChar));
-                    var info = physical is not null && File.Exists(physical) ? new FileInfo(physical) : null;
+                    // rclone's Windows local backend exposes a physical full-width
+                    // colon under the logical ':' spelling used in RC requests.
+                    var encodedPhysical = string.IsNullOrEmpty(sourceFs) ? null : Path.Combine(sourceFs, source.Replace(':', '：').Replace('/', Path.DirectorySeparatorChar));
+                    var info = physical is not null && File.Exists(physical) ? new FileInfo(physical) :
+                        encodedPhysical is not null && File.Exists(encodedPhysical) ? new FileInfo(encodedPhysical) : null;
                     size = info?.Length ?? 0;
                     modified = info?.LastWriteTimeUtc ?? DateTimeOffset.Parse("2026-01-01T00:00:00Z");
                 }

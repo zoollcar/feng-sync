@@ -27,7 +27,6 @@ function Invoke-Stage([string]$name, [scriptblock]$action) {
 
 Require-Command dotnet
 Require-Command pwsh
-Require-Command node
 
 $rclone = Join-Path $workspace 'src\FengSync\Assets\rclone\rclone.exe'
 if (-not (Test-Path -LiteralPath $rclone)) { throw "Bundled rclone was not found: $rclone" }

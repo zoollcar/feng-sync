@@ -10,7 +10,7 @@ function Clear-FengSyncTestProcesses {
     # Never target a normally launched FengSync installation.
     $candidates = Get-CimInstance Win32_Process | Where-Object {
         $command = $_.CommandLine ?? ''
-        $_.ProcessId -ne $CurrentProcessId -and $_.Name -in @('FengSync.exe', 'FengSync.Cli.exe', 'rclone.exe', 'node.exe') -and (
+        $_.ProcessId -ne $CurrentProcessId -and $_.Name -in @('FengSync.exe', 'FengSync.Cli.exe', 'rclone.exe') -and (
             $command -like '*--fengsync-test-run-id*' -or
             $command -like '*\.fengsync-test\*' -or
             # Covers the older UI test executable format too, without touching

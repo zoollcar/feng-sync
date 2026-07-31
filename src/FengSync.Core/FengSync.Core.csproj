@@ -4,10 +4,7 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
     <!-- Override the vulnerable transitive native SQLite bundle selected by Microsoft.Data.Sqlite 10.0.0. -->
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="SftpServer\node-sftp-host.cjs" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="SftpServer\package.json" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="SftpServer\package-lock.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- WMI is required to read another process's command line on Windows; rclone mount discovery depends on it. -->
+    <PackageReference Include="System.Management" Version="9.0.0" />
   </ItemGroup>
 </Project>

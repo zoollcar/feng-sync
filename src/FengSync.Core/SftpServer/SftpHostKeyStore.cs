@@ -15,7 +15,7 @@ public sealed class SftpHostKeyStore
         Directory.CreateDirectory(_directory);
         var path = Path.GetFullPath(Path.Combine(_directory, "host-key.pem"));
         // Generate before displaying the fingerprint: the settings UI must never show a hash of an
-        // empty future file. The Node protocol host consumes this PKCS#1 PEM unchanged.
+        // empty future file. rclone consumes this PKCS#1 PEM unchanged.
         if (!File.Exists(path))
         {
             using var rsa = RSA.Create(3072);

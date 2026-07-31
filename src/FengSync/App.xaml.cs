@@ -1,3 +1,4 @@
+using FengSync.Core.Mount;
 using FengSync.Core.SftpServer;
 using System.IO;
 
@@ -5,9 +6,12 @@ namespace FengSync;
 public partial class App : System.Windows.Application
 {
     private readonly SftpServerHostedService _sftpService = new();
+    private readonly RcloneMountService _mountService = new();
     private int _shutdownStarted;
     public static App CurrentApp => (App)Current;
     public SftpServerHostedService SftpService => _sftpService;
+    /// <summary>Application-owned mount service so other windows can observe the same instance.</summary>
+    public RcloneMountService MountService => _mountService;
 
     protected override void OnStartup(System.Windows.StartupEventArgs e)
     {
@@ -34,6 +38,20 @@ public partial class App : System.Windows.Application
     public async Task ShutdownAsync()
     {
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0) return;
+        // Mounts must come down BEFORE the SFTP service: SFTP may be backed by a remote
+        // we just mounted, so leaving the SFTP child process alive while we tear down
+        // the mount would orphan the underlying connection. Any failures here are
+        // recorded but do not block the dispatcher shutdown.
+        try
+        {
+            var result = await _mountService.StopAllFengSyncMountsAsync();
+            if (!result.AllStopped)
+            {
+                var detail = string.Join("; ", result.Failures.Select(f => $"{f.MountPoint}（PID {f.Pid}）：{f.Reason}"));
+                System.Diagnostics.Trace.TraceWarning("Feng Sync-owned mounts were not fully stopped during shutdown: " + detail);
+            }
+        }
+        catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop Feng Sync mounts during shutdown: " + ex); }
         try { await _sftpService.StopAsync(); }
         catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop SFTP server during shutdown: " + ex); }
         finally { Shutdown(); }
@@ -53,7 +71,10 @@ public partial class App : System.Windows.Application
     {
         // ShutdownAsync normally performs this work.  Keep this synchronous final
         // guard for exits initiated outside MainWindow (for example, a system close).
+        try { _mountService.StopAllFengSyncMountsAsync().GetAwaiter().GetResult(); }
+        catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop Feng Sync mounts during final exit: " + ex); }
         try { _sftpService.StopAsync().GetAwaiter().GetResult(); }
+        catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop SFTP server during final exit: " + ex); }
         finally { base.OnExit(e); }
     }
 }

@@ -31,6 +31,17 @@ public sealed class PlannerTests
     }
     [Fact] public void One_side_modification_propagates() => Assert.Equal(OperationKind.CopyLeftToRight, Assert.Single(_planner.Build([File("a.txt", "B")], [File("a.txt", "A")], Baseline()).Operations).Kind);
     [Fact] public void One_side_delete_propagates_only_with_baseline() => Assert.Equal(OperationKind.DeleteRight, Assert.Single(_planner.Build([], [File("a.txt", "A")], Baseline()).Operations).Kind);
+    [Fact]
+    public void One_side_empty_directory_delete_is_a_visible_sync_operation()
+    {
+        var directory = new EntrySnapshot("empty", EntryKind.Directory, null);
+        var baseline = new[] { new BaselineEntry("empty", directory, directory) };
+
+        var operation = Assert.Single(_planner.Build([], [directory], baseline).Operations);
+
+        Assert.Equal("empty", operation.Path);
+        Assert.Equal(OperationKind.DeleteRight, operation.Kind);
+    }
     [Fact] public void Equal_two_sided_change_merges_without_action() => Assert.Empty(_planner.Build([File("a.txt", "B")], [File("a.txt", "B")], Baseline()).Operations);
     [Fact] public void Different_two_sided_change_is_unresolved_conflict()
     {
