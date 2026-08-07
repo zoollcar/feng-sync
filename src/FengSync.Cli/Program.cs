@@ -23,7 +23,18 @@ public static class CliProgram
                 return Write(new { profileId = comparison.ProfileId, planned = comparison.Planned, selected = comparison.Selected, canExecute = comparison.CanExecute, exitCode = code.ToString() }, code);
             }
             var result = await new AutomationRunner().RunAsync(profile);
-            return Write(new { profileId = profile.Id, exitCode = result.ExitCode.ToString(), result = result.ProfileResult, error = result.Error }, result.ExitCode);
+            return Write(new
+            {
+                profileId = profile.Id,
+                exitCode = result.ExitCode.ToString(),
+                result = result.ProfileResult,
+                error = result.Error,
+                failureCategory = result.FailureCategory,
+                failureOperation = result.FailureOperation,
+                retryable = result.Retryable,
+                correlationId = result.CorrelationId,
+                suggestedAction = result.SuggestedAction
+            }, result.ExitCode);
         }
         catch (Exception ex) { return Write(new { error = ex.Message }, AutomationExitCode.ConfigurationError); }
     }

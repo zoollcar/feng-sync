@@ -50,7 +50,7 @@ public partial class RemoteEndpointPickerWindow : Window
             if (_accounts.Count > 0) EndpointList.SelectedIndex = restore;
             StatusText.Text = _accounts.Count == 0 ? "尚无云端端点；请通过工具 → 远程端点管理 创建一个。" : $"共 {_accounts.Count} 个云端端点。";
         }
-        catch (Exception ex) { StatusText.Text = "无法读取云端端点：" + ex.Message; }
+        catch (Exception ex) { StatusText.Text = "无法读取云端端点：" + RcloneUiError.Describe(ex, "remote-picker-list"); }
         finally { _busy = false; UpdateResolved(); }
     }
 
@@ -92,7 +92,7 @@ public partial class RemoteEndpointPickerWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = "无法浏览远端目录：" + ex.Message;
+            StatusText.Text = "无法浏览远端目录：" + RcloneUiError.Describe(ex, "remote-picker-browse");
         }
         finally { _busy = false; loading.Close(); UpdateResolved(); }
     }
@@ -108,9 +108,9 @@ public partial class RemoteEndpointPickerWindow : Window
     // --- Remote directory picker: a modal TreeView with lazy expansion (same approach as MainWindow). ---
     private async Task<string> PickRemoteDirectoryAsync(string remote, string currentPath)
     {
-        await using var daemon = await RcloneDaemon.StartAsync(BundledRclone.ExecutablePath, BundledRclone.ConfigPath);
+        var client = await App.CurrentApp.RcloneHost.GetClientAsync();
         var filesystem = remote.EndsWith(':') ? remote : remote + ":";
-        var directories = await daemon.Client.ListDirectoriesAsync(filesystem, "", false);
+        var directories = await client.ListDirectoriesAsync(filesystem, "", false);
         var tree = new TreeView { Margin = new Thickness(12), MinWidth = 420, MinHeight = 360 };
 
         TreeViewItem Create(string name, string path)
@@ -122,7 +122,7 @@ public partial class RemoteEndpointPickerWindow : Window
                 item.Items.Clear();
                 try
                 {
-                    var children = await daemon.Client.ListDirectoriesAsync(filesystem, path, false);
+                    var children = await client.ListDirectoriesAsync(filesystem, path, false);
                     foreach (var child in children.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => RemoteDirectoryTree.RelativeToListingRoot(x, path)).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
                     {
                         var childName = child.Contains('/') ? child[(child.LastIndexOf('/') + 1)..] : child;
@@ -130,7 +130,7 @@ public partial class RemoteEndpointPickerWindow : Window
                         item.Items.Add(Create(childName, childPath));
                     }
                 }
-                catch (Exception ex) { item.Items.Add(new TreeViewItem { Header = "无法读取子目录：" + ex.Message, IsEnabled = false }); }
+                catch (Exception ex) { item.Items.Add(new TreeViewItem { Header = "无法读取子目录：" + RcloneUiError.Describe(ex, "remote-picker-expand"), IsEnabled = false }); }
             };
             item.Items.Add(new TreeViewItem { Header = "正在加载…", Tag = null });
             return item;

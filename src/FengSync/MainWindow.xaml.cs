@@ -36,7 +36,7 @@ public partial class MainWindow : Window
     private PlanSnapshot? _snapshot;
     private ComparisonSnapshot? _comparison;
     private IEndpoint? _left, _right;
-    private RcloneDaemon? _rclone;
+    private RcloneRcClient? _rcloneClient;
     private ApplicationSettings _settings;
     private CancellationTokenSource? _syncCancellation;
     private CancellationTokenSource? _compareCancellation;
@@ -128,7 +128,7 @@ public partial class MainWindow : Window
             await BuildPlanAsync(token);
         }
         catch (OperationCanceledException) { Status.Text = "比较已取消。"; }
-        catch (Exception ex) { SyncButton.IsEnabled = false; Status.Text = ex.Message; }
+        catch (Exception ex) { SyncButton.IsEnabled = false; Status.Text = RcloneUiError.Describe(ex, "comparison"); }
         finally
         {
             _compareCancellation?.Dispose();
@@ -212,20 +212,26 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException ex)
         {
-            var message = "同步失败：操作意外中断。" + ex.Message;
+            var message = "同步失败：操作意外中断。" + RcloneUiError.Describe(ex, "sync-aggregate");
             Status.Text = message;
             progressDialog?.Complete(false, message);
             await RecordManualRunAsync(attemptedProfile, RunOutcome.Failed, message);
         }
-        catch (Exception ex) { Status.Text = "同步失败：" + ex.Message; progressDialog?.Complete(false, ex.Message); await RecordManualRunAsync(attemptedProfile, RunOutcome.Failed, ex.Message); }
+        catch (Exception ex)
+        {
+            var detail = RcloneUiError.Describe(ex, "sync-run");
+            Status.Text = "同步失败：" + detail;
+            progressDialog?.Complete(false, detail);
+            await RecordManualRunAsync(attemptedProfile, RunOutcome.Failed, detail, ex);
+        }
         finally { _syncCancellation?.Dispose(); _syncCancellation = null; _syncInProgress = false; RefreshSummary(); UpdateActionButtons(); _ = _updates?.CheckDeferredAsync(this, _syncInProgress || _compareInProgress); }
     }
     private static Task AppendRunHistoryAsync(SyncProfile profile, IReadOnlyCollection<SyncOperation> operations, SyncRunResult run, RunOutcome outcome, string? detail)
         => new RunHistoryRepository().AppendAsync(new RunHistoryEntry(profile.Id, outcome, DateTimeOffset.UtcNow, operations.Count(x => x.Selected), run.SucceededOperations, run.FailedOperations, run.Operations.Sum(x => x.BytesTransferred), detail, run.RunId));
-    private async Task RecordManualRunAsync(SyncProfile profile, RunOutcome outcome, string? detail)
+    private async Task RecordManualRunAsync(SyncProfile profile, RunOutcome outcome, string? detail, Exception? exception = null)
     {
         var timestamp = DateTimeOffset.UtcNow;
-        await new RunHistoryRepository().AppendAsync(new RunHistoryEntry(profile.Id, outcome, timestamp, 0, 0, 0, 0, detail), CancellationToken.None);
+        await new RunHistoryRepository().AppendAsync(RunHistoryEntry.FromFailure(profile.Id, outcome, timestamp, detail, exception), CancellationToken.None);
         SetLastRun(profile, timestamp);
     }
     private void SetLastRun(SyncProfile profile, DateTimeOffset timestamp)
@@ -252,7 +258,7 @@ public partial class MainWindow : Window
         foreach (var row in rows)
         {
             try { row.Operation.OverrideCopyDirection(keepLeft, row.Left, row.Right); row.Refresh(); changed++; }
-            catch (Exception ex) { errors.Add($"{row.Operation.Path}：{ex.Message}"); }
+            catch (Exception ex) { errors.Add($"{row.Operation.Path}：{RcloneUiError.Describe(ex, "operation-retry")}"); }
         }
         Comparison.Items.Refresh(); RefreshSummary();
         Status.Text = errors.Count == 0 ? $"已将 {changed} 项设置为{(keepLeft ? "左侧覆盖右侧" : "右侧覆盖左侧")}。" : $"已修改 {changed} 项；{string.Join(" ", errors)}";
@@ -637,27 +643,26 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) throw new InvalidOperationException("请先填写两个端点。");
         await DisposeRcloneAsync();
         var needsRemote = IsCloud(left) || IsCloud(right);
-        if (needsRemote) _rclone = await RcloneDaemon.StartAsync(BundledRclone.ExecutablePath, BundledRclone.ConfigPath);
+        if (needsRemote) _rcloneClient = await App.CurrentApp.RcloneHost.GetClientAsync();
         return (CreateEndpoint(left), CreateEndpoint(right));
     }
-    private Task<ProfileRunResult> RunBatchProfileAsync(SyncProfile profile) => new ProfileRunner(applicationSettings: _settings).RunAsync(profile);
+    private async Task<ProfileRunResult> RunBatchProfileAsync(SyncProfile profile)
+    {
+        var client = EndpointFactory.IsRemote(profile.LeftPath) || EndpointFactory.IsRemote(profile.RightPath)
+            ? await App.CurrentApp.RcloneHost.GetClientAsync()
+            : null;
+        return await new ProfileRunner(applicationSettings: _settings, sharedRcloneClient: client).RunAsync(profile);
+    }
     private IEndpoint CreateEndpoint(string value)
     {
         if (!IsCloud(value)) return new LocalEndpoint(value);
-        if (_rclone is null) throw new InvalidOperationException("云端连接未启动。");
+        if (_rcloneClient is null) throw new InvalidOperationException("云端连接未启动。");
         var split = value.Split("://", 2, StringSplitOptions.None); var remoteAndRoot = split[1].Split('/', 2); var type = CloudEndpointType(split[0]);
-        return new RcloneEndpoint(_rclone.Client, new EndpointProfile(Guid.NewGuid(), type, remoteAndRoot.Length == 2 ? remoteAndRoot[1] : "", remoteAndRoot[0]), new(false, true, type == EndpointType.GoogleDrive, TimeSpan.FromSeconds(1)));
-    }
-    private static IEndpoint CreateEndpoint(string value, RcloneDaemon? daemon)
-    {
-        if (!IsCloud(value)) return new LocalEndpoint(value);
-        if (daemon is null) throw new InvalidOperationException("云端连接未启动。");
-        var split = value.Split("://", 2, StringSplitOptions.None); var remoteAndRoot = split[1].Split('/', 2); var type = CloudEndpointType(split[0]);
-        return new RcloneEndpoint(daemon.Client, new EndpointProfile(Guid.NewGuid(), type, remoteAndRoot.Length == 2 ? remoteAndRoot[1] : "", remoteAndRoot[0]), new(false, true, type == EndpointType.GoogleDrive, TimeSpan.FromSeconds(1)));
+        return new RcloneEndpoint(_rcloneClient, new EndpointProfile(Guid.NewGuid(), type, remoteAndRoot.Length == 2 ? remoteAndRoot[1] : "", remoteAndRoot[0]), new(false, true, type == EndpointType.GoogleDrive, TimeSpan.FromSeconds(1)));
     }
     private static EndpointType CloudEndpointType(string scheme) => scheme.ToLowerInvariant() switch { "gdrive" => EndpointType.GoogleDrive, "sftp" => EndpointType.Sftp, "s3" => EndpointType.S3, _ => throw new InvalidOperationException("不支持的云端端点协议。") };
     private static bool IsCloud(string value) => value.StartsWith("gdrive://", StringComparison.OrdinalIgnoreCase) || value.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase) || value.StartsWith("s3://", StringComparison.OrdinalIgnoreCase);
-    private async Task DisposeRcloneAsync() { if (_rclone is not null) { await _rclone.DisposeAsync(); _rclone = null; } }
+    private Task DisposeRcloneAsync() { _rcloneClient = null; return Task.CompletedTask; }
     private void AddCloudEndpoint_Click(object sender, RoutedEventArgs e) => AddCloudEndpoint((sender as FrameworkElement)?.Tag as string);
     private void AddCloudEndpoint(string? side)
     {
@@ -674,7 +679,12 @@ public partial class MainWindow : Window
     {
         if (_profiles.Count == 0) { Status.Text = "没有可运行的 Profile。"; return; }
         new BatchRunWindow(_profiles.ToList(), CurrentSettings.MaxConcurrentCopies,
-            (profile, cancellationToken) => new ProfileRunner(applicationSettings: _settings).RunAsync(profile, ct: cancellationToken))
+            async (profile, cancellationToken) =>
+            {
+                var client = await ((App)Application.Current).RcloneHost.GetClientAsync(cancellationToken);
+                return await new ProfileRunner(applicationSettings: _settings, sharedRcloneClient: client)
+                    .RunAsync(profile, ct: cancellationToken);
+            })
         { Owner = this }.ShowDialog();
     }
     private void Options_Click(object s, RoutedEventArgs e) => SettingsButton_Click(s, new RoutedEventArgs());

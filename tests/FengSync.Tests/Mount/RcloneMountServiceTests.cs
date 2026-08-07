@@ -1,139 +1,121 @@
+using System.Text.Json;
 using FengSync.Core.Mount;
+using FengSync.Core.Rclone.Lifecycle;
 
 namespace FengSync.Tests.Mount;
 
-/// <summary>Test stub that pretends a fixed set of rclone processes exist; rclone is never actually spawned.</summary>
-public sealed class RcloneMountServiceTests : IDisposable
+public sealed class RcloneMountServiceTests
 {
-    private readonly string _tempRoot = Path.Combine(Path.GetTempPath(), "fengsync-mount-service-" + Guid.NewGuid().ToString("N"));
-    private readonly string _sessionsPath;
-
-    public RcloneMountServiceTests()
+    [Fact]
+    public async Task ScanAsync_uses_rc_mounts_as_managed_truth()
     {
-        Directory.CreateDirectory(_tempRoot);
-        _sessionsPath = Path.Combine(_tempRoot, "sessions.json");
-    }
+        var rc = new FakeLifecycleClient();
+        rc.Mounts.Add(new("driveA:", "X:"));
+        var service = new RcloneMountService(rc, new FakeProcessEnumerator([]));
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempRoot)) Directory.Delete(_tempRoot, recursive: true);
+        var mount = Assert.Single(await service.ScanAsync());
+
+        Assert.Equal(MountOrigin.FengSyncManaged, mount.Origin);
+        Assert.Equal("driveA", mount.RemoteName);
+        Assert.True(mount.CanUnmount);
+        Assert.Null(mount.Pid);
+        Assert.Equal("mount/listmounts", Assert.Single(rc.Calls).Operation);
     }
 
     [Fact]
-    public async Task ValidateAsync_throws_when_WinFsp_is_unavailable()
+    public async Task ScanAsync_keeps_external_processes_read_only()
     {
-        var service = new RcloneMountService(new FakeProcessEnumerator([]), new MountSessionStore(_sessionsPath), rcloneExecutable: "nonexistent-rclone.exe", configPath: "nonexistent.conf");
-        var target = new MountTarget("remote", "sftp", "X:", MountTargetKind.DriveLetter);
-        // We don't actually run WinFsp detection here; we instead exercise the validator with a known-bad target.
-        var existing = await service.ScanAsync();
-        var invalid = new MountTarget("remote", "sftp", "bad-drive", MountTargetKind.DriveLetter);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ValidateAsync(invalid));
-    }
-
-    [Fact]
-    public async Task ScanAsync_marks_session_pids_as_fengsync_managed()
-    {
-        var store = new MountSessionStore(_sessionsPath);
-        var fengPid = 1234;
-        var record = new MountSessionRecord(Guid.NewGuid(), "driveA", "Google Drive", "X:", MountTargetKind.DriveLetter, fengPid, DateTimeOffset.UtcNow, MountSessionStatus.Active);
-        await store.SaveAsync([record]);
-
-        var enumerator = new FakeProcessEnumerator([
-            new RcloneProcessSnapshot(fengPid, "rclone.exe mount driveA:/ X: --config C:\\rclone.conf --cache-dir C:\\cache", DateTimeOffset.UtcNow, true)
-        ]);
-        var service = new RcloneMountService(enumerator, store, rcloneExecutable: "ignored.exe", configPath: "ignored.conf");
-
-        var mounts = await service.ScanAsync();
-        var managed = Assert.Single(mounts);
-        Assert.Equal(MountOrigin.FengSyncManaged, managed.Origin);
-        Assert.Equal("driveA", managed.RemoteName);
-    }
-
-    [Fact]
-    public async Task ScanAsync_marks_unknown_processes_as_external()
-    {
-        var store = new MountSessionStore(_sessionsPath);
-        var enumerator = new FakeProcessEnumerator([
+        var rc = new FakeLifecycleClient();
+        var processes = new FakeProcessEnumerator([
             new RcloneProcessSnapshot(7777, "rclone.exe mount external:photos Z: --config C:\\other.conf", DateTimeOffset.UtcNow, true)
         ]);
-        var service = new RcloneMountService(enumerator, store, rcloneExecutable: "ignored.exe", configPath: "ignored.conf");
+        var service = new RcloneMountService(rc, processes);
 
-        var mounts = await service.ScanAsync();
-        var external = Assert.Single(mounts);
-        Assert.Equal(MountOrigin.External, external.Origin);
-        Assert.Equal("external", external.RemoteName);
+        var mount = Assert.Single(await service.ScanAsync());
+
+        Assert.Equal(MountOrigin.External, mount.Origin);
+        Assert.False(mount.CanUnmount);
+        Assert.Equal(7777, mount.Pid);
     }
 
     [Fact]
-    public async Task ScanAsync_reports_unreadable_processes_separately()
+    public async Task UnmountAsync_refuses_external_mount_without_rc_call()
     {
-        var store = new MountSessionStore(_sessionsPath);
-        var enumerator = new FakeProcessEnumerator([
-            new RcloneProcessSnapshot(8888, null, null, false)
-        ]);
-        var service = new RcloneMountService(enumerator, store, rcloneExecutable: "ignored.exe", configPath: "ignored.conf");
+        var rc = new FakeLifecycleClient();
+        var service = new RcloneMountService(rc, new FakeProcessEnumerator([]));
+        var external = new MountInfo(42, "other", "rclone", "Z:", MountTargetKind.DriveLetter,
+            DateTimeOffset.UtcNow, MountOrigin.External, true);
 
-        var mounts = await service.ScanAsync();
-        var unreadable = Assert.Single(mounts);
-        Assert.Equal(MountOrigin.Unreadable, unreadable.Origin);
-        Assert.Equal(8888, unreadable.Pid);
+        var result = await service.UnmountAsync(external);
+
+        Assert.False(result.AllStopped);
+        Assert.Contains("外部程序", Assert.Single(result.Failures).Reason);
+        Assert.Empty(rc.Calls);
     }
 
     [Fact]
-    public async Task ScanAsync_retains_orphaned_sessions_even_when_no_process_is_alive()
+    public async Task UnmountAsync_uses_mount_unmount_for_managed_mount()
     {
-        var store = new MountSessionStore(_sessionsPath);
-        var record = new MountSessionRecord(Guid.NewGuid(), "driveA", "Google Drive", "Y:", MountTargetKind.DriveLetter, 4242, DateTimeOffset.UtcNow, MountSessionStatus.Orphaned);
-        await store.SaveAsync([record]);
-        var enumerator = new FakeProcessEnumerator([]);
-        var service = new RcloneMountService(enumerator, store, rcloneExecutable: "ignored.exe", configPath: "ignored.conf");
+        var rc = new FakeLifecycleClient();
+        rc.Mounts.Add(new("driveA:", "X:"));
+        var service = new RcloneMountService(rc, new FakeProcessEnumerator([]));
+        var managed = new MountInfo(null, "driveA", "Google Drive", "X:", MountTargetKind.DriveLetter,
+            DateTimeOffset.UtcNow, MountOrigin.FengSyncManaged, true);
 
-        var mounts = await service.ScanAsync();
-        var orphan = Assert.Single(mounts);
-        Assert.Equal(MountOrigin.FengSyncManaged, orphan.Origin);
-        Assert.Equal("Y:", orphan.MountPoint);
-        Assert.Equal(4242, orphan.Pid);
+        var result = await service.UnmountAsync(managed);
+
+        Assert.True(result.AllStopped);
+        Assert.Contains(rc.Calls, x => x.Operation == "mount/unmount");
+        Assert.Empty(rc.Mounts);
     }
 
     [Fact]
-    public async Task StopAllFengSyncMountsAsync_clears_active_records_whose_process_is_already_gone()
+    public async Task StopAllFengSyncMountsAsync_only_stops_rc_owned_mounts()
     {
-        // Use a PID that cannot possibly map to a real process. The service must treat the missing
-        // process as "already stopped" and clear the session record without throwing.
-        var missingPid = int.MaxValue - 1;
-        var store = new MountSessionStore(_sessionsPath);
-        var record = new MountSessionRecord(Guid.NewGuid(), "driveA", "Google Drive", "X:", MountTargetKind.DriveLetter, missingPid, DateTimeOffset.UtcNow, MountSessionStatus.Active);
-        await store.SaveAsync([record]);
+        var rc = new FakeLifecycleClient();
+        rc.Mounts.AddRange([new("driveA:", "X:"), new("driveB:", "Y:")]);
+        var service = new RcloneMountService(rc, new FakeProcessEnumerator([
+            new RcloneProcessSnapshot(100, "rclone.exe mount external: Z:", DateTimeOffset.UtcNow, true)
+        ]));
 
-        var service = new RcloneMountService(new FakeProcessEnumerator([]), store, rcloneExecutable: "ignored.exe", configPath: "ignored.conf");
         var result = await service.StopAllFengSyncMountsAsync();
 
-        var after = await store.LoadAsync();
-        Assert.Empty(after);
-        Assert.NotNull(result);
+        Assert.True(result.AllStopped);
+        Assert.Empty(rc.Mounts);
+        Assert.Equal(2, rc.Calls.Count(x => x.Operation == "mount/unmount"));
     }
 
-    [Fact]
-    public async Task StopAllFengSyncMountsAsync_leaves_external_records_untouched()
+    private sealed class FakeLifecycleClient : IRcloneLifecycleClient
     {
-        // Orphaned records (from a previous run) must not be killed by the current shutdown path —
-        // they're owned by the user, not by this process tree.
-        var store = new MountSessionStore(_sessionsPath);
-        var orphan = new MountSessionRecord(Guid.NewGuid(), "driveA", "Google Drive", "X:", MountTargetKind.DriveLetter, int.MaxValue - 2, DateTimeOffset.UtcNow, MountSessionStatus.Orphaned);
-        await store.SaveAsync([orphan]);
+        public List<(string Fs, string MountPoint)> Mounts { get; } = [];
+        public List<(string Operation, JsonElement Payload)> Calls { get; } = [];
 
-        var service = new RcloneMountService(new FakeProcessEnumerator([]), store, rcloneExecutable: "ignored.exe", configPath: "ignored.conf");
-        await service.StopAllFengSyncMountsAsync();
+        public Task<JsonElement> CallAsync(string operation, object payload, CancellationToken cancellationToken = default)
+        {
+            var json = JsonSerializer.SerializeToElement(payload);
+            Calls.Add((operation, json));
+            return Task.FromResult(operation switch
+            {
+                "mount/listmounts" => JsonSerializer.SerializeToElement(new
+                {
+                    mountPoints = Mounts.Select(x => new { x.Fs, x.MountPoint }).ToArray()
+                }),
+                "mount/unmount" => Unmount(json),
+                "mount/types" => JsonSerializer.SerializeToElement(new { mountTypes = new[] { "mount" } }),
+                _ => JsonSerializer.SerializeToElement(new { })
+            });
+        }
 
-        var after = await store.LoadAsync();
-        var leftover = Assert.Single(after);
-        Assert.Equal(MountSessionStatus.Orphaned, leftover.Status);
+        private JsonElement Unmount(JsonElement payload)
+        {
+            var point = payload.GetProperty("mountPoint").GetString();
+            Mounts.RemoveAll(x => string.Equals(x.MountPoint, point, StringComparison.OrdinalIgnoreCase));
+            return JsonSerializer.SerializeToElement(new { });
+        }
     }
 
-    private sealed class FakeProcessEnumerator : IProcessEnumerator
+    private sealed class FakeProcessEnumerator(IReadOnlyList<RcloneProcessSnapshot> snapshots) : IProcessEnumerator
     {
-        private readonly IReadOnlyList<RcloneProcessSnapshot> _snapshots;
-        public FakeProcessEnumerator(IReadOnlyList<RcloneProcessSnapshot> snapshots) => _snapshots = snapshots;
-        public IReadOnlyList<RcloneProcessSnapshot> EnumerateRcloneProcesses() => _snapshots;
+        public IReadOnlyList<RcloneProcessSnapshot> EnumerateRcloneProcesses() => snapshots;
     }
 }

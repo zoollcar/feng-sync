@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Collections.Concurrent;
+using FengSync.Core.Rclone.Diagnostics;
 
 namespace FengSync.Core;
 
@@ -67,7 +68,33 @@ public sealed class FilterEngine(IEnumerable<FilterRule>? rules = null)
 }
 
 public enum RunOutcome { Succeeded, PartialSuccess, Failed, Cancelled }
-public sealed record RunHistoryEntry(string ProfileId, RunOutcome Outcome, DateTimeOffset CompletedUtc, int Planned, int Succeeded, int Failed, long TransferredBytes, string? Detail = null, Guid? RunId = null);
+public sealed record RunHistoryEntry(
+    string ProfileId,
+    RunOutcome Outcome,
+    DateTimeOffset CompletedUtc,
+    int Planned,
+    int Succeeded,
+    int Failed,
+    long TransferredBytes,
+    string? Detail = null,
+    Guid? RunId = null,
+    string? FailureCategory = null,
+    string? FailureOperation = null,
+    bool? FailureRetryable = null,
+    string? CorrelationId = null)
+{
+    public static RunHistoryEntry FromFailure(string profileId, RunOutcome outcome,
+        DateTimeOffset completedUtc, string? detail, Exception? exception = null)
+    {
+        var failure = (exception as RcloneException)?.Failure;
+        if (failure is not null) RcloneFailureLog.Write(failure, "run-history");
+        return new(profileId, outcome, completedUtc, 0, 0, 0, 0, detail,
+            FailureCategory: failure?.Category.ToString(),
+            FailureOperation: failure?.Operation,
+            FailureRetryable: failure?.Retryable,
+            CorrelationId: failure?.CorrelationId);
+    }
+}
 
 /// <summary>Small durable, queryable history store. It is deliberately independent of incomplete-operation journals.</summary>
 public sealed class RunHistoryRepository

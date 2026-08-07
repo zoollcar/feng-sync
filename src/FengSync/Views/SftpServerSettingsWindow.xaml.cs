@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FengSync.Core.Rclone.Diagnostics;
 using FengSync.Core.SftpServer;
 
 namespace FengSync.Views;
@@ -29,6 +30,16 @@ public partial class SftpServerSettingsWindow : Window
             FingerprintText.Text = "主机指纹：" + new SftpHostKeyStore().GetKeyReference().Fingerprint;
             StatusText.Text = _store.LegacyConfigurationRemoved ? "已清除不兼容的旧版 SFTP 配置，请重新设置服务。" : App.CurrentApp.SftpService.IsRunning ? "SFTP 服务运行中。" : "SFTP 服务当前未运行。";
         }
+        catch (SftpServerOperationException ex)
+        {
+            StatusText.Text = $"{ex.Message} {ex.SuggestedAction}（诊断 ID：{ex.CorrelationId}）";
+            System.Diagnostics.Trace.TraceError($"SFTP {ex.Operation} failed; code={ex.TechnicalCode}; correlationId={ex.CorrelationId}");
+        }
+        catch (RcloneException ex)
+        {
+            StatusText.Text = $"{ex.Failure.UserMessage} {ex.Failure.SuggestedAction}（诊断 ID：{ex.Failure.CorrelationId}）";
+            System.Diagnostics.Trace.TraceError($"rclone {ex.Failure.Operation} failed; category={ex.Failure.Category}; correlationId={ex.Failure.CorrelationId}; detail={ex.Failure.TechnicalMessage}");
+        }
         catch (Exception ex) { StatusText.Text = ex.Message; }
     }
 
@@ -54,6 +65,16 @@ public partial class SftpServerSettingsWindow : Window
     {
         if (_operationInProgress) return; _operationInProgress = true; var original = button.Content;
         try { button.IsEnabled = false; button.Content = busyText; StatusText.Text = busyText; await action(); }
+        catch (SftpServerOperationException ex)
+        {
+            StatusText.Text = $"{ex.Message} {ex.SuggestedAction}（诊断 ID：{ex.CorrelationId}）";
+            System.Diagnostics.Trace.TraceError($"SFTP {ex.Operation} failed; code={ex.TechnicalCode}; correlationId={ex.CorrelationId}");
+        }
+        catch (RcloneException ex)
+        {
+            StatusText.Text = $"{ex.Failure.UserMessage} {ex.Failure.SuggestedAction}（诊断 ID：{ex.Failure.CorrelationId}）";
+            System.Diagnostics.Trace.TraceError($"rclone {ex.Failure.Operation} failed; category={ex.Failure.Category}; correlationId={ex.Failure.CorrelationId}; detail={ex.Failure.TechnicalMessage}");
+        }
         catch (Exception ex) { StatusText.Text = ex.Message; }
         finally { button.IsEnabled = true; button.Content = original; _operationInProgress = false; }
     }

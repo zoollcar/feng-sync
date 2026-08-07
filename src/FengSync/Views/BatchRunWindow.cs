@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using FengSync.Core;
 using FengSync.Core.Automation;
+using FengSync.Services;
 
 namespace FengSync.Views;
 
@@ -33,7 +34,7 @@ public sealed class BatchRunWindow : Window
         {
             _summary.Text = $"队列运行中（最多 {_concurrency} 项）…";
             var scheduler = new BatchScheduler(_concurrency);
-            var results = await scheduler.RunAsync(_profiles.Select((p, i) => (Func<CancellationToken, Task<ProfileRunResult>>)(async token => { _rows[i].State = "运行中"; try { var value = await _run(p, token); _rows[i].State = "成功"; return value; } catch (Exception ex) { _rows[i].State = "失败：" + ex.Message; throw; } })), _cancel.Token);
+            var results = await scheduler.RunAsync(_profiles.Select((p, i) => (Func<CancellationToken, Task<ProfileRunResult>>)(async token => { _rows[i].State = "运行中"; try { var value = await _run(p, token); _rows[i].State = "成功"; return value; } catch (Exception ex) { _rows[i].State = "失败：" + RcloneUiError.Describe(ex, "batch-run"); throw; } })), _cancel.Token);
             _summary.Text = $"完成：{results.Count(x => x.Succeeded)} 成功，{results.Count(x => !x.Succeeded)} 失败。";
         }
         finally { _cancel.Dispose(); _cancel = null; }

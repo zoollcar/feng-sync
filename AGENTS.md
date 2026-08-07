@@ -13,10 +13,12 @@ Use this file as a fast routing map. Inspect only the relevant subtree and its f
 - Run desktop app: `dotnet run --project .\src\FengSync`
 - Run core/CLI/integration tests: `dotnet test .\tests\FengSync.Tests\FengSync.Tests.csproj`
 - Run WPF acceptance tests: `dotnet test .\tests\FengSync.UiTests\FengSync.UiTests.csproj`
-- Full Windows suite: `pwsh -File .\scripts\Test-All.ps1 -SkipGoogleDrive`
+- Core-only Windows gate: `pwsh -File .\scripts\Test-All.ps1 -Level Core`
+- Full offline Windows suite: `pwsh -File .\scripts\Test-All.ps1 -Level UiOffline`
+- Online suite, including Google Drive: `pwsh -File .\scripts\Test-All.ps1 -Level Online`
 - Release-package gate: `pwsh -File .\scripts\Test-ReleasePackage.ps1 ...` (all parameters are mandatory; see the script).
 
-`Test-All.ps1` builds first, then runs Core/CLI/SFTP tests and UI tests. Do not run multiple UI suites concurrently: they manage desktop processes. Google Drive tests are external and credential-dependent; use `-SkipGoogleDrive` for normal local verification, and enable its volume matrix only with `-IncludeGoogleDriveVolume`.
+`Test-All.ps1` builds first, then runs Core/CLI/SFTP tests and UI tests. Do not run multiple UI suites concurrently: they manage desktop processes. Google Drive tests are external and credential-dependent; use `-Level UiOffline` for normal local verification and opt into them with `-Level Online`.
 
 ## Repository map
 

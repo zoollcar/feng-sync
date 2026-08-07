@@ -97,7 +97,8 @@ public partial class CloudEndpointEditorWindow : Window
         if (_configuredRemote is not null && _configuredKind == SelectedKind) return _configuredRemote;
         var fields = CollectFields();
         var remote = CloudEndpointService.SanitizeRemoteName(DisplayName);
-        await CloudEndpointService.CreateRemoteAsync(SelectedKind, remote, fields);
+        var progress = new Progress<string>(message => StatusText.Text = message);
+        await CloudEndpointService.CreateRemoteAsync(SelectedKind, remote, fields, progress);
         _configuredRemote = remote;
         _configuredKind = SelectedKind;
         return remote;
@@ -147,7 +148,12 @@ public partial class CloudEndpointEditorWindow : Window
             button.Content = busyText; StatusText.Text = busyText;
             await action();
         }
-        catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(ex.Message, "Feng Sync", MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex)
+        {
+            var message = RcloneUiError.Describe(ex, "cloud-endpoint-editor");
+            StatusText.Text = message;
+            MessageBox.Show(message, "Feng Sync", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
         finally { TestButton.IsEnabled = true; PreviewButton.IsEnabled = true; SaveButton.IsEnabled = true; button.Content = original; _isBusy = false; }
     }
 
@@ -155,9 +161,9 @@ public partial class CloudEndpointEditorWindow : Window
     private async Task LoadPreviewAsync(string remote)
     {
         PreviewTree.Items.Clear();
-        await using var daemon = await RcloneDaemon.StartAsync(BundledRclone.ExecutablePath, BundledRclone.ConfigPath);
+        var client = await App.CurrentApp.RcloneHost.GetClientAsync();
         var filesystem = remote.EndsWith(':') ? remote : remote + ":";
-        var directories = await daemon.Client.ListDirectoriesAsync(filesystem, "", false);
+        var directories = await client.ListDirectoriesAsync(filesystem, "", false);
         var rootItem = new TreeViewItem { Header = "/（根目录）", Tag = "" };
         foreach (var directory in directories.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim('/')).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
             rootItem.Items.Add(CreateNode(filesystem, directory[(directory.LastIndexOf('/') + 1)..], directory));
@@ -173,11 +179,10 @@ public partial class CloudEndpointEditorWindow : Window
         {
             if (item.Items.Count != 1 || (item.Items[0] as TreeViewItem)?.Tag is not null) return;
             item.Items.Clear();
-            // A fresh daemon per expansion keeps this handler self-contained; listings are small and cheap.
             try
             {
-                await using var daemon = await RcloneDaemon.StartAsync(BundledRclone.ExecutablePath, BundledRclone.ConfigPath);
-                var children = await daemon.Client.ListDirectoriesAsync(filesystem, path, false);
+                var client = await App.CurrentApp.RcloneHost.GetClientAsync();
+                var children = await client.ListDirectoriesAsync(filesystem, path, false);
                 foreach (var child in children.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => RemoteDirectoryTree.RelativeToListingRoot(x, path)).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
                 {
                     var childName = child.Contains('/') ? child[(child.LastIndexOf('/') + 1)..] : child;
@@ -186,7 +191,7 @@ public partial class CloudEndpointEditorWindow : Window
                 }
                 if (item.Items.Count == 0) item.Items.Add(new TreeViewItem { Header = "（空目录）", IsEnabled = false });
             }
-            catch (Exception ex) { item.Items.Add(new TreeViewItem { Header = "无法读取子目录：" + ex.Message, IsEnabled = false }); }
+            catch (Exception ex) { item.Items.Add(new TreeViewItem { Header = "无法读取子目录：" + RcloneUiError.Describe(ex, "remote-tree"), IsEnabled = false }); }
         };
         return item;
     }

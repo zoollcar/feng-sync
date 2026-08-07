@@ -1,15 +1,25 @@
 using FengSync.Core.Mount;
+using FengSync.Core.Rclone.Lifecycle;
 using FengSync.Core.SftpServer;
 using System.IO;
 
 namespace FengSync;
 public partial class App : System.Windows.Application
 {
-    private readonly SftpServerHostedService _sftpService = new();
-    private readonly RcloneMountService _mountService = new();
+    private readonly RcloneLifecycleHost _rcloneLifecycle = new();
+    private readonly SftpServerHostedService _sftpService;
+    private readonly RcloneMountService _mountService;
     private int _shutdownStarted;
+
+    public App()
+    {
+        _sftpService = new SftpServerHostedService(_rcloneLifecycle);
+        _mountService = new RcloneMountService(_rcloneLifecycle);
+    }
     public static App CurrentApp => (App)Current;
     public SftpServerHostedService SftpService => _sftpService;
+    public RcloneLifecycleHost RcloneHost => _rcloneLifecycle;
+    public IRcloneLifecycleClient RcloneLifecycle => _rcloneLifecycle;
     /// <summary>Application-owned mount service so other windows can observe the same instance.</summary>
     public RcloneMountService MountService => _mountService;
 
@@ -54,7 +64,12 @@ public partial class App : System.Windows.Application
         catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop Feng Sync mounts during shutdown: " + ex); }
         try { await _sftpService.StopAsync(); }
         catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop SFTP server during shutdown: " + ex); }
-        finally { Shutdown(); }
+        finally
+        {
+            try { await _rcloneLifecycle.DisposeAsync(); }
+            catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop rclone lifecycle host during shutdown: " + ex); }
+            Shutdown();
+        }
     }
 
     private async Task StartConfiguredSftpAsync()
@@ -71,10 +86,18 @@ public partial class App : System.Windows.Application
     {
         // ShutdownAsync normally performs this work.  Keep this synchronous final
         // guard for exits initiated outside MainWindow (for example, a system close).
-        try { _mountService.StopAllFengSyncMountsAsync().GetAwaiter().GetResult(); }
-        catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop Feng Sync mounts during final exit: " + ex); }
-        try { _sftpService.StopAsync().GetAwaiter().GetResult(); }
-        catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop SFTP server during final exit: " + ex); }
+        try
+        {
+            if (Volatile.Read(ref _shutdownStarted) == 0)
+            {
+                try { _mountService.StopAllFengSyncMountsAsync().GetAwaiter().GetResult(); }
+                catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop Feng Sync mounts during final exit: " + ex); }
+                try { _sftpService.StopAsync().GetAwaiter().GetResult(); }
+                catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop SFTP server during final exit: " + ex); }
+                try { _rcloneLifecycle.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+                catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop rclone lifecycle host during final exit: " + ex); }
+            }
+        }
         finally { base.OnExit(e); }
     }
 }

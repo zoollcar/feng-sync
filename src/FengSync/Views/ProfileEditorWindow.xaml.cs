@@ -5,6 +5,7 @@ using System.IO;
 using System.Collections.ObjectModel;
 using FengSync.Core;
 using FengSync.Core.Configuration;
+using FengSync.Services;
 using FengSync.ViewModels;
 
 namespace FengSync.Views;
@@ -123,7 +124,7 @@ public partial class ProfileEditorWindow : Window
             await client.ConnectAsync(uri.Host, uri.IsDefaultPort ? 22 : uri.Port, timeout.Token);
             EndpointTestResult.Text = $"{side} SFTP 主机 {uri.Host}:{(uri.IsDefaultPort ? 22 : uri.Port)} 可连接。凭据会在实际同步时验证。";
         }
-        catch (Exception ex) { EndpointTestResult.Text = $"{side}端点测试失败：{ex.Message}"; }
+        catch (Exception ex) { EndpointTestResult.Text = $"{side}端点测试失败：{RcloneUiError.Describe(ex, "profile-endpoint-test")}"; }
     }
     private async Task RunBusyAsync(Button button, string busyText, Func<Task> action)
     {

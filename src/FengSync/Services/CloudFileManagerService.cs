@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using FengSync.Core;
+using FengSync.Core.Rclone.Diagnostics;
 using FluentIcon = FluentIcons.Common.Icon;
 
 namespace FengSync.Services;
@@ -11,8 +12,8 @@ public sealed class CloudFileManagerService
 {
     public async Task<IReadOnlyList<CloudFileEntry>> ListAsync(string remote, string path, CancellationToken ct = default)
     {
-        await using var daemon = await RcloneDaemon.StartAsync(BundledRclone.ExecutablePath, BundledRclone.ConfigPath, ct);
-        var entries = await daemon.Client.ListDirectoryAsync(FileSystem(remote), path.Trim('/'), ct);
+        var client = await App.CurrentApp.RcloneHost.GetClientAsync(ct);
+        var entries = await client.ListDirectoryAsync(FileSystem(remote), path.Trim('/'), ct);
         return entries.Select(x => new CloudFileEntry(NameOf(x.Path), x.Path, x.IsDirectory, x.Size, x.ModifiedUtc))
             .OrderByDescending(x => x.IsDirectory).ThenBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
@@ -33,9 +34,9 @@ public sealed class CloudFileManagerService
 
     private static async Task TransferAsync(string remote, string sourceFs, string sourcePath, string destinationFs, string destinationPath, long total, IProgress<CloudTransferProgress>? progress, CancellationToken ct)
     {
-        await using var daemon = await RcloneDaemon.StartAsync(BundledRclone.ExecutablePath, BundledRclone.ConfigPath, ct);
+        var client = await App.CurrentApp.RcloneHost.GetClientAsync(ct);
         var group = "cloud-manager-" + Guid.NewGuid().ToString("N");
-        var copy = daemon.Client.CopyFileAsync(sourceFs, sourcePath, destinationFs, destinationPath, ct, group);
+        var copy = client.CopyFileAsync(sourceFs, sourcePath, destinationFs, destinationPath, ct, group);
         while (!copy.IsCompleted)
         {
             await Task.WhenAny(copy, Task.Delay(350, ct));
@@ -43,10 +44,10 @@ public sealed class CloudFileManagerService
             {
                 try
                 {
-                    var stats = await daemon.Client.GetTransferStatsAsync(group, ct);
+                    var stats = await client.GetTransferStatsAsync(group, ct);
                     if (stats is not null) progress?.Report(new(sourcePath, stats.BytesTransferred, total > 0 ? total : stats.TotalBytes, stats.BytesPerSecond));
                 }
-                catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { }
+                catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or RcloneException) { }
             }
         }
         await copy;

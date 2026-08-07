@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Net.Http.Json;
 using System.Text;
 using FengSync.Core.Diagnostics;
+using FengSync.Core.Rclone.Diagnostics;
 
 namespace FengSync.Core;
 
@@ -127,23 +128,26 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
         }
         catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            // HttpClient represents its own timeout as OperationCanceledException.
-            // It is not a user-requested cancellation, and treating it as one hides
-            // transient Google Drive/network failures from both the UI and the log.
-            throw new TimeoutException($"rclone RC 请求超时或连接中断：{operation}。请检查网络和 Google Drive 连接后重试。", ex);
+            throw new RcloneException(RcloneFailureClassifier.FromTransport(operation,
+                new TimeoutException("rclone RC HTTP 请求超时。", ex)), ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new RcloneException(RcloneFailureClassifier.FromTransport(operation, ex), ex);
         }
         using (response)
         {
         if (!response.IsSuccessStatusCode)
         {
             var detail = await response.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException($"rclone {operation} failed ({(int)response.StatusCode}): {detail}");
+            throw new RcloneException(RcloneFailureClassifier.FromRc(operation, (int)response.StatusCode, detail));
         }
         using var body = await response.Content.ReadAsStreamAsync(ct); using var doc = await JsonDocument.ParseAsync(body, cancellationToken: ct);
         return doc.RootElement.Clone();
         }
     }
-    public Task<JsonElement> ListAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/list", new { fs, remote, opt = new { recurse = true } }, ct);
+    public Task<JsonElement> ListAsync(string fs, string remote, CancellationToken ct = default) =>
+        RunJobAsync("operations/list", new { fs, remote, opt = new { recurse = true }, _async = true }, ct);
     public async Task<IReadOnlyList<string>> ListDirectoriesAsync(string fs, string remote, bool recurse = false, CancellationToken ct = default)
     {
         var response = await CallAsync("operations/list", new { fs, remote, opt = new { recurse } }, ct);
@@ -160,9 +164,9 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
         return paths.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
     }
     public Task CopyFileAsync(string sourceFs, string sourceRemote, string targetFs, string targetRemote, CancellationToken ct = default, string? statsGroup = null) =>
-        CallAsync("operations/copyfile", statsGroup is null
-            ? new { srcFs = sourceFs, srcRemote = sourceRemote, dstFs = targetFs, dstRemote = targetRemote }
-            : new { srcFs = sourceFs, srcRemote = sourceRemote, dstFs = targetFs, dstRemote = targetRemote, _group = statsGroup }, ct);
+        RunJobAsync("operations/copyfile", statsGroup is null
+            ? new { srcFs = sourceFs, srcRemote = sourceRemote, dstFs = targetFs, dstRemote = targetRemote, _async = true }
+            : new { srcFs = sourceFs, srcRemote = sourceRemote, dstFs = targetFs, dstRemote = targetRemote, _group = statsGroup, _async = true }, ct);
     public async Task<RcloneTransferStats?> GetTransferStatsAsync(string statsGroup, CancellationToken ct = default)
     {
         var response = await CallAsync("core/stats", new { group = statsGroup, @short = true }, ct);
@@ -173,13 +177,77 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     }
     public Task MoveFileAsync(string fs, string source, string target, CancellationToken ct = default) => CallAsync("operations/movefile", new { srcFs = fs, srcRemote = source, dstFs = fs, dstRemote = target }, ct);
     public Task MoveDirectoryAsync(string sourceFs, string targetFs, CancellationToken ct = default) =>
-        CallAsync("sync/move", new { srcFs = sourceFs, dstFs = targetFs, createEmptySrcDirs = true, deleteEmptySrcDirs = true }, ct);
+        RunJobAsync("sync/move", new { srcFs = sourceFs, dstFs = targetFs, createEmptySrcDirs = true, deleteEmptySrcDirs = true, _async = true }, ct);
     public Task DeleteFileAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/deletefile", new { fs, remote }, ct);
     public Task MakeDirectoryAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/mkdir", new { fs, remote }, ct);
     public Task PurgeAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/purge", new { fs, remote }, ct);
+
+    public async Task<JsonElement> RunJobAsync(string operation, object payload, CancellationToken ct = default)
+    {
+        var started = await CallAsync(operation, payload, ct).ConfigureAwait(false);
+        // This compatibility path also makes the client usable with older rclone builds
+        // and small fake RC servers which complete a request synchronously.
+        if (!started.TryGetProperty("jobid", out var idElement) || !idElement.TryGetInt64(out var jobId)) return started;
+        try
+        {
+            while (true)
+            {
+                var status = await CallAsync("job/status", new { jobid = jobId }, ct).ConfigureAwait(false);
+                if (!status.TryGetProperty("finished", out var finished) || !finished.GetBoolean())
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(200), ct).ConfigureAwait(false);
+                    continue;
+                }
+                var success = !status.TryGetProperty("success", out var succeeded) || succeeded.GetBoolean();
+                if (!success)
+                {
+                    var detail = status.TryGetProperty("error", out var error) ? error.GetString() : null;
+                    throw new RcloneException(RcloneFailureClassifier.FromJob(operation, detail ?? "rclone 异步任务失败。"));
+                }
+                return status.TryGetProperty("output", out var output) ? output.Clone() : EmptyJson();
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await StopJobBestEffortAsync(jobId).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public Task StopJobAsync(long jobId, CancellationToken ct = default) =>
+        CallAsync("job/stop", new { jobid = jobId }, ct);
+
+    public async Task<IReadOnlyList<RcloneTransferredItem>> GetTransferredAsync(string statsGroup,
+        CancellationToken ct = default)
+    {
+        var response = await CallAsync("core/transferred", new { group = statsGroup }, ct).ConfigureAwait(false);
+        if (!response.TryGetProperty("transferred", out var items)) return [];
+        return items.EnumerateArray().Select(item => new RcloneTransferredItem(
+            item.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "",
+            item.TryGetProperty("size", out var size) && size.TryGetInt64(out var length) ? length : 0,
+            item.TryGetProperty("bytes", out var bytes) && bytes.TryGetInt64(out var copied) ? copied : 0,
+            item.TryGetProperty("error", out var error) ? error.GetString() : null)).ToList();
+    }
+
+    private async Task StopJobBestEffortAsync(long jobId)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            await StopJobAsync(jobId, timeout.Token).ConfigureAwait(false);
+        }
+        catch { }
+    }
+
+    private static JsonElement EmptyJson()
+    {
+        using var document = JsonDocument.Parse("{}");
+        return document.RootElement.Clone();
+    }
 }
 
 public sealed record RcloneTransferStats(long BytesTransferred, long TotalBytes, double BytesPerSecond);
+public sealed record RcloneTransferredItem(string Name, long Size, long BytesTransferred, string? Error);
 public sealed record RcloneDirectoryEntry(string Path, bool IsDirectory, long Size, DateTimeOffset? ModifiedUtc);
 
 /// <summary>rclone-backed SFTP, Google Drive, or S3 endpoint. Authentication is supplied exclusively by rclone.conf.</summary>

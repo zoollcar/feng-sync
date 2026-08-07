@@ -13,8 +13,11 @@ public sealed class ProfileRunner
 {
     private readonly RunHistoryRepository _history;
     private readonly ApplicationSettings _applicationSettings;
-    public ProfileRunner(RunHistoryRepository? history = null, ApplicationSettings? applicationSettings = null)
-        => (_history, _applicationSettings) = (history ?? new RunHistoryRepository(), applicationSettings ?? new ApplicationSettings());
+    private readonly RcloneRcClient? _sharedRcloneClient;
+    public ProfileRunner(RunHistoryRepository? history = null, ApplicationSettings? applicationSettings = null,
+        RcloneRcClient? sharedRcloneClient = null)
+        => (_history, _applicationSettings, _sharedRcloneClient) =
+            (history ?? new RunHistoryRepository(), applicationSettings ?? new ApplicationSettings(), sharedRcloneClient);
 
     /// <summary>Runs the same capability and safety checks as execution, without changing either endpoint.</summary>
     public async Task<ProfileComparisonResult> CompareAsync(SyncProfile profile, CancellationToken ct = default)
@@ -74,7 +77,8 @@ public sealed class ProfileRunner
         }
         catch (Exception ex) when (!historyLogged)
         {
-            await _history.AppendAsync(new(profile.Id, RunOutcome.Failed, DateTimeOffset.UtcNow, 0, 0, 0, 0, ex.Message), CancellationToken.None);
+            await _history.AppendAsync(RunHistoryEntry.FromFailure(profile.Id, RunOutcome.Failed,
+                DateTimeOffset.UtcNow, ex.Message, ex), CancellationToken.None);
             throw;
         }
     }
@@ -128,7 +132,9 @@ public sealed class ProfileRunner
         var compatibility = new FeatureCapabilityService().Evaluate(profile);
         if (!compatibility.CanRun) throw new InvalidOperationException("该 Profile 需要修复：" + compatibility.Summary);
         var effective = EffectiveProfileSettings.Resolve(profile, _applicationSettings);
-        var endpoints = await EndpointFactory.OpenAsync(profile.LeftPath, profile.RightPath, ct);
+        var endpoints = _sharedRcloneClient is null
+            ? await EndpointFactory.OpenAsync(profile.LeftPath, profile.RightPath, ct)
+            : EndpointFactory.OpenWithClient(profile.LeftPath, profile.RightPath, _sharedRcloneClient);
         try
         {
             var left = endpoints.Left; var right = endpoints.Right;

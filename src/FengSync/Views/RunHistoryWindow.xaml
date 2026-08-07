@@ -76,6 +76,9 @@
                 <DataGridTextColumn Header="失败" Binding="{Binding Failed}" Width="55" />
                 <DataGridTextColumn Header="字节" Binding="{Binding TransferredBytes, StringFormat={}{0:N0}}" Width="95" />
                 <DataGridTextColumn Header="详情" Binding="{Binding Detail}" Width="2*" />
+                <DataGridTextColumn Header="类别" Binding="{Binding FailureCategory}" Width="100" />
+                <DataGridTextColumn Header="可重试" Binding="{Binding FailureRetryable}" Width="70" />
+                <DataGridTextColumn Header="诊断 ID" Binding="{Binding CorrelationId}" Width="150" />
             </DataGrid.Columns>
         </DataGrid>
     </Grid>

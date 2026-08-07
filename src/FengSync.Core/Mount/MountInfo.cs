@@ -22,6 +22,9 @@ public sealed record MountInfo(
     MountOrigin Origin,
     bool IsHealthy)
 {
+    /// <summary>Only RC-managed mounts can be safely unmounted by Feng Sync.</summary>
+    public bool CanUnmount => Origin == MountOrigin.FengSyncManaged;
+
     /// <summary>Compact list display like <c>[本应用] drive:Google  →  X:</c>.</summary>
     public string Display
     {

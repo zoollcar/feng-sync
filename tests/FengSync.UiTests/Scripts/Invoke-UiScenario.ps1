@@ -45,6 +45,34 @@ function Write-HarnessTrace([string]$message) {
 }
 Write-HarnessTrace "Starting scenario: $Scenario"
 
+function Enable-RcloneWindowsProxy {
+  # The online fixture invokes bundled rclone before the application starts. GUI
+  # processes and this isolated PowerShell host may not inherit shell proxy variables,
+  # so mirror Feng Sync's WinINET fallback for fixture setup and for the child app.
+  if ($env:HTTPS_PROXY -or $env:HTTP_PROXY -or $env:ALL_PROXY) { return }
+  $internet = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue
+  if ($internet.ProxyEnable -ne 1 -or [string]::IsNullOrWhiteSpace($internet.ProxyServer)) { return }
+  $entries = @{}
+  $singleProxy = $internet.ProxyServer -notmatch '='
+  if (-not $singleProxy) {
+    foreach ($part in $internet.ProxyServer -split ';') {
+      $pair = $part -split '=', 2
+      if ($pair.Count -eq 2) { $entries[$pair[0].Trim().ToLowerInvariant()] = $pair[1].Trim() }
+    }
+  } else {
+    $entries.http = $internet.ProxyServer
+    $entries.https = $internet.ProxyServer
+    $entries.socks = $internet.ProxyServer
+  }
+  $asHttp = { param([string]$value) if ($value -match '://') { $value } else { 'http://' + $value } }
+  if ($entries.http) { $env:HTTP_PROXY = & $asHttp $entries.http }
+  if ($entries.https) { $env:HTTPS_PROXY = & $asHttp $entries.https }
+  if ($entries.socks -and -not $env:ALL_PROXY) {
+    $env:ALL_PROXY = if ($singleProxy) { & $asHttp $entries.socks } elseif ($entries.socks -match '://') { $entries.socks } else { 'socks5://' + $entries.socks }
+  }
+  $env:NO_PROXY = '127.0.0.1,localhost,::1'
+}
+
 function Wait-Until([scriptblock]$Condition, [string]$Message, [int]$Seconds = 30) {
   $end = [DateTime]::UtcNow.AddSeconds($Seconds)
   do { $value = & $Condition; if ($null -ne $value -and $value -ne $false) { return $value }; Start-Sleep -Milliseconds 150 } while ([DateTime]::UtcNow -lt $end)
@@ -554,6 +582,7 @@ try {
       & $rclone config create ui_sftp sftp host 127.0.0.1 user ui port "$port" pass $password --config $config; if ($LASTEXITCODE -ne 0) { throw 'Could not configure isolated SFTP remote.' }; $sftpUri='sftp://ui_sftp' }
   }
   if ($Scenario -in @('gdrive', 'gdrive-volume')) {
+    Enable-RcloneWindowsProxy
     $sourceConfig = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) 'FengSync\rclone\rclone.conf'
     if (-not (Test-Path -LiteralPath $sourceConfig)) { Write-Output 'SKIPPED: no Feng Sync rclone configuration was found.'; exit 77 }
     $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'

@@ -5,6 +5,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using FengSync.Core;
+using FengSync.Services;
 using FluentIconSymbol = FluentIcons.Common.Icon;
 using Microsoft.Win32;
 
@@ -181,7 +182,7 @@ public partial class ProgressWindow : Window
         StateDescription.Text = $"正在重试 {plan.Operations.Count} 项可重试失败。";
         try { Complete(await _retry(plan), "失败项重试已完成。"); }
         catch (OperationCanceledException) { Complete(new SyncRunResult(Guid.NewGuid(), []), "失败项重试已取消。", cancelled: true); }
-        catch (Exception ex) { Complete(new SyncRunResult(Guid.NewGuid(), [new(Guid.NewGuid(), "", OperationKind.Blocked, TransferStage.Failed, Error: ex.Message)]), "失败项重试失败。"); }
+        catch (Exception ex) { Complete(new SyncRunResult(Guid.NewGuid(), [new(Guid.NewGuid(), "", OperationKind.Blocked, TransferStage.Failed, Error: RcloneUiError.Describe(ex, "retry-failed-items"))]), "失败项重试失败。"); }
     }
 
     private async void SaveLog_Click(object sender, RoutedEventArgs e)

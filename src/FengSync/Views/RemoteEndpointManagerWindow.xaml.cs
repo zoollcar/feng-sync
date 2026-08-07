@@ -21,7 +21,7 @@ public partial class RemoteEndpointManagerWindow : Window
 {
     private readonly ObservableCollection<RcloneAccount> _accounts = [];
     private readonly ObservableCollection<MountInfo> _mounts = [];
-    private readonly RcloneMountService _mountService = new();
+    private readonly RcloneMountService _mountService = App.CurrentApp.MountService;
     private readonly CloudFileManagerService _files = new();
     private readonly ObservableCollection<CloudFileEntry> _entries = [];
     private string _currentPath = "";
@@ -53,7 +53,7 @@ public partial class RemoteEndpointManagerWindow : Window
             if (_accounts.Count > 0) EndpointList.SelectedIndex = restore;
             StatusText.Text = _accounts.Count == 0 ? "尚无云端端点。点击“新建端点”创建一个。" : $"共 {_accounts.Count} 个云端端点。";
         }
-        catch (Exception ex) { StatusText.Text = "无法读取云端端点：" + ex.Message; }
+        catch (Exception ex) { StatusText.Text = "无法读取云端端点：" + RcloneUiError.Describe(ex, "endpoint-manager-list"); }
         await RefreshMountsAsync();
     }
 
@@ -67,14 +67,14 @@ public partial class RemoteEndpointManagerWindow : Window
             foreach (var mount in mounts) _mounts.Add(mount);
             MountStatus.Text = _mounts.Count == 0 ? "当前系统没有 rclone 挂载。" : $"共发现 {_mounts.Count} 个挂载，其中 {_mounts.Count(m => m.Origin == MountOrigin.FengSyncManaged)} 个由本应用启动。";
         }
-        catch (Exception ex) { MountStatus.Text = "扫描挂载失败：" + ex.Message; }
+        catch (Exception ex) { MountStatus.Text = "扫描挂载失败：" + RcloneUiError.Describe(ex, "mount-scan"); }
         UpdateMountButtons();
     }
 
     private void UpdateMountButtons()
     {
         MountSelectedEndpointButton.IsEnabled = Selected is not null && !_mountBusy;
-        UnmountMountButton.IsEnabled = SelectedMount is not null && !_mountBusy;
+        UnmountMountButton.IsEnabled = SelectedMount?.CanUnmount == true && !_mountBusy;
         RefreshMountsButton.IsEnabled = !_mountBusy;
     }
 
@@ -105,9 +105,11 @@ public partial class RemoteEndpointManagerWindow : Window
     private async void Reconnect_Click(object sender, RoutedEventArgs e)
     {
         if (Selected is not RcloneAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
+        if (!account.IsGoogleDrive) { StatusText.Text = "只有 Google Drive 端点需要浏览器重新登录。"; return; }
         await RunBusyAsync(ReconnectButton, "正在登录…", "正在重新登录，请在浏览器完成授权…", async () =>
         {
-            await CloudEndpointService.ReconnectAsync(account.Name);
+            var progress = new Progress<string>(message => StatusText.Text = message);
+            await CloudEndpointService.ReconnectAsync(account.Name, progress);
             await RefreshAsync();
             StatusText.Text = $"“{account.Name}”已重新登录。";
         });
@@ -133,7 +135,12 @@ public partial class RemoteEndpointManagerWindow : Window
         _busy = true;
         var original = button.Content;
         try { button.IsEnabled = false; button.Content = busyText; StatusText.Text = status; await action(); }
-        catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(ex.Message, "远程端点", MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex)
+        {
+            var message = RcloneUiError.Describe(ex, "endpoint-manager-action");
+            StatusText.Text = message;
+            MessageBox.Show(message, "远程端点", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
         finally { button.IsEnabled = true; button.Content = original; _busy = false; }
     }
 
@@ -143,7 +150,7 @@ public partial class RemoteEndpointManagerWindow : Window
         _mountBusy = true;
         UpdateMountButtons();
         try { await RefreshMountsAsync(); }
-        catch (Exception ex) { MountStatus.Text = "刷新挂载失败：" + ex.Message; }
+        catch (Exception ex) { MountStatus.Text = "刷新挂载失败：" + RcloneUiError.Describe(ex, "mount-refresh"); }
         finally { _mountBusy = false; UpdateMountButtons(); }
     }
 
@@ -166,8 +173,9 @@ public partial class RemoteEndpointManagerWindow : Window
         }
         catch (Exception ex)
         {
-            MountStatus.Text = "挂载失败：" + ex.Message;
-            MessageBox.Show(ex.Message, "挂载", MessageBoxButton.OK, MessageBoxImage.Error);
+            var message = RcloneUiError.Describe(ex, "mount-create");
+            MountStatus.Text = "挂载失败：" + message;
+            MessageBox.Show(message, "挂载", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally { _mountBusy = false; UpdateMountButtons(); }
     }
@@ -177,14 +185,12 @@ public partial class RemoteEndpointManagerWindow : Window
         var mount = SelectedMount;
         if (mount is null) { MountStatus.Text = "请先选择要取消的挂载。"; return; }
         if (_mountBusy) return;
-        if (mount.Origin == MountOrigin.Unreadable)
+        if (!mount.CanUnmount)
         {
-            MessageBox.Show("该挂载的命令行无法读取，可能由更高权限的进程启动。请用任务管理器手动结束对应 rclone 进程。", "取消挂载", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("该挂载由外部程序管理。Feng Sync 只读显示外部挂载，不会结束其进程或代为卸载。", "取消挂载", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        var prompt = mount.Origin == MountOrigin.External
-            ? $"该挂载不是由本应用启动的。\n\n{mount.Display}\n\n仍要停止并卸载吗？"
-            : $"确定取消挂载？\n\n{mount.Display}";
+        var prompt = $"确定取消挂载？\n\n{mount.Display}";
         if (MessageBox.Show(prompt, "取消挂载", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         _mountBusy = true;
         UpdateMountButtons();
@@ -203,8 +209,9 @@ public partial class RemoteEndpointManagerWindow : Window
         }
         catch (Exception ex)
         {
-            MountStatus.Text = "取消挂载失败：" + ex.Message;
-            MessageBox.Show(ex.Message, "取消挂载", MessageBoxButton.OK, MessageBoxImage.Error);
+            var message = RcloneUiError.Describe(ex, "mount-remove");
+            MountStatus.Text = "取消挂载失败：" + message;
+            MessageBox.Show(message, "取消挂载", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally { _mountBusy = false; UpdateMountButtons(); }
     }
@@ -221,7 +228,7 @@ public partial class RemoteEndpointManagerWindow : Window
             BackButton.IsEnabled = !string.IsNullOrEmpty(_currentPath);
             StatusText.Text = $"共 {_entries.Count} 项。";
         }
-        catch (Exception ex) { StatusText.Text = "无法读取目录：" + ex.Message; }
+        catch (Exception ex) { StatusText.Text = "无法读取目录：" + RcloneUiError.Describe(ex, "cloud-file-list"); }
     }
 
     private async void BrowseRefresh_Click(object sender, RoutedEventArgs e) => await BrowseAsync();
@@ -292,7 +299,7 @@ public partial class RemoteEndpointManagerWindow : Window
             { TransferProgress.Value = p.Percentage; StatusText.Text = $"正在上传：{Path.GetFileName(localPath)}  {p.Percentage:N1}%  {p.CompletedBytes / 1024d / 1024d:N1} MB"; }));
             StatusText.Text = (overwrite ? "已覆盖：" : "已上传：") + Path.GetFileName(localPath); return true;
         }
-        catch (Exception ex) { StatusText.Text = "上传失败：" + ex.Message; return false; }
+        catch (Exception ex) { StatusText.Text = "上传失败：" + RcloneUiError.Describe(ex, "cloud-file-upload"); return false; }
     }
 
     private async Task DownloadAsync(CloudFileEntry entry)
@@ -314,7 +321,7 @@ public partial class RemoteEndpointManagerWindow : Window
     private async Task<bool> DownloadToAsync(string remote, CloudFileEntry entry, string local)
     {
         try { TransferProgress.Value = 0; await _files.DownloadAsync(remote, entry.Path, local, new Progress<CloudTransferProgress>(p => TransferProgress.Value = p.Percentage)); StatusText.Text = "已下载：" + entry.Name; return true; }
-        catch (Exception ex) { StatusText.Text = "下载失败：" + ex.Message; return false; }
+        catch (Exception ex) { StatusText.Text = "下载失败：" + RcloneUiError.Describe(ex, "cloud-file-download"); return false; }
     }
 
     private void Resume_Click(object sender, RoutedEventArgs e)

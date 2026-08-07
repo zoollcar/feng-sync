@@ -148,10 +148,11 @@ public sealed class RcloneEndpointTests : IDisposable
         using var http = new HttpClient(new TimeoutHandler()) { BaseAddress = new Uri("http://rc.test/") };
         var client = new RcloneRcClient(http, http.BaseAddress!, "user", "pass");
 
-        var error = await Assert.ThrowsAsync<TimeoutException>(() => client.CallAsync("operations/list", new { }));
+        var error = await Assert.ThrowsAsync<FengSync.Core.Rclone.Diagnostics.RcloneException>(() => client.CallAsync("operations/list", new { }));
 
-        Assert.Contains("operations/list", error.Message);
-        Assert.Contains("Google Drive", error.Message);
+        Assert.Equal(FengSync.Core.Rclone.Diagnostics.RcloneFailureCategory.Temporary, error.Failure.Category);
+        Assert.True(error.Failure.Retryable);
+        Assert.Equal("operations/list", error.Failure.Operation);
     }
 
     [Fact]
