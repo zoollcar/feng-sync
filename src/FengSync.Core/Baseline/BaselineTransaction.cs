@@ -28,6 +28,7 @@ public sealed class BaselineRepository
         => (_store, _transactions) = (store ?? new EndpointBaselineStore(), transactionStore ?? new BaselineTransactionStore());
     public Task<IReadOnlyList<BaselineEntry>?> LoadAsync(LocalEndpoint left, LocalEndpoint right, CancellationToken ct = default) => _store.LoadAsync(left, right, ct);
     public Task<IReadOnlyList<BaselineEntry>?> LoadAsync(IEndpoint left, IEndpoint right, CancellationToken ct = default) => _store.LoadAsync(left, right, ct);
+    public Task<BaselineLoadResult> LoadDetailedAsync(IEndpoint left, IEndpoint right, CancellationToken ct = default) => _store.LoadDetailedAsync(left, right, ct);
     public string? LastLoadWarning => _store.LastLoadWarning;
     public BaselineTransaction Begin(IEndpoint left, IEndpoint right) => new(Guid.NewGuid(), EndpointIdentity.From(left), EndpointIdentity.From(right), DateTimeOffset.UtcNow);
     public async Task<BaselineTransaction> BeginAsync(IEndpoint left, IEndpoint right, CancellationToken ct = default)
@@ -41,9 +42,9 @@ public sealed class BaselineRepository
         => await CommitCoreAsync(transaction, left, right, allOperationsSucceeded, () => _store.CommitAsync(left, right, ct), ct);
     public async Task<BaselineTransaction> CommitAsync(BaselineTransaction transaction, IEndpoint left, IEndpoint right, bool allOperationsSucceeded, CancellationToken ct = default)
         => await CommitCoreAsync(transaction, left, right, allOperationsSucceeded, () => _store.CommitAsync(left, right, ct), ct);
-    public Task CommitFromSnapshotAsync(IEndpoint left, IEndpoint right, ComparisonSnapshot snapshot, CancellationToken ct = default)
+    public Task<BaselineCommitResult> CommitFromSnapshotAsync(IEndpoint left, IEndpoint right, ComparisonSnapshot snapshot, CancellationToken ct = default)
         => _store.CommitFromSnapshotAsync(left, right, snapshot, ct);
-    public Task CommitFromResultsAsync(IEndpoint left, IEndpoint right, BaselineCommitInput input, CancellationToken ct = default)
+    public Task<BaselineCommitResult> CommitFromResultsAsync(IEndpoint left, IEndpoint right, BaselineCommitInput input, CancellationToken ct = default)
         => _store.CommitFromResultsAsync(left, right, input, ct);
     private async Task<BaselineTransaction> CommitCoreAsync(BaselineTransaction transaction, IEndpoint left, IEndpoint right, bool allOperationsSucceeded, Func<Task> publish, CancellationToken ct)
     {

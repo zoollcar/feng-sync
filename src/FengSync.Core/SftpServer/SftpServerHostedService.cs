@@ -124,17 +124,6 @@ public sealed class SftpServerHostedService : IAsyncDisposable
         IsRunning = true;
     }
 
-    public async Task RefreshStatusAsync(CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(_serverId))
-        {
-            IsRunning = false;
-            return;
-        }
-        IsRunning = await IsServerListedAsync(_serverId, ct).ConfigureAwait(false);
-        if (!IsRunning) { _serverId = null; BoundAddress = null; }
-    }
-
     public async Task StopAsync(CancellationToken ct = default)
     {
         var id = _serverId;

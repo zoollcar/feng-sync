@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Net.Http.Json;
 using System.Text;
+using System.Runtime.CompilerServices;
 using FengSync.Core.Diagnostics;
 using FengSync.Core.Rclone.Diagnostics;
 
@@ -50,6 +51,21 @@ public interface IEndpoint
     EndpointProfile Profile { get; }
     EndpointCapabilities Capabilities { get; }
     Task<IReadOnlyList<EntrySnapshot>> ScanAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Streams scan results so paired snapshot capture can index entries while
+    /// enumeration is still in progress. Existing endpoint implementations keep
+    /// working through this compatibility adapter; performance-sensitive endpoints
+    /// should override it to avoid materialising an intermediate list.
+    /// </summary>
+    async IAsyncEnumerable<EntrySnapshot> ScanEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var entries = await ScanAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var entry in entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return entry;
+        }
+    }
     async Task<IReadOnlyList<EntrySnapshot>> ScanAsync(IProgress<ScanProgress> progress, CancellationToken cancellationToken = default)
     {
         progress.Report(new(0));
@@ -217,18 +233,6 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     public Task StopJobAsync(long jobId, CancellationToken ct = default) =>
         CallAsync("job/stop", new { jobid = jobId }, ct);
 
-    public async Task<IReadOnlyList<RcloneTransferredItem>> GetTransferredAsync(string statsGroup,
-        CancellationToken ct = default)
-    {
-        var response = await CallAsync("core/transferred", new { group = statsGroup }, ct).ConfigureAwait(false);
-        if (!response.TryGetProperty("transferred", out var items)) return [];
-        return items.EnumerateArray().Select(item => new RcloneTransferredItem(
-            item.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "",
-            item.TryGetProperty("size", out var size) && size.TryGetInt64(out var length) ? length : 0,
-            item.TryGetProperty("bytes", out var bytes) && bytes.TryGetInt64(out var copied) ? copied : 0,
-            item.TryGetProperty("error", out var error) ? error.GetString() : null)).ToList();
-    }
-
     private async Task StopJobBestEffortAsync(long jobId)
     {
         try
@@ -247,7 +251,6 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
 }
 
 public sealed record RcloneTransferStats(long BytesTransferred, long TotalBytes, double BytesPerSecond);
-public sealed record RcloneTransferredItem(string Name, long Size, long BytesTransferred, string? Error);
 public sealed record RcloneDirectoryEntry(string Path, bool IsDirectory, long Size, DateTimeOffset? ModifiedUtc);
 
 /// <summary>rclone-backed SFTP, Google Drive, or S3 endpoint. Authentication is supplied exclusively by rclone.conf.</summary>
@@ -271,37 +274,61 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
 
     public async Task<IReadOnlyList<EntrySnapshot>> ScanAsync(CancellationToken cancellationToken = default)
     {
+        var items = new List<EntrySnapshot>();
+        await foreach (var item in ScanEntriesAsync(cancellationToken).ConfigureAwait(false)) items.Add(item);
+        return items;
+    }
+
+    public async IAsyncEnumerable<EntrySnapshot> ScanEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
         SyncRunMetricsHub.Current.IncrementDirectoryScan();
         var response = await client.ListAsync(Fs, Profile.Root, cancellationToken);
-        if (!response.TryGetProperty("list", out var list)) return [];
-        var items = new List<EntrySnapshot>();
+        if (!response.TryGetProperty("list", out var list)) yield break;
         foreach (var x in list.EnumerateArray())
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // RC list may return either a path relative to `remote` or a path prefixed by
             // that remote. Normalize once here; every planner operation must be relative to
             // Profile.Root so At() never produces `root/root/file` on a later copy.
             var path = RelativeToRoot(x.GetProperty("Path").GetString() ?? "");
             if (Excluded(path)) continue;
             var directory = x.TryGetProperty("IsDir", out var isDir) && isDir.GetBoolean();
-            if (directory) { items.Add(new(path, EntryKind.Directory, null)); continue; }
+            if (directory)
+            {
+                SyncRunMetricsHub.Current.AddEntriesEnumerated(1);
+                yield return new(path, EntryKind.Directory, null);
+                continue;
+            }
             var size = x.TryGetProperty("Size", out var s) ? s.GetInt64() : 0;
             var mod = x.TryGetProperty("ModTime", out var m) && DateTimeOffset.TryParse(m.GetString(), out var parsed) ? parsed : DateTimeOffset.MinValue;
             string? hash = null;
             if (x.TryGetProperty("Hashes", out var hashes))
                 foreach (var candidate in new[] { "md5", "sha1", "sha256" }) if (hashes.TryGetProperty(candidate, out var h)) { hash = h.GetString(); break; }
-            items.Add(new(path, EntryKind.File, new(size, mod, hash)));
+            SyncRunMetricsHub.Current.AddEntriesEnumerated(1);
+            yield return new(path, EntryKind.File, new(size, mod, hash));
         }
-        return items;
     }
     public async Task CopyToAsync(string relativePath, IEndpoint target, string temporaryPath, CancellationToken cancellationToken = default)
     {
-        if (target is not RcloneEndpoint remoteTarget) throw new NotSupportedException("跨本地/远程传输由 SyncExecutor 的传输适配器处理。");
+        if (target is not RcloneEndpoint remoteTarget) throw new NotSupportedException("跨本地/远程传输由统一传输适配器处理。");
         await client.CopyFileAsync(Fs, At(relativePath), remoteTarget.Fs, remoteTarget.At(temporaryPath), cancellationToken);
     }
     public Task MoveAsync(string from, string to, CancellationToken cancellationToken = default) => client.MoveFileAsync(Fs, At(from), At(to), cancellationToken);
     public Task MoveDirectoryAsync(string from, string to, CancellationToken cancellationToken = default) =>
         client.MoveDirectoryAsync(Fs + At(from), Fs + At(to), cancellationToken);
-    public Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default) => directory ? client.PurgeAsync(Fs, At(relativePath), cancellationToken) : client.DeleteFileAsync(Fs, At(relativePath), cancellationToken);
+    public async Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (directory) await client.PurgeAsync(Fs, At(relativePath), cancellationToken).ConfigureAwait(false);
+            else await client.DeleteFileAsync(Fs, At(relativePath), cancellationToken).ConfigureAwait(false);
+        }
+        catch (RcloneException ex) when (ex.Failure.Category == RcloneFailureCategory.NotFound)
+        {
+            // Delete is idempotent: an object that disappeared after comparison is
+            // already in the requested state and must not require a preceding list.
+        }
+    }
     public Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default) => client.MakeDirectoryAsync(Fs, At(relativePath), cancellationToken);
     public async Task<IReadOnlyList<TransferTemporaryFile>> ListTransferTemporaryFilesAsync(CancellationToken cancellationToken = default)
     {

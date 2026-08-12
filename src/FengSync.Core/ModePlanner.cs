@@ -112,7 +112,40 @@ internal static class MoveCoordinator
                 changed.Confidence, execution, fallback);
             output.Add(new(changed.NewPath, OperationKind.Move, "传播端点内移动", selected: changed.Confidence <= settings.MinimumAutoExecuteConfidence, move: descriptor));
         }
+        RemoveMoveStructuralOperations(output, left, right, paths);
         return new(output.OrderBy(x => x.Path, StringComparer.Ordinal).ToList());
+    }
+
+    // A detected file move already owns the old -> new path transition. The
+    // three-way planner may also have emitted parent-directory create/delete
+    // operations for that same transition. Leaving those operations visible is
+    // redundant when the move is selected and unsafe when a low-confidence move
+    // is deselected, because the old parent could otherwise be deleted alone.
+    private static void RemoveMoveStructuralOperations(List<SyncOperation> operations,
+        IReadOnlyDictionary<string, EntrySnapshot> left, IReadOnlyDictionary<string, EntrySnapshot> right,
+        EndpointPathSemantics paths)
+    {
+        foreach (var operation in operations.Where(x => x.Kind == OperationKind.Move && x.Move is not null).ToList())
+        {
+            var move = operation.Move!;
+            if (move.ChangedOn == move.ExecuteOn) continue;
+            var target = move.ExecuteOn == EndpointSide.Left ? left : right;
+            var source = move.ChangedOn == EndpointSide.Left ? left : right;
+            var deleteKind = move.ExecuteOn == EndpointSide.Left ? OperationKind.DeleteLeft : OperationKind.DeleteRight;
+            var createKind = move.ExecuteOn == EndpointSide.Left ? OperationKind.CreateLeftDirectory : OperationKind.CreateRightDirectory;
+            operations.RemoveAll(candidate => candidate.OperationId != operation.OperationId &&
+                ((candidate.Kind == deleteKind && IsDirectoryAncestor(candidate.Path, move.FromPath, target, paths)) ||
+                 (candidate.Kind == createKind && IsDirectoryAncestor(candidate.Path, move.ToPath, source, paths))));
+        }
+    }
+
+    private static bool IsDirectoryAncestor(string candidate, string child,
+        IReadOnlyDictionary<string, EntrySnapshot> entries, EndpointPathSemantics paths)
+    {
+        var ancestorKey = paths.Canonicalize(candidate).TrimEnd('/');
+        var childKey = paths.Canonicalize(child);
+        return childKey.Length > ancestorKey.Length && childKey.StartsWith(ancestorKey + "/", StringComparison.Ordinal) &&
+               entries.TryGetValue(ancestorKey, out var entry) && entry.Kind == EntryKind.Directory;
     }
     private static void RemovePathOperations(List<SyncOperation> operations, params string[] paths) =>
         operations.RemoveAll(x => paths.Any(p => string.Equals(p, x.Path, StringComparison.Ordinal)) &&

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume')][string]$Scenario,
     [Parameter(Mandatory)][string]$AppPath,
     [Parameter(Mandatory)][string]$Workspace
 )
@@ -33,6 +33,11 @@ $stamp = "ui-$Scenario-" + [Guid]::NewGuid().ToString('N')
 $root = Join-Path $Workspace ('.fengsync-test\ui\' + $stamp)
 $appData = Join-Path $root 'appdata'; $artifacts = Join-Path $root 'artifacts'
 New-Item -ItemType Directory -Force -Path $root, $appData, $artifacts | Out-Null
+$screenshotManifest = [System.Collections.Generic.List[object]]::new()
+$script:comparisonScreenshotCount = 0
+$script:syncScreenshotCount = 0
+$script:activeSyncLabel = $null
+$script:activeSyncProgressCaptured = $false
 # A test has no reason to retain completed progress windows. This makes every
 # successful sync self-closing even before the explicit UI assertion below.
 [IO.File]::WriteAllText((Join-Path $appData 'FengSync.local.json'), '{"ShowCompleted":false}')
@@ -210,21 +215,25 @@ function Apply-Direction($main, [string]$header) {
   $actionButton = Find-Name $row '变更操作菜单' 5
   $bounds = $actionButton.Current.BoundingRectangle
   if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw 'Comparison action menu has no clickable bounds.' }
-  [Windows.Forms.Cursor]::Position = [Drawing.Point]::new([int]($bounds.Left + ($bounds.Width / 2)), [int]($bounds.Top + ($bounds.Height / 2)))
-  Start-Sleep -Milliseconds 100
-  [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTDOWN, 0, 0, 0, [UIntPtr]::Zero)
-  [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTUP, 0, 0, 0, [UIntPtr]::Zero)
+  [System.Windows.Automation.InvokePattern]$invoke = $null
+  if ($actionButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
+    $invoke.Invoke()
+  } else {
+    try { $actionButton.SetFocus() } catch { }
+    [FengSyncUiMouse]::SetCursorPos([int]($bounds.Left + ($bounds.Width / 2)), [int]($bounds.Top + ($bounds.Height / 2))) | Out-Null
+    Start-Sleep -Milliseconds 180
+    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTUP, 0, 0, 0, [UIntPtr]::Zero)
+  }
   Start-Sleep -Milliseconds 250
   $menu = $null
   $menuDeadline = [DateTime]::UtcNow.AddSeconds(5)
   while ([DateTime]::UtcNow -lt $menuDeadline -and $null -eq $menu) {
     try {
-      $menus = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
-        [System.Windows.Automation.TreeScope]::Descendants,
-        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Menu))
-      foreach ($candidate in $menus) {
+      $candidate = Find-ContextMenuInApp 'ComparisonActionMenu'
+      if ($candidate) {
         $target = $candidate.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $header))
-        if ($target) { $menu = $candidate; break }
+        if ($target) { $menu = $candidate }
       }
     } catch { $menu = $null }
     if ($null -eq $menu) { Start-Sleep -Milliseconds 150 }
@@ -265,7 +274,7 @@ function Apply-Direction($main, [string]$header) {
   }
 }
 # =================== Profile context menu (right-click ProfileList) ===================
-function Find-ContextMenuInApp {
+function Find-ContextMenuInApp([string]$automationId = 'ProfileContextMenu') {
   # WPF ContextMenus are not top-level windows, so they don't appear as children of
   # RootElement. Recursively walk the whole tree looking for the popup's Menu control.
   $root = [System.Windows.Automation.AutomationElement]::RootElement
@@ -274,7 +283,7 @@ function Find-ContextMenuInApp {
   while ($queue.Count -gt 0) {
     $node = $queue.Dequeue()
     try {
-      if ($node.Current.ControlType -eq [System.Windows.Automation.ControlType]::Menu -and $node.Current.AutomationId -eq 'ProfileContextMenu') {
+      if ($node.Current.ControlType -eq [System.Windows.Automation.ControlType]::Menu -and $node.Current.AutomationId -eq $automationId) {
         return $node
       }
       $children = $node.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
@@ -396,7 +405,11 @@ function Approve-ConfirmationIfPresent {
   $confirm = try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'SyncConfirmationWindow' } } catch { $null }
   if ($confirm) {
     $id = [string]::Join('-', $confirm.GetRuntimeId())
-    if ($approvedConfirmations.Add($id)) { Click (Find-Id $confirm 'ConfirmSyncButton'); return $true }
+    if ($approvedConfirmations.Add($id)) {
+      Capture-Element $confirm ("sync-{0:D2}-confirmation.png" -f $script:syncScreenshotCount) 'sync-confirmation' $script:activeSyncLabel
+      Click (Find-Id $confirm 'ConfirmSyncButton')
+      return $true
+    }
   }
   return $false
 }
@@ -406,14 +419,25 @@ function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds
   catch { $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }; throw "Comparison did not produce an executable plan. UI status: $status" }
   $expectedDescription = if ($checkExpectedContent) { $expectedContent } else { '<existence-only>' }
   Write-Output "Comparison ready; expected sync output: $expectedFile; expected content: $expectedDescription"
+  $script:syncScreenshotCount++
+  $script:activeSyncLabel = "sync-$($script:syncScreenshotCount)-$([IO.Path]::GetFileName($expectedFile))"
+  $script:activeSyncProgressCaptured = $false
   Click (Find-Id $main 'SyncButton')
   Write-HarnessTrace 'Sync button invoked.'
+  Capture-Element (Get-LiveMain) ("sync-{0:D2}-started.png" -f $script:syncScreenshotCount) 'sync-started' $script:activeSyncLabel
   Write-HarnessTrace "Probing synchronized result: $expectedFile"
   $resultDeadline = [DateTime]::UtcNow.AddSeconds($transferSeconds)
   $resultObserved = $false
   try {
     do {
       Approve-ConfirmationIfPresent | Out-Null
+      if (-not $script:activeSyncProgressCaptured) {
+        $progress = try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'ProgressWindow' } } catch { $null }
+        if ($progress) {
+          Capture-Element $progress ("sync-{0:D2}-progress.png" -f $script:syncScreenshotCount) 'sync-progress' $script:activeSyncLabel
+          $script:activeSyncProgressCaptured = $true
+        }
+      }
       Assert-NoUiFailure 'Synchronization' | Out-Null
       $outputExists = Test-Path -LiteralPath $expectedFile
       if ($outputExists) {
@@ -434,6 +458,7 @@ function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds
     throw "Expected synchronized result was not produced: $expectedFile. Expected content: $expectedContent. Actual: $actual. UI status: $status"
   }
   Wait-MainReadyAfterSync $transferSeconds
+  Capture-Element (Get-LiveMain) ("sync-{0:D2}-complete.png" -f $script:syncScreenshotCount) 'sync-complete' $script:activeSyncLabel
   Write-HarnessTrace 'Sync complete; main window is responsive and the scenario will continue its next UI action.'
   $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }
   $actual = try { [IO.File]::ReadAllText($expectedFile) } catch { '<unreadable>' }
@@ -458,6 +483,7 @@ function Compare-Ui {
   } 'CompareButton stayed disabled before the next comparison could start.' 30 | Out-Null
 
   $statusBeforeClick = Get-UiStatus
+  $compareTimer = [Diagnostics.Stopwatch]::StartNew()
   Click (Find-Id $main 'CompareButton')
   Write-HarnessTrace "Compare button invoked: $left <-> $right"
 
@@ -469,9 +495,17 @@ function Compare-Ui {
     if ($status -match '失败|已取消|错误|无法|需要修复|阻断') { throw "Comparison failed. UI status: $status" }
     $compareEnabled = (Find-Id $liveMain 'CompareButton' 2).Current.IsEnabled
     $syncEnabled = (Find-Id $liveMain 'SyncButton' 2).Current.IsEnabled
-    if (-not $compareEnabled -or $status -ne $statusBeforeClick) { $accepted = $true }
-    if ($accepted -and $compareEnabled -and ($syncEnabled -or $allowNonExecutable)) {
+    if (-not $compareEnabled -or $status -ne $statusBeforeClick -or ($compareTimer.ElapsedMilliseconds -ge 500 -and $status -match '比较完成')) { $accepted = $true }
+    # A baseline safety notice intentionally remains as the final status for a
+    # usable plan; scanning/analyzing text is transitional and must not be captured.
+    $comparisonFinished = $status -match '比较完成|仅一端存在 sync\.fengdb；本次停用删除基线'
+    if ($accepted -and $comparisonFinished -and $compareEnabled -and ($syncEnabled -or $allowNonExecutable)) {
       Write-HarnessTrace "Comparison completed. UI status: $status"
+      $script:comparisonScreenshotCount++
+      $mode = try { (Find-Id $liveMain 'SyncModeBox').Current.Name } catch { 'unknown-mode' }
+      $leftKind = if ($left -match '^(?<kind>[a-z0-9]+)://') { $Matches.kind } else { 'local' }
+      $rightKind = if ($right -match '^(?<kind>[a-z0-9]+)://') { $Matches.kind } else { 'local' }
+      Capture-Element $liveMain ("compare-{0:D2}-{1}-to-{2}.png" -f $script:comparisonScreenshotCount, $leftKind, $rightKind) 'comparison' "$mode | $leftKind -> $rightKind | $status"
       return
     }
     Start-Sleep -Milliseconds 100
@@ -511,15 +545,32 @@ function Stop-App {
   finally { $p.Dispose() }
 }
 function Assert-File { param([string]$path, [string]$content); if (-not (Test-Path -LiteralPath $path)) { throw "Expected file not found: $path" }; $actual = [IO.File]::ReadAllText($path); if ($actual -ne $content) { throw "Unexpected content in $path. Expected: $content. Actual: $actual" }; Write-Output "File assertion passed: $path; content: $actual" }
-function Capture-Window { param($p, [string]$name)
+function Capture-Element {
+  param(
+    [Parameter(Mandatory)][System.Windows.Automation.AutomationElement]$element,
+    [Parameter(Mandatory)][string]$name,
+    [Parameter(Mandatory)][string]$category,
+    [string]$context = ''
+  )
+  $bounds = $element.Current.BoundingRectangle
+  if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw "Cannot capture '$name' because the UI element has no visible bounds." }
+  $handle = [IntPtr]$element.Current.NativeWindowHandle
+  if ($handle -ne [IntPtr]::Zero) { [void][FengSyncUiMouse]::SetForegroundWindow($handle); Start-Sleep -Milliseconds 180 }
+  $target = Join-Path $artifacts $name
+  $image = [Drawing.Bitmap]::new([int][Math]::Ceiling($bounds.Width), [int][Math]::Ceiling($bounds.Height))
+  $graphics = [Drawing.Graphics]::FromImage($image)
   try {
-    if (-not $p -or $p.MainWindowHandle -eq 0) { return }
-    $bounds = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle).Current.BoundingRectangle
-    if ($bounds.Width -le 0 -or $bounds.Height -le 0) { return }
-    $image = [Drawing.Bitmap]::new([int]$bounds.Width, [int]$bounds.Height); $graphics = [Drawing.Graphics]::FromImage($image)
-    try { $graphics.CopyFromScreen([int]$bounds.X, [int]$bounds.Y, 0, 0, $image.Size); $image.Save((Join-Path $artifacts $name), [Drawing.Imaging.ImageFormat]::Png) }
-    finally { $graphics.Dispose(); $image.Dispose() }
-  } catch { Write-Verbose "Could not capture UI screenshot: $_" }
+    $graphics.CopyFromScreen([int]$bounds.X, [int]$bounds.Y, 0, 0, $image.Size)
+    $image.Save($target, [Drawing.Imaging.ImageFormat]::Png)
+  }
+  finally { $graphics.Dispose(); $image.Dispose() }
+  if (-not (Test-Path -LiteralPath $target) -or (Get-Item -LiteralPath $target).Length -le 0) { throw "UI screenshot was not saved: $target" }
+  $screenshotManifest.Add([pscustomobject]@{ File = $name; Category = $category; Context = $context; CapturedUtc = [DateTimeOffset]::UtcNow })
+  Write-HarnessTrace "Screenshot captured: $name [$category] $context"
+}
+function Capture-Window { param($p, [string]$name, [string]$category = 'window', [string]$context = '')
+  if (-not $p -or $p.MainWindowHandle -eq 0) { throw "Cannot capture '$name' because Feng Sync has no main window." }
+  Capture-Element ([System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)) $name $category $context
 }
 function Set-WindowSize { param($window, [double]$width, [double]$height, [string]$label)
   $windowPattern = $null
@@ -552,7 +603,7 @@ function Assert-VisualMatrixGeometry { param($main, [string]$label)
   # ChangeSummaryPanel and ProfileList give stable, observable edges for the sidebar.
   $profiles = Find-Id $main 'ProfileList'
   $toolbar = @('EditCurrentProfileButton', 'SwapEndpointsButton', 'SyncModeBox', 'CompareButton', 'SyncButton') | ForEach-Object { Find-Id $main $_ }
-  $content = @('LeftPath', 'RightPath', 'TotalSummary', 'ChangeFilterBox', 'Comparison', 'Status') | ForEach-Object { Find-Id $main $_ }
+  $content = @('LeftPath', 'RightPath', 'TotalSummary', 'UploadFilterButton', 'Comparison', 'Status') | ForEach-Object { Find-Id $main $_ }
   @($profiles) + $toolbar + $content | ForEach-Object { Assert-RectangleInside $_ $main "$label/$($_.Current.AutomationId)" }
   foreach ($button in $toolbar) {
     if ($button.Current.BoundingRectangle.Left -lt ($profiles.Current.BoundingRectangle.Right - 2)) { throw "$label/$($button.Current.AutomationId) enters the profile workspace." }
@@ -604,7 +655,7 @@ try {
     $remoteCleanup = $driveUri
   }
   $launch = Start-App; $process = $launch[0]; $main = $launch[1]
-  Capture-Window $process '01-main.png'
+  Capture-Window $process '01-main.png' 'main-window' 'initial application state'
   switch ($Scenario) {
     { $_ -in @('ui-shell', 'ui-shell-native', 'ui-shell-software') } {
       # The renamed UI still has the sidebar/toolbar split; sidebar keeps its ProfileList on the left.
@@ -615,6 +666,7 @@ try {
       if (-not (Find-Id $main 'EditCurrentProfileButton' 2)) { throw 'EditCurrentProfileButton was not exposed.' }
       $left = Join-Path $root 'shell-left'; $right = Join-Path $root 'shell-right'; New-Item -ItemType Directory -Force -Path $left, $right | Out-Null
       [IO.File]::WriteAllText((Join-Path $left 'safety-proof.txt'), 'plan')
+      [IO.File]::WriteAllText((Join-Path $right 'download-proof.txt'), 'remote')
       Compare-Ui $main $left $right
       # New summary surface: a right-side panel with UploadSummary/DownloadSummary/etc.
       # TotalSummary is always populated once a comparison finishes successfully.
@@ -624,7 +676,18 @@ try {
       # successful comparison above is the primary proof the engine ran.
       $status = (Find-Id $main 'Status' 2).Current.Name
       if ($status -notmatch '比较完成') { throw "Comparison did not complete: $status" }
-      Capture-Window $process '02-shell.png'
+      Capture-Window $process '02-shell.png' 'comparison' 'mixed upload and download comparison'
+      $action = Find-Id $main 'ComparisonActionButton'
+      if ($action.Current.HelpText -notmatch '复制新项目到') { throw "Comparison action did not expose its hover explanation: $($action.Current.HelpText)" }
+      $actionBounds = $action.Current.BoundingRectangle
+      [Windows.Forms.Cursor]::Position = [Drawing.Point]::new([int]($actionBounds.Left + ($actionBounds.Width / 2)), [int]($actionBounds.Top + ($actionBounds.Height / 2)))
+      Start-Sleep -Milliseconds 1600
+      Capture-Window $process '03-shell-tooltip.png' 'comparison-detail' 'comparison action tooltip'
+
+      Click (Find-Id $main 'UploadFilterButton')
+      Wait-Until { $items = (Find-Id $main 'Comparison').FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)); $items.Count -eq 1 } 'Upload summary filter did not narrow the comparison list.' | Out-Null
+      Click (Find-Id $main 'ChangeSummaryTotal')
+      Wait-Until { $items = (Find-Id $main 'Comparison').FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)); $items.Count -eq 2 } 'Total summary button did not restore all comparison rows.' | Out-Null
       $screenshot = Join-Path $artifacts '02-shell.png'
       if (-not (Test-Path -LiteralPath $screenshot) -or (Get-Item -LiteralPath $screenshot).Length -le 0) { throw 'Shell screenshot was not saved.' }
       if ($main.Current.BoundingRectangle.Width -le 0 -or $main.Current.BoundingRectangle.Height -le 0) { throw 'Main window is not visible after shell rendering.' }
@@ -669,7 +732,7 @@ try {
       Start-Sleep -Milliseconds 500
       $settings = Open-SettingsCenter
       if ((Get-ToggleState (Find-Id $settings 'SettingsAutoCheckUpdates')) -ne [System.Windows.Automation.ToggleState]::Off) { throw 'Auto update preference did not persist after reopening settings.' }
-      Capture-Window $process '02-update-settings.png'
+      Capture-Element $settings '02-update-settings.png' 'settings' 'update preference after reopening'
       Close-Window $settings
       Stop-App $process; $process = $null; $launch = Start-App; $process = $launch[0]; $main = $launch[1]
       $restoredWidth = (Find-Id $main 'ProfileList').Current.BoundingRectangle.Width
@@ -685,7 +748,7 @@ try {
       $product = [Diagnostics.FileVersionInfo]::GetVersionInfo($AppPath).ProductVersion
       $releaseProduct = if ($product) { $product.TrimStart('v').Split('+')[0] } else { '' }
       if ([string]::IsNullOrWhiteSpace($releaseProduct) -or $shown -notmatch [Regex]::Escape($releaseProduct)) { throw "About version '$shown' does not match product version '$product'." }
-      Find-Id $about 'AboutCheckUpdates' | Out-Null; Capture-Window $process '02-about.png'
+      Find-Id $about 'AboutCheckUpdates' | Out-Null; Capture-Element $about '02-about.png' 'about' 'built product version'
       Close-Window $about
     }
     'local' {
@@ -708,7 +771,27 @@ try {
       Start-Sleep -Milliseconds 2200
       Compare-Ui $main $left $right 20 $true
       Apply-Direction $main '右侧覆盖左侧'
+      Capture-Element (Get-LiveMain) 'compare-conflict-resolved-right-to-left.png' 'comparison-override' 'two-way conflict resolved with right side overwriting left'
       Wait-Sync $main (Join-Path $left 'initial.txt') 120 120 'right-change'; Assert-File (Join-Path $left 'initial.txt') 'right-change'
+    }
+    'local-move' {
+      $left = Join-Path $root 'left'; $right = Join-Path $root 'right'; New-Item -ItemType Directory -Force -Path @($left, $right) | Out-Null
+      $profileName = 'ui-move-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+      Update-CurrentProfileEndpoints $main $profileName $left $right
+      [IO.File]::WriteAllText((Join-Path $left 'before-name.txt'), 'move-proof')
+      Compare-Ui $main $left $right; Wait-Sync $main (Join-Path $right 'before-name.txt') 120 120 'move-proof'
+      Stop-App $process; $process = $null; $launch = Start-App; $process = $launch[0]; $main = $launch[1]
+      Move-Item -LiteralPath (Join-Path $left 'before-name.txt') -Destination (Join-Path $left 'after-name.txt')
+      Start-Sleep -Milliseconds 2200
+      Compare-Ui $main $left $right 120 $true
+      Capture-Element (Get-LiveMain) 'compare-move-detected-unselected.png' 'comparison-move' 'medium-confidence move detected and awaiting confirmation'
+      $moveRow = Get-ComparisonRow $main
+      $moveBox = Wait-Until { $items = $moveRow.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::CheckBox)); if ($items.Count -gt 0) { $items[0] } } 'Move selection checkbox was not exposed.'
+      if ((Get-ToggleState $moveBox) -ne [System.Windows.Automation.ToggleState]::On) { Toggle-Ui $moveBox }
+      Wait-Until { (Find-Id $main 'SyncButton').Current.IsEnabled } 'Confirmed move did not become executable.' | Out-Null
+      Capture-Element (Get-LiveMain) 'compare-move-confirmed.png' 'comparison-move' 'medium-confidence move explicitly selected'
+      Wait-Sync $main (Join-Path $right 'after-name.txt') 120 120 'move-proof'
+      if (Test-Path -LiteralPath (Join-Path $right 'before-name.txt')) { throw 'Move comparison did not remove the old right-side path.' }
     }
     'modes' {
       $left = Join-Path $root 'left'; $right = Join-Path $root 'right'; New-Item -ItemType Directory -Force -Path @($left, $right) | Out-Null
@@ -724,11 +807,16 @@ try {
       # plan exists. Do not race it with a second Compare button invocation.
       Select-Mode $main '镜像到右侧'
       Wait-Until { (Find-Id $main 'SyncButton').Current.IsEnabled } 'Mirror did not create a plan'
+      Capture-Element (Get-LiveMain) 'compare-mirror-delete-right.png' 'comparison' 'mirror comparison with right-side deletions'
       Click (Find-Id $main 'SyncButton')
       # Mirror is high-risk; SyncConfirmationWindow now exposes ConfirmSyncButton for that case.
       $confirm = Wait-Until { try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'SyncConfirmationWindow' } } catch { $null } } 'Mirror confirmation window did not appear.' 30
+      Capture-Element $confirm 'sync-mirror-confirmation.png' 'sync-confirmation' 'mirror deletion confirmation'
       Click (Find-Id $confirm 'ConfirmSyncButton')
+      Capture-Element (Get-LiveMain) 'sync-mirror-started.png' 'sync-started' 'mirror deletion synchronization'
       Wait-Until { -not (Test-Path -LiteralPath (Join-Path $right 'remove-in-mirror.txt')) -and -not (Test-Path -LiteralPath (Join-Path $right 'right-only.txt')) } 'Mirror did not delete every right-only file' 60
+      Wait-MainReadyAfterSync 60
+      Capture-Element (Get-LiveMain) 'sync-mirror-complete.png' 'sync-complete' 'mirror deletion synchronization'
       Assert-File (Join-Path $right 'from-left.txt') 'left'
     }
     'selection' {
@@ -740,6 +828,7 @@ try {
       $box = Wait-Until { $items = $row.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::CheckBox)); if ($items.Count -gt 0) { $items[0] } } 'Comparison selection checkbox was not exposed.'
       Toggle-Ui $box
       Wait-Until { -not (Find-Id $main 'SyncButton').Current.IsEnabled } 'Deselecting the only planned file did not disable sync.'
+      Capture-Element (Get-LiveMain) 'compare-selection-excluded.png' 'comparison-selection' 'only planned item deselected'
       if (Test-Path -LiteralPath (Join-Path $right 'not-selected.txt')) { throw 'Deselected file was unexpectedly synchronized.' }
     }
     'sftp-to-local' {
@@ -751,10 +840,17 @@ try {
       # Cloud endpoint manager is now a top-level sidebar button rather than a Tools menu entry.
       Click (Find-Id $main 'RemoteEndpointsButton')
       $manager = Find-WindowById 'RemoteEndpointManagerWindow' 30
+      Capture-Element $manager 'remote-endpoint-manager.png' 'remote-endpoints' 'remote endpoint manager'
       Click (Find-Name $manager '新建云盘端点')
       $editor = Wait-Until { try { Find-AppWindow { param($window) $window.Current.Name -like '*新建云端*' } } catch { $null } } 'Cloud editor did not appear' 30
-      $service = Find-Id $editor 'CloudServiceType'; $expand = $null; $service.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null; $expand.Expand(); Start-Sleep -Milliseconds 200; Select-Ui (Find-Name $service 'SFTP' 5)
-      Set-Text (Find-Id $editor 'SftpRemoteName') $remoteName; Set-Text (Find-Id $editor 'SftpRemoteHost') '127.0.0.1'; Set-Text (Find-Id $editor 'SftpRemotePort') "$port"; Set-Text (Find-Id $editor 'SftpRemoteUser') 'ui'; Set-Password (Find-Id $editor 'SftpRemotePassword') $password; Set-Text (Find-Id $editor 'SftpRemoteRoot') ''
+      $service = Find-Id $editor 'CloudServiceType'; $expand = $null
+      foreach ($serviceName in @('Google Drive', 'S3 Bucket', 'SFTP')) {
+        $service.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null; $expand.Expand(); Start-Sleep -Milliseconds 200; Select-Ui (Find-Name $service $serviceName 5); Start-Sleep -Milliseconds 200
+        Capture-Element $editor ("remote-editor-{0}.png" -f ($serviceName.ToLowerInvariant().Replace(' ', '-'))) 'remote-endpoint-editor' "$serviceName settings"
+      }
+      Set-Text (Find-Id $editor 'SftpRemoteName') $remoteName; Set-Text (Find-Id $editor 'SftpRemoteHost') '127.0.0.1'; Set-Text (Find-Id $editor 'SftpRemotePort') "$port"; Set-Text (Find-Id $editor 'SftpRemoteUser') 'ui'; Set-Text (Find-Id $editor 'SftpRemoteRoot') ''
+      Capture-Element $editor 'remote-editor-sftp-configured-without-password.png' 'remote-endpoint-editor' 'SFTP fields populated before entering password'
+      Set-Password (Find-Id $editor 'SftpRemotePassword') $password
       Click (Find-Id $editor 'SaveCloudEndpoint')
       Wait-Until { try { $null -eq (Find-AppWindow { param($window) $window.Current.AutomationId -eq 'CloudEndpointEditorWindow' }) } catch { $false } } 'Cloud endpoint editor did not close after saving.' 30 | Out-Null
       $config = Join-Path $appData 'rclone\rclone.conf'
@@ -774,7 +870,13 @@ try {
       # Edit through the top header's EditCurrentProfileButton (more deterministic than the context menu).
       Click (Find-Id $main 'EditCurrentProfileButton')
       $editor = Find-WindowById 'ProfileEditorWindow'
-      Set-Text (Find-Id $editor 'ProfileName') $profileName; Set-Text (Find-Id $editor 'ProfileLeftPath') $left; Set-Text (Find-Id $editor 'ProfileRightPath') $right; Click (Find-Id $editor 'ProfileSave')
+      Set-Text (Find-Id $editor 'ProfileName') $profileName; Set-Text (Find-Id $editor 'ProfileLeftPath') $left; Set-Text (Find-Id $editor 'ProfileRightPath') $right
+      $sections = Find-Id $editor 'ProfileSections'
+      foreach ($sectionName in @('常规', '比较', '过滤器', '同步', '版本管理', '性能与可靠性')) {
+        Select-Ui (Find-Name $sections $sectionName 5); Start-Sleep -Milliseconds 180
+        Capture-Element $editor ("profile-editor-{0}.png" -f $sectionName) 'profile-editor' $sectionName
+      }
+      Click (Find-Id $editor 'ProfileSave')
       Wait-Until { (Find-Id $main 'Status').Current.Name -match '已保存|Profile 设置已保存' } 'Profile edit did not report a save.'
       # A cancelled edit must not leak into the in-memory UI nor the persisted profile.
       Click (Find-Id $main 'EditCurrentProfileButton'); $editor = Find-WindowById 'ProfileEditorWindow'; Set-Text (Find-Id $editor 'ProfileName') 'must-not-persist'; Click (Find-Id $editor 'ProfileCancel')
@@ -793,7 +895,7 @@ try {
       [IO.File]::WriteAllText((Join-Path $left 'included.txt'), 'included'); [IO.File]::WriteAllText((Join-Path $left '.git\config'), 'must-be-filtered')
       Click (Find-Id $main 'EditCurrentProfileButton'); $editor = Find-WindowById 'ProfileEditorWindow'; Set-Text (Find-Id $editor 'ProfileLeftPath') $left; Set-Text (Find-Id $editor 'ProfileRightPath') $right
       $sections = Find-Id $editor 'ProfileSections'; $sections.SetFocus(); [Windows.Forms.SendKeys]::SendWait('{HOME}{DOWN}{DOWN}')
-      Click (Find-Name $editor '添加常用排除规则'); Click (Find-Id $editor 'ProfileSave')
+      Click (Find-Name $editor '添加常用排除规则'); Capture-Element $editor 'profile-filter-configured.png' 'profile-editor' 'filter rules'; Click (Find-Id $editor 'ProfileSave')
       Compare-Ui $main $left $right; Wait-Sync $main (Join-Path $right 'included.txt'); Assert-File (Join-Path $right 'included.txt') 'included'
       if (Test-Path -LiteralPath (Join-Path $right '.git\config')) { throw 'Profile filter did not exclude .git content from the real sync.' }
     }
@@ -803,20 +905,32 @@ try {
       $profileName = 'threshold-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
       Click (Find-Id $main 'EditCurrentProfileButton'); $editor = Find-WindowById 'ProfileEditorWindow'; Set-Text (Find-Id $editor 'ProfileName') $profileName; Set-Text (Find-Id $editor 'ProfileLeftPath') $left; Set-Text (Find-Id $editor 'ProfileRightPath') $right
       $sections = Find-Id $editor 'ProfileSections'; $sections.SetFocus(); [Windows.Forms.SendKeys]::SendWait('{END}')
-      Set-Text (Find-Id $editor 'ProfileMaxDeletes') '0'; Set-Text (Find-Id $editor 'ProfileMaxDeleteRatio') '0'; Click (Find-Id $editor 'ProfileSave')
+      Set-Text (Find-Id $editor 'ProfileMaxDeletes') '0'; Set-Text (Find-Id $editor 'ProfileMaxDeleteRatio') '0'; Capture-Element $editor 'profile-delete-threshold.png' 'profile-editor' 'performance and destructive safety'; Click (Find-Id $editor 'ProfileSave')
       Select-Mode $main '镜像到右侧'; Compare-Ui $main $left $right; Wait-Until { (Find-Id $main 'SyncButton').Current.IsEnabled } 'Mirror threshold plan was not executable.'
       Click (Find-Id $main 'SyncButton'); $confirm = Wait-Until { try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'SyncConfirmationWindow' } } catch { $null } } 'Threshold confirm window did not appear' 30
-      Set-Text (Find-Id $confirm 'ProfileNameInput') $profileName; Click (Find-Id $confirm 'ConfirmSyncButton')
+      Set-Text (Find-Id $confirm 'ProfileNameInput') $profileName; Capture-Element $confirm 'sync-delete-threshold-confirmation.png' 'sync-confirmation' 'profile-name destructive confirmation'; Click (Find-Id $confirm 'ConfirmSyncButton')
+      Capture-Element (Get-LiveMain) 'sync-delete-threshold-started.png' 'sync-started' 'destructive mirror synchronization'
       Wait-Until { -not (Test-Path -LiteralPath (Join-Path $right 'delete-a.txt')) -and -not (Test-Path -LiteralPath (Join-Path $right 'delete-b.txt')) } 'Profile-name threshold confirmation did not permit mirror deletion.' 60
+      Wait-MainReadyAfterSync 60
+      Capture-Element (Get-LiveMain) 'sync-delete-threshold-complete.png' 'sync-complete' 'destructive mirror synchronization'
     }
     'settings' {
       $settings = Open-SettingsCenter
       # The General page is selected by default; the previously separate Defaults tab is gone.
       Set-Text (Find-Id $settings 'SettingsConcurrency') '3'; Set-Text (Find-Id $settings 'SettingsTimeTolerance') '7'; Set-Text (Find-Id $settings 'SettingsIncludeRules') '**/*.keep'; Set-Text (Find-Id $settings 'SettingsExcludeRules') '**/*.skip'
+      Capture-Element $settings 'settings-general-modified.png' 'settings' 'general settings with unsaved changes'
       Click (Find-Id $settings 'SettingsApply'); Click (Find-Id $settings 'SettingsOk')
       Wait-Until { (Find-Id $main 'Status').Current.Name -match '已应用|程序设置已应用' } 'Settings did not report apply.'
       $settings = Open-SettingsCenter
       if ((Get-Text (Find-Id $settings 'SettingsConcurrency')) -ne '3' -or (Get-Text (Find-Id $settings 'SettingsTimeTolerance')) -ne '7' -or (Get-Text (Find-Id $settings 'SettingsIncludeRules')) -ne '**/*.keep' -or (Get-Text (Find-Id $settings 'SettingsExcludeRules')) -ne '**/*.skip') { throw 'Applied application defaults were not persisted on re-open.' }
+      Capture-Element $settings 'settings-general-persisted.png' 'settings' 'persisted general settings'
+      Select-Ui (Find-Id $settings 'RunHistoryNav'); Start-Sleep -Milliseconds 200; Capture-Element $settings 'settings-run-history.png' 'settings' 'run history settings page'
+      Select-Ui (Find-Id $settings 'LogsNav'); Start-Sleep -Milliseconds 200; Capture-Element $settings 'settings-logs.png' 'settings' 'logs settings page'
+      Select-Ui (Find-Id $settings 'SettingsGeneralNav'); Start-Sleep -Milliseconds 200
+      Click (Find-Id $settings 'SftpServerSettingsButton')
+      $sftpSettings = Find-WindowById 'SftpServerSettingsWindow'
+      Capture-Element $sftpSettings 'settings-sftp-server.png' 'sftp-server-settings' 'SFTP server settings without credential changes'
+      Close-Window $sftpSettings
       Close-Window $settings
     }
     'history' {
@@ -827,6 +941,7 @@ try {
       $settings = Open-SettingsCenter
       Select-Ui (Find-Id $settings 'RunHistoryNav')
       Start-Sleep -Milliseconds 300
+      Capture-Element $settings 'history-settings-launcher.png' 'settings' 'run history launcher'
       $launcher = Find-Id $settings 'OpenRunHistory' 5
       Click $launcher
       $history = Find-WindowById 'RunHistoryWindow'
@@ -834,6 +949,7 @@ try {
       $entry = Wait-Until { $items = (Find-Id $history 'RunHistoryEntries').FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)); if ($items.Count -gt 0) { $items[0] } } 'Run history did not show the real completed run.' 30
       $outcome = Find-Id $history 'RunHistoryOutcome'; $expand = $null; $outcome.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null; $expand.Expand(); Select-Ui (Find-Name $outcome '成功')
       Wait-Until { (Find-Id $history 'RunHistoryEntries').FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)).Count -gt 0 } 'Successful-outcome filter hid the completed run.'
+      Capture-Element $history 'run-history-success.png' 'run-history' 'completed successful synchronization'
       Close-Window $history
       Close-Window $settings
     }
@@ -843,10 +959,12 @@ try {
       Click (Find-Id $main 'SchedulesButton')
       $schedule = Find-WindowById 'ScheduleWizard'
       Set-Text (Find-Id $schedule 'ScheduleTaskName') $scheduledTask
+      Capture-Element $schedule 'schedule-configured.png' 'schedule' 'schedule wizard before creation'
       Click (Find-Id $schedule 'CreateScheduleButton')
       Wait-Until { & schtasks.exe /Query /TN $scheduledTask *> $null; $LASTEXITCODE -eq 0 } 'Schedule UI did not create the unique Windows task.' 30
       Click (Find-Id $schedule 'TestScheduleButton')
       Wait-Until { try { (Find-Id $schedule 'ResultText').Current.Name -match '测试运行|请求' } catch { $true } } 'Schedule UI did not request a test run.' 30
+      Capture-Element $schedule 'schedule-test-running.png' 'schedule' 'scheduled test requested'
       Wait-Until { $state = & schtasks.exe /Query /TN $scheduledTask /FO LIST 2>$null; $LASTEXITCODE -eq 0 -and ($state -notmatch 'Running|正在运行') } 'Scheduled test run did not leave the running state.' 60
       Click (Find-Id $schedule 'DeleteScheduleButton')
       Wait-Until { & schtasks.exe /Query /TN $scheduledTask *> $null; $LASTEXITCODE -ne 0 } 'Schedule UI did not delete the unique Windows task.' 30
@@ -910,7 +1028,17 @@ try {
       if ($results.Count -ne 3) { throw 'Google Drive 10-file matrix did not complete every synchronization mode.' }
     }
   }
-  Capture-Window $process '99-complete.png'
+  Capture-Window $process '99-complete.png' 'main-window' 'completed scenario state'
+  $comparisonScenarios = @('ui-shell', 'ui-shell-native', 'ui-shell-software', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'profile-filter', 'delete-threshold', 'history', 'gdrive', 'gdrive-volume')
+  if ($Scenario -in $comparisonScenarios -and -not ($screenshotManifest.Category -contains 'comparison')) {
+    throw "Scenario '$Scenario' completed a comparison without recording a comparison screenshot."
+  }
+  $syncScenarios = @('local', 'local-move', 'modes', 'sftp-to-local', 'sftp-ui', 'profile-filter', 'delete-threshold', 'history', 'gdrive', 'gdrive-volume')
+  if ($Scenario -in $syncScenarios) {
+    foreach ($requiredCategory in @('sync-started', 'sync-complete')) {
+      if (-not ($screenshotManifest.Category -contains $requiredCategory)) { throw "Scenario '$Scenario' did not record the required $requiredCategory screenshot." }
+    }
+  }
   $passed = $true
   $scenarioTimer.Stop()
   Write-HarnessTrace ("Passed {0}; completed in {1}" -f $Scenario, $scenarioTimer.Elapsed)
@@ -920,6 +1048,8 @@ catch {
   throw
 }
 finally {
+  $manifestPath = Join-Path $artifacts 'screenshots.json'
+  [IO.File]::WriteAllText($manifestPath, ($screenshotManifest | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
   Stop-App $process
   Write-HarnessTrace "Cleaning up scenario: $Scenario"
   if ($remoteCleanup) {

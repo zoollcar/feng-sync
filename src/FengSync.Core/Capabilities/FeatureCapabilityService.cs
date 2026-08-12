@@ -8,8 +8,6 @@ public sealed class FeatureCapabilityService
         var blockers = new List<string>(); var warnings = new List<string>();
         var remote = IsRemote(profile.LeftPath) || IsRemote(profile.RightPath);
         if (profile.Mode == SyncMode.Custom) blockers.Add("自定义同步模式尚未实现。");
-        // Remote two-way uses RemoteBaselineStore, keyed by the stable rclone remote and root.
-        // Keep this policy in one place so future providers can opt out explicitly if needed.
         var versioning = profile.Settings?.Versioning ?? profile.Versioning;
         if (versioning?.Mode == VersioningMode.RecycleBin && (!OperatingSystem.IsWindows() || remote))
             blockers.Add("回收站仅支持 Windows 本地端点；远端端点不能安全使用此策略。");

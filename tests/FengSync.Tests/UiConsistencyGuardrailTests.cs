@@ -30,7 +30,8 @@ public sealed class UiConsistencyGuardrailTests
         "DangerButtonStyle",
         "IconButtonStyle",
         "DangerIconButtonStyle",
-        "EndpointSwapButtonStyle"
+        "EndpointSwapButtonStyle",
+        "ChangeSummaryFilterButtonStyle"
     };
 
     // Command and status iconography uses FluentIcons.Wpf. Keep this inventory empty;

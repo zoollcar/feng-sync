@@ -13,9 +13,13 @@ public static class EndpointSnapshotCapture
     public static async Task<EndpointSnapshot> CaptureAsync(IEndpoint endpoint, CancellationToken ct = default)
     {
         var started = DateTimeOffset.UtcNow;
-        var entries = await endpoint.ScanAsync(ct).ConfigureAwait(false);
-        var byPath = new Dictionary<string, EntrySnapshot>(entries.Count, endpoint.Capabilities.EffectivePaths.CreateComparer());
-        foreach (var entry in entries) byPath[entry.Path] = entry;
+        var entries = new List<EntrySnapshot>();
+        var byPath = new Dictionary<string, EntrySnapshot>(endpoint.Capabilities.EffectivePaths.CreateComparer());
+        await foreach (var entry in endpoint.ScanEntriesAsync(ct).ConfigureAwait(false))
+        {
+            entries.Add(entry);
+            byPath[entry.Path] = entry;
+        }
         return new EndpointSnapshot
         {
             Endpoint = endpoint.Profile,
@@ -34,15 +38,6 @@ public static class EndpointSnapshotCapture
 /// </summary>
 public sealed class ComparisonSnapshotBuilder
 {
-    private readonly Func<IEndpoint, Task<IReadOnlyList<BaselineEntry>?>>? _baselineLoader;
-    public ComparisonSnapshotBuilder(Func<IEndpoint, IEndpoint, Task<IReadOnlyList<BaselineEntry>?>>? baselineLoader = null)
-    {
-        if (baselineLoader is not null)
-        {
-            _baselineLoader = (endpoint) => baselineLoader(endpoint, endpoint);
-        }
-    }
-
     public async Task<ComparisonSnapshot> CaptureAsync(
         IEndpoint left,
         IEndpoint right,
@@ -51,42 +46,17 @@ public sealed class ComparisonSnapshotBuilder
         IReadOnlyList<BaselineEntry>? baseline = null,
         CancellationToken ct = default)
     {
-        var started = DateTimeOffset.UtcNow;
-        var leftSnapshot = await EndpointSnapshotCapture.CaptureAsync(left, ct).ConfigureAwait(false);
-        var rightSnapshot = await EndpointSnapshotCapture.CaptureAsync(right, ct).ConfigureAwait(false);
+        var captures = await Task.WhenAll(
+            EndpointSnapshotCapture.CaptureAsync(left, ct),
+            EndpointSnapshotCapture.CaptureAsync(right, ct)).ConfigureAwait(false);
         return new ComparisonSnapshot
         {
             SnapshotId = Guid.NewGuid(),
-            Left = leftSnapshot,
-            Right = rightSnapshot,
+            Left = captures[0],
+            Right = captures[1],
             Mode = mode,
             TimeTolerance = timeTolerance,
             Baseline = baseline,
         };
     }
-}
-
-/// <summary>
-/// Resolves the entries relevant to a single planned operation against a paired
-/// comparison snapshot. The executor must call this instead of <see cref="IEndpoint.ScanAsync"/>
-/// so pre-execution freshness checks do not trigger a full re-enumeration.
-/// </summary>
-public static class ComparisonSnapshotLookup
-{
-    public static EntrySnapshot? Source(this ComparisonSnapshot snapshot, Guid operationId, SyncOperation operation)
-    {
-        var isCopy = operation.Kind is OperationKind.CopyLeftToRight or OperationKind.CreateRightDirectory;
-        var target = isCopy ? snapshot.Left : snapshot.Right;
-        return Resolve(target, operation.Path);
-    }
-
-    public static EntrySnapshot? Target(this ComparisonSnapshot snapshot, Guid operationId, SyncOperation operation)
-    {
-        var isCopy = operation.Kind is OperationKind.CopyLeftToRight or OperationKind.CreateRightDirectory;
-        var target = isCopy ? snapshot.Right : snapshot.Left;
-        return Resolve(target, operation.Path);
-    }
-
-    public static EntrySnapshot? Resolve(EndpointSnapshot snapshot, string path)
-        => snapshot.ByPath.TryGetValue(path, out var entry) ? entry : null;
 }

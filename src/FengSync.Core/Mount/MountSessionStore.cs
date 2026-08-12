@@ -85,15 +85,6 @@ public sealed class MountSessionStore
         if (records.Count != before) await SaveAsync(records, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Remove the record by its session id.</summary>
-    public async Task RemoveByIdAsync(Guid id, CancellationToken ct = default)
-    {
-        var records = (await LoadAsync(ct).ConfigureAwait(false)).ToList();
-        var before = records.Count;
-        records.RemoveAll(x => x.Id == id);
-        if (records.Count != before) await SaveAsync(records, ct).ConfigureAwait(false);
-    }
-
     private static MountSessionRecord? ReadRecord(JsonElement element)
     {
         if (element.ValueKind != JsonValueKind.Object) return null;

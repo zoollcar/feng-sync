@@ -30,15 +30,6 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         Assert.False(DeletionGuard.Validate(plan, sourceItemCount: 1, targetItemCount: 1, SyncMode.Mirror, maxDeletes: 0, maxDeleteRatio: 0).HasBlockingIssues);
     }
 
-    [Fact] public async Task Freshness_validation_rejects_changed_copy_source()
-    {
-        await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), "one");
-        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
-        var snapshot = await PlanSnapshot.CaptureAsync(new ThreeWayPlanner().Build(left.Scan(), right.Scan(), null), left, right);
-        await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), "changed");
-        Assert.True((await new PlanFreshnessValidator().ValidateAsync(snapshot, left, right)).HasBlockingIssues);
-    }
-
     [Fact]
     public void Hashless_remote_fingerprints_allow_listing_timestamp_precision_but_not_material_changes()
     {
@@ -52,7 +43,7 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
     {
         await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), new string('x', 1024));
         var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right); var events = new List<TransferProgress>();
-        var result = await new SyncExecutor().ExecuteAsync(await PlanSnapshot.CaptureAsync(new ThreeWayPlanner().Build(left.Scan(), right.Scan(), null), left, right), left, right, new Progress<TransferProgress>(events.Add));
+        var result = await new FengSync.Core.Execution.SyncExecutorV2().ExecuteAsync(await PlanSnapshot.CaptureAsync(new ThreeWayPlanner().Build(left.Scan(), right.Scan(), null), left, right), left, right, new Progress<TransferProgress>(events.Add));
         Assert.True(result.Succeeded); Assert.Equal(1, result.SucceededOperations); Assert.Contains(events, x => x.BytesCompleted == 1024 && x.Stage == TransferStage.Committed);
     }
 
@@ -66,7 +57,7 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         Assert.Single(left.Scan()); Assert.Empty(right.Scan());
 
         var plan = new SyncPlan([new SyncOperation("large.bin", OperationKind.CopyLeftToRight, "copy")]);
-        var result = await new SyncExecutor().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, left, right), left, right);
+        var result = await new FengSync.Core.Execution.SyncExecutorV2().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, left, right), left, right);
 
         Assert.True(result.Succeeded);
         Assert.Equal(content, await File.ReadAllTextAsync(Path.Combine(Right, "large.bin")));
@@ -82,7 +73,7 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
         var plan = new SyncPlan([new SyncOperation("tampered.bin", OperationKind.CopyLeftToRight, "copy")]);
 
-        var result = await new SyncExecutor().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, left, right), left, right);
+        var result = await new FengSync.Core.Execution.SyncExecutorV2().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, left, right), left, right);
 
         Assert.True(result.Succeeded);
         Assert.Equal(content, await File.ReadAllTextAsync(Path.Combine(Right, "tampered.bin")));
@@ -126,7 +117,7 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task V2_preserves_a_delete_target_changed_after_comparison_when_an_unrelated_copy_fails()
+    public async Task V2_directly_deletes_a_planned_target_without_rechecking_it()
     {
         await File.WriteAllTextAsync(Path.Combine(Left, "copy.txt"), "source");
         await File.WriteAllTextAsync(Path.Combine(Right, "delete.txt"), "old");
@@ -143,9 +134,9 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
 
         Assert.Equal(TransferStage.Failed, result.Operations.Single(x => x.OperationId == copy.OperationId).Stage);
         var deleteResult = result.Operations.Single(x => x.OperationId == delete.OperationId);
-        Assert.Equal(TransferStage.Failed, deleteResult.Stage);
-        Assert.Contains("删除目标在比较后已改变", deleteResult.Error);
-        Assert.Equal("newer contents", await File.ReadAllTextAsync(Path.Combine(Right, "delete.txt")));
+        Assert.Equal(TransferStage.Committed, deleteResult.Stage);
+        Assert.Null(deleteResult.Error);
+        Assert.False(File.Exists(Path.Combine(Right, "delete.txt")));
     }
 
     [Fact] public void Maintenance_only_removes_expired_recognized_temporary_files()
@@ -201,33 +192,14 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         var plan = new SyncPlan([new SyncOperation("a.txt", OperationKind.CopyLeftToRight, "test")]);
         Directory.CreateDirectory(Path.Combine(Right, "a.txt"));
         var snapshot = await PlanSnapshot.CaptureAsync(plan, left, right);
-        var transaction = new BaselineRepository().Begin(left, right);
-        var run = await new SyncExecutor().ExecuteAsync(snapshot, left, right);
-        var committed = await new BaselineRepository().CommitAsync(transaction, left, right, run.Succeeded);
+        var repository = new BaselineRepository(transactionStore: new BaselineTransactionStore(Path.Combine(_root, "failed-run-transactions")));
+        var transaction = repository.Begin(left, right);
+        var run = await new FengSync.Core.Execution.SyncExecutorV2().ExecuteAsync(snapshot, left, right);
+        var committed = await repository.CommitAsync(transaction, left, right, run.Succeeded);
         Assert.False(run.Succeeded);
         Assert.Equal(BaselineTransactionState.NeedsRecovery, committed.State);
-        Assert.Null(await new BaselineStore().LoadAsync(left, right));
+        Assert.Null(await new BaselineRepository().LoadAsync(left, right));
         Assert.Single(Directory.EnumerateFiles(Right, "*.fengsync-*.partial", SearchOption.AllDirectories));
-    }
-
-    [Fact] public async Task Remote_baseline_is_keyed_by_stable_endpoint_identity_and_atomically_replaces_only_on_commit()
-    {
-        await File.WriteAllTextAsync(Path.Combine(Left, "drive-file.txt"), "first");
-        var left = new LocalEndpoint(Left);
-        var right = new LocalEndpoint(Right);
-        var store = new RemoteBaselineStore(Path.Combine(_root, "remote-baselines"));
-
-        Assert.Null(await store.LoadAsync(left, right));
-        await store.CommitAsync(left, right);
-        var first = await store.LoadAsync(left, right);
-        Assert.Single(first!);
-
-        await File.WriteAllTextAsync(Path.Combine(Left, "drive-file.txt"), "second-version");
-        // A failed transfer never invokes CommitAsync, so the durable baseline remains first.
-        var unchanged = await store.LoadAsync(left, right);
-        Assert.Equal(first, unchanged);
-        await store.CommitAsync(left, right);
-        Assert.NotEqual(first![0].Left!.Fingerprint!.Size, (await store.LoadAsync(left, right))![0].Left!.Fingerprint!.Size);
     }
 
     [Fact] public void Recycle_bin_is_allowed_only_for_windows_local_profiles()

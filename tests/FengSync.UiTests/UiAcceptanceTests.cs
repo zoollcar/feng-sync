@@ -6,6 +6,7 @@ using Xunit.Sdk;
 
 namespace FengSync.UiTests;
 
+[Collection(UiAcceptanceCollection.Name)]
 public sealed class UiAcceptanceTests
 {
     private readonly ITestOutputHelper _output;
@@ -14,6 +15,10 @@ public sealed class UiAcceptanceTests
     [Fact]
     [Trait("Category", "UI")]
     public Task Local_folders_support_two_way_sync_and_manual_direction_override() => RunAsync("local");
+
+    [Fact]
+    [Trait("Category", "UI")]
+    public Task Local_file_move_is_visible_in_comparison_and_sync_progress() => RunAsync("local-move");
 
     [Fact]
     [Trait("Category", "UI")]

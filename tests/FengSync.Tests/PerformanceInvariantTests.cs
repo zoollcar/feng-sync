@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FengSync.Core;
 using FengSync.Core.Diagnostics;
 using FengSync.Core.Execution;
@@ -7,10 +6,8 @@ using FengSync.Core.Scanning;
 namespace FengSync.Tests;
 
 /// <summary>
-/// Verifies the M0 metrics plumbing, the M1 no-default-hash guarantee, the M2
-/// freshness no-rescan guarantee and the M3 baseline no-rescan guarantee.
-/// These are the regression gates the M6 integration plan requires before
-/// shipping the new engine.
+/// Verifies scan, execution and baseline performance invariants used by the
+/// production synchronization path.
 /// </summary>
 public sealed class PerformanceInvariantTests : IAsyncLifetime
 {
@@ -19,47 +16,6 @@ public sealed class PerformanceInvariantTests : IAsyncLifetime
     private string Right => Path.Combine(_root, "right");
     public Task InitializeAsync() { Directory.CreateDirectory(Left); Directory.CreateDirectory(Right); return Task.CompletedTask; }
     public Task DisposeAsync() { if (Directory.Exists(_root)) Directory.Delete(_root, true); return Task.CompletedTask; }
-
-    [Fact]
-    public async Task Default_scan_does_not_hash_file_contents()
-    {
-        for (var i = 0; i < 5; i++) await File.WriteAllTextAsync(Path.Combine(Left, $"file-{i}.txt"), "payload-" + i);
-        var metrics = new SyncRunMetrics();
-        using var scope = SyncRunMetricsHub.BeginScope(metrics);
-        var endpoint = new LocalEndpoint(Left);
-        _ = await endpoint.ScanAsync();
-        Assert.Equal(0, metrics.HashBytes);
-        Assert.Equal(0, metrics.HashFiles);
-    }
-
-    [Fact]
-    public async Task Content_hash_endpoint_counts_bytes_and_files()
-    {
-        await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), new string('x', 4096));
-        var metrics = new SyncRunMetrics();
-        using var scope = SyncRunMetricsHub.BeginScope(metrics);
-        var digest = await new LocalEndpoint(Left).HashAsync("a.txt", HashAlgorithmId.Sha256);
-        Assert.NotEmpty(digest.Hex);
-        Assert.True(metrics.HashFiles >= 1);
-        Assert.True(metrics.HashBytes >= 4096);
-    }
-
-    [Fact]
-    public async Task Plan_freshness_check_uses_stat_not_full_scan()
-    {
-        await File.WriteAllTextAsync(Path.Combine(Left, "stale.txt"), "stale");
-        await File.WriteAllTextAsync(Path.Combine(Right, "stale.txt"), "fresh");
-        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
-        var baseline = await new BaselineRepository().LoadAsync(left, right);
-        var plan = new ThreeWayPlanner().Build(left.Scan(), right.Scan(), baseline);
-        var snapshot = PlanSnapshot.FromComparison(plan, await new ComparisonSnapshotBuilder().CaptureAsync(left, right, ComparisonMode.TimeAndSize, TimeSpan.Zero, baseline));
-        var metrics = new SyncRunMetrics();
-        using var scope = SyncRunMetricsHub.BeginScope(metrics);
-        var before = metrics.DirectoryScans;
-        await new PlanFreshnessValidator().ValidateStatAsync(snapshot, left, right, maxParallel: 2);
-        // M2 guarantee: freshness must not trigger an extra directory scan.
-        Assert.Equal(before, metrics.DirectoryScans);
-    }
 
     [Fact]
     public async Task Baseline_commit_does_not_trigger_an_additional_directory_scan()
@@ -76,41 +32,6 @@ public sealed class PerformanceInvariantTests : IAsyncLifetime
     }
 
     [Fact]
-    public void Rclone_batch_planner_respects_size_thresholds()
-    {
-        var reqs = Enumerable.Range(0, 250).Select(i => new CopyRequest(Guid.NewGuid(), $"src/{i}.bin", $"dst/{i}.bin", 1024)).ToList();
-        var batches = RcloneBatchPlanner.PlanBatches(reqs);
-        Assert.Single(batches);
-        Assert.Equal(250, batches[0].Count);
-
-        var single = Enumerable.Range(0, 10).Select(i => new CopyRequest(Guid.NewGuid(), $"src/{i}.bin", $"dst/{i}.bin", 1024)).ToList();
-        var singleBatches = RcloneBatchPlanner.PlanBatches(single);
-        Assert.Equal(10, singleBatches.Count);
-    }
-
-    [Fact]
-    public void Engine_flags_default_to_the_safe_subset()
-    {
-        var flags = EngineFeatureFlags.Defaults;
-        Assert.True(flags.SnapshotV2);
-        Assert.True(flags.LazyHash);
-        Assert.True(flags.VerifierV2);
-        Assert.True(flags.BaselineV2);
-        Assert.True(flags.JournalWal);
-        Assert.True(flags.DeviceScheduler);
-        // rclone-batch is opt-in until the long-lived async-job work lands.
-        Assert.False(flags.RcloneBatch);
-    }
-
-    [Fact]
-    public void Engine_flags_parse_overrides()
-    {
-        var parsed = EngineFeatureFlags.Resolve("snapshot-v2=false, rclone-batch");
-        Assert.False(parsed.SnapshotV2);
-        Assert.True(parsed.RcloneBatch);
-    }
-
-    [Fact]
     public async Task EntriesEnumerated_reflects_every_returned_entry()
     {
         for (var i = 0; i < 12; i++) await File.WriteAllTextAsync(Path.Combine(Left, $"f-{i}.txt"), "x");
@@ -124,55 +45,79 @@ public sealed class PerformanceInvariantTests : IAsyncLifetime
     public async Task Profile_runner_default_path_scans_each_endpoint_exactly_once()
     {
         for (var i = 0; i < 6; i++) await File.WriteAllTextAsync(Path.Combine(Left, $"file-{i}.txt"), "src-" + i);
-        var dataDir = Path.Combine(_root, "appdata");
-        Environment.SetEnvironmentVariable("FENGSYNC_DATA_DIR", dataDir);
-        try
-        {
-            var profile = SyncProfile.Create("perf-default-path", Left, Right) with { Mode = SyncMode.Mirror };
-            var runner = new ProfileRunner();
-            var metrics = new SyncRunMetrics();
-            using var scope = SyncRunMetricsHub.BeginScope(metrics);
-            await runner.CompareAsync(profile);
-            // M1: planner-side enumeration only; Mirror adds the source as deletion authority.
-            Assert.True(metrics.DirectoryScans <= 4, $"CompareAsync triggered {metrics.DirectoryScans} directory scans; expected <= 4 (left, right, baseline.download/state)");
-        }
-        finally { Environment.SetEnvironmentVariable("FENGSYNC_DATA_DIR", null); }
+        // CompareAsync does not persist run history or transactions, so a
+        // process-wide FENGSYNC_DATA_DIR override is unnecessary and would race
+        // unrelated tests running in parallel.
+        var profile = SyncProfile.Create("perf-default-path", Left, Right) with { Mode = SyncMode.Mirror };
+        var runner = new ProfileRunner();
+        var metrics = new SyncRunMetrics();
+        using var scope = SyncRunMetricsHub.BeginScope(metrics);
+        await runner.CompareAsync(profile);
+        // M1: planner-side enumeration only; Mirror adds the source as deletion authority.
+        Assert.True(metrics.DirectoryScans <= 4, $"CompareAsync triggered {metrics.DirectoryScans} directory scans; expected <= 4 (left, right, baseline.download/state)");
     }
 
     [Fact]
-    public async Task Wal_writer_emits_events_after_begin()
+    public async Task Paired_snapshot_consumes_both_streams_concurrently_without_legacy_list()
     {
-        var journalRoot = Path.Combine(_root, "wal");
-        await using var store = new JournalWalStore(journalRoot);
-        var runId = Guid.NewGuid().ToString("N");
-        await store.BeginRunAsync(runId, new JournalHeader(2, runId, DateTimeOffset.UtcNow, "profile",
-            new EndpointIdentity("Local", Left, Left), new EndpointIdentity("Local", Right, Right),
-            Guid.NewGuid().ToString("N"),
-            new[] { new JournalOperation(Guid.NewGuid().ToString("N"), "a.txt", nameof(OperationKind.CopyLeftToRight), 10) }));
-        await store.AppendAsync(new JournalEvent { Kind = JournalEventKind.OperationStarted, OperationId = "x" });
-        await store.AppendAsync(new JournalEvent { Kind = JournalEventKind.OperationCommitted, OperationId = "x" });
-        await store.AwaitDurabilityAsync();
-        await store.CompleteRunAsync(new JournalSummary(runId, DateTimeOffset.UtcNow, 1, 0, 0));
-        var eventsPath = Path.Combine(journalRoot, runId + ".events.jsonl");
-        Assert.True(File.Exists(eventsPath));
-        var lines = await File.ReadAllLinesAsync(eventsPath);
-        Assert.True(lines.Length >= 2, $"Expected at least 2 lines, got {lines.Length}");
-        var seqs = lines.Select(l => JsonSerializer.Deserialize<JournalEvent>(l)?.Seq ?? 0).ToList();
-        Assert.Equal(seqs.OrderBy(x => x).ToList(), seqs);
+        var coordinator = new ScanStartCoordinator();
+        var left = new CoordinatedStreamingEndpoint("left.txt", coordinator);
+        var right = new CoordinatedStreamingEndpoint("right.txt", coordinator);
+
+        var comparison = await new ComparisonSnapshotBuilder()
+            .CaptureAsync(left, right)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(2, coordinator.Started);
+        Assert.True(comparison.Left.ByPath.ContainsKey("left.txt"));
+        Assert.True(comparison.Right.ByPath.ContainsKey("right.txt"));
+        Assert.Equal(0, left.LegacyScanCalls + right.LegacyScanCalls);
     }
 
     [Fact]
-    public async Task Wal_writer_rejects_concurrent_begin_calls()
+    public async Task Delete_executes_directly_without_stat_and_removes_an_empty_directory()
     {
-        var journalRoot = Path.Combine(_root, "wal-fail");
-        await using var store = new JournalWalStore(journalRoot);
-        var runId = Guid.NewGuid().ToString("N");
-        await store.BeginRunAsync(runId, new JournalHeader(2, runId, DateTimeOffset.UtcNow, null,
-            new EndpointIdentity("Local", Left, Left), new EndpointIdentity("Local", Right, Right),
-            Guid.NewGuid().ToString("N"), Array.Empty<JournalOperation>()));
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await store.BeginRunAsync(runId, new JournalHeader(2, runId, DateTimeOffset.UtcNow, null,
-            new EndpointIdentity("Local", Left, Left), new EndpointIdentity("Local", Right, Right),
-            Guid.NewGuid().ToString("N"), Array.Empty<JournalOperation>())));
+        var directory = Path.Combine(Right, "obsolete");
+        Directory.CreateDirectory(directory);
+        var left = new DeleteRecordingEndpoint(new LocalEndpoint(Left));
+        var right = new DeleteRecordingEndpoint(new LocalEndpoint(Right));
+        var comparison = await new ComparisonSnapshotBuilder().CaptureAsync(left, right);
+        var plan = new SyncPlan([new SyncOperation("obsolete", OperationKind.DeleteRight, "test")]);
+        comparison.Plan = plan;
+
+        var result = await new SyncExecutorV2().ExecuteAsync(PlanSnapshot.FromComparison(plan, comparison), left, right);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(0, right.StatCalls);
+        Assert.Equal(1, right.DeleteCalls);
+        Assert.False(Directory.Exists(directory));
+    }
+
+    [Fact]
+    public async Task Confirmed_copy_overwrites_without_pre_execution_comparison()
+    {
+        var leftPath = Path.Combine(Left, "replace.txt");
+        var rightPath = Path.Combine(Right, "replace.txt");
+        await File.WriteAllTextAsync(leftPath, "planned source");
+        await File.WriteAllTextAsync(rightPath, "planned target");
+        var left = new LocalEndpoint(Left);
+        var right = new LocalEndpoint(Right);
+        var comparison = await new ComparisonSnapshotBuilder().CaptureAsync(left, right);
+        var plan = new SyncPlan([new SyncOperation("replace.txt", OperationKind.CopyLeftToRight, "confirmed overwrite")]);
+        comparison.Plan = plan;
+
+        await File.WriteAllTextAsync(leftPath, "latest source contents");
+        await File.WriteAllTextAsync(rightPath, "target changed after confirmation");
+        var metrics = new SyncRunMetrics();
+        using var scope = SyncRunMetricsHub.BeginScope(metrics);
+
+        var result = await new SyncExecutorV2().ExecuteAsync(PlanSnapshot.FromComparison(plan, comparison), left, right);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("latest source contents", await File.ReadAllTextAsync(rightPath));
+        // The two Stat calls are post-publish verification of source and target;
+        // there are no execution-time source/target freshness probes before copy.
+        Assert.Equal(2, metrics.StatCalls);
     }
 
     [Fact]
@@ -196,43 +141,6 @@ public sealed class PerformanceInvariantTests : IAsyncLifetime
         await update;
 
         Assert.Empty(await store.LoadIncompleteAsync());
-    }
-
-    [Fact]
-    public async Task Wal_recovery_replays_a_complete_final_line()
-    {
-        var journalRoot = Path.Combine(_root, "wal-tail");
-        Directory.CreateDirectory(journalRoot);
-        var runId = Guid.NewGuid().ToString("N");
-        var operationId = Guid.NewGuid().ToString("N");
-        var header = new JournalHeader(2, runId, DateTimeOffset.UtcNow, null,
-            new EndpointIdentity("Local", Left, Left), new EndpointIdentity("Local", Right, Right),
-            Guid.NewGuid().ToString("N"), [new JournalOperation(operationId, "a.txt", nameof(OperationKind.CopyLeftToRight), 1)]);
-        await File.WriteAllTextAsync(Path.Combine(journalRoot, runId + ".header.json"), JsonSerializer.Serialize(header));
-        await File.WriteAllTextAsync(Path.Combine(journalRoot, runId + ".events.jsonl"),
-            JsonSerializer.Serialize(new JournalEvent { Seq = 1, Kind = JournalEventKind.OperationCommitted, OperationId = operationId }) + "\n");
-
-        var recovered = await JournalRecoveryReader.LoadIncompleteAsync(journalRoot);
-        Assert.Empty(recovered);
-    }
-
-    [Fact]
-    public async Task Wal_recovery_surfaces_sequence_faults_even_when_operations_committed()
-    {
-        var journalRoot = Path.Combine(_root, "wal-sequence");
-        Directory.CreateDirectory(journalRoot);
-        var runId = Guid.NewGuid().ToString("N");
-        var operationId = Guid.NewGuid().ToString("N");
-        var header = new JournalHeader(2, runId, DateTimeOffset.UtcNow, null,
-            new EndpointIdentity("Local", Left, Left), new EndpointIdentity("Local", Right, Right),
-            Guid.NewGuid().ToString("N"), [new JournalOperation(operationId, "a.txt", nameof(OperationKind.CopyLeftToRight), 1)]);
-        await File.WriteAllTextAsync(Path.Combine(journalRoot, runId + ".header.json"), JsonSerializer.Serialize(header));
-        await File.WriteAllTextAsync(Path.Combine(journalRoot, runId + ".events.jsonl"),
-            JsonSerializer.Serialize(new JournalEvent { Seq = 2, Kind = JournalEventKind.OperationCommitted, OperationId = operationId }) + "\n");
-
-        var recovered = await JournalRecoveryReader.LoadIncompleteAsync(journalRoot);
-        var item = Assert.Single(recovered).Items.First(x => x.State == JournalState.Failed);
-        Assert.Contains("序号", item.Error);
     }
 
     [Fact]
@@ -278,5 +186,63 @@ public sealed class PerformanceInvariantTests : IAsyncLifetime
         // M2 guarantee: V2 executor must not add any directory scans on top of
         // the planner's two enumerations.
         Assert.Equal(baselineScans, metrics.DirectoryScans);
+    }
+
+    private sealed class ScanStartCoordinator
+    {
+        private readonly TaskCompletionSource _bothStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _started;
+        public int Started => Volatile.Read(ref _started);
+        public Task ArriveAsync()
+        {
+            if (Interlocked.Increment(ref _started) == 2) _bothStarted.TrySetResult();
+            return _bothStarted.Task;
+        }
+    }
+
+    private sealed class CoordinatedStreamingEndpoint(string path, ScanStartCoordinator coordinator) : IEndpoint
+    {
+        public int LegacyScanCalls { get; private set; }
+        public EndpointProfile Profile { get; } = new(Guid.NewGuid(), EndpointType.Local, path);
+        public EndpointCapabilities Capabilities { get; } = new(false, false, true, TimeSpan.Zero);
+        public Task<IReadOnlyList<EntrySnapshot>> ScanAsync(CancellationToken cancellationToken = default)
+        {
+            LegacyScanCalls++;
+            throw new InvalidOperationException("Legacy list scan should not be used.");
+        }
+        public async IAsyncEnumerable<EntrySnapshot> ScanEntriesAsync(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await coordinator.ArriveAsync().WaitAsync(cancellationToken);
+            yield return new(path, EntryKind.File, new(1, DateTimeOffset.UnixEpoch, null));
+        }
+        public Task<EntrySnapshot?> StatAsync(string relativePath, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task CopyToAsync(string relativePath, IEndpoint target, string temporaryPath, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task MoveAsync(string from, string to, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class DeleteRecordingEndpoint(LocalEndpoint inner) : IEndpoint
+    {
+        public int StatCalls { get; private set; }
+        public int DeleteCalls { get; private set; }
+        public EndpointProfile Profile => inner.Profile;
+        public EndpointCapabilities Capabilities => inner.Capabilities;
+        public Task<IReadOnlyList<EntrySnapshot>> ScanAsync(CancellationToken cancellationToken = default) => inner.ScanAsync(cancellationToken);
+        public IAsyncEnumerable<EntrySnapshot> ScanEntriesAsync(CancellationToken cancellationToken = default) => inner.ScanEntriesAsync(cancellationToken);
+        public Task<EntrySnapshot?> StatAsync(string relativePath, CancellationToken cancellationToken = default)
+        {
+            StatCalls++;
+            return inner.StatAsync(relativePath, cancellationToken);
+        }
+        public Task CopyToAsync(string relativePath, IEndpoint target, string temporaryPath, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task MoveAsync(string from, string to, CancellationToken cancellationToken = default) => inner.MoveAsync(from, to, cancellationToken);
+        public async Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default)
+        {
+            DeleteCalls++;
+            await inner.DeleteAsync(relativePath, directory, cancellationToken);
+        }
+        public Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default) => inner.CreateDirectoryAsync(relativePath, cancellationToken);
     }
 }

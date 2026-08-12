@@ -6,6 +6,7 @@ public sealed class MoveDetectionTests
 {
     private static EntrySnapshot File(string path, string text, string? id = null) =>
         new(path, EntryKind.File, new(text.Length, DateTimeOffset.UnixEpoch, null), id is null ? null : new EntryIdentity(StableObjectId: id));
+    private static EntrySnapshot Dir(string path) => new(path, EntryKind.Directory, null);
 
     [Fact]
     public void Stable_id_matches_only_within_one_endpoint()
@@ -58,6 +59,44 @@ public sealed class MoveDetectionTests
     }
 
     [Fact]
+    public void Directory_structural_operations_are_removed_when_files_are_recognized_as_moves()
+    {
+        var baseline = new[]
+        {
+            new BaselineEntry("old", Dir("old"), Dir("old")),
+            new BaselineEntry("old/file.txt", File("old/file.txt", "x", "left-1"), File("old/file.txt", "x", "right-1"))
+        };
+        var plan = new ModePlanner().Build(SyncMode.TwoWay,
+            [Dir("new"), File("new/file.txt", "x", "left-1")],
+            [Dir("old"), File("old/file.txt", "x", "right-1")], baseline,
+            leftCapabilities: new(true, true, true, TimeSpan.Zero), rightCapabilities: new(true, true, true, TimeSpan.Zero));
+
+        var move = Assert.Single(plan.Operations);
+        Assert.Equal(OperationKind.Move, move.Kind);
+        Assert.True(move.Selected);
+        Assert.Equal(("old/file.txt", "new/file.txt"), (move.Move!.FromPath, move.Move.ToPath));
+    }
+
+    [Fact]
+    public void Medium_confidence_move_is_unselected_without_leaving_parent_create_or_delete_operations()
+    {
+        var baseline = new[]
+        {
+            new BaselineEntry("old", Dir("old"), Dir("old")),
+            new BaselineEntry("old/file.txt", File("old/file.txt", "same"), File("old/file.txt", "same"))
+        };
+        var plan = new ModePlanner().Build(SyncMode.TwoWay,
+            [Dir("new"), File("new/file.txt", "same")],
+            [Dir("old"), File("old/file.txt", "same")], baseline,
+            leftCapabilities: new(false, true, true, TimeSpan.Zero), rightCapabilities: new(false, true, true, TimeSpan.Zero));
+
+        var move = Assert.Single(plan.Operations);
+        Assert.Equal(OperationKind.Move, move.Kind);
+        Assert.Equal(MoveConfidence.Medium, move.Move!.Confidence);
+        Assert.False(move.Selected);
+    }
+
+    [Fact]
     public async Task Move_executor_renames_the_planned_target_only_after_source_freshness_check()
     {
         var root = Path.Combine(Path.GetTempPath(), "fengsync-move-" + Guid.NewGuid().ToString("N"));
@@ -79,7 +118,7 @@ public sealed class MoveDetectionTests
     }
 
     [Fact]
-    public async Task Move_executor_refuses_a_replaced_execute_endpoint_source()
+    public async Task Move_executor_directly_moves_a_replaced_execute_endpoint_source()
     {
         var root = Path.Combine(Path.GetTempPath(), "fengsync-move-stale-" + Guid.NewGuid().ToString("N"));
         var leftRoot = Path.Combine(root, "left"); var rightRoot = Path.Combine(root, "right");
@@ -93,9 +132,9 @@ public sealed class MoveDetectionTests
             var snapshot = await PlanSnapshot.CaptureAsync(plan, left, right);
             await System.IO.File.WriteAllTextAsync(Path.Combine(rightRoot, "old.txt"), "replaced-with-different-size");
             var result = await new FengSync.Core.Execution.SyncExecutorV2().ExecuteAsync(snapshot, left, right);
-            Assert.False(result.Succeeded);
-            Assert.True(System.IO.File.Exists(Path.Combine(rightRoot, "old.txt")));
-            Assert.False(System.IO.File.Exists(Path.Combine(rightRoot, "new.txt")));
+            Assert.True(result.Succeeded);
+            Assert.False(System.IO.File.Exists(Path.Combine(rightRoot, "old.txt")));
+            Assert.Equal("replaced-with-different-size", await System.IO.File.ReadAllTextAsync(Path.Combine(rightRoot, "new.txt")));
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }

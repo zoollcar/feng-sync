@@ -104,7 +104,14 @@
    <Trigger Property="IsPressed" Value="True">
     <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
    </Trigger>
-  </Style.Triggers>
+ </Style.Triggers>
+ </Style>
+
+ <!-- Tall, full-width metric filters used by the change summary panel. -->
+ <Style x:Key="ChangeSummaryFilterButtonStyle" TargetType="Button" BasedOn="{StaticResource TertiaryButtonStyle}">
+  <Setter Property="Height" Value="60"/>
+  <Setter Property="Padding" Value="8"/>
+  <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
  </Style>
 
  <!-- Profile list item: 76 DIP high, 3 DIP AccentBrush left indicator when selected.

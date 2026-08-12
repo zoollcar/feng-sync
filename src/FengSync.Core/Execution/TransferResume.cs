@@ -5,7 +5,8 @@ namespace FengSync.Core.Execution;
 /// <summary>Discovers Feng Sync staging files without using a baseline or local task journal.</summary>
 internal static class TransferResume
 {
-    public static async Task<(string TemporaryPath, bool Resumed)> PrepareAsync(IEndpoint source, IEndpoint target, string path, CancellationToken ct)
+    public static async Task<(string TemporaryPath, bool Resumed)> PrepareAsync(IEndpoint source, IEndpoint target, string path,
+        IReadOnlyList<TransferTemporaryFile>? knownCandidates, CancellationToken ct)
     {
         // Remote transfers are deliberately restarted from zero. A random staging
         // name cannot collide with an earlier run, so recursively listing the whole
@@ -14,7 +15,7 @@ internal static class TransferResume
         if (target is not LocalEndpoint)
             return (path + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial", false);
 
-        var candidates = (await target.ListTransferTemporaryFilesAsync(ct))
+        var candidates = (knownCandidates ?? await target.ListTransferTemporaryFilesAsync(ct))
             .Where(x => x.OriginalPath.Equals(path, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(x => x.Size)
             .ToList();

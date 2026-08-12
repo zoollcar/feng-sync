@@ -17,8 +17,6 @@ internal static class DirectoryMoveOptimizer
 {
     public static IReadOnlyList<DirectoryMoveGroup> Find(PlanSnapshot snapshot, IEndpoint left, IEndpoint right)
     {
-        if (snapshot.LeftEntries is null || snapshot.RightEntries is null) return [];
-
         var candidates = snapshot.Plan.Operations
             .Where(x => x.Selected && x.Kind == OperationKind.Move && x.Move is
             {
@@ -66,8 +64,8 @@ internal static class DirectoryMoveOptimizer
             Overlaps(fromDirectory, toDirectory))
             return null;
 
-        var targetEntries = executeOn == EndpointSide.Left ? snapshot.LeftEntries! : snapshot.RightEntries!;
-        var sourceEntries = changedOn == EndpointSide.Left ? snapshot.LeftEntries! : snapshot.RightEntries!;
+        var targetEntries = executeOn == EndpointSide.Left ? snapshot.LeftEntries : snapshot.RightEntries;
+        var sourceEntries = changedOn == EndpointSide.Left ? snapshot.LeftEntries : snapshot.RightEntries;
         var targetTree = targetEntries.Values.Where(x => AtOrBelow(x.Path, fromDirectory)).ToList();
         var sourceTree = sourceEntries.Values.Where(x => AtOrBelow(x.Path, toDirectory)).ToList();
         if (!targetTree.Any(x => x.Path == fromDirectory && x.Kind == EntryKind.Directory) ||

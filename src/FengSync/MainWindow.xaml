@@ -19,7 +19,7 @@
   <Grid.RowDefinitions>
    <RowDefinition Height="64"/>
    <RowDefinition Height="120"/>
-   <RowDefinition Height="52"/>
+   <RowDefinition Height="0"/>
    <RowDefinition Height="*"/>
    <RowDefinition Height="32"/>
   </Grid.RowDefinitions>
@@ -155,7 +155,7 @@
    <Grid.RowDefinitions>
     <RowDefinition Height="64"/>
      <RowDefinition Height="120"/>
-    <RowDefinition Height="52"/>
+    <RowDefinition Height="0"/>
     <RowDefinition Height="*"/>
    </Grid.RowDefinitions>
 
@@ -284,105 +284,38 @@
     </Grid>
    </Border>
 
-   <!-- 变更预览工具栏 -->
-   <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
-    <Grid Margin="24,0,16,0">
-     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="*"/>
-      <ColumnDefinition Width="Auto"/>
-      <ColumnDefinition Width="Auto"/>
-     </Grid.ColumnDefinitions>
-     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-      <ComboBox x:Name="ChangeFilterBox" AutomationProperties.AutomationId="ChangeFilterBox" Width="124" Height="32" SelectedIndex="0" SelectionChanged="ChangeFilterBox_SelectionChanged" Margin="0,0,8,0">
-       <ComboBoxItem Content="全部"/>
-       <ComboBoxItem Content="上传"/>
-       <ComboBoxItem Content="下载"/>
-       <ComboBoxItem Content="删除"/>
-       <ComboBoxItem Content="冲突"/>
-       <ComboBoxItem Content="已忽略"/>
-      </ComboBox>
-      <Button x:Name="ExportPlanButton" AutomationProperties.AutomationId="ExportPlanButton" AutomationProperties.Name="导出同步计划" Click="ExportPlan_Click" Style="{StaticResource TertiaryButtonStyle}">
-       <DockPanel>
-        <fluent:FluentIcon DockPanel.Dock="Left" Icon="ArrowExport" Width="16" Height="16" FontSize="16" Margin="0,0,6,0" Style="{StaticResource LibraryIconStyle}"/>
-        <TextBlock Text="导出" VerticalAlignment="Center"/>
-       </DockPanel>
-      </Button>
-     </StackPanel>
-     <StackPanel Grid.Column="0" VerticalAlignment="Center" Orientation="Horizontal">
-      <TextBlock Text="变更预览" Style="{StaticResource SectionTitleTextStyle}"/>
-      <TextBlock x:Name="CompareResultStatus" AutomationProperties.AutomationId="CompareResultStatus" Style="{StaticResource CaptionTextStyle}" Text="尚未比较" Margin="12,0,0,0"/>
-     </StackPanel>
-     <Grid Grid.Column="1" Width="248" Margin="16,0" VerticalAlignment="Center">
-      <Grid.ColumnDefinitions>
-       <ColumnDefinition Width="Auto"/>
-       <ColumnDefinition Width="*"/>
-      </Grid.ColumnDefinitions>
-      <fluent:FluentIcon Icon="Search" Width="16" Height="16" FontSize="16" Margin="10,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Style="{StaticResource LibraryIconStyle}"/>
-      <TextBox x:Name="ChangeSearchBox" Grid.Column="1" AutomationProperties.AutomationId="ChangeSearchBox" AutomationProperties.Name="搜索变更文件" VerticalContentAlignment="Center" TextChanged="ChangeSearchBox_TextChanged" ToolTip="搜索文件名"/>
-     </Grid>
-    </Grid>
-   </Border>
-
-   <!-- DataGrid：Canvas 中唯一主要内容 Surface；空状态不覆盖列标题。 -->
+   <!-- 左右端点对照列表；中央状态列承载方向、冲突和操作菜单。 -->
    <Grid Grid.Row="3" Margin="24,16,16,16">
     <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="{StaticResource RadiusMedium}">
      <DataGrid x:Name="Comparison" AutomationProperties.AutomationId="Comparison"
                AutoGenerateColumns="False" CanUserAddRows="False"
                IsReadOnly="False" SelectionMode="Extended"
                HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-               RowHeight="40" ColumnHeaderHeight="40"
+               RowHeight="36" ColumnHeaderHeight="40"
                AlternatingRowBackground="{DynamicResource SurfaceSubtleBrush}"
                HorizontalGridLinesBrush="{DynamicResource BorderSubtleBrush}"
                Background="Transparent" BorderThickness="0"
                CurrentCellChanged="Comparison_CurrentCellChanged">
       <DataGrid.Columns>
-       <DataGridCheckBoxColumn Header="" Binding="{Binding Selected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="48"/>
-       <DataGridTextColumn Header="名称" Binding="{Binding Name}" Width="180" IsReadOnly="True">
-        <DataGridTextColumn.ElementStyle>
-         <Style TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextStyle}">
-          <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-         </Style>
-        </DataGridTextColumn.ElementStyle>
-       </DataGridTextColumn>
-       <DataGridTextColumn Header="相对路径" Binding="{Binding RelativePath}" Width="*" IsReadOnly="True">
-        <DataGridTextColumn.ElementStyle>
-         <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
-          <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-         </Style>
-        </DataGridTextColumn.ElementStyle>
-       </DataGridTextColumn>
-       <DataGridTextColumn Header="同步方向" Binding="{Binding DirectionDisplay}" Width="88" IsReadOnly="True">
-        <DataGridTextColumn.ElementStyle>
-         <Style TargetType="TextBlock">
-          <Setter Property="HorizontalAlignment" Value="Center"/>
-          <Setter Property="VerticalAlignment" Value="Center"/>
-          <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>
-          <Setter Property="FontSize" Value="12"/>
-         </Style>
-        </DataGridTextColumn.ElementStyle>
-       </DataGridTextColumn>
-       <DataGridTemplateColumn Header="操作" Width="88" IsReadOnly="True">
+       <DataGridCheckBoxColumn Header="" Binding="{Binding Selected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="38"/>
+       <DataGridTemplateColumn Header="左侧相对路径" Width="*" IsReadOnly="True">
         <DataGridTemplateColumn.CellTemplate>
          <DataTemplate>
-          <Button Style="{StaticResource TertiaryButtonStyle}"
-                  AutomationProperties.Name="变更操作菜单">
-           <Button.ContextMenu>
-            <ContextMenu>
-             <MenuItem Header="左侧覆盖右侧" Click="ActionMenu_KeepLeft_Click"/>
-             <MenuItem Header="右侧覆盖左侧" Click="ActionMenu_KeepRight_Click"/>
-             <Separator/>
-             <MenuItem Header="忽略此文件" Click="ActionMenu_Ignore_Click"/>
-             <MenuItem Header="重新启用此文件" Click="ActionMenu_Enable_Click"/>
-            </ContextMenu>
-           </Button.ContextMenu>
-           <Border Style="{StaticResource StatusChipStyle}" Background="{Binding OperationSeverity, Converter={x:Static views:AppConverters.SeverityBackgroundConverter}}">
-            <TextBlock Text="{Binding OperationLabel}" Style="{StaticResource StatusChipTextStyle}"/>
-           </Border>
-          </Button>
+          <Grid Margin="8,0,6,0" ToolTip="{Binding LeftToolTip}">
+           <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+           <fluent:FluentIcon Icon="{Binding LeftEntryIcon}" Width="16" Height="16" FontSize="16" Margin="0,0,6,0" Foreground="{DynamicResource TextSecondaryBrush}">
+            <fluent:FluentIcon.Style>
+             <Style TargetType="fluent:FluentIcon" BasedOn="{StaticResource LibraryIconStyle}">
+              <Style.Triggers><DataTrigger Binding="{Binding LeftDisplay}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
+             </Style>
+            </fluent:FluentIcon.Style>
+           </fluent:FluentIcon>
+           <TextBlock Grid.Column="1" Text="{Binding LeftDisplay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+          </Grid>
          </DataTemplate>
         </DataGridTemplateColumn.CellTemplate>
        </DataGridTemplateColumn>
-       <DataGridTextColumn Header="大小" Binding="{Binding OperationSize, Converter={x:Static views:AppConverters.NullableBytesConverter}}" Width="92" IsReadOnly="True">
+       <DataGridTextColumn Header="大小" Binding="{Binding LeftSize}" Width="82" IsReadOnly="True">
         <DataGridTextColumn.ElementStyle>
          <Style TargetType="TextBlock">
           <Setter Property="HorizontalAlignment" Value="Right"/>
@@ -392,13 +325,51 @@
          </Style>
         </DataGridTextColumn.ElementStyle>
        </DataGridTextColumn>
-       <DataGridTextColumn Header="修改时间" Binding="{Binding ModifiedUtc, Converter={x:Static views:AppConverters.ModifiedConverter}}" Width="160" IsReadOnly="True">
+       <DataGridTemplateColumn Header="操作" Width="58" IsReadOnly="True">
+        <DataGridTemplateColumn.CellTemplate>
+         <DataTemplate>
+          <Border Background="{Binding OperationSeverity, Converter={x:Static views:AppConverters.SeverityBackgroundConverter}}" Margin="1,0">
+           <Button AutomationProperties.AutomationId="ComparisonActionButton" AutomationProperties.Name="变更操作菜单"
+                   AutomationProperties.HelpText="{Binding ActionToolTip}" ToolTip="{Binding ActionToolTip}"
+                   ToolTipService.InitialShowDelay="150" ToolTipService.ShowDuration="15000"
+                   Click="ComparisonActionButton_Click" Style="{StaticResource TertiaryButtonStyle}">
+            <Button.ContextMenu>
+             <ContextMenu AutomationProperties.AutomationId="ComparisonActionMenu">
+              <MenuItem Header="左侧覆盖右侧" Click="ActionMenu_KeepLeft_Click"/>
+              <MenuItem Header="右侧覆盖左侧" Click="ActionMenu_KeepRight_Click"/>
+              <Separator/>
+              <MenuItem Header="忽略此文件" Click="ActionMenu_Ignore_Click"/>
+              <MenuItem Header="重新启用此文件" Click="ActionMenu_Enable_Click"/>
+             </ContextMenu>
+            </Button.ContextMenu>
+            <fluent:FluentIcon Icon="{Binding ActionIcon}" Width="24" Height="24" FontSize="24" Foreground="{Binding ActionBrush}" Style="{StaticResource LibraryIconStyle}"/>
+           </Button>
+          </Border>
+         </DataTemplate>
+        </DataGridTemplateColumn.CellTemplate>
+       </DataGridTemplateColumn>
+       <DataGridTemplateColumn Header="右侧相对路径" Width="*" IsReadOnly="True">
+        <DataGridTemplateColumn.CellTemplate>
+         <DataTemplate>
+          <Grid Margin="8,0,6,0" ToolTip="{Binding RightToolTip}">
+           <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+           <fluent:FluentIcon Icon="{Binding RightEntryIcon}" Width="16" Height="16" FontSize="16" Margin="0,0,6,0" Foreground="{DynamicResource TextSecondaryBrush}">
+            <fluent:FluentIcon.Style>
+             <Style TargetType="fluent:FluentIcon" BasedOn="{StaticResource LibraryIconStyle}">
+              <Style.Triggers><DataTrigger Binding="{Binding RightDisplay}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
+             </Style>
+            </fluent:FluentIcon.Style>
+           </fluent:FluentIcon>
+           <TextBlock Grid.Column="1" Text="{Binding RightDisplay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+          </Grid>
+         </DataTemplate>
+        </DataGridTemplateColumn.CellTemplate>
+       </DataGridTemplateColumn>
+       <DataGridTextColumn Header="大小" Binding="{Binding RightSize}" Width="82" IsReadOnly="True">
         <DataGridTextColumn.ElementStyle>
          <Style TargetType="TextBlock">
-          <Setter Property="HorizontalAlignment" Value="Right"/>
-          <Setter Property="VerticalAlignment" Value="Center"/>
-          <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>
-          <Setter Property="FontSize" Value="12"/>
+          <Setter Property="HorizontalAlignment" Value="Right"/><Setter Property="VerticalAlignment" Value="Center"/>
+          <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/><Setter Property="FontSize" Value="12"/>
          </Style>
         </DataGridTextColumn.ElementStyle>
        </DataGridTextColumn>
@@ -428,7 +399,10 @@
 
      <StackPanel x:Name="ChangeSummaryPanel" AutomationProperties.AutomationId="ChangeSummaryPanel">
 
-      <Grid Margin="0,0,0,14">
+      <Button x:Name="UploadFilterButton" Tag="Upload" Click="SummaryFilter_Click"
+              AutomationProperties.AutomationId="UploadFilterButton" AutomationProperties.Name="筛选上传变更"
+              Style="{StaticResource ChangeSummaryFilterButtonStyle}" Margin="0,0,0,6">
+       <Grid>
        <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto"/>
         <ColumnDefinition Width="*"/>
@@ -438,11 +412,15 @@
        </Border>
        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
         <TextBlock x:Name="UploadSummary" AutomationProperties.AutomationId="UploadSummary" Style="{StaticResource BodyStrongTextStyle}" Text="上传 0 项"/>
-        <TextBlock x:Name="UploadSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="0 B"/>
+       <TextBlock x:Name="UploadSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="0 B"/>
        </StackPanel>
-      </Grid>
+       </Grid>
+      </Button>
 
-      <Grid Margin="0,0,0,14">
+      <Button x:Name="DownloadFilterButton" Tag="Download" Click="SummaryFilter_Click"
+              AutomationProperties.AutomationId="DownloadFilterButton" AutomationProperties.Name="筛选下载变更"
+              Style="{StaticResource ChangeSummaryFilterButtonStyle}" Margin="0,0,0,6">
+       <Grid>
        <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto"/>
         <ColumnDefinition Width="*"/>
@@ -452,11 +430,15 @@
        </Border>
        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
         <TextBlock x:Name="DownloadSummary" AutomationProperties.AutomationId="DownloadSummary" Style="{StaticResource BodyStrongTextStyle}" Text="下载 0 项"/>
-        <TextBlock x:Name="DownloadSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="0 B"/>
+       <TextBlock x:Name="DownloadSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="0 B"/>
        </StackPanel>
-      </Grid>
+       </Grid>
+      </Button>
 
-      <Grid Margin="0,0,0,14">
+      <Button x:Name="DeleteFilterButton" Tag="Delete" Click="SummaryFilter_Click"
+              AutomationProperties.AutomationId="DeleteFilterButton" AutomationProperties.Name="筛选删除变更"
+              Style="{StaticResource ChangeSummaryFilterButtonStyle}" Margin="0,0,0,6">
+       <Grid>
        <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto"/>
         <ColumnDefinition Width="*"/>
@@ -466,11 +448,15 @@
        </Border>
        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
         <TextBlock x:Name="DeleteSummary" AutomationProperties.AutomationId="DeleteSummary" Style="{StaticResource BodyStrongTextStyle}" Text="删除 0 项"/>
-        <TextBlock x:Name="DeleteSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="—"/>
+       <TextBlock x:Name="DeleteSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="—"/>
        </StackPanel>
-      </Grid>
+       </Grid>
+      </Button>
 
-      <Grid Margin="0,0,0,14">
+      <Button x:Name="ConflictFilterButton" Tag="Conflict" Click="SummaryFilter_Click"
+              AutomationProperties.AutomationId="ConflictFilterButton" AutomationProperties.Name="筛选冲突变更"
+              Style="{StaticResource ChangeSummaryFilterButtonStyle}" Margin="0,0,0,6">
+       <Grid>
        <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto"/>
         <ColumnDefinition Width="*"/>
@@ -480,11 +466,14 @@
        </Border>
        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
         <TextBlock x:Name="ConflictSummary" AutomationProperties.AutomationId="ConflictSummary" Style="{StaticResource BodyStrongTextStyle}" Text="冲突 0 项"/>
-        <TextBlock x:Name="ConflictSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="0 B"/>
+       <TextBlock x:Name="ConflictSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="0 B"/>
        </StackPanel>
-      </Grid>
+       </Grid>
+      </Button>
 
-      <Border x:Name="ChangeSummaryTotal" Style="{StaticResource ChangeSummaryTotalStyle}">
+      <Button x:Name="ChangeSummaryTotal" Tag="All" Click="SummaryFilter_Click"
+              AutomationProperties.AutomationId="ChangeSummaryTotal" AutomationProperties.Name="显示全部变更"
+              Style="{StaticResource ChangeSummaryFilterButtonStyle}" Margin="0,8,0,0">
        <Grid>
         <Grid.ColumnDefinitions>
          <ColumnDefinition Width="*"/>
@@ -496,7 +485,7 @@
         </StackPanel>
         <TextBlock x:Name="TotalSizeSummary" Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource BodyStrongTextStyle}" Text="0 B"/>
        </Grid>
-      </Border>
+      </Button>
      </StackPanel>
 
     </StackPanel>

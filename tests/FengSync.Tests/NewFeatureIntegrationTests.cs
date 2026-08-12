@@ -1,4 +1,5 @@
 using FengSync.Core;
+using FengSync.Core.Execution;
 
 namespace FengSync.Tests;
 
@@ -35,7 +36,10 @@ public sealed class NewFeatureIntegrationTests : IAsyncLifetime
     {
         Directory.CreateDirectory(Path.Combine(Right, "history")); await File.WriteAllTextAsync(Path.Combine(Right, "history", "old.txt"), "preserve me");
         var plan = new SyncPlan([new SyncOperation("history/old.txt", OperationKind.DeleteRight, "test")]);
-        await new LocalExecutor().ExecuteAsync(plan, new LocalEndpoint(Left), new LocalEndpoint(Right), versioning: new VersioningPolicy(VersioningMode.TimestampedArchive, Archive));
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
+        var run = await new SyncExecutorV2().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, left, right), left, right,
+            versioning: new VersioningPolicy(VersioningMode.TimestampedArchive, Archive));
+        Assert.True(run.Succeeded);
         Assert.False(File.Exists(Path.Combine(Right, "history", "old.txt")));
         var archived = Assert.Single(Directory.EnumerateFiles(Archive, "old.txt", SearchOption.AllDirectories));
         Assert.Equal("preserve me", await File.ReadAllTextAsync(archived));
@@ -46,7 +50,11 @@ public sealed class NewFeatureIntegrationTests : IAsyncLifetime
     {
         await File.WriteAllTextAsync(Path.Combine(Right, "old.txt"), "x");
         var plan = new SyncPlan([new SyncOperation("old.txt", OperationKind.DeleteRight, "test")]);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new LocalExecutor().ExecuteAsync(plan, new LocalEndpoint(Left), new LocalEndpoint(Right), versioning: new VersioningPolicy(VersioningMode.TimestampedArchive)));
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
+        var snapshot = await PlanSnapshot.CaptureAsync(plan, left, right);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new SyncExecutorV2().ExecuteAsync(
+            snapshot, left, right,
+            versioning: new VersioningPolicy(VersioningMode.TimestampedArchive)));
         Assert.True(File.Exists(Path.Combine(Right, "old.txt")));
     }
 
@@ -55,7 +63,7 @@ public sealed class NewFeatureIntegrationTests : IAsyncLifetime
     {
         await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), "content");
         var result = await new ProfileRunner().RunAsync(SyncProfile.Create("two way", Left, Right));
-        Assert.Equal(1, result.Executed); Assert.NotNull(await new BaselineStore().LoadAsync(new LocalEndpoint(Left), new LocalEndpoint(Right)));
+        Assert.Equal(1, result.Executed); Assert.NotNull(await new BaselineRepository().LoadAsync(new LocalEndpoint(Left), new LocalEndpoint(Right)));
     }
 
     [Fact]
@@ -75,10 +83,16 @@ public sealed class NewFeatureIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Endpoint_neutral_synchronizer_executes_local_endpoints()
+    public async Task Current_endpoint_pipeline_executes_local_endpoints()
     {
         await File.WriteAllTextAsync(Path.Combine(Left, "portable.txt"), "portable");
-        var plan = await new EndpointSynchronizer().SynchronizeAsync(new LocalEndpoint(Left), new LocalEndpoint(Right), SyncMode.Update);
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
+        var comparison = await new FengSync.Core.Scanning.ComparisonSnapshotBuilder().CaptureAsync(left, right);
+        var plan = new ModePlanner().Build(SyncMode.Update, comparison.Left.Entries, comparison.Right.Entries,
+            leftCapabilities: left.Capabilities, rightCapabilities: right.Capabilities);
+        comparison.Plan = plan;
+        var run = await new SyncExecutorV2().ExecuteAsync(PlanSnapshot.FromComparison(plan, comparison), left, right);
+        Assert.True(run.Succeeded);
         Assert.Equal(OperationKind.CopyLeftToRight, Assert.Single(plan.Operations).Kind);
         Assert.Equal("portable", await File.ReadAllTextAsync(Path.Combine(Right, "portable.txt")));
     }

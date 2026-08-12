@@ -23,6 +23,23 @@ function Invoke-Stage([string]$name, [scriptblock]$action) {
     throw
   }
 }
+function Reset-TestArtifacts {
+  $artifactRoot = [IO.Path]::GetFullPath((Join-Path $workspace '.fengsync-test'))
+  $artifactParent = [IO.Directory]::GetParent($artifactRoot)?.FullName
+  if (-not [string]::Equals($artifactParent, $workspace, [StringComparison]::OrdinalIgnoreCase) -or
+      -not [string]::Equals([IO.Path]::GetFileName($artifactRoot), '.fengsync-test', [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to clear an unexpected test-artifact path: $artifactRoot"
+  }
+
+  $cleanup = Join-Path $workspace 'tests\Shared\TestProcessCleanup.ps1'
+  . $cleanup
+  Clear-FengSyncTestProcesses -Workspace $workspace
+  if (Test-Path -LiteralPath $artifactRoot) {
+    Remove-Item -LiteralPath $artifactRoot -Recurse -Force
+  }
+  New-Item -ItemType Directory -Path $artifactRoot | Out-Null
+  Write-Host "Prepared an empty test-artifact directory: $artifactRoot" -ForegroundColor DarkGray
+}
 
 Require-Command dotnet
 Require-Command pwsh
@@ -32,6 +49,7 @@ if (-not (Test-Path -LiteralPath $rclone)) { throw "Bundled rclone was not found
 
 Push-Location $workspace
 try {
+  Reset-TestArtifacts
   Invoke-Stage 'Build' { & dotnet build .\FengSync.sln -c $Configuration --nologo }
   Invoke-Stage 'Core, CLI and real SFTP protocol tests' { & dotnet test .\tests\FengSync.Tests\FengSync.Tests.csproj -c $Configuration --no-build --nologo }
 

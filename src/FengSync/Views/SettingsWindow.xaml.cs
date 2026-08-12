@@ -20,7 +20,6 @@ public partial class SettingsWindow : Window
     private readonly Func<Task<int>> _cleanupTemporaryFiles;
     private readonly SyncProfile? _currentProfile;
     private ApplicationSettings _initial;
-    private bool _loading;
     private bool _applying;
 
     public SettingsWindow(
@@ -219,7 +218,7 @@ public partial class SettingsWindow : Window
         return btn;
     }
 
-    private void MarkDirty(object sender, RoutedEventArgs e) { if (!_loading) SetDirty(true); }
+    private void MarkDirty(object sender, RoutedEventArgs e) => SetDirty(true);
     private void SetDirty(bool dirty) => DirtyLabel.Text = dirty ? "有未应用的更改" : "";
 
     private async Task<bool> ApplyAsync()

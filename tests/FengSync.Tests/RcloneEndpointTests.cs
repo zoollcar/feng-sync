@@ -166,6 +166,62 @@ public sealed class RcloneEndpointTests : IDisposable
         Assert.Contains(_handler.Bodies, x => x.Contains("\"deleteEmptySrcDirs\":true", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData(EndpointType.Sftp)]
+    [InlineData(EndpointType.GoogleDrive)]
+    public async Task Remote_file_move_uses_one_native_move_and_preserves_content_metadata(EndpointType type)
+    {
+        await File.WriteAllTextAsync(Path.Combine(_root, "new.txt"), "contents");
+        _handler.Seed("old.txt", 8);
+        var local = new LocalEndpoint(_root); var remote = Remote(type);
+        var move = new SyncOperation("new.txt", OperationKind.Move, "remote file move", move: new(
+            EndpointSide.Left, EndpointSide.Right, "old.txt", "new.txt", EntryKind.File,
+            IdentityEvidenceKind.StrongDigest, MoveConfidence.High,
+            EndpointMoveExecution.NativeRename, MoveFallback.CrossEndpointCopyDelete));
+
+        var result = await new SyncExecutorV2().ExecuteAsync(await PlanSnapshot.CaptureAsync(new SyncPlan([move]), local, remote), local, remote);
+
+        AssertSucceeded(result, _handler);
+        Assert.Single(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/movefile"));
+        Assert.False(_handler.Contains("old.txt"));
+        Assert.True(_handler.Contains("new.txt"));
+    }
+
+    [Theory]
+    [InlineData(EndpointType.Sftp)]
+    [InlineData(EndpointType.GoogleDrive)]
+    public async Task Complete_remote_directory_move_is_aggregated_into_one_native_request(EndpointType type)
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "new-dir", "sub"));
+        await File.WriteAllTextAsync(Path.Combine(_root, "new-dir", "a.txt"), "alpha");
+        await File.WriteAllTextAsync(Path.Combine(_root, "new-dir", "sub", "b.txt"), "bravo");
+        _handler.Seed("old-dir/a.txt", 5); _handler.Seed("old-dir/sub/b.txt", 5);
+        var local = new LocalEndpoint(_root); var remote = Remote(type);
+        var plan = new SyncPlan([
+            new("new-dir", OperationKind.CreateRightDirectory, "directory move"),
+            new("new-dir/sub", OperationKind.CreateRightDirectory, "directory move"),
+            new("old-dir/sub", OperationKind.DeleteRight, "directory move"),
+            new("old-dir", OperationKind.DeleteRight, "directory move"),
+            RemoteMove("old-dir/a.txt", "new-dir/a.txt"),
+            RemoteMove("old-dir/sub/b.txt", "new-dir/sub/b.txt")]);
+        var paths = remote.Capabilities.EffectivePaths.CreateComparer();
+        var leftEntries = (await local.ScanAsync()).ToDictionary(x => x.Path, paths);
+        var rightEntries = leftEntries.Values.Select(x => x with { Path = x.Path.Replace("new-dir", "old-dir", StringComparison.Ordinal) }).ToDictionary(x => x.Path, paths);
+        // Reuse the comparison data directly: this is both faster and asserts
+        // that execution does not need a second remote tree scan.
+        var snapshot = new PlanSnapshot(plan, new Dictionary<Guid, Fingerprint?>(), leftEntries, rightEntries);
+
+        var result = await new SyncExecutorV2().ExecuteAsync(snapshot, local, remote);
+
+        AssertSucceeded(result, _handler);
+        Assert.Single(_handler.Requests, x => x.AbsolutePath.EndsWith("sync/move"));
+        Assert.DoesNotContain(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/movefile"));
+        Assert.False(_handler.Contains("old-dir/a.txt"));
+        Assert.False(_handler.Contains("old-dir/sub/b.txt"));
+        Assert.True(_handler.Contains("new-dir/a.txt"));
+        Assert.True(_handler.Contains("new-dir/sub/b.txt"));
+    }
+
     [Fact]
     public async Task Publishing_state_database_uses_rclone_overwrite_without_deleting_the_old_google_drive_file_first()
     {
@@ -233,7 +289,7 @@ public sealed class RcloneEndpointTests : IDisposable
     [InlineData(EndpointType.Sftp, true)]
     [InlineData(EndpointType.GoogleDrive, false)]
     [InlineData(EndpointType.GoogleDrive, true)]
-    public async Task Remote_delete_is_conditional_on_the_compared_object_even_when_an_unrelated_copy_fails(EndpointType type, bool changeDeleteTarget)
+    public async Task Remote_delete_runs_directly_even_when_an_unrelated_copy_fails(EndpointType type, bool changeDeleteTarget)
     {
         await File.WriteAllTextAsync(Path.Combine(_root, "copy.txt"), "source");
         _handler.Seed("delete.txt", 3);
@@ -252,8 +308,8 @@ public sealed class RcloneEndpointTests : IDisposable
 
         Assert.Equal(TransferStage.Failed, result.Operations.Single(x => x.OperationId == copy.OperationId).Stage);
         var deleteResult = result.Operations.Single(x => x.OperationId == delete.OperationId);
-        Assert.Equal(changeDeleteTarget ? TransferStage.Failed : TransferStage.Committed, deleteResult.Stage);
-        Assert.Equal(!changeDeleteTarget, _handler.HasDeleteFor("delete.txt"));
+        Assert.Equal(TransferStage.Committed, deleteResult.Stage);
+        Assert.True(_handler.HasDeleteFor("delete.txt"));
     }
 
     private static void AssertSucceeded(SyncRunResult result, RecordingHandler handler)
@@ -261,6 +317,11 @@ public sealed class RcloneEndpointTests : IDisposable
         var operations = string.Join(Environment.NewLine, result.Operations.Select(x => $"path={x.Path}; kind={x.Kind}; stage={x.Stage}; published={x.Published}; error={x.Error ?? "<none>"}"));
         Assert.True(result.Succeeded, $"V2 synchronization failed.{Environment.NewLine}Operations:{Environment.NewLine}{operations}{Environment.NewLine}RC state:{Environment.NewLine}{handler.DiagnosticState}");
     }
+
+    private static SyncOperation RemoteMove(string from, string to) => new(to, OperationKind.Move, "directory move", move: new(
+        EndpointSide.Left, EndpointSide.Right, from, to, EntryKind.File,
+        IdentityEvidenceKind.StrongDigest, MoveConfidence.High,
+        EndpointMoveExecution.NativeRename, MoveFallback.CrossEndpointCopyDelete));
 
     private RcloneEndpoint Remote(EndpointType type) => new(new RcloneRcClient(_http, _http.BaseAddress!, "user", "pass"), new EndpointProfile(Guid.NewGuid(), type, "root", "test"), new(false, true, true, TimeSpan.FromSeconds(1)));
     private sealed class RecordingHandler : HttpMessageHandler
@@ -284,6 +345,7 @@ public sealed class RcloneEndpointTests : IDisposable
                 return Requests.Zip(Bodies).Any(x => x.First.AbsolutePath.EndsWith("operations/deletefile") &&
                     x.Second.Contains($"\"remote\":\"root/{path}\"", StringComparison.Ordinal));
         }
+        public bool Contains(string path) { lock (_gate) return _objects.ContainsKey(path); }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
@@ -318,6 +380,23 @@ public sealed class RcloneEndpointTests : IDisposable
 
         private string Apply(string operation, string body)
         {
+            if (operation.EndsWith("sync/move"))
+            {
+                using var moveRequest = JsonDocument.Parse(body);
+                var sourceDirectory = RelativeFileSystem(moveRequest.RootElement.GetProperty("srcFs").GetString() ?? "");
+                var destinationDirectory = RelativeFileSystem(moveRequest.RootElement.GetProperty("dstFs").GetString() ?? "");
+                lock (_gate)
+                {
+                    var moved = _objects.Where(x => x.Key == sourceDirectory || x.Key.StartsWith(sourceDirectory + "/", StringComparison.Ordinal)).ToList();
+                    foreach (var item in moved)
+                    {
+                        var suffix = item.Key[sourceDirectory.Length..];
+                        _objects[destinationDirectory + suffix] = item.Value;
+                        _objects.Remove(item.Key);
+                    }
+                }
+                return "{}";
+            }
             if (!operation.EndsWith("operations/copyfile") && !operation.EndsWith("operations/movefile")) return "{}";
             using var request = JsonDocument.Parse(body);
             var root = request.RootElement;
@@ -346,6 +425,11 @@ public sealed class RcloneEndpointTests : IDisposable
         }
 
         private static string Relative(string remote) => remote.Trim('/').StartsWith("root/", StringComparison.Ordinal) ? remote.Trim('/')[5..] : remote.Trim('/');
+        private static string RelativeFileSystem(string fileSystem)
+        {
+            var separator = fileSystem.IndexOf(':');
+            return Relative(separator >= 0 ? fileSystem[(separator + 1)..] : fileSystem);
+        }
     }
 
     private sealed class TimeoutHandler : HttpMessageHandler

@@ -1,9 +1,10 @@
-using System.Security.Cryptography;
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using FengSync.Core.Diagnostics;
 using FengSync.Core.Scanning;
 
 namespace FengSync.Core;
-public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorage, IContentHashEndpoint, IStagedPublishEndpoint
+public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorage, IStagedPublishEndpoint
 {
     public string Root { get; } = Path.GetFullPath(root);
     public EndpointProfile Profile { get; } = new(Guid.NewGuid(), EndpointType.Local, Path.GetFullPath(root), Identity: Path.GetFullPath(root));
@@ -30,6 +31,38 @@ public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorag
     }
     public string PhysicalPath(string relative) => Path.Combine(Root, relative.Replace('/', Path.DirectorySeparatorChar));
     public Task<IReadOnlyList<EntrySnapshot>> ScanAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<EntrySnapshot>>(Scan().ToList());
+    public async IAsyncEnumerable<EntrySnapshot> ScanEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (!Directory.Exists(Root)) throw new DirectoryNotFoundException(Root);
+        var channel = Channel.CreateBounded<EntrySnapshot>(new BoundedChannelOptions(256)
+        {
+            SingleReader = true,
+            SingleWriter = true,
+            FullMode = BoundedChannelFullMode.Wait
+        });
+        using var producerCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var producer = Task.Run(async () =>
+        {
+            try
+            {
+                foreach (var entry in Scan())
+                    await channel.Writer.WriteAsync(entry, producerCancellation.Token).ConfigureAwait(false);
+                channel.Writer.TryComplete();
+            }
+            catch (Exception ex) { channel.Writer.TryComplete(ex); }
+        }, CancellationToken.None);
+        try
+        {
+            await foreach (var entry in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+                yield return entry;
+        }
+        finally
+        {
+            producerCancellation.Cancel();
+            try { await producer.ConfigureAwait(false); }
+            catch (OperationCanceledException) when (producerCancellation.IsCancellationRequested) { }
+        }
+    }
     public Task<IReadOnlyList<EntrySnapshot>> ScanAsync(IProgress<ScanProgress> progress, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(Root)) throw new DirectoryNotFoundException(Root);
@@ -82,35 +115,6 @@ public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorag
         }
         return Task.FromResult<IReadOnlyList<TransferTemporaryFile>>(files);
     }
-    public Task<ContentDigest> HashAsync(string relativePath, HashAlgorithmId algorithm, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
-    {
-        SyncRunMetricsHub.Current.IncrementHashFile();
-        var physical = PhysicalPath(relativePath);
-        HashAlgorithm hashInstance = algorithm switch
-        {
-            HashAlgorithmId.Sha256 => SHA256.Create(),
-            HashAlgorithmId.Sha1 => SHA1.Create(),
-            HashAlgorithmId.Md5 => MD5.Create(),
-            _ => throw new ArgumentOutOfRangeException(nameof(algorithm))
-        };
-        using (hashInstance)
-        {
-            using var stream = new FileStream(physical, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
-            var buffer = new byte[64 * 1024];
-            int read;
-            long total = 0;
-            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                hashInstance.TransformBlock(buffer, 0, read, null, 0);
-                total += read;
-                progress?.Report(total);
-            }
-            hashInstance.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-            SyncRunMetricsHub.Current.AddHashBytes(total);
-            return Task.FromResult(new ContentDigest(algorithm, Convert.ToHexString(hashInstance.Hash!)));
-        }
-    }
     public async Task CopyToAsync(string relativePath, IEndpoint target, string temporaryPath, CancellationToken cancellationToken = default)
     {
         if (target is not LocalEndpoint localTarget) throw new NotSupportedException("本地端点需要通过统一端点执行器传输到远程端点。");
@@ -142,7 +146,24 @@ public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorag
         return Task.CompletedTask;
     }
     public Task DeleteAsync(string relativePath, bool directory, CancellationToken cancellationToken = default)
-    { var path = PhysicalPath(relativePath); if (directory) { if (Directory.Exists(path) && !Directory.EnumerateFileSystemEntries(path).Any()) Directory.Delete(path); } else if (File.Exists(path)) File.Delete(path); return Task.CompletedTask; }
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var path = PhysicalPath(relativePath);
+        // The comparison snapshot already established the target kind. Delete
+        // directly without enumerating a directory first; absence is success.
+        if (directory)
+        {
+            try { Directory.Delete(path); }
+            catch (DirectoryNotFoundException) { }
+            catch (IOException ex) when ((ex.HResult & 0xFFFF) == 145)
+            {
+                // A deselected child intentionally keeps the directory alive.
+                // Treat that as a no-op without listing the directory contents.
+            }
+        }
+        else File.Delete(path);
+        return Task.CompletedTask;
+    }
     public Task CreateDirectoryAsync(string relativePath, CancellationToken cancellationToken = default) { Directory.CreateDirectory(PhysicalPath(relativePath)); return Task.CompletedTask; }
     public Task<string?> DownloadStateAsync(string relativePath, string localDirectory, CancellationToken cancellationToken = default)
     {

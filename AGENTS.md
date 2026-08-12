@@ -59,7 +59,7 @@ Use this file as a fast routing map. Inspect only the relevant subtree and its f
 
 ## Testing and local artifacts
 
-- UI/integration artifacts live in `.fengsync-test/` and are intentionally ignored. Failed runs retain evidence there; do not delete it as routine cleanup.
+- UI/integration artifacts live in the ignored `.fengsync-test/` directory. Clear it once at the start of each test-suite run, then retain the current run's evidence until the next run; do not delete it during test teardown.
 - `artifacts/` contains generated release packages and is ignored.
 - Test fixtures are versioned in `tests/fixtures/`; never place real endpoints, tokens, passwords, private keys, or personal paths there.
 - Build outputs (`bin/`, `obj/`) and `.vs/` are generated files; do not edit or commit them.

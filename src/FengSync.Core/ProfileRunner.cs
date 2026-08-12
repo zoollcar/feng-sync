@@ -42,9 +42,9 @@ public sealed class ProfileRunner
             // M1/M2: build the per-operation fingerprints from the comparison
             // snapshot that PrepareAsync already produced, so the executor does
             // not need to call ScanAsync a third time. The V2 executor performs
-            // freshness via per-path StatAsync and verifies copies with the
-            // StatVerifier so the default run meets the M2 no-full-rescan
-            // guarantee.
+            // executes the user-confirmed operations without comparing endpoint
+            // state again. Post-publish StatVerifier checks are retained to verify
+            // transfer integrity and build the next baseline.
             var snapshot = PlanSnapshot.FromComparison(prepared.Plan, prepared.Comparison);
             run = await new Execution.SyncExecutorV2().ExecuteAsync(snapshot, prepared.Left, prepared.Right,
                 progress is null ? null : new Progress<TransferProgress>(x => progress.Report(x.Path)), ct, prepared.Effective.VerifyCopies, prepared.Effective.Versioning, resourceGovernor: null, journals: new TaskJournalStore(), maxConcurrentCopies: prepared.Effective.MaxConcurrentCopies);
@@ -143,7 +143,8 @@ public sealed class ProfileRunner
                 : SafetyValidationResult.Pass;
             if (configurationSafety.HasBlockingIssues) throw new InvalidOperationException(string.Join(" ", configurationSafety.Issues.Select(x => x.Message)));
             var baselines = new BaselineRepository();
-            var baseline = await baselines.LoadAsync(left, right, ct);
+            var baselineLoad = await baselines.LoadDetailedAsync(left, right, ct);
+            var baseline = baselineLoad.CanPropagateDeletes ? baselineLoad.Entries : null;
             // Build a single paired snapshot of both endpoints so the planner, the
             // safety check, the freshness validator and the baseline commit all
             // operate on the same enumeration — no module below this point may

@@ -1,27 +1,7 @@
 namespace FengSync.Core.Scanning;
 
-/// <summary>
-/// Optional capability for endpoints that can hash a single file lazily. Splitting
-/// hashing from <see cref="IEndpoint"/> keeps remote endpoints from carrying fake
-/// implementations and matches the M1 plan's lazy-hash direction.
-/// </summary>
-public interface IContentHashEndpoint
-{
-    Task<ContentDigest> HashAsync(string relativePath, HashAlgorithmId algorithm, IProgress<long>? progress = null, CancellationToken cancellationToken = default);
-}
-
 public enum HashAlgorithmId { Sha256, Sha1, Md5 }
 public sealed record ContentDigest(HashAlgorithmId Algorithm, string Hex);
-
-/// <summary>
-/// Single-path metadata fetch. Replaces the historical
-/// "scan entire tree, then FirstOrDefault" pattern used by the freshness validator
-/// and the copy verifier.
-/// </summary>
-public interface IStatEndpoint
-{
-    Task<EntrySnapshot?> StatAsync(string relativePath, CancellationToken cancellationToken = default);
-}
 
 /// <summary>
 /// Default comparison strategy. The TimeAndSize default avoids reading file
