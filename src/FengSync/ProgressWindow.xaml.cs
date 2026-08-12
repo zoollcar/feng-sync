@@ -20,7 +20,6 @@ public partial class ProgressWindow : Window
     private int _total;
     private int _copyTotal;
     private long _copyTotalBytes;
-    private int _activeTransfers;
     private long _speedSampleBytes;
     private TimeSpan _speedSampleElapsed;
     private double _bytesPerSecond;
@@ -36,7 +35,7 @@ public partial class ProgressWindow : Window
         AutoClose.IsChecked = autoClose;
         OperationResults.ItemsSource = _rows;
         _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-        _refreshTimer.Tick += (_, _) => UpdateVisualCounters(_activeTransfers);
+        _refreshTimer.Tick += (_, _) => UpdateVisualCounters();
         Closed += (_, _) => _refreshTimer.Stop();
         BeginRun(operations);
     }
@@ -62,10 +61,10 @@ public partial class ProgressWindow : Window
         BytesText.Text = _copyTotal == 0 ? "本次没有文件传输" : $"已完成 0 / {_copyTotal} 个文件，0 B";
         SpeedText.Text = "等待传输";
         _clock.Restart();
-        _activeTransfers = 0;
         _speedSampleBytes = 0;
         _speedSampleElapsed = TimeSpan.Zero;
         _bytesPerSecond = 0;
+        _result = null;
         _refreshTimer.Start();
     }
 
@@ -85,22 +84,22 @@ public partial class ProgressWindow : Window
         FileProgress.IsIndeterminate = false;
         StateTitle.Text = "正在同步";
         CurrentFile.Text = "等待传输任务…";
-        UpdateLiveSummary(concurrency);
+        UpdateLiveSummary();
     }
 
     public void Report(TransferProgress progress)
     {
-        _activeTransfers = progress.ActiveTransfers;
         CurrentFile.Text = progress.Path;
         if (!_rowsById.TryGetValue(progress.OperationId, out var row)) return;
         row.Update(progress);
-        UpdateVisualCounters(_activeTransfers);
-        UpdateLiveSummary(_activeTransfers);
+        UpdateVisualCounters();
+        UpdateLiveSummary();
     }
 
-    private void UpdateVisualCounters(int activeTransfers)
+    private void UpdateVisualCounters()
     {
         var completed = _rows.Count(x => x.IsTerminal);
+        var executing = _rows.Count(x => x.IsExecuting);
         var completedCopies = _rows.Count(x => x.IsCopy && x.Stage == TransferStage.Committed);
         var bytes = _rows.Where(x => x.IsCopy).Sum(x => x.BytesCompleted);
         _copyTotalBytes = Math.Max(_copyTotalBytes, _rows.Where(x => x.IsCopy).Sum(x => x.TotalBytes));
@@ -116,16 +115,18 @@ public partial class ProgressWindow : Window
             _speedSampleElapsed = elapsed;
         }
         var remaining = _bytesPerSecond > 0 && _copyTotalBytes > bytes ? TimeSpan.FromSeconds((_copyTotalBytes - bytes) / _bytesPerSecond) : (TimeSpan?)null;
-        SpeedText.Text = $"{FormatBytes((long)_bytesPerSecond)}/秒 · {activeTransfers} 项并发 · 已用 {elapsed:mm\\:ss}" +
+        SpeedText.Text = $"{FormatBytes((long)_bytesPerSecond)}/秒 · {executing} 项并发 · 已用 {elapsed:mm\\:ss}" +
             (remaining is { } eta ? $" · 预计剩余 {eta:mm\\:ss}" : "");
+        if (_result is null && _total > 0 && completed == _total) StateTitle.Text = "正在完成同步";
     }
 
-    private void UpdateLiveSummary(int activeTransfers)
+    private void UpdateLiveSummary()
     {
         var completed = _rows.Count(x => x.IsTerminal);
         var failed = _rows.Count(x => x.Stage == TransferStage.Failed);
         var executing = _rows.Count(x => x.IsExecuting);
-        StateDescription.Text = $"已完成 {completed}，执行中 {Math.Max(executing, activeTransfers)}，失败 {failed}";
+        var waiting = _rows.Count(x => x.Stage == TransferStage.Pending);
+        StateDescription.Text = $"已完成 {completed}，执行中 {executing}，等待 {waiting}，失败 {failed}";
     }
 
     public void SetRetry(IReadOnlyList<SyncOperation> originalOperations, Func<SyncPlan, Task<SyncRunResult>> retry)
@@ -134,7 +135,6 @@ public partial class ProgressWindow : Window
     public void Complete(SyncRunResult result, string text, bool cancelled = false)
     {
         _refreshTimer.Stop();
-        _activeTransfers = 0;
         FileProgress.IsIndeterminate = false;
         _result = result;
         _cancelled = cancelled;
@@ -149,7 +149,7 @@ public partial class ProgressWindow : Window
         var transferred = _rows.Where(x => x.IsCopy).Sum(x => x.BytesCompleted);
         if (_bytesPerSecond == 0 && transferred > 0)
             _bytesPerSecond = transferred / Math.Max(.001, _clock.Elapsed.TotalSeconds);
-        UpdateVisualCounters(0);
+        UpdateVisualCounters();
         var outcome = RunResultPresentation.OutcomeOf(result, cancelled);
         (StateIcon.Icon, StateIcon.Foreground, StateTitle.Text) = outcome switch
         {
@@ -207,6 +207,20 @@ public sealed class ProgressOperationRow : INotifyPropertyChanged
     public Guid OperationId { get; }
     public string Path { get; }
     public OperationKind Kind { get; }
+    public string KindText => Kind switch
+    {
+        OperationKind.CopyLeftToRight => "复制到右侧",
+        OperationKind.CopyRightToLeft => "复制到左侧",
+        OperationKind.DeleteLeft => "删除左侧",
+        OperationKind.DeleteRight => "删除右侧",
+        OperationKind.CreateLeftDirectory => "创建左侧目录",
+        OperationKind.CreateRightDirectory => "创建右侧目录",
+        OperationKind.Move => "移动",
+        OperationKind.MoveConflict => "移动冲突",
+        OperationKind.Conflict => "冲突",
+        OperationKind.Blocked => "已阻止",
+        _ => Kind.ToString()
+    };
     public bool IsCopy { get; }
     public TransferStage Stage { get; private set; } = TransferStage.Pending;
     public string StageText => Stage switch

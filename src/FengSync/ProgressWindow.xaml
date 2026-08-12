@@ -21,7 +21,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="132" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -67,10 +67,10 @@
             </StackPanel>
 
             <Grid Grid.Row="2" Margin="0,20,0,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
                 <Border Background="{DynamicResource SurfaceBrush}"
                         BorderBrush="{DynamicResource BorderSubtleBrush}"
@@ -84,24 +84,29 @@
                                      Margin="0,12,0,0"
                                      AutomationProperties.Name="已传输字节进度" />
                         <TextBlock x:Name="BytesText"
+                                   AutomationProperties.AutomationId="ProgressBytesText"
                                    Text="等待传输"
                                    Style="{StaticResource CaptionTextStyle}"
+                                   TextWrapping="Wrap"
                                    Margin="0,8,0,0" />
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="1"
+                <Border Grid.Column="1"
                         Background="{DynamicResource SurfaceBrush}"
                         BorderBrush="{DynamicResource BorderSubtleBrush}"
                         BorderThickness="1"
                         CornerRadius="{StaticResource RadiusMedium}"
                         Padding="16"
-                        Margin="0,8,0,0">
+                        Margin="12,0,0,0">
                     <StackPanel>
                         <TextBlock Text="速度 / 用时" Style="{StaticResource SectionTitleTextStyle}" />
                         <TextBlock x:Name="SpeedText"
+                                   AutomationProperties.AutomationId="ProgressSpeedText"
                                    Text="0 B/s"
                                    Style="{StaticResource MetricTextStyle}"
+                                   MinHeight="52"
+                                   TextWrapping="Wrap"
                                    Margin="0,12,0,0" />
                     </StackPanel>
                 </Border>
@@ -116,7 +121,7 @@
                           AutomationProperties.Name="同步操作详情">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="状态" Binding="{Binding StageText}" Width="90" />
-                        <DataGridTextColumn Header="操作" Binding="{Binding Kind}" Width="115" />
+                        <DataGridTextColumn Header="操作" Binding="{Binding KindText}" Width="115" />
                         <DataGridTextColumn Header="路径" Binding="{Binding Path}" Width="*" />
                         <DataGridTextColumn Header="错误 / 建议" Binding="{Binding Error}" Width="2*" />
                     </DataGrid.Columns>

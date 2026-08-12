@@ -32,10 +32,24 @@ public partial class RunHistoryWindow : Window
             RefreshButton.IsEnabled = false; RefreshButton.Content = "正在刷新…";
             var outcome = OutcomeBox.SelectedIndex switch { 1 => RunOutcome.Succeeded, 2 => RunOutcome.PartialSuccess, 3 => RunOutcome.Failed, 4 => RunOutcome.Cancelled, _ => (RunOutcome?)null };
             var since = PeriodBox.SelectedIndex switch { 1 => DateTimeOffset.UtcNow.AddDays(-7), 2 => DateTimeOffset.UtcNow.AddDays(-30), _ => (DateTimeOffset?)null };
-            Entries.ItemsSource = await _repository.QueryAsync(_profileId, outcome, since);
+            Entries.ItemsSource = (await _repository.QueryAsync(_profileId, outcome, since)).Select(RunHistoryDisplayRow.From).ToList();
         }
         finally { RefreshButton.IsEnabled = true; RefreshButton.Content = original; _refreshing = false; }
     }
     private async void FilterChanged(object sender, SelectionChangedEventArgs e) => await RefreshAsync();
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshAsync();
+}
+
+internal sealed record RunHistoryDisplayRow(
+    string ProfileId, string OutcomeText, string CompletedLocalText, int Planned, int Succeeded, int Failed,
+    string TransferredText, string? Detail, string? FailureCategory, bool? FailureRetryable, string? CorrelationId)
+{
+    public static RunHistoryDisplayRow From(RunHistoryEntry entry) => new(
+        entry.ProfileId,
+        entry.Outcome switch { RunOutcome.Succeeded => "成功", RunOutcome.PartialSuccess => "部分成功", RunOutcome.Failed => "失败", RunOutcome.Cancelled => "已取消", _ => entry.Outcome.ToString() },
+        entry.CompletedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+        entry.Planned, entry.Succeeded, entry.Failed, FormatBytes(entry.TransferredBytes), entry.Detail,
+        entry.FailureCategory, entry.FailureRetryable, entry.CorrelationId);
+
+    private static string FormatBytes(long bytes) => bytes < 1024 ? $"{bytes:N0} B" : bytes < 1024 * 1024 ? $"{bytes / 1024d:N1} KB" : bytes < 1024L * 1024 * 1024 ? $"{bytes / 1024d / 1024:N1} MB" : $"{bytes / 1024d / 1024 / 1024:N2} GB";
 }

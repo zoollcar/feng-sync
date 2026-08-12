@@ -112,6 +112,16 @@ function Select-Ui($element) { $p = $null; if (-not $element.TryGetCurrentPatter
 function Toggle-Ui($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$p)) { throw "Element cannot be toggled: $($element.Current.Name)" }; $p.Toggle() }
 function Get-ToggleState($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$p)) { throw "Element has no TogglePattern: $($element.Current.Name)" }; return $p.Current.ToggleState }
 function Get-Text($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p)) { throw "Element has no ValuePattern: $($element.Current.Name)" }; return $p.Current.Value }
+function Scroll-ToTop($element) {
+  $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::IsScrollPatternAvailableProperty, $true)
+  $scrollable = $element.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+  if (-not $scrollable) { return }
+  $pattern = $null
+  if ($scrollable.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern, [ref]$pattern) -and $pattern.Current.VerticallyScrollable) {
+    $pattern.SetScrollPercent([System.Windows.Automation.ScrollPattern]::NoScroll, 0)
+    Start-Sleep -Milliseconds 180
+  }
+}
 function Drag-ElementHorizontally($element, [int]$offset) {
   $box = $element.Current.BoundingRectangle
   if ($box.Width -le 0 -or $box.Height -le 0) { throw "Element cannot be dragged because it has no bounds: $($element.Current.AutomationId)" }
@@ -215,30 +225,36 @@ function Apply-Direction($main, [string]$header) {
   $actionButton = Find-Name $row '变更操作菜单' 5
   $bounds = $actionButton.Current.BoundingRectangle
   if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw 'Comparison action menu has no clickable bounds.' }
-  [System.Windows.Automation.InvokePattern]$invoke = $null
-  if ($actionButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
-    $invoke.Invoke()
-  } else {
-    try { $actionButton.SetFocus() } catch { }
-    [FengSyncUiMouse]::SetCursorPos([int]($bounds.Left + ($bounds.Width / 2)), [int]($bounds.Top + ($bounds.Height / 2))) | Out-Null
-    Start-Sleep -Milliseconds 180
-    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTDOWN, 0, 0, 0, [UIntPtr]::Zero)
-    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTUP, 0, 0, 0, [UIntPtr]::Zero)
-  }
-  Start-Sleep -Milliseconds 250
   $menu = $null
-  $menuDeadline = [DateTime]::UtcNow.AddSeconds(5)
-  while ([DateTime]::UtcNow -lt $menuDeadline -and $null -eq $menu) {
-    try {
-      $candidate = Find-ContextMenuInApp 'ComparisonActionMenu'
-      if ($candidate) {
-        $target = $candidate.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $header))
-        if ($target) { $menu = $candidate }
-      }
-    } catch { $menu = $null }
-    if ($null -eq $menu) { Start-Sleep -Milliseconds 150 }
+  for ($attempt = 1; $attempt -le 3 -and $null -eq $menu; $attempt++) {
+    [void][FengSyncUiMouse]::SetForegroundWindow($script:process.MainWindowHandle)
+    try { $actionButton.SetFocus() } catch { }
+    [System.Windows.Automation.InvokePattern]$invoke = $null
+    if ($actionButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
+      $invoke.Invoke()
+    } else {
+      [FengSyncUiMouse]::SetCursorPos([int]($bounds.Left + ($bounds.Width / 2)), [int]($bounds.Top + ($bounds.Height / 2))) | Out-Null
+      Start-Sleep -Milliseconds 180
+      [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+      [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTUP, 0, 0, 0, [UIntPtr]::Zero)
+    }
+    $menuDeadline = [DateTime]::UtcNow.AddSeconds(2)
+    while ([DateTime]::UtcNow -lt $menuDeadline -and $null -eq $menu) {
+      try {
+        $candidate = Find-ContextMenuInApp 'ComparisonActionMenu'
+        if ($candidate) {
+          $target = $candidate.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $header))
+          if ($target) { $menu = $candidate }
+        }
+      } catch { $menu = $null }
+      if ($null -eq $menu) { Start-Sleep -Milliseconds 150 }
+    }
+    if ($null -eq $menu) {
+      [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+      Start-Sleep -Milliseconds 150
+    }
   }
-  if ($null -eq $menu) { throw 'Row context menu did not appear.' }
+  if ($null -eq $menu) { throw 'Row context menu did not appear after three attempts.' }
   # Use keyboard to navigate rather than cross-process InvokePattern — the latter
   # sometimes throws when the menu's window token is mid-transition.
   $itemCount = 0
@@ -297,13 +313,17 @@ function Open-ProfileContextMenu {
   $target = if ([string]::IsNullOrWhiteSpace($script:deletingProfileName)) { $list } else { Find-Name $list $script:deletingProfileName 5 }
   $bounds = $target.Current.BoundingRectangle
   $anchor = [System.Drawing.Point]::new([int]($bounds.Left + [Math]::Min(60, [int]($bounds.Width / 3))), [int]($bounds.Top + ($bounds.Height / 2)))
-  [System.Windows.Forms.Cursor]::Position = $anchor
-  Start-Sleep -Milliseconds 60
-  [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTDOWN, 0, 0, 0, [UIntPtr]::Zero)
-  [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTUP, 0, 0, 0, [UIntPtr]::Zero)
-  Start-Sleep -Milliseconds 250
-  $menu = Wait-Until { Find-ContextMenuInApp } 'Profile context menu did not appear.' 5
-  return $menu
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    try { $target.SetFocus() } catch { }
+    [void][FengSyncUiMouse]::SetForegroundWindow($script:process.MainWindowHandle)
+    [System.Windows.Forms.Cursor]::Position = $anchor
+    Start-Sleep -Milliseconds 100
+    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTUP, 0, 0, 0, [UIntPtr]::Zero)
+    $menu = try { Wait-Until { Find-ContextMenuInApp } "Profile context menu attempt $attempt did not appear." 2 } catch { $null }
+    if ($menu) { return $menu }
+  }
+  throw 'Profile context menu did not appear after three attempts.'
 }
 function Edit-Profile-ThroughContextMenu {
   $menu = Open-ProfileContextMenu
@@ -434,8 +454,22 @@ function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds
       if (-not $script:activeSyncProgressCaptured) {
         $progress = try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'ProgressWindow' } } catch { $null }
         if ($progress) {
-          Capture-Element $progress ("sync-{0:D2}-progress.png" -f $script:syncScreenshotCount) 'sync-progress' $script:activeSyncLabel
-          $script:activeSyncProgressCaptured = $true
+          try {
+            $bytesCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ProgressBytesText')
+            $speedCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ProgressSpeedText')
+            $bytesText = $progress.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $bytesCondition)
+            $speedText = $progress.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $speedCondition)
+            if ($bytesText -and $speedText) {
+              foreach ($metric in @($bytesText, $speedText)) {
+                $metricBounds = $metric.Current.BoundingRectangle
+                if ([string]::IsNullOrWhiteSpace($metric.Current.Name) -or $metricBounds.Width -le 0 -or $metricBounds.Height -lt 16) { throw 'Sync progress metric is empty or clipped.' }
+              }
+              if ($speedText.Current.BoundingRectangle.Height -lt 48) { throw 'Sync speed metric does not reserve enough height for wrapped ETA text.' }
+              Capture-Element $progress ("sync-{0:D2}-progress.png" -f $script:syncScreenshotCount) 'sync-progress' $script:activeSyncLabel
+              $script:activeSyncProgressCaptured = $true
+            }
+          }
+          catch [System.Windows.Automation.ElementNotAvailableException] { }
         }
       }
       Assert-NoUiFailure 'Synchronization' | Out-Null
@@ -453,9 +487,10 @@ function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds
     if (-not $resultObserved) { throw "Expected synchronized result was not produced: $expectedFile" }
   }
   catch {
+    $cause = $_.Exception.Message
     $status = try { (Find-Id $main 'Status').Current.Name } catch { 'unavailable' }
     $actual = try { if (Test-Path -LiteralPath $expectedFile) { [IO.File]::ReadAllText($expectedFile) } else { '<missing>' } } catch { '<unreadable>' }
-    throw "Expected synchronized result was not produced: $expectedFile. Expected content: $expectedContent. Actual: $actual. UI status: $status"
+    throw "Synchronization observation failed: $cause Expected file: $expectedFile. Expected content: $expectedContent. Actual: $actual. UI status: $status"
   }
   Wait-MainReadyAfterSync $transferSeconds
   Capture-Element (Get-LiveMain) ("sync-{0:D2}-complete.png" -f $script:syncScreenshotCount) 'sync-complete' $script:activeSyncLabel
@@ -614,6 +649,12 @@ function Assert-VisualMatrixGeometry { param($main, [string]$label)
     }
   }
   if ($profiles.Current.BoundingRectangle.Left -ge $toolbar[0].Current.BoundingRectangle.Left) { throw "$label profile list is not left of the toolbar." }
+  foreach ($side in @('Left', 'Right')) {
+    $title = Find-Id $main "${side}EndpointTitle"
+    $path = Find-Id $main "${side}Path"
+    if ($title.Current.BoundingRectangle.Height -lt 14 -or $path.Current.BoundingRectangle.Height -lt 20) { throw "$label $side endpoint title or path is clipped." }
+    if ($path.Current.BoundingRectangle.Top -lt ($title.Current.BoundingRectangle.Bottom - 1)) { throw "$label $side endpoint title overlaps its path." }
+  }
 }
 
 $process = $null; $server = $null; $remoteCleanup = $null; $sftpUri = $null; $driveUri = $null; $driveChild = $null; $scheduledTask = $null; $passed = $false
@@ -846,6 +887,8 @@ try {
       $service = Find-Id $editor 'CloudServiceType'; $expand = $null
       foreach ($serviceName in @('Google Drive', 'S3 Bucket', 'SFTP')) {
         $service.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null; $expand.Expand(); Start-Sleep -Milliseconds 200; Select-Ui (Find-Name $service $serviceName 5); Start-Sleep -Milliseconds 200
+        try { $expand.Collapse() } catch { }
+        Scroll-ToTop $editor
         Capture-Element $editor ("remote-editor-{0}.png" -f ($serviceName.ToLowerInvariant().Replace(' ', '-'))) 'remote-endpoint-editor' "$serviceName settings"
       }
       Set-Text (Find-Id $editor 'SftpRemoteName') $remoteName; Set-Text (Find-Id $editor 'SftpRemoteHost') '127.0.0.1'; Set-Text (Find-Id $editor 'SftpRemotePort') "$port"; Set-Text (Find-Id $editor 'SftpRemoteUser') 'ui'; Set-Text (Find-Id $editor 'SftpRemoteRoot') ''
@@ -949,6 +992,7 @@ try {
       $entry = Wait-Until { $items = (Find-Id $history 'RunHistoryEntries').FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)); if ($items.Count -gt 0) { $items[0] } } 'Run history did not show the real completed run.' 30
       $outcome = Find-Id $history 'RunHistoryOutcome'; $expand = $null; $outcome.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null; $expand.Expand(); Select-Ui (Find-Name $outcome '成功')
       Wait-Until { (Find-Id $history 'RunHistoryEntries').FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)).Count -gt 0 } 'Successful-outcome filter hid the completed run.'
+      try { $expand.Collapse() } catch { }
       Capture-Element $history 'run-history-success.png' 'run-history' 'completed successful synchronization'
       Close-Window $history
       Close-Window $settings

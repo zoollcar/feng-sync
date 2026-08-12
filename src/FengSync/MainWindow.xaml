@@ -204,8 +204,8 @@
          <fluent:FluentIcon x:Name="LeftEndpointIcon" Icon="Folder" Width="20" Height="20" FontSize="20" Style="{StaticResource LibraryIconStyle}"/>
         </Border>
         <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="LeftEndpointTitle" Text="未选择端点" Style="{StaticResource CaptionTextStyle}"/>
-        <TextBox x:Name="LeftPath" AutomationProperties.AutomationId="LeftPath" AutomationProperties.Name="左侧端点路径" Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="选择一个端点"/>
+        <TextBlock x:Name="LeftEndpointTitle" AutomationProperties.AutomationId="LeftEndpointTitle" Text="未选择端点" Style="{StaticResource CaptionTextStyle}" LineHeight="16"/>
+        <TextBox x:Name="LeftPath" AutomationProperties.AutomationId="LeftPath" AutomationProperties.Name="左侧端点路径" Background="Transparent" BorderThickness="0" Padding="0" MinHeight="0" Height="22" VerticalContentAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="选择一个端点" TextChanged="EndpointPath_TextChanged" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
        </StackPanel>
        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
         <Button AutomationProperties.AutomationId="AddLeftLocalEndpoint" AutomationProperties.Name="选择左侧本地端点" Content="本地" Click="BrowseLeft_Click" Style="{StaticResource TertiaryButtonStyle}"/>
@@ -235,8 +235,8 @@
          <fluent:FluentIcon x:Name="RightEndpointIcon" Icon="Cloud" Width="20" Height="20" FontSize="20" Style="{StaticResource LibraryIconStyle}"/>
         </Border>
         <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="RightEndpointTitle" Text="未选择端点" Style="{StaticResource CaptionTextStyle}"/>
-        <TextBox x:Name="RightPath" AutomationProperties.AutomationId="RightPath" AutomationProperties.Name="右侧端点路径" Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="选择一个端点"/>
+        <TextBlock x:Name="RightEndpointTitle" AutomationProperties.AutomationId="RightEndpointTitle" Text="未选择端点" Style="{StaticResource CaptionTextStyle}" LineHeight="16"/>
+        <TextBox x:Name="RightPath" AutomationProperties.AutomationId="RightPath" AutomationProperties.Name="右侧端点路径" Background="Transparent" BorderThickness="0" Padding="0" MinHeight="0" Height="22" VerticalContentAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="选择一个端点" TextChanged="EndpointPath_TextChanged" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
        </StackPanel>
        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
         <Button AutomationProperties.AutomationId="AddRightLocalEndpoint" AutomationProperties.Name="选择右侧本地端点" Content="本地" Click="BrowseRight_Click" Style="{StaticResource TertiaryButtonStyle}"/>

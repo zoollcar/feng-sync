@@ -590,6 +590,7 @@ public partial class MainWindow : Window
         if (RightEndpointTitle != null) RightEndpointTitle.Text = rightTitle;
         if (RightEndpointIcon != null) RightEndpointIcon.Icon = rightIcon;
     }
+    private void EndpointPath_TextChanged(object sender, TextChangedEventArgs e) => UpdateEndpointHeaders();
     private static (string Title, FluentIcon Icon) DescribeEndpoint(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return ("未选择端点", FluentIcon.Folder);

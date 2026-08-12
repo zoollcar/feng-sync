@@ -122,7 +122,6 @@
                             <ComboBoxItem Content="更新到右侧" />
                             <ComboBoxItem Content="自定义（尚不可用）" IsEnabled="False" ToolTip="自定义模式尚未实现，不能保存或执行。" />
                         </ComboBox>
-                        <TextBlock Text="自定义模式在当前版本不可用；请选择双向、镜像或更新。" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
                         <TextBlock x:Name="CompatibilityText" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}" Margin="0,12,0,0" />
                     </StackPanel>
 
