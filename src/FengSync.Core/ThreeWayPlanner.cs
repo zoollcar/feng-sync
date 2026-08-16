@@ -42,6 +42,7 @@ public sealed class ThreeWayPlanner
     private static void Decide(string p, EntrySnapshot? l, EntrySnapshot? r, BaselineEntry b, List<SyncOperation> o)
     {
         var dl = Change(l, b.Left); var dr = Change(r, b.Right);
+        if (l is null && r is null) return;
         if (dl == Delta.Unchanged && dr == Delta.Unchanged) return;
         if (dl == Delta.Unchanged) { Propagate(p, r!, true, dr, o); return; }
         if (dr == Delta.Unchanged) { Propagate(p, l!, false, dl, o); return; }

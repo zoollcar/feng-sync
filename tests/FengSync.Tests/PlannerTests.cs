@@ -43,6 +43,7 @@ public sealed class PlannerTests
         Assert.Equal(OperationKind.DeleteRight, operation.Kind);
     }
     [Fact] public void Equal_two_sided_change_merges_without_action() => Assert.Empty(_planner.Build([File("a.txt", "B")], [File("a.txt", "B")], Baseline()).Operations);
+    [Fact] public void Equal_two_sided_delete_merges_without_action() => Assert.Empty(_planner.Build([], [], Baseline()).Operations);
     [Fact] public void Different_two_sided_change_is_unresolved_conflict()
     {
         var operation = Assert.Single(_planner.Build([File("a.txt", "B")], [File("a.txt", "C")], Baseline()).Operations);
