@@ -15,7 +15,7 @@ env:
   RUNTIME_IDENTIFIER: win-x64
 
 jobs:
-  build:
+  release:
     runs-on: windows-latest
 
     steps:
@@ -30,21 +30,6 @@ jobs:
       - name: Restore and build
         shell: pwsh
         run: dotnet build ./FengSync.sln -c $env:CONFIGURATION --nologo
-
-  release:
-    # Only version tags publish software.
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: windows-latest
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
 
       - name: Publish release package
         id: package
@@ -84,15 +69,6 @@ jobs:
           "asset_name=FengSync-$version-win-x64.zip" >> $env:GITHUB_OUTPUT
           "asset_path=$zipPath" >> $env:GITHUB_OUTPUT
           "sha_path=$shaPath" >> $env:GITHUB_OUTPUT
-
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.package.outputs.asset_name }}
-          path: |
-            ${{ steps.package.outputs.asset_path }}
-            ${{ steps.package.outputs.sha_path }}
-          if-no-files-found: error
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
