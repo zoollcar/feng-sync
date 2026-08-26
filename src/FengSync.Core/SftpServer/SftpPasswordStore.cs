@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace FengSync.Core.SftpServer;
@@ -14,14 +15,21 @@ public sealed class SftpPasswordStore
         if (string.IsNullOrEmpty(password)) throw new ArgumentException("SFTP 密码不能为空。", nameof(password));
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
         var cipher = Protect(System.Text.Encoding.UTF8.GetBytes(password));
-        await File.WriteAllBytesAsync(_path, cipher, ct).ConfigureAwait(false);
+        var temporary = _path + ".tmp";
+        await File.WriteAllBytesAsync(temporary, cipher, ct).ConfigureAwait(false);
+        File.Move(temporary, _path, overwrite: true);
     }
 
     public async Task<string?> LoadAsync(CancellationToken ct = default)
     {
         if (!File.Exists(_path)) return null;
         var cipher = await File.ReadAllBytesAsync(_path, ct).ConfigureAwait(false);
-        return System.Text.Encoding.UTF8.GetString(Unprotect(cipher));
+        try { return System.Text.Encoding.UTF8.GetString(Unprotect(cipher)); }
+        catch (Win32Exception)
+        {
+            Clear();
+            return null;
+        }
     }
 
     public void Clear() { if (File.Exists(_path)) File.Delete(_path); }

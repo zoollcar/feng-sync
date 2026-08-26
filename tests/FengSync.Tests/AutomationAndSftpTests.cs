@@ -53,6 +53,35 @@ public sealed class AutomationAndSftpTests
     }
 
     [Fact]
+    public async Task Password_store_preserves_the_previous_password_when_atomic_replace_fails()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "fengsync-sftp-password-atomic-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory); var path = Path.Combine(directory, "secret.dat");
+        try
+        {
+            var store = new SftpPasswordStore(path);
+            await store.SaveAsync("previous-password");
+            await using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+                await Assert.ThrowsAsync<UnauthorizedAccessException>(() => store.SaveAsync("replacement-password"));
+            Assert.Equal("previous-password", await store.LoadAsync());
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
+    public async Task Password_store_clears_ciphertext_that_dpapi_cannot_decrypt()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "fengsync-sftp-password-corrupt-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory); var path = Path.Combine(directory, "secret.dat");
+        try
+        {
+            await File.WriteAllBytesAsync(path, [1, 2, 3, 4]);
+            var store = new SftpPasswordStore(path);
+            Assert.Null(await store.LoadAsync());
+            Assert.False(store.HasPassword);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
     public async Task Legacy_sftp_configuration_is_deleted()
     {
         var directory = Path.Combine(Path.GetTempPath(), "fengsync-sftp-legacy-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory); var path = Path.Combine(directory, "sftp-server.json");

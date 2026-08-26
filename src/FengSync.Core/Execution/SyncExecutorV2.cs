@@ -33,14 +33,23 @@ public sealed class SyncExecutorV2
         // and a move can introduce a new parent path without a structural
         // operation.  Cache mkdirs per target/path so concurrent file copies
         // still issue at most one request for each parent directory.
-        var ensuredParents = new System.Collections.Concurrent.ConcurrentDictionary<string, Task>(StringComparer.Ordinal);
+        var ensuredParents = new System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task>>(StringComparer.Ordinal);
 
-        Task EnsureCopyParentAsync(IEndpoint target, string path, CancellationToken token)
+        async Task EnsureCopyParentAsync(IEndpoint target, string path, CancellationToken token)
         {
             var parent = ParentDirectory(path);
-            if (parent is null) return Task.CompletedTask;
+            if (parent is null) return;
             var key = $"{ResourceKey.For(target)}\u001f{parent}";
-            return ensuredParents.GetOrAdd(key, _ => target.CreateDirectoryAsync(parent, token));
+            var creation = ensuredParents.GetOrAdd(key, _ => new(
+                () => target.CreateDirectoryAsync(parent, token),
+                LazyThreadSafetyMode.ExecutionAndPublication));
+            try { await creation.Value.ConfigureAwait(false); }
+            catch
+            {
+                if (ensuredParents.TryGetValue(key, out var cached) && ReferenceEquals(cached, creation))
+                    ensuredParents.TryRemove(key, out _);
+                throw;
+            }
         }
 
         async Task Mark(SyncOperation op, JournalState state, TransferStage stage, long bytes = 0, string? error = null)

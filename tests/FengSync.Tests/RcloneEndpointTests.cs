@@ -102,6 +102,27 @@ public sealed class RcloneEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Local_to_remote_retries_a_parent_directory_after_the_cached_creation_fails()
+    {
+        var directory = Path.Combine(_root, "new-parent");
+        Directory.CreateDirectory(directory);
+        await File.WriteAllTextAsync(Path.Combine(directory, "first.txt"), "first");
+        await File.WriteAllTextAsync(Path.Combine(directory, "second.txt"), "second");
+        _handler.FailNextMkdir = true;
+        var local = new LocalEndpoint(_root); var remote = Remote(EndpointType.Sftp);
+        var first = new SyncOperation("new-parent/first.txt", OperationKind.CopyLeftToRight, "test");
+        var second = new SyncOperation("new-parent/second.txt", OperationKind.CopyLeftToRight, "test");
+        var plan = new SyncPlan([first, second]);
+
+        var result = await new SyncExecutorV2().ExecuteAsync(
+            await PlanSnapshot.CaptureAsync(plan, local, remote), local, remote, maxConcurrentCopies: 1);
+
+        Assert.Equal(TransferStage.Failed, result.Operations.Single(x => x.OperationId == first.OperationId).Stage);
+        Assert.Equal(TransferStage.Committed, result.Operations.Single(x => x.OperationId == second.OperationId).Stage);
+        Assert.Equal(2, _handler.Requests.Count(x => x.AbsolutePath.EndsWith("operations/mkdir")));
+    }
+
+    [Fact]
     public async Task Local_to_remote_uses_rclones_logical_colon_for_a_windows_full_width_colon_filename()
     {
         const string physicalName = "文件：一.doc";
@@ -328,6 +349,7 @@ public sealed class RcloneEndpointTests : IDisposable
     {
         public string ListJson { get; set; } = "{\"list\":[]}";
         public List<Uri> Requests { get; } = []; public List<string> Bodies { get; } = [];
+        public bool FailNextMkdir { get; set; }
         public bool DelayCopy { get; set; } public int MaximumConcurrentCopies { get; private set; } private int _concurrentCopies;
         private readonly object _gate = new();
         private readonly Dictionary<string, (long Size, DateTimeOffset Modified)> _objects = new(StringComparer.Ordinal);
@@ -357,6 +379,11 @@ public sealed class RcloneEndpointTests : IDisposable
                 lock (_gate) MaximumConcurrentCopies = Math.Max(MaximumConcurrentCopies, current);
                 await Task.Delay(80, cancellationToken);
                 Interlocked.Decrement(ref _concurrentCopies);
+            }
+            if (FailNextMkdir && operation.EndsWith("operations/mkdir"))
+            {
+                FailNextMkdir = false;
+                return new(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("{\"error\":\"temporary mkdir failure\"}", Encoding.UTF8, "application/json") };
             }
             var payload = operation.EndsWith("operations/list") ? List(body) : Apply(operation, body);
             return new(HttpStatusCode.OK) { Content = new StringContent(payload, Encoding.UTF8, "application/json") };
