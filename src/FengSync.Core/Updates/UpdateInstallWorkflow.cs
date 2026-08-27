@@ -33,7 +33,14 @@ public sealed class UpdateInstallWorkflow
             var staging = await new UpdatePackageExtractor().ExtractAndValidateAsync(package.ZipPath, package.TaskDirectory, release.Tag, cancellationToken);
             var updater = Path.Combine(staging, "FengSync.Updater.exe");
             var detached = Path.Combine(package.TaskDirectory, "FengSync.Updater.exe");
-            _copyFile(updater, detached);
+            var detachedTemporary = detached + ".tmp";
+            _copyFile(updater, detachedTemporary);
+            // Flush the completed copy before atomically publishing its name. A
+            // crash can leave only the recognizable .tmp file, never a partial
+            // executable at the path passed to Process.Start.
+            using (var copied = new FileStream(detachedTemporary, FileMode.Open, FileAccess.Write, FileShare.Read))
+                copied.Flush(flushToDisk: true);
+            File.Move(detachedTemporary, detached, overwrite: true);
 
             var oldManifest = Path.Combine(installation, "release-manifest.json");
             var start = new ProcessStartInfo(detached) { UseShellExecute = false, WorkingDirectory = package.TaskDirectory };
@@ -49,10 +56,9 @@ public sealed class UpdateInstallWorkflow
         }
         catch
         {
-            // A launch failure must not leave a copied executable that a later run
-            // could mistake for a valid updater hand-off. Keep the package/staging
-            // for diagnostics; both are under the dedicated temp task directory.
-            try { File.Delete(Path.Combine(package.TaskDirectory, "FengSync.Updater.exe")); } catch { }
+            // No failed hand-off artifact is reusable: remove the detached copy,
+            // its temporary file, the extracted staging tree and downloaded ZIP.
+            try { Directory.Delete(package.TaskDirectory, recursive: true); } catch { }
             throw;
         }
     }

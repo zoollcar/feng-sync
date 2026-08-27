@@ -25,7 +25,9 @@ public sealed class SyncExecutorV2
         var results = new System.Collections.Concurrent.ConcurrentDictionary<Guid, OperationRunResult>();
         var runId = Guid.NewGuid();
         var journalStates = selected.ToDictionary(x => x.OperationId, x => new JournalItem(x.OperationId, x.Path, x.Kind, JournalState.Pending));
-        var journalLock = new SemaphoreSlim(1, 1);
+        var journal = journals is null
+            ? null
+            : await JournalCheckpointWriter.CreateAsync(journals, runId, LocalRoots(left, right), journalStates);
         var governor = resourceGovernor ?? new ResourceGovernor();
         var capacity = channelCapacity ?? DefaultChannelCapacity;
         // A plan normally contains explicit directory operations.  Do not rely
@@ -52,31 +54,21 @@ public sealed class SyncExecutorV2
             }
         }
 
-        async Task Mark(SyncOperation op, JournalState state, TransferStage stage, long bytes = 0, string? error = null)
+        Task Mark(SyncOperation op, JournalState state, TransferStage stage, long bytes = 0, string? error = null)
         {
             results[op.OperationId] = new(op.OperationId, op.Path, op.Kind, stage, bytes, error,
                 results.TryGetValue(op.OperationId, out var prev) ? prev.SourceAfter : null,
                 results.TryGetValue(op.OperationId, out var prev2) ? prev2.TargetAfter : null,
                 results.TryGetValue(op.OperationId, out var prev3) && prev3.Published);
-            await journalLock.WaitAsync(CancellationToken.None);
-            try
-            {
-                journalStates[op.OperationId] = new(op.OperationId, op.Path, op.Kind, state, error);
-                if (journals is not null) await journals.SaveAsync(new(runId, DateTimeOffset.UtcNow, journalStates.Values.ToList(), LocalRoots(left, right)), CancellationToken.None);
-            }
-            finally { journalLock.Release(); }
+            journal?.Update(new(op.OperationId, op.Path, op.Kind, state, error));
+            return Task.CompletedTask;
         }
 
-        async Task Record(SyncOperation op, TransferStage stage, long bytes, Fingerprint? sourceAfter, Fingerprint? targetAfter, bool published, string? error = null)
+        Task Record(SyncOperation op, TransferStage stage, long bytes, Fingerprint? sourceAfter, Fingerprint? targetAfter, bool published, string? error = null)
         {
             results[op.OperationId] = new(op.OperationId, op.Path, op.Kind, stage, bytes, error, sourceAfter, targetAfter, published);
-            await journalLock.WaitAsync(CancellationToken.None);
-            try
-            {
-                journalStates[op.OperationId] = new(op.OperationId, op.Path, op.Kind, stage == TransferStage.Committed ? JournalState.Committed : stage == TransferStage.Failed ? JournalState.Failed : JournalState.Running, error);
-                if (journals is not null) await journals.SaveAsync(new(runId, DateTimeOffset.UtcNow, journalStates.Values.ToList(), LocalRoots(left, right)), CancellationToken.None);
-            }
-            finally { journalLock.Release(); }
+            journal?.Update(new(op.OperationId, op.Path, op.Kind, stage == TransferStage.Committed ? JournalState.Committed : stage == TransferStage.Failed ? JournalState.Failed : JournalState.Running, error));
+            return Task.CompletedTask;
         }
 
         try
@@ -276,6 +268,10 @@ public sealed class SyncExecutorV2
             foreach (var op in selected.Where(x => !results.ContainsKey(x.OperationId)))
                 await Mark(op, JournalState.Cancelled, TransferStage.Cancelled);
             throw;
+        }
+        finally
+        {
+            if (journal is not null) await journal.DisposeAsync();
         }
     }
 

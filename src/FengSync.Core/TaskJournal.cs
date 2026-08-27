@@ -7,10 +7,10 @@ public sealed record JournalItem(Guid OperationId, string Path, OperationKind Ki
 public sealed record SyncJournal(Guid JobId, DateTimeOffset CreatedUtc, IReadOnlyList<JournalItem> Items, IReadOnlyList<string>? EndpointRoots = null);
 
 /// <summary>Crash-recovery journal held locally; committed endpoint databases are never used as an in-progress transaction log.</summary>
-public sealed class TaskJournalStore(string? root = null)
+public class TaskJournalStore(string? root = null)
 {
     private readonly string _root = root ?? Path.Combine(AppDataPaths.Root, "jobs");
-    public async Task SaveAsync(SyncJournal journal, CancellationToken ct = default)
+    public virtual async Task SaveAsync(SyncJournal journal, CancellationToken ct = default)
     {
         Directory.CreateDirectory(_root); var target = Path.Combine(_root, journal.JobId + ".json"); var temp = target + ".tmp";
         await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(journal), ct);

@@ -144,6 +144,25 @@ public sealed class PerformanceInvariantTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Executor_batches_journal_checkpoints_instead_of_saving_every_state_change()
+    {
+        var left = new LocalEndpoint(Left); var right = new LocalEndpoint(Right);
+        var comparison = await new ComparisonSnapshotBuilder().CaptureAsync(left, right);
+        var operations = Enumerable.Range(0, 100)
+            .Select(i => new SyncOperation($"directory-{i}", OperationKind.CreateRightDirectory, "journal batching"))
+            .ToArray();
+        var plan = new SyncPlan(operations); comparison.Plan = plan;
+        var store = new CountingTaskJournalStore(Path.Combine(_root, "batched-journal"));
+
+        var result = await new SyncExecutorV2().ExecuteAsync(PlanSnapshot.FromComparison(plan, comparison), left, right,
+            journals: store, maxConcurrentCopies: 4);
+
+        Assert.True(result.Succeeded);
+        Assert.InRange(store.SaveCount, 2, 20);
+        Assert.Empty(await store.LoadIncompleteAsync());
+    }
+
+    [Fact]
     public async Task Baseline_commit_records_post_publish_fingerprint_after_copy()
     {
         await File.WriteAllTextAsync(Path.Combine(Left, "a.txt"), "hello");
@@ -197,6 +216,16 @@ public sealed class PerformanceInvariantTests : IAsyncLifetime
         {
             if (Interlocked.Increment(ref _started) == 2) _bothStarted.TrySetResult();
             return _bothStarted.Task;
+        }
+    }
+
+    private sealed class CountingTaskJournalStore(string root) : TaskJournalStore(root)
+    {
+        public int SaveCount { get; private set; }
+        public override async Task SaveAsync(SyncJournal journal, CancellationToken ct = default)
+        {
+            SaveCount++;
+            await base.SaveAsync(journal, ct);
         }
     }
 

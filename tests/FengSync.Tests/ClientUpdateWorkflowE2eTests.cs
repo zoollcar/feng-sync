@@ -63,11 +63,26 @@ public sealed class ClientUpdateWorkflowE2eTests : IDisposable
     public async Task Detached_updater_copy_or_start_failure_never_exits_or_modifies_installation()
     {
         var layout = await CreateLayoutAsync(); var zip = await CreatePackageAsync(layout.Payload, validManifest: true);
-        var copyFailure = new UpdateInstallWorkflow(new HttpClient(new ReleaseHandler(zip)), _ => new Process(), (_, _) => throw new IOException("copy injected"));
+        string? failedTaskDirectory = null;
+        var copyFailure = new UpdateInstallWorkflow(new HttpClient(new ReleaseHandler(zip)), _ => new Process(), (_, destination) =>
+        {
+            failedTaskDirectory = Path.GetDirectoryName(destination);
+            File.WriteAllText(destination, "partial updater");
+            throw new IOException("copy injected");
+        });
         await Assert.ThrowsAsync<IOException>(() => copyFailure.DownloadValidateAndLaunchAsync(Release(zip), layout.Executable, layout.Installation, "1.0.0"));
+        Assert.NotNull(failedTaskDirectory);
+        Assert.False(Directory.Exists(failedTaskDirectory));
 
-        var startFailure = new UpdateInstallWorkflow(new HttpClient(new ReleaseHandler(zip)), _ => null);
+        string? failedLaunchTaskDirectory = null;
+        var startFailure = new UpdateInstallWorkflow(new HttpClient(new ReleaseHandler(zip)), start =>
+        {
+            failedLaunchTaskDirectory = start.WorkingDirectory;
+            return null;
+        });
         await Assert.ThrowsAsync<InvalidOperationException>(() => startFailure.DownloadValidateAndLaunchAsync(Release(zip), layout.Executable, layout.Installation, "1.0.0"));
+        Assert.NotNull(failedLaunchTaskDirectory);
+        Assert.False(Directory.Exists(failedLaunchTaskDirectory));
         Assert.Equal("old executable", await File.ReadAllTextAsync(layout.Executable));
         Assert.Equal("old manifest", await File.ReadAllTextAsync(Path.Combine(layout.Installation, "release-manifest.json")));
     }
