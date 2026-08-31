@@ -38,6 +38,14 @@ public sealed class UiAcceptanceTests
 
     [Fact]
     [Trait("Category", "UI")]
+    public Task Built_in_sftp_service_starts_and_stops_through_the_settings_ui() => RunAsync("sftp-service");
+
+    [Fact]
+    [Trait("Category", "UI")]
+    public Task Batch_window_runs_a_saved_profile_and_reports_its_summary() => RunAsync("batch-run");
+
+    [Fact]
+    [Trait("Category", "UI")]
     public Task Profile_lifecycle_persists_edited_endpoints_and_rejects_cancelled_changes() => RunAsync("profile");
 
     [Fact]
@@ -99,6 +107,26 @@ public sealed class UiAcceptanceTests
         return RunAsync("gdrive-volume");
     }
 
+    [Fact]
+    [Trait("Category", "UI")]
+    [Trait("Category", "External")]
+    public Task Cloudflare_r2_round_trips_through_the_s3_endpoint()
+    {
+        if (!OnlineServicesEnabled)
+            return Task.CompletedTask;
+        return RunAsync("r2");
+    }
+
+    [Fact]
+    [Trait("Category", "UI")]
+    [Trait("Category", "External")]
+    public Task Cloudflare_r2_syncs_ten_files_in_each_mode()
+    {
+        if (!OnlineServicesEnabled)
+            return Task.CompletedTask;
+        return RunAsync("r2-volume");
+    }
+
     private async Task RunAsync(string scenario)
     {
         var root = FindRepositoryRoot();
@@ -118,7 +146,7 @@ public sealed class UiAcceptanceTests
         var timer = Stopwatch.StartNew();
         var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
         // The opt-in Google Drive matrix makes three independent remote runs.
-        var timeoutSeconds = scenario == "gdrive-volume" ? 30 * 60 : 15 * 60;
+        var timeoutSeconds = scenario is "gdrive-volume" or "r2-volume" ? 30 * 60 : 15 * 60;
         var exited = process.WaitForExitAsync();
         if (await Task.WhenAny(exited, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds))) != exited)
         {

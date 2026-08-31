@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation;
 using FengSync.Core;
 using FengSync.Core.Automation;
 using FengSync.Services;
@@ -21,11 +22,19 @@ public sealed class BatchRunWindow : Window
     {
         _profiles = profiles; _concurrency = concurrency; _run = run; _rows = new(profiles.Select(p => new Row(p)));
         Title = "批处理运行"; Width = 680; Height = 420; WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        AutomationProperties.SetAutomationId(this, "BatchRunWindow");
+        AutomationProperties.SetName(this, "批处理运行");
+        AutomationProperties.SetAutomationId(_summary, "BatchRunSummary");
+        AutomationProperties.SetLiveSetting(_summary, AutomationLiveSetting.Polite);
         var start = new Button { Content = "开始", IsDefault = true }; var stop = new Button { Content = "停止队列", Margin = new Thickness(8, 0, 0, 0) };
+        AutomationProperties.SetAutomationId(start, "BatchRunStart"); AutomationProperties.SetName(start, "开始批处理运行");
+        AutomationProperties.SetAutomationId(stop, "BatchRunStop"); AutomationProperties.SetName(stop, "停止批处理队列");
         start.Click += async (_, _) => await ExecuteAsync(); stop.Click += (_, _) => _cancel?.Cancel();
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Children = { _summary, start, stop } };
         DockPanel.SetDock(buttons, Dock.Bottom);
-        var panel = new DockPanel { Margin = new Thickness(18) }; panel.Children.Add(buttons); panel.Children.Add(new DataGrid { ItemsSource = _rows, AutoGenerateColumns = true, IsReadOnly = true }); Content = panel;
+        var grid = new DataGrid { ItemsSource = _rows, AutoGenerateColumns = true, IsReadOnly = true };
+        AutomationProperties.SetAutomationId(grid, "BatchRunProfiles"); AutomationProperties.SetName(grid, "批处理配置列表");
+        var panel = new DockPanel { Margin = new Thickness(18) }; panel.Children.Add(buttons); panel.Children.Add(grid); Content = panel;
     }
     private async Task ExecuteAsync()
     {

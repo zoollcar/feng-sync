@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation;
 using FengSync.Core.Rclone.Diagnostics;
 using FengSync.Core.SftpServer;
 
@@ -85,7 +86,11 @@ public partial class SftpServerSettingsWindow : Window
         public PasswordDialog()
         {
             Title = "设置 SFTP 密码"; Width = 360; SizeToContent = SizeToContent.Height; WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            var save = new Button { Content = "保存", IsDefault = true }; save.Click += (_, _) => { if (string.IsNullOrEmpty(_password.Password)) { MessageBox.Show("密码不能为空。", Title); return; } DialogResult = true; };
+            AutomationProperties.SetAutomationId(this, "SftpPasswordDialog"); AutomationProperties.SetName(this, Title);
+            AutomationProperties.SetAutomationId(_password, "SftpPassword"); AutomationProperties.SetName(_password, "SFTP 密码");
+            var save = new Button { Content = "保存", IsDefault = true };
+            AutomationProperties.SetAutomationId(save, "SaveSftpPassword"); AutomationProperties.SetName(save, "保存 SFTP 密码");
+            save.Click += (_, _) => { if (string.IsNullOrEmpty(_password.Password)) { MessageBox.Show("密码不能为空。", Title); return; } DialogResult = true; };
             Content = new StackPanel { Margin = new Thickness(18), Children = { new TextBlock { Text = "密码" }, _password, save } };
         }
     }

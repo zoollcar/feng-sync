@@ -57,13 +57,13 @@
                     <TextBlock Text="远程根目录（可选）" /><TextBox x:Name="SftpRootBox" AutomationProperties.AutomationId="SftpRemoteRoot" AutomationProperties.Name="SFTP 远程根目录" Margin="0,3,0,10" />
                 </StackPanel>
                 <StackPanel x:Name="S3Panel" Visibility="Collapsed">
-                    <TextBlock Text="显示名称" /><TextBox x:Name="S3NameBox" AutomationProperties.Name="S3 显示名称" Text="S3 Bucket" Margin="0,3,0,10" />
-                    <TextBlock Text="Provider（如 AWS、Minio、Cloudflare 等）" /><TextBox x:Name="S3ProviderBox" AutomationProperties.Name="S3 Provider" Text="AWS" Margin="0,3,0,10" />
-                    <TextBlock Text="Access Key ID" /><TextBox x:Name="S3AccessKeyBox" AutomationProperties.Name="S3 Access Key ID" Margin="0,3,0,10" />
-                    <TextBlock Text="Secret Access Key" /><PasswordBox x:Name="S3SecretBox" AutomationProperties.Name="S3 Secret Access Key" Margin="0,3,0,10" />
-                    <TextBlock Text="Region（如 us-east-1）" /><TextBox x:Name="S3RegionBox" AutomationProperties.Name="S3 Region" Margin="0,3,0,10" />
-                    <TextBlock Text="Endpoint（可选，非 AWS 服务填写）" /><TextBox x:Name="S3EndpointBox" AutomationProperties.Name="S3 Endpoint" Margin="0,3,0,10" />
-                    <TextBlock Text="Bucket 与根目录（例如 my-bucket/path）" /><TextBox x:Name="S3RootBox" AutomationProperties.Name="S3 Bucket 与根目录" Margin="0,3,0,10" />
+                    <TextBlock Text="显示名称" /><TextBox x:Name="S3NameBox" AutomationProperties.AutomationId="S3DisplayName" AutomationProperties.Name="S3 显示名称" Text="S3 Bucket" Margin="0,3,0,10" />
+                    <TextBlock Text="Provider（如 AWS、Minio、Cloudflare 等）" /><TextBox x:Name="S3ProviderBox" AutomationProperties.AutomationId="S3Provider" AutomationProperties.Name="S3 Provider" Text="AWS" Margin="0,3,0,10" />
+                    <TextBlock Text="Access Key ID" /><TextBox x:Name="S3AccessKeyBox" AutomationProperties.AutomationId="S3AccessKeyId" AutomationProperties.Name="S3 Access Key ID" Margin="0,3,0,10" />
+                    <TextBlock Text="Secret Access Key" /><PasswordBox x:Name="S3SecretBox" AutomationProperties.AutomationId="S3SecretAccessKey" AutomationProperties.Name="S3 Secret Access Key" Margin="0,3,0,10" />
+                    <TextBlock Text="Region（如 us-east-1）" /><TextBox x:Name="S3RegionBox" AutomationProperties.AutomationId="S3Region" AutomationProperties.Name="S3 Region" Margin="0,3,0,10" />
+                    <TextBlock Text="Endpoint（可选，非 AWS 服务填写）" /><TextBox x:Name="S3EndpointBox" AutomationProperties.AutomationId="S3Endpoint" AutomationProperties.Name="S3 Endpoint" Margin="0,3,0,10" />
+                    <TextBlock Text="Bucket 与根目录（例如 my-bucket/path）" /><TextBox x:Name="S3RootBox" AutomationProperties.AutomationId="S3BucketPath" AutomationProperties.Name="S3 Bucket 与根目录" Margin="0,3,0,10" />
                 </StackPanel>
             </Grid>
         </ScrollViewer>

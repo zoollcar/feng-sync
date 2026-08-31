@@ -44,6 +44,18 @@ function Reset-TestArtifacts {
 Require-Command dotnet
 Require-Command pwsh
 
+if ($Level -eq 'Online') {
+  $requiredR2Variables = @(
+    'FENGSYNC_TEST_R2_ACCOUNT_ID',
+    'FENGSYNC_TEST_R2_ACCESS_KEY_ID',
+    'FENGSYNC_TEST_R2_SECRET_ACCESS_KEY'
+  )
+  $missingR2Variables = @($requiredR2Variables | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
+  if ($missingR2Variables.Count -gt 0) {
+    throw "Online tests require Cloudflare R2 credentials in: $($missingR2Variables -join ', ')."
+  }
+}
+
 $rclone = Join-Path $workspace 'src\FengSync\Assets\rclone\rclone.exe'
 if (-not (Test-Path -LiteralPath $rclone)) { throw "Bundled rclone was not found: $rclone" }
 
@@ -51,7 +63,11 @@ Push-Location $workspace
 try {
   Reset-TestArtifacts
   Invoke-Stage 'Build' { & dotnet build .\FengSync.sln -c $Configuration --nologo }
-  Invoke-Stage 'Core, CLI and real SFTP protocol tests' { & dotnet test .\tests\FengSync.Tests\FengSync.Tests.csproj -c $Configuration --no-build --nologo }
+  $winFspService = Get-Service -Name 'WinFsp.Launcher' -ErrorAction SilentlyContinue
+  if ($Level -ne 'Core' -and $winFspService) { $env:FENGSYNC_TEST_REAL_MOUNT = '1' }
+  elseif ($Level -ne 'Core') { Write-Warning 'WinFsp is not installed; the opt-in real mount test will not execute.' }
+  try { Invoke-Stage 'Core, CLI, real SFTP and available WinFsp tests' { & dotnet test .\tests\FengSync.Tests\FengSync.Tests.csproj -c $Configuration --no-build --nologo } }
+  finally { Remove-Item Env:FENGSYNC_TEST_REAL_MOUNT -ErrorAction SilentlyContinue }
 
   if ($Level -eq 'Core') { return }
 

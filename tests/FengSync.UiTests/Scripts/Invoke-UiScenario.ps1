@@ -1,13 +1,13 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'sftp-service', 'batch-run', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume', 'r2', 'r2-volume')][string]$Scenario,
     [Parameter(Mandatory)][string]$AppPath,
     [Parameter(Mandatory)][string]$Workspace
 )
 
 # Every scenario uses a new data root. On failure it is retained with its logs and
-# screenshots; remote Google Drive cleanup is constrained to a generated child below
-# the fixed test/FengSync-Automated-Tests test root.
+# screenshots; remote cleanup is constrained to a generated child below a fixed
+# test root and is verified before the scenario can finish.
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
@@ -22,8 +22,13 @@ public static class FengSyncUiMouse {
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint procId);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll", EntryPoint="ShowWindow")] public static extern bool ShowWindowNative(IntPtr hWnd, int command);
+  [DllImport("user32.dll", EntryPoint="SetWindowPos")] public static extern bool SetWindowPosNative(IntPtr hWnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
   public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
   public const uint LEFTDOWN = 0x0002, LEFTUP = 0x0004, RIGHTDOWN = 0x0008, RIGHTUP = 0x0010;
+  public static readonly IntPtr TOPMOST = new IntPtr(-1), NOTOPMOST = new IntPtr(-2);
+  public const uint NOMOVE = 0x0002, NOSIZE = 0x0001, SHOWWINDOW = 0x0040;
+  public const int RESTORE = 9;
 }
 '@
 $AppPath = [IO.Path]::GetFullPath($AppPath); $Workspace = [IO.Path]::GetFullPath($Workspace)
@@ -49,6 +54,16 @@ function Write-HarnessTrace([string]$message) {
   Write-Output $message
 }
 Write-HarnessTrace "Starting scenario: $Scenario"
+
+function Activate-TestWindow {
+  if (-not $script:process -or $script:process.HasExited -or $script:process.MainWindowHandle -eq 0) { return }
+  $handle = $script:process.MainWindowHandle
+  [void][FengSyncUiMouse]::ShowWindowNative($handle, [FengSyncUiMouse]::RESTORE)
+  $flags = [FengSyncUiMouse]::NOMOVE -bor [FengSyncUiMouse]::NOSIZE -bor [FengSyncUiMouse]::SHOWWINDOW
+  [void][FengSyncUiMouse]::SetWindowPosNative($handle, [FengSyncUiMouse]::TOPMOST, 0, 0, 0, 0, $flags)
+  [void][FengSyncUiMouse]::SetWindowPosNative($handle, [FengSyncUiMouse]::NOTOPMOST, 0, 0, 0, 0, $flags)
+  [void][FengSyncUiMouse]::SetForegroundWindow($handle)
+}
 
 function Enable-RcloneWindowsProxy {
   # The online fixture invokes bundled rclone before the application starts. GUI
@@ -85,6 +100,7 @@ function Wait-Until([scriptblock]$Condition, [string]$Message, [int]$Seconds = 3
 }
 function Find-Id($root, [string]$id, [int]$seconds = 20) { Wait-Until { try { $root.FindFirst([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)) } catch { $null } } "Missing UI element: $id" $seconds }
 function Find-Name($root, [string]$name, [int]$seconds = 20) { Wait-Until { try { $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $name)) } catch { $null } } "Missing UI element: $name" $seconds }
+function Find-NameContaining($root, [string]$fragment, [int]$seconds = 20) { Wait-Until { try { $items = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition); foreach ($item in $items) { if ($item.Current.Name -like "*$fragment*") { return $item } }; $null } catch { $null } } "Missing UI element containing: $fragment" $seconds }
 function Click($element) {
   # A disabled element cannot be invoked through UIA — UIA throws the
   # generic "Could not open the process token" / "Unrecognized error"
@@ -109,6 +125,15 @@ function Click($element) {
 function Set-Text($element, [string]$value) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p)) { throw "Element has no ValuePattern: $($element.Current.Name)" }; $p.SetValue($value) }
 function Set-Password($element, [string]$value) { $element.SetFocus(); [Windows.Forms.SendKeys]::SendWait($value) }
 function Select-Ui($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$p)) { throw "Element cannot be selected: $($element.Current.Name)" }; $p.Select() }
+function Select-UiOrAncestor($element) {
+  $current = $element
+  while ($current) {
+    $pattern = $null
+    if ($current.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) { $pattern.Select(); return }
+    $current = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($current)
+  }
+  throw "Element has no selectable ancestor: $($element.Current.Name)"
+}
 function Toggle-Ui($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$p)) { throw "Element cannot be toggled: $($element.Current.Name)" }; $p.Toggle() }
 function Get-ToggleState($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$p)) { throw "Element has no TogglePattern: $($element.Current.Name)" }; return $p.Current.ToggleState }
 function Get-Text($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p)) { throw "Element has no ValuePattern: $($element.Current.Name)" }; return $p.Current.Value }
@@ -125,6 +150,8 @@ function Scroll-ToTop($element) {
 function Drag-ElementHorizontally($element, [int]$offset) {
   $box = $element.Current.BoundingRectangle
   if ($box.Width -le 0 -or $box.Height -le 0) { throw "Element cannot be dragged because it has no bounds: $($element.Current.AutomationId)" }
+  Activate-TestWindow
+  Start-Sleep -Milliseconds 180
   $start = [Drawing.Point]::new([int]($box.Left + ($box.Width / 2)), [int]($box.Top + ($box.Height / 2)))
   [FengSyncUiMouse]::SetCursorPos($start.X, $start.Y); Start-Sleep -Milliseconds 120
   [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
@@ -264,9 +291,9 @@ function Apply-Direction($main, [string]$header) {
     $target = $null
     foreach ($it in $items) { if ($it.Current.Name -eq $header) { $target = $it; break } }
     if ($null -ne $target) {
-      $target.SetFocus()
-      Start-Sleep -Milliseconds 60
-      [Windows.Forms.SendKeys]::SendWait('{ENTER}')
+      # Invoke the actual MenuItem. Keyboard focus alone can move to the item
+      # without raising Click on newer WPF/UIA builds.
+      Click $target
     } else {
       # Fallback: arrow-down until the desired header is current (WPF ContextMenu
       # routes arrow keys to its menu items directly).
@@ -288,6 +315,7 @@ function Apply-Direction($main, [string]$header) {
     Start-Sleep -Milliseconds 200
     [Windows.Forms.SendKeys]::SendWait('{ESC}')
   }
+  Wait-Until { (Find-Id (Get-LiveMain) 'Status').Current.Name -match [Regex]::Escape($header) } "Direction override '$header' was not applied." 10 | Out-Null
 }
 # =================== Profile context menu (right-click ProfileList) ===================
 function Find-ContextMenuInApp([string]$automationId = 'ProfileContextMenu') {
@@ -460,13 +488,22 @@ function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds
             $bytesText = $progress.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $bytesCondition)
             $speedText = $progress.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $speedCondition)
             if ($bytesText -and $speedText) {
+              $completedBeforeMetricCheck = $false
               foreach ($metric in @($bytesText, $speedText)) {
                 $metricBounds = $metric.Current.BoundingRectangle
-                if ([string]::IsNullOrWhiteSpace($metric.Current.Name) -or $metricBounds.Width -le 0 -or $metricBounds.Height -lt 16) { throw 'Sync progress metric is empty or clipped.' }
+                if ([string]::IsNullOrWhiteSpace($metric.Current.Name) -or $metricBounds.Width -le 0 -or $metricBounds.Height -lt 16) {
+                  # A very small local transfer can complete between locating the
+                  # progress window and reading its children. Its closing peers are
+                  # no longer evidence of clipping once the main UI reports success.
+                  if ((Get-UiStatus) -match '同步完成') { $completedBeforeMetricCheck = $true; break }
+                  throw 'Sync progress metric is empty or clipped.'
+                }
               }
-              if ($speedText.Current.BoundingRectangle.Height -lt 48) { throw 'Sync speed metric does not reserve enough height for wrapped ETA text.' }
-              Capture-Element $progress ("sync-{0:D2}-progress.png" -f $script:syncScreenshotCount) 'sync-progress' $script:activeSyncLabel
-              $script:activeSyncProgressCaptured = $true
+              if (-not $completedBeforeMetricCheck) {
+                if ($speedText.Current.BoundingRectangle.Height -lt 48) { throw 'Sync speed metric does not reserve enough height for wrapped ETA text.' }
+                Capture-Element $progress ("sync-{0:D2}-progress.png" -f $script:syncScreenshotCount) 'sync-progress' $script:activeSyncLabel
+                $script:activeSyncProgressCaptured = $true
+              }
             }
           }
           catch [System.Windows.Automation.ElementNotAvailableException] { }
@@ -589,8 +626,10 @@ function Capture-Element {
   )
   $bounds = $element.Current.BoundingRectangle
   if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw "Cannot capture '$name' because the UI element has no visible bounds." }
+  Activate-TestWindow
   $handle = [IntPtr]$element.Current.NativeWindowHandle
-  if ($handle -ne [IntPtr]::Zero) { [void][FengSyncUiMouse]::SetForegroundWindow($handle); Start-Sleep -Milliseconds 180 }
+  if ($handle -ne [IntPtr]::Zero) { [void][FengSyncUiMouse]::SetForegroundWindow($handle) }
+  Start-Sleep -Milliseconds 180
   $target = Join-Path $artifacts $name
   $image = [Drawing.Bitmap]::new([int][Math]::Ceiling($bounds.Width), [int][Math]::Ceiling($bounds.Height))
   $graphics = [Drawing.Graphics]::FromImage($image)
@@ -656,8 +695,33 @@ function Assert-VisualMatrixGeometry { param($main, [string]$label)
     if ($path.Current.BoundingRectangle.Top -lt ($title.Current.BoundingRectangle.Bottom - 1)) { throw "$label $side endpoint title overlaps its path." }
   }
 }
+function New-R2EndpointThroughUi { param($main, [string]$remoteName, [string]$bucketPath, [string]$accountId, [string]$accessKeyId, [string]$secretAccessKey)
+  Click (Find-Id $main 'RemoteEndpointsButton')
+  $manager = Find-WindowById 'RemoteEndpointManagerWindow' 30
+  Click (Find-Name $manager '新建云盘端点')
+  $editor = Find-WindowById 'CloudEndpointEditorWindow' 30
+  $service = Find-Id $editor 'CloudServiceType'; $expand = $null
+  $service.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null
+  $expand.Expand(); Select-Ui (Find-Name $service 'S3 Bucket' 5); Start-Sleep -Milliseconds 200
+  Set-Text (Find-Id $editor 'S3DisplayName') $remoteName
+  Set-Text (Find-Id $editor 'S3Provider') 'Cloudflare'
+  Set-Text (Find-Id $editor 'S3Region') 'auto'
+  Set-Text (Find-Id $editor 'S3Endpoint') "https://$accountId.r2.cloudflarestorage.com"
+  Set-Text (Find-Id $editor 'S3BucketPath') $bucketPath
+  Capture-Element $editor 'remote-editor-r2-before-credentials.png' 'remote-endpoint-editor' 'Cloudflare R2 fields before credentials'
+  Set-Text (Find-Id $editor 'S3AccessKeyId') $accessKeyId
+  Set-Password (Find-Id $editor 'S3SecretAccessKey') $secretAccessKey
+  Click (Find-Id $editor 'SaveCloudEndpoint')
+  Wait-Until { try { $null -eq (Find-AppWindow { param($window) $window.Current.AutomationId -eq 'CloudEndpointEditorWindow' }) } catch { $false } } 'S3 endpoint editor did not close after saving.' 60 | Out-Null
+  $remoteItem = Find-NameContaining (Find-Id $manager 'CloudEndpointList') $remoteName 30
+  Select-UiOrAncestor $remoteItem
+  Wait-Until { try { (Find-Name $manager '.fengsync-fixture-anchor' 2).Current.Name -eq '.fengsync-fixture-anchor' } catch { $false } } 'Cloud file manager did not browse the R2 prefix created for this test.' 60 | Out-Null
+  Capture-Element $manager 'remote-file-manager-r2.png' 'remote-file-manager' 'Cloudflare R2 isolated prefix listing'
+  Close-Window $manager
+  return "s3://$remoteName/$bucketPath"
+}
 
-$process = $null; $server = $null; $remoteCleanup = $null; $sftpUri = $null; $driveUri = $null; $driveChild = $null; $scheduledTask = $null; $passed = $false
+$process = $null; $server = $null; $remoteCleanup = $null; $sftpUri = $null; $driveUri = $null; $driveChild = $null; $r2Uri = $null; $r2Child = $null; $scheduledTask = $null; $passed = $false
 try {
   if ($Scenario -in @('sftp-to-local', 'sftp-ui')) {
     $fixture = Join-Path $root 'sftp'; $share = Join-Path $fixture 'share'
@@ -667,7 +731,7 @@ try {
     $hostKey = Join-Path $root 'host-key.pem'
     & ssh-keygen.exe -q -t ed25519 -N '' -f $hostKey
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $hostKey)) { throw 'Could not generate the isolated SFTP host key.' }
-    $password = 'ui-sftp-password'; $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'
+    $password = 'ui-' + [Guid]::NewGuid().ToString('N'); $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'
     $start = [Diagnostics.ProcessStartInfo]::new($rclone); $start.Arguments = 'serve sftp ":local:' + $share + '" --addr 127.0.0.1:' + $port + ' --user ui --key "' + $hostKey + '" --vfs-cache-mode writes --cache-dir "' + (Join-Path $root 'sftp-cache') + '"'; $start.UseShellExecute=$false; $start.CreateNoWindow=$true; $start.EnvironmentVariables['RCLONE_PASS']=$password
     $server = [Diagnostics.Process]::Start($start); Wait-Until { try { $tcp=[Net.Sockets.TcpClient]::new();$tcp.Connect('127.0.0.1',$port);$tcp.Dispose();$true } catch {$false} } 'SFTP fixture did not start'
     if ($Scenario -eq 'sftp-to-local') { $config = Join-Path $appData 'rclone\rclone.conf'; New-Item -ItemType Directory -Force -Path (Split-Path $config) | Out-Null
@@ -693,7 +757,44 @@ try {
     $anchor = Join-Path $root '.fengsync-fixture-anchor'; [IO.File]::WriteAllText($anchor, 'fixture')
     & $rclone copyto $anchor "${driveRemote}:test/FengSync-Automated-Tests/$driveChild/.fengsync-fixture-anchor" --config $sourceConfig --contimeout 10s --timeout 30s
     if ($LASTEXITCODE -ne 0) { throw "Could not materialize Google Drive test child: $driveUri" }
-    $remoteCleanup = $driveUri
+    $remoteCleanup = [pscustomobject]@{
+      Label = 'Google Drive'; Target = "${driveRemote}:test/FengSync-Automated-Tests/$driveChild"
+      Parent = "${driveRemote}:test/FengSync-Automated-Tests"; Child = $driveChild; Config = $config
+    }
+  }
+  if ($Scenario -in @('r2', 'r2-volume')) {
+    Enable-RcloneWindowsProxy
+    $accountId = $env:FENGSYNC_TEST_R2_ACCOUNT_ID
+    $accessKeyId = $env:FENGSYNC_TEST_R2_ACCESS_KEY_ID
+    $secretAccessKey = $env:FENGSYNC_TEST_R2_SECRET_ACCESS_KEY
+    $sessionToken = $env:FENGSYNC_TEST_R2_SESSION_TOKEN
+    $bucket = if ([string]::IsNullOrWhiteSpace($env:FENGSYNC_TEST_R2_BUCKET)) { 'feng-sync-e2e-test' } else { $env:FENGSYNC_TEST_R2_BUCKET }
+    if ([string]::IsNullOrWhiteSpace($accountId) -or [string]::IsNullOrWhiteSpace($accessKeyId) -or [string]::IsNullOrWhiteSpace($secretAccessKey)) {
+      Write-Output 'SKIPPED: Cloudflare R2 test credentials are not configured.'; exit 77
+    }
+    $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'
+    $config = Join-Path $root 'r2-fixture.conf'
+    $r2Remote = 'fixture_r2'
+    # Keep credentials out of the config file and command line. Both the fixture
+    # rclone process and the application inherit these variables from this isolated host.
+    $env:AWS_ACCESS_KEY_ID = $accessKeyId; $env:AWS_SECRET_ACCESS_KEY = $secretAccessKey
+    if ([string]::IsNullOrWhiteSpace($sessionToken)) { Remove-Item Env:AWS_SESSION_TOKEN -ErrorAction SilentlyContinue }
+    else { $env:AWS_SESSION_TOKEN = $sessionToken }
+    $configLines = @(
+      "[$r2Remote]", 'type = s3', 'provider = Cloudflare', 'env_auth = true', 'region = auto',
+      "endpoint = https://$accountId.r2.cloudflarestorage.com", 'acl = private', 'no_check_bucket = true'
+    )
+    [IO.File]::WriteAllLines($config, $configLines, [Text.UTF8Encoding]::new($false))
+    $r2Child = 'fengsync-ui-' + [Guid]::NewGuid().ToString('N')
+    $r2Root = "FengSync-Automated-Tests/$r2Child"
+    $r2Uri = "s3://$r2Remote/$bucket/$r2Root"
+    $remoteCleanup = [pscustomobject]@{
+      Label = 'Cloudflare R2'; Target = "${r2Remote}:$bucket/$r2Root"
+      Parent = "${r2Remote}:$bucket/FengSync-Automated-Tests"; Child = $r2Child; Config = $config
+    }
+    $anchor = Join-Path $root '.fengsync-r2-fixture-anchor'; [IO.File]::WriteAllText($anchor, 'fixture')
+    & $rclone copyto $anchor "${r2Remote}:$bucket/$r2Root/.fengsync-fixture-anchor" --config $config --contimeout 10s --timeout 30s
+    if ($LASTEXITCODE -ne 0) { throw "Could not materialize Cloudflare R2 test child: $r2Uri" }
   }
   $launch = Start-App; $process = $launch[0]; $main = $launch[1]
   Capture-Window $process '01-main.png' 'main-window' 'initial application state'
@@ -758,11 +859,17 @@ try {
     }
     'update-settings' {
       $profiles = Find-Id $main 'ProfileList'; $beforeWidth = $profiles.Current.BoundingRectangle.Width
-      $splitter = Find-Id $main 'SidebarSplitter'; Drag-ElementHorizontally $splitter 75
+      # Shrink instead of grow: a restored/default sidebar may already be at its
+      # 320 px maximum, making a positive drag a legitimate no-op.
+      $splitter = Find-Id $main 'SidebarSplitter'; Drag-ElementHorizontally $splitter -60
       # GridSplitter also supports keyboard resizing for accessibility. It is more
       # deterministic than injected pointer capture on virtual desktops.
-      try { $splitter.SetFocus(); [Windows.Forms.SendKeys]::SendWait('{RIGHT 6}') } catch { }
-      try { Wait-Until { (Find-Id (Get-LiveMain) 'ProfileList').Current.BoundingRectangle.Width -gt ($beforeWidth + 35) } 'Sidebar width did not change after dragging the splitter.' 15 | Out-Null }
+      try {
+        Activate-TestWindow
+        $splitter.SetFocus(); Start-Sleep -Milliseconds 100
+        [Windows.Forms.SendKeys]::SendWait('{LEFT 5}')
+      } catch { }
+      try { Wait-Until { (Find-Id (Get-LiveMain) 'ProfileList').Current.BoundingRectangle.Width -lt ($beforeWidth - 25) } 'Sidebar width did not change after dragging the splitter.' 15 | Out-Null }
       catch { $actual = (Find-Id (Get-LiveMain) 'ProfileList').Current.BoundingRectangle.Width; throw "Sidebar width did not change after dragging the splitter. before=$beforeWidth after=$actual splitter=$($splitter.Current.BoundingRectangle.Width)" }
       $changedWidth = (Find-Id (Get-LiveMain) 'ProfileList').Current.BoundingRectangle.Width
       # Settings dialog is opened via the SettingsButton in the sidebar (no Tools menu anymore).
@@ -897,13 +1004,59 @@ try {
       Click (Find-Id $editor 'SaveCloudEndpoint')
       Wait-Until { try { $null -eq (Find-AppWindow { param($window) $window.Current.AutomationId -eq 'CloudEndpointEditorWindow' }) } catch { $false } } 'Cloud endpoint editor did not close after saving.' 30 | Out-Null
       $config = Join-Path $appData 'rclone\rclone.conf'
+      $remoteItem = Find-NameContaining (Find-Id $manager 'CloudEndpointList') $remoteName 30
+      Select-UiOrAncestor $remoteItem
+      Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } 'Cloud file manager did not browse the endpoint created through its editor.' 30 | Out-Null
+      Capture-Element $manager 'remote-file-manager-sftp.png' 'remote-file-manager' 'SFTP endpoint directory listing'
+      Close-Window $manager
       # Build the sftp:// URI directly so the test does not depend on the manager's browse workflow.
       $upload = Join-Path $root 'ui-upload'; New-Item -ItemType Directory -Force -Path $upload | Out-Null; [IO.File]::WriteAllText((Join-Path $upload 'created-through-ui.txt'), 'endpoint-ui-proof')
       $sftpUriCreated = "sftp://$remoteName"
-      New-Item -ItemType Directory -Force -Path (Split-Path $config) | Out-Null
-      $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'
-      & $rclone config create $remoteName sftp host 127.0.0.1 user ui port "$port" pass $password --config $config 2>$null
+      if (-not (Test-Path -LiteralPath $config)) { throw 'SFTP endpoint editor did not persist its rclone configuration.' }
       Select-Mode $main '更新到右侧'; Compare-Ui $main $upload $sftpUriCreated; Wait-Sync $main (Join-Path $share 'created-through-ui.txt'); Assert-File (Join-Path $share 'created-through-ui.txt') 'endpoint-ui-proof'
+    }
+    'sftp-service' {
+      $share = Join-Path $root 'built-in-sftp-share'; New-Item -ItemType Directory -Force -Path $share | Out-Null
+      [IO.File]::WriteAllText((Join-Path $share 'service-proof.txt'), 'built-in-sftp')
+      $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0); $listener.Start(); $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port; $listener.Stop()
+      $settings = Open-SettingsCenter
+      Click (Find-Id $settings 'SftpServerSettingsButton')
+      $sftpSettings = Find-WindowById 'SftpServerSettingsWindow'
+      Set-Text (Find-Id $sftpSettings 'SftpListenAddress') '127.0.0.1'
+      Set-Text (Find-Id $sftpSettings 'SftpPort') "$port"
+      Set-Text (Find-Id $sftpSettings 'SftpRootPath') $share
+      Set-Text (Find-Id $sftpSettings 'SftpUserName') 'ui-service'
+      Set-Text (Find-Id $sftpSettings 'SftpCacheSize') '1'
+      Click (Find-Id $sftpSettings 'SetSftpPassword')
+      $passwordDialog = Find-WindowById 'SftpPasswordDialog'
+      $servicePassword = 'ui-service-' + [Guid]::NewGuid().ToString('N')
+      Set-Password (Find-Id $passwordDialog 'SftpPassword') $servicePassword
+      Click (Find-Id $passwordDialog 'SaveSftpPassword')
+      Click (Find-Id $sftpSettings 'StartSftpServer')
+      Wait-Until {
+        try { $tcp = [Net.Sockets.TcpClient]::new(); $tcp.Connect('127.0.0.1', $port); $tcp.Dispose(); $true } catch { $false }
+      } 'Built-in SFTP service did not open its configured port.' 30 | Out-Null
+      Wait-Until { (Find-Id $sftpSettings 'SftpServerStatus').Current.Name -match '正在监听' } 'Built-in SFTP status did not report the listening endpoint.' 30 | Out-Null
+      Capture-Element $sftpSettings 'sftp-service-running.png' 'sftp-server-settings' 'built-in SFTP service running'
+      Click (Find-Id $sftpSettings 'StopSftpServer')
+      Wait-Until {
+        try { $tcp = [Net.Sockets.TcpClient]::new(); $tcp.Connect('127.0.0.1', $port); $tcp.Dispose(); $false } catch { $true }
+      } 'Built-in SFTP service did not release its configured port.' 30 | Out-Null
+      Wait-Until { (Find-Id $sftpSettings 'SftpServerStatus').Current.Name -match '端口已释放' } 'Built-in SFTP status did not report a clean stop.' 30 | Out-Null
+      Close-Window $sftpSettings; Close-Window $settings
+    }
+    'batch-run' {
+      $left = Join-Path $root 'batch-left'; $right = Join-Path $root 'batch-right'; New-Item -ItemType Directory -Force -Path @($left, $right) | Out-Null
+      [IO.File]::WriteAllText((Join-Path $left 'batch-proof.txt'), 'batch-window-proof')
+      Update-CurrentProfileEndpoints $main ('ui-batch-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)) $left $right
+      Click (Find-Id $main 'BatchJobsButton')
+      $batch = Find-WindowById 'BatchRunWindow'
+      if (-not (Find-Id $batch 'BatchRunProfiles')) { throw 'Batch window did not expose its saved-profile queue.' }
+      Click (Find-Id $batch 'BatchRunStart')
+      Wait-Until { (Find-Id $batch 'BatchRunSummary').Current.Name -match '^完成：1 成功，0 失败。$' } 'Batch window did not report a successful completed queue.' 120 | Out-Null
+      Assert-File (Join-Path $right 'batch-proof.txt') 'batch-window-proof'
+      Capture-Element $batch 'batch-run-complete.png' 'batch-run' 'saved profile completed through batch window'
+      Close-Window $batch
     }
     'profile' {
       $left = Join-Path $root 'profile-left'; $right = Join-Path $root 'profile-right'; New-Item -ItemType Directory -Force -Path @($left, $right) | Out-Null
@@ -927,7 +1080,7 @@ try {
       Stop-App $process; $process = $null
       $launch = Start-App; $process = $launch[0]; $main = $launch[1]
       $item = Find-Name (Find-Id $main 'ProfileList') $profileName 2
-      (Find-Id $main 'ProfileList').SetFocus(); [Windows.Forms.SendKeys]::SendWait('{END}')
+      Select-UiOrAncestor $item
       Wait-Until { (Get-Text (Find-Id $main 'LeftPath')) -eq $left } 'Persisted Profile did not load after selecting it.'
       if ((Get-Text (Find-Id $main 'LeftPath')) -ne $left -or (Get-Text (Find-Id $main 'RightPath')) -ne $right) { throw 'Persisted Profile endpoints did not survive application restart.' }
       Delete-Profile-ThroughContextMenu
@@ -937,7 +1090,7 @@ try {
       $left = Join-Path $root 'left'; $right = Join-Path $root 'right'; New-Item -ItemType Directory -Force -Path @($left, $right, (Join-Path $left '.git')) | Out-Null
       [IO.File]::WriteAllText((Join-Path $left 'included.txt'), 'included'); [IO.File]::WriteAllText((Join-Path $left '.git\config'), 'must-be-filtered')
       Click (Find-Id $main 'EditCurrentProfileButton'); $editor = Find-WindowById 'ProfileEditorWindow'; Set-Text (Find-Id $editor 'ProfileLeftPath') $left; Set-Text (Find-Id $editor 'ProfileRightPath') $right
-      $sections = Find-Id $editor 'ProfileSections'; $sections.SetFocus(); [Windows.Forms.SendKeys]::SendWait('{HOME}{DOWN}{DOWN}')
+      $sections = Find-Id $editor 'ProfileSections'; Select-Ui (Find-Name $sections '过滤器' 5)
       Click (Find-Name $editor '添加常用排除规则'); Capture-Element $editor 'profile-filter-configured.png' 'profile-editor' 'filter rules'; Click (Find-Id $editor 'ProfileSave')
       Compare-Ui $main $left $right; Wait-Sync $main (Join-Path $right 'included.txt'); Assert-File (Join-Path $right 'included.txt') 'included'
       if (Test-Path -LiteralPath (Join-Path $right '.git\config')) { throw 'Profile filter did not exclude .git content from the real sync.' }
@@ -947,7 +1100,7 @@ try {
       [IO.File]::WriteAllText((Join-Path $left 'keep.txt'), 'keep'); [IO.File]::WriteAllText((Join-Path $right 'keep.txt'), 'keep'); [IO.File]::WriteAllText((Join-Path $right 'delete-a.txt'), 'a'); [IO.File]::WriteAllText((Join-Path $right 'delete-b.txt'), 'b')
       $profileName = 'threshold-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
       Click (Find-Id $main 'EditCurrentProfileButton'); $editor = Find-WindowById 'ProfileEditorWindow'; Set-Text (Find-Id $editor 'ProfileName') $profileName; Set-Text (Find-Id $editor 'ProfileLeftPath') $left; Set-Text (Find-Id $editor 'ProfileRightPath') $right
-      $sections = Find-Id $editor 'ProfileSections'; $sections.SetFocus(); [Windows.Forms.SendKeys]::SendWait('{END}')
+      $sections = Find-Id $editor 'ProfileSections'; Select-Ui (Find-Name $sections '性能与可靠性' 5)
       Set-Text (Find-Id $editor 'ProfileMaxDeletes') '0'; Set-Text (Find-Id $editor 'ProfileMaxDeleteRatio') '0'; Capture-Element $editor 'profile-delete-threshold.png' 'profile-editor' 'performance and destructive safety'; Click (Find-Id $editor 'ProfileSave')
       Select-Mode $main '镜像到右侧'; Compare-Ui $main $left $right; Wait-Until { (Find-Id $main 'SyncButton').Current.IsEnabled } 'Mirror threshold plan was not executable.'
       Click (Find-Id $main 'SyncButton'); $confirm = Wait-Until { try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'SyncConfirmationWindow' } } catch { $null } } 'Threshold confirm window did not appear' 30
@@ -1071,13 +1224,58 @@ try {
       }
       if ($results.Count -ne 3) { throw 'Google Drive 10-file matrix did not complete every synchronization mode.' }
     }
+    'r2' {
+      $r2UiRemote = 'ui_r2_' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+      $r2Uri = New-R2EndpointThroughUi $main $r2UiRemote "$bucket/$r2Root" $accountId $accessKeyId $secretAccessKey
+      $upload = Join-Path $root 'r2-upload'; $download = Join-Path $root 'r2-download'; New-Item -ItemType Directory -Force -Path @($upload, $download) | Out-Null
+      [IO.File]::WriteAllText((Join-Path $upload 'r2-proof.txt'), 'r2-roundtrip')
+      Select-Mode $main '更新到右侧'; Compare-Ui $main $upload $r2Uri; Wait-Sync $main (Join-Path $upload 'r2-proof.txt')
+      Wait-Until {
+        $listing = & $rclone lsf $remoteCleanup.Target --config $remoteCleanup.Config --contimeout 10s --timeout 30s 2>$null
+        $LASTEXITCODE -eq 0 -and $listing -contains 'r2-proof.txt'
+      } 'UI upload did not become visible in the generated Cloudflare R2 test prefix.' 120
+      Stop-App $process; $process = $null
+      $launch = Start-App; $process = $launch[0]; $main = $launch[1]
+      Select-Mode $main '更新到右侧'; Compare-Ui $main $r2Uri $download
+      Wait-Sync $main (Join-Path $download 'r2-proof.txt') 180 300
+      Assert-File (Join-Path $download 'r2-proof.txt') 'r2-roundtrip'
+    }
+    'r2-volume' {
+      $r2UiRemote = 'ui_r2_' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+      $r2Uri = New-R2EndpointThroughUi $main $r2UiRemote "$bucket/$r2Root" $accountId $accessKeyId $secretAccessKey
+      $results = [System.Collections.Generic.List[object]]::new()
+      foreach ($mode in @(
+        [pscustomobject]@{ Name = '双向同步'; Slug = 'two-way' },
+        [pscustomobject]@{ Name = '镜像到右侧'; Slug = 'mirror' },
+        [pscustomobject]@{ Name = '更新到右侧'; Slug = 'update' }
+      )) {
+        $case = "$($mode.Slug)-flat-10-files"
+        $upload = Join-Path $root (Join-Path 'r2-volume' $case)
+        $remoteCase = $r2Uri.TrimEnd('/') + '/' + $case
+        New-Item -ItemType Directory -Force -Path $upload | Out-Null
+        $fixtureAnchor = Join-Path $upload '.fengsync-fixture-anchor'; [IO.File]::WriteAllText($fixtureAnchor, 'fixture')
+        for ($i = 1; $i -le 10; $i++) { [IO.File]::WriteAllText((Join-Path $upload ('batch-{0:D3}.txt' -f $i)), "Cloudflare R2 fixture $i") }
+        & $rclone copyto $fixtureAnchor ($remoteCleanup.Target + "/$case/.fengsync-fixture-anchor") --config $remoteCleanup.Config --contimeout 10s --timeout 30s
+        if ($LASTEXITCODE -ne 0) { throw "Could not materialize Cloudflare R2 test prefix: $remoteCase" }
+        Stop-App $process; $process = $null
+        $launch = Start-App; $process = $launch[0]; $main = $launch[1]
+        Select-Mode $main $mode.Name; Compare-Ui $main $upload $remoteCase 180
+        Wait-Sync $main (Join-Path $upload 'batch-001.txt') 180 600
+        Wait-Until {
+          $listing = & $rclone lsf ($remoteCleanup.Target + "/$case") --recursive --config $remoteCleanup.Config --contimeout 10s --timeout 30s 2>$null
+          $LASTEXITCODE -eq 0 -and @($listing | Where-Object { $_ -match '\.txt$' }).Count -eq 10
+        } "Cloudflare R2 did not contain all 10 fixture files: $remoteCase" 180 | Out-Null
+        $results.Add($mode.Slug); Write-Output "Cloudflare R2 10-file matrix completed: mode=$($mode.Slug)"
+      }
+      if ($results.Count -ne 3) { throw 'Cloudflare R2 10-file matrix did not complete every synchronization mode.' }
+    }
   }
   Capture-Window $process '99-complete.png' 'main-window' 'completed scenario state'
-  $comparisonScenarios = @('ui-shell', 'ui-shell-native', 'ui-shell-software', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'profile-filter', 'delete-threshold', 'history', 'gdrive', 'gdrive-volume')
+  $comparisonScenarios = @('ui-shell', 'ui-shell-native', 'ui-shell-software', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'profile-filter', 'delete-threshold', 'history', 'gdrive', 'gdrive-volume', 'r2', 'r2-volume')
   if ($Scenario -in $comparisonScenarios -and -not ($screenshotManifest.Category -contains 'comparison')) {
     throw "Scenario '$Scenario' completed a comparison without recording a comparison screenshot."
   }
-  $syncScenarios = @('local', 'local-move', 'modes', 'sftp-to-local', 'sftp-ui', 'profile-filter', 'delete-threshold', 'history', 'gdrive', 'gdrive-volume')
+  $syncScenarios = @('local', 'local-move', 'modes', 'sftp-to-local', 'sftp-ui', 'profile-filter', 'delete-threshold', 'history', 'gdrive', 'gdrive-volume', 'r2', 'r2-volume')
   if ($Scenario -in $syncScenarios) {
     foreach ($requiredCategory in @('sync-started', 'sync-complete')) {
       if (-not ($screenshotManifest.Category -contains $requiredCategory)) { throw "Scenario '$Scenario' did not record the required $requiredCategory screenshot." }
@@ -1097,8 +1295,27 @@ finally {
   Stop-App $process
   Write-HarnessTrace "Cleaning up scenario: $Scenario"
   if ($remoteCleanup) {
-    $parts = $remoteCleanup.Substring('gdrive://'.Length).Split('/',2); $config = Join-Path $appData 'rclone\rclone.conf'; $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'
-    if ($parts.Count -eq 2) { & $rclone purge ($parts[0] + ':' + $parts[1]) --config $config --contimeout 10s --timeout 30s; if ($LASTEXITCODE -ne 0) { Write-Error "Google Drive cleanup failed for generated child $remoteCleanup" } }
+    try {
+      $config = $remoteCleanup.Config; $rclone = Join-Path (Split-Path $AppPath) 'Assets\rclone\rclone.exe'
+      & $rclone purge $remoteCleanup.Target --config $config --contimeout 10s --timeout 30s
+      if ($LASTEXITCODE -ne 0) { Write-Error "$($remoteCleanup.Label) cleanup failed for generated child $($remoteCleanup.Target)" }
+      $remaining = & $rclone lsf $remoteCleanup.Parent --recursive --config $config --contimeout 10s --timeout 30s 2>$null
+      if ($LASTEXITCODE -ne 0) { Write-Error "$($remoteCleanup.Label) cleanup verification could not list $($remoteCleanup.Parent)" }
+      $prefix = $remoteCleanup.Child.TrimEnd('/') + '/'
+      if (@($remaining | Where-Object { $_ -eq $remoteCleanup.Child -or $_.StartsWith($prefix, [StringComparison]::Ordinal) }).Count -ne 0) {
+        Write-Error "$($remoteCleanup.Label) cleanup verification found residual objects below $($remoteCleanup.Target)"
+      }
+    }
+    finally {
+      if ($Scenario -in @('r2', 'r2-volume')) {
+        # The UI necessarily writes an obscured credential to its isolated rclone
+        # config. It is not diagnostic evidence, so remove both credential-bearing
+        # configs even when remote cleanup verification fails.
+        Remove-Item -LiteralPath (Join-Path $appData 'rclone\rclone.conf') -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $remoteCleanup.Config -Force -ErrorAction SilentlyContinue
+        Remove-Item Env:AWS_ACCESS_KEY_ID, Env:AWS_SECRET_ACCESS_KEY, Env:AWS_SESSION_TOKEN -ErrorAction SilentlyContinue
+      }
+    }
   }
   if ($server) {
     try {

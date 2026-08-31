@@ -45,6 +45,49 @@ public sealed class CliIntegrationTests : IAsyncLifetime
         Assert.Equal("from-cli", await File.ReadAllTextAsync(Path.Combine(Right, "proof.txt")));
     }
 
+    [Theory]
+    [InlineData(4)]
+    [InlineData(4, "unknown")]
+    [InlineData(4, "compare")]
+    [InlineData(4, "run", "--profile", "missing-profile-id")]
+    public async Task Invalid_commands_return_one_json_error_and_configuration_exit_code(int expectedExitCode, params string[] arguments)
+    {
+        var result = await RunCliAsync(arguments);
+
+        Assert.Equal(expectedExitCode, result.ExitCode);
+        Assert.False(string.IsNullOrWhiteSpace(result.Json.RootElement.GetProperty("error").GetString()));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Malformed_profile_returns_configuration_error_without_leaking_file_contents()
+    {
+        var profileFile = Path.Combine(_root, "malformed.fengsync.json");
+        const string secretMarker = "must-not-appear-in-cli-output";
+        await File.WriteAllTextAsync(profileFile, "{\"secret\":\"" + secretMarker + "\"");
+
+        var result = await RunCliAsync("compare", "--profile", profileFile);
+
+        Assert.Equal(4, result.ExitCode);
+        Assert.DoesNotContain(secretMarker, result.Json.RootElement.GetProperty("error").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Compare_reports_unresolved_two_way_conflict_with_contract_exit_code()
+    {
+        await File.WriteAllTextAsync(Path.Combine(Left, "same.txt"), "left");
+        await File.WriteAllTextAsync(Path.Combine(Right, "same.txt"), "right");
+        var profileFile = Path.Combine(_root, "conflict.fengsync.json");
+        await File.WriteAllTextAsync(profileFile, JsonSerializer.Serialize(SyncProfile.Create("CLI conflict", Left, Right)));
+
+        var result = await RunCliAsync("compare", "--profile", profileFile);
+
+        Assert.Equal(3, result.ExitCode);
+        Assert.Equal("Conflict", result.Json.RootElement.GetProperty("exitCode").GetString());
+        Assert.False(result.Json.RootElement.GetProperty("canExecute").GetBoolean());
+    }
+
     private async Task<(int ExitCode, JsonDocument Json)> RunCliAsync(params string[] arguments)
     {
         var root = FindRepositoryRoot();
