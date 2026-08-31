@@ -14,19 +14,21 @@ public partial class MountPickerDialog : Window
 {
     private readonly string _remoteName;
     private readonly string _provider;
+    private readonly string _rootPath;
     private readonly IReadOnlyList<string> _occupiedMountPoints;
     private MountPickerMode _mode = MountPickerMode.DriveLetter;
 
     public MountTarget? SelectedTarget { get; private set; }
 
-    public MountPickerDialog(string remoteName, string provider, IReadOnlyList<string> occupiedMountPoints)
+    public MountPickerDialog(string remoteName, string provider, IReadOnlyList<string> occupiedMountPoints, string rootPath = "")
     {
         InitializeComponent();
         _remoteName = remoteName;
         _provider = provider;
+        _rootPath = rootPath.Trim('/');
         _occupiedMountPoints = occupiedMountPoints;
         HeaderText.Text = $"挂载 {_remoteName}";
-        SubHeaderText.Text = $"选择本地盘符或目录，将 {_remoteName}: 的根目录挂载到 Feng Sync 可访问的位置。";
+        SubHeaderText.Text = $"选择本地盘符或目录，将 {_remoteName}:/{_rootPath} 挂载到 Feng Sync 可访问的位置。";
         DriveLetterList.ItemsSource = MountPointInspector.EnumerateDriveLetters();
         UpdateStatus();
     }
@@ -92,14 +94,14 @@ public partial class MountPickerDialog : Window
         if (_mode == MountPickerMode.DriveLetter)
         {
             if (DriveLetterList.SelectedItem is not MountPointInspector.DriveLetterOption option || !option.IsAvailable) return;
-            SelectedTarget = new MountTarget(_remoteName, _provider, option.Letter, MountTargetKind.DriveLetter);
+            SelectedTarget = new MountTarget(_remoteName, _provider, option.Letter, MountTargetKind.DriveLetter, _rootPath);
         }
         else
         {
             var path = DirectoryPathBox.Text?.Trim() ?? "";
             var validation = MountPointInspector.Validate(path, MountTargetKind.Directory, _occupiedMountPoints);
             if (!validation.IsValid) { StatusText.Text = validation.Error; return; }
-            SelectedTarget = new MountTarget(_remoteName, _provider, Path.GetFullPath(path), MountTargetKind.Directory);
+            SelectedTarget = new MountTarget(_remoteName, _provider, Path.GetFullPath(path), MountTargetKind.Directory, _rootPath);
         }
         DialogResult = SelectedTarget is not null;
     }

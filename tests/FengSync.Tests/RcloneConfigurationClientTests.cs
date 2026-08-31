@@ -65,6 +65,20 @@ public sealed class RcloneConfigurationClientTests
         Assert.True(await api.SupportsOAuthControlAsync());
     }
 
+    [Fact]
+    public async Task S3_provider_metadata_preserves_enum_values_and_provider_specific_region_suggestions()
+    {
+        var handler = new ConfigurationHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://rc.test/") };
+        var api = new RcloneConfigurationClient(new RcloneRcClient(http, http.BaseAddress, "user", "pass"));
+
+        var providers = await api.GetS3ProvidersAsync();
+
+        Assert.Collection(providers,
+            aws => { Assert.Equal("AWS", aws.Name); Assert.Contains("us-east-1", aws.RegionSuggestions); },
+            cloudflare => { Assert.Equal("Cloudflare", cloudflare.Name); Assert.Contains("auto", cloudflare.RegionSuggestions); });
+    }
+
     private sealed class ConfigurationHandler : HttpMessageHandler
     {
         public List<string> Bodies { get; } = [];
@@ -81,6 +95,7 @@ public sealed class RcloneConfigurationClientTests
                     : "{\"type\":\"drive\",\"token\":\"must-not-escape\"}",
                 "/rc/list" => "{\"commands\":[{\"Path\":\"config/oauthstatus\"},{\"Path\":\"config/oauthstop\"}]}",
                 "/config/oauthstatus" => "{\"status\":\"running\",\"authUrl\":\"http://127.0.0.1:1234/auth?state=x\"}",
+                "/config/providers" => "{\"providers\":[{\"Name\":\"s3\",\"Options\":[{\"Name\":\"provider\",\"Examples\":[{\"Value\":\"AWS\",\"Help\":\"Amazon\"},{\"Value\":\"Cloudflare\",\"Help\":\"R2\"}]},{\"Name\":\"region\",\"Examples\":[{\"Value\":\"us-east-1\",\"Provider\":\"AWS\"},{\"Value\":\"auto\",\"Provider\":\"Cloudflare\"}]}]}]}",
                 "/operations/list" => "{\"list\":[]}",
                 _ => "{}"
             };

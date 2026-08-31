@@ -26,6 +26,53 @@ public sealed class UiFeatureBehaviorTests
     }
 
     [Fact]
+    public void S3_endpoint_uri_keeps_the_bucket_out_of_the_service_endpoint()
+    {
+        Assert.Equal("s3://r2/feng-sync-e2e-test/path",
+            CloudEndpointService.BuildUri(CloudEndpointService.ProviderKind.S3, "r2", "/feng-sync-e2e-test/path/"));
+    }
+
+    [Fact]
+    public void S3_settings_reject_unknown_providers_and_bucket_paths_inside_endpoint()
+    {
+        var providers = new[] { "Cloudflare", "AWS" };
+        var unknown = CloudEndpointService.ValidateS3Settings(new("R2", "R2", "key", "secret", "auto", "https://example.test", "bucket", ""), providers);
+        var endpoint = CloudEndpointService.ValidateS3Settings(new("R2", "Cloudflare", "key", "secret", "auto", "https://example.test/bucket", "bucket", ""), providers);
+        var valid = CloudEndpointService.ValidateS3Settings(new("R2", "Cloudflare", "key", "secret", "auto", "https://example.test", "bucket", "path"), providers);
+        Assert.Contains("provider", unknown.Keys);
+        Assert.Contains("endpoint", endpoint.Keys);
+        Assert.Empty(valid);
+    }
+
+    [Fact]
+    public void S3_draft_invalidates_a_successful_probe_after_any_field_change()
+    {
+        var draft = new S3EndpointDraft();
+        var initial = new S3EndpointValues("R2", "Cloudflare", "key", "secret", "auto", "https://example.test", "bucket", "path");
+        draft.Update(initial); draft.RecordProbe(true);
+        Assert.True(draft.HasCurrentSuccessfulTest);
+        draft.Update(initial with { Bucket = "other" });
+        Assert.False(draft.HasCurrentSuccessfulTest);
+    }
+
+    [Fact]
+    public async Task Cloud_endpoint_metadata_round_trips_bucket_and_subdirectory()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "FengSync-metadata-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "cloud-endpoints.json");
+        try
+        {
+            var store = new CloudEndpointMetadataStore(path);
+            await store.UpsertAsync(new("r2", "s3", "Cloudflare", "bucket", "team/files"));
+            var restored = Assert.Single(await store.LoadAsync()).Value;
+            Assert.Equal("bucket/team/files", restored.RootPath);
+            await store.DeleteAsync("r2");
+            Assert.Empty(await store.LoadAsync());
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    [Fact]
     public void Update_window_exposes_release_state_and_determinate_download_progress()
     {
         RunSta(() =>
@@ -47,6 +94,22 @@ public sealed class UiFeatureBehaviorTests
             Assert.Contains("50%", window.Progress.Text, StringComparison.Ordinal);
             Assert.Equal(Visibility.Visible, window.DownloadProgressBar.Visibility);
             Assert.Equal(50, window.DownloadProgressBar.Value);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public void Cloud_endpoint_editor_constructs_as_a_two_step_window()
+    {
+        RunSta(() =>
+        {
+            var application = Application.Current ?? new Application();
+            if (application.Resources.MergedDictionaries.Count == 0)
+                foreach (var resource in new[] { "DesignTokens.xaml", "Typography.xaml", "Icons.xaml", "Controls.xaml" })
+                    application.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri($"pack://application:,,,/FengSync;component/Themes/{resource}") });
+            var window = new CloudEndpointEditorWindow();
+            Assert.Equal(Visibility.Visible, window.NextButton.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.SaveButton.Visibility);
             window.Close();
         });
     }

@@ -15,7 +15,7 @@ namespace FengSync.Views;
 public partial class RemoteEndpointPickerWindow : Window
 {
     private readonly string _side;
-    private readonly ObservableCollection<RcloneAccount> _accounts = [];
+    private readonly ObservableCollection<CloudEndpointAccount> _accounts = [];
     private bool _busy;
 
     /// <summary>The fully-built Feng Sync endpoint URI the caller should write into the path box.</summary>
@@ -33,7 +33,7 @@ public partial class RemoteEndpointPickerWindow : Window
         Loaded += async (_, _) => await RefreshAsync();
     }
 
-    private RcloneAccount? Selected => EndpointList.SelectedItem as RcloneAccount;
+    private CloudEndpointAccount? Selected => EndpointList.SelectedItem as CloudEndpointAccount;
 
     private async Task RefreshAsync()
     {
@@ -43,7 +43,7 @@ public partial class RemoteEndpointPickerWindow : Window
         {
             StatusText.Text = "正在读取云端端点列表…";
             var previous = Selected?.Name;
-            var accounts = await CloudEndpointService.LoadAccountsAsync();
+            var accounts = await CloudEndpointService.LoadEndpointAccountsAsync();
             _accounts.Clear();
             foreach (var account in accounts) _accounts.Add(account);
             var restore = previous is null ? 0 : Math.Max(0, _accounts.ToList().FindIndex(x => x.Name == previous));
@@ -54,12 +54,16 @@ public partial class RemoteEndpointPickerWindow : Window
         finally { _busy = false; UpdateResolved(); }
     }
 
-    private void EndpointList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateResolved();
+    private void EndpointList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (Selected is CloudEndpointAccount account && string.IsNullOrWhiteSpace(RemotePathBox.Text)) RemotePathBox.Text = account.RootPath;
+        UpdateResolved();
+    }
     private void RemotePathBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateResolved();
 
     private void UpdateResolved()
     {
-        if (Selected is not RcloneAccount account) { ResolvedUriText.Text = ""; AddButton.IsEnabled = false; return; }
+        if (Selected is not CloudEndpointAccount account) { ResolvedUriText.Text = ""; AddButton.IsEnabled = false; return; }
         var kind = CloudEndpointService.KindFromRcloneType(account.Type);
         ResolvedUriText.Text = "将添加：" + CloudEndpointService.BuildUri(kind, account.Name, RemotePathBox.Text);
         AddButton.IsEnabled = true;
@@ -67,7 +71,7 @@ public partial class RemoteEndpointPickerWindow : Window
 
     private async void BrowseRemote_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not RcloneAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
         if (_busy) return;
         _busy = true;
         AddButton.IsEnabled = false;
@@ -99,7 +103,7 @@ public partial class RemoteEndpointPickerWindow : Window
 
     private void Add_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not RcloneAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
         var kind = CloudEndpointService.KindFromRcloneType(account.Type);
         ResultUri = CloudEndpointService.BuildUri(kind, account.Name, RemotePathBox.Text);
         DialogResult = true;

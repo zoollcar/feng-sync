@@ -19,7 +19,7 @@ namespace FengSync.Views;
 /// </summary>
 public partial class RemoteEndpointManagerWindow : Window
 {
-    private readonly ObservableCollection<RcloneAccount> _accounts = [];
+    private readonly ObservableCollection<CloudEndpointAccount> _accounts = [];
     private readonly ObservableCollection<MountInfo> _mounts = [];
     private readonly RcloneMountService _mountService = App.CurrentApp.MountService;
     private readonly CloudFileManagerService _files = new();
@@ -37,7 +37,7 @@ public partial class RemoteEndpointManagerWindow : Window
         Loaded += async (_, _) => await RefreshAsync();
     }
 
-    private RcloneAccount? Selected => EndpointList.SelectedItem as RcloneAccount;
+    private CloudEndpointAccount? Selected => EndpointList.SelectedItem as CloudEndpointAccount;
     private MountInfo? SelectedMount => MountsList.SelectedItem as MountInfo;
 
     private async Task RefreshAsync()
@@ -46,7 +46,7 @@ public partial class RemoteEndpointManagerWindow : Window
         {
             StatusText.Text = "正在读取云端端点列表…";
             var previous = Selected?.Name;
-            var accounts = await CloudEndpointService.LoadAccountsAsync();
+            var accounts = await CloudEndpointService.LoadEndpointAccountsAsync();
             _accounts.Clear();
             foreach (var account in accounts) _accounts.Add(account);
             var restore = previous is null ? 0 : Math.Max(0, _accounts.ToList().FindIndex(x => x.Name == previous));
@@ -80,7 +80,7 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async void EndpointList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _currentPath = "";
+        _currentPath = Selected?.RootPath ?? "";
         UpdateMountButtons();
         await BrowseAsync();
     }
@@ -104,8 +104,8 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async void Reconnect_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not RcloneAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
-        if (!account.IsGoogleDrive) { StatusText.Text = "只有 Google Drive 端点需要浏览器重新登录。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
+        if (!account.Remote.IsGoogleDrive) { StatusText.Text = "只有 Google Drive 端点需要浏览器重新登录。"; return; }
         await RunBusyAsync(ReconnectButton, "正在登录…", "正在重新登录，请在浏览器完成授权…", async () =>
         {
             var progress = new Progress<string>(message => StatusText.Text = message);
@@ -117,7 +117,7 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async void Delete_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not RcloneAccount account) { StatusText.Text = "请先选择要删除的端点。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择要删除的端点。"; return; }
         var relatedMounts = _mounts.Where(m => string.Equals(m.RemoteName, account.Name, StringComparison.OrdinalIgnoreCase)).ToList();
         if (relatedMounts.Count > 0)
         {
@@ -156,10 +156,10 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async void MountSelectedEndpoint_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not RcloneAccount account) { MountStatus.Text = "请先选择要挂载的端点。"; return; }
+        if (Selected is not CloudEndpointAccount account) { MountStatus.Text = "请先选择要挂载的端点。"; return; }
         if (_mountBusy) return;
         var provider = CloudEndpointService.DisplayName(CloudEndpointService.KindFromRcloneType(account.Type));
-        var dialog = new MountPickerDialog(account.Name, provider, _mounts.Select(m => m.MountPoint).ToList()) { Owner = this };
+        var dialog = new MountPickerDialog(account.Name, provider, _mounts.Select(m => m.MountPoint).ToList(), account.RootPath) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         var target = dialog.SelectedTarget!;
         _mountBusy = true;
@@ -218,21 +218,27 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async Task BrowseAsync()
     {
-        if (Selected is not RcloneAccount account) { _entries.Clear(); PathText.Text = "请选择一个云盘"; return; }
+        if (Selected is not CloudEndpointAccount account) { _entries.Clear(); PathText.Text = "请选择一个云盘"; return; }
         try
         {
             StatusText.Text = "正在读取目录…";
             var items = await _files.ListAsync(account.Name, _currentPath);
             _entries.Clear(); foreach (var item in items) _entries.Add(item);
             PathText.Text = $"{account.Name}:/{_currentPath}";
-            BackButton.IsEnabled = !string.IsNullOrEmpty(_currentPath);
+            BackButton.IsEnabled = !_currentPath.Equals(account.RootPath, StringComparison.OrdinalIgnoreCase);
             StatusText.Text = $"共 {_entries.Count} 项。";
         }
         catch (Exception ex) { StatusText.Text = "无法读取目录：" + RcloneUiError.Describe(ex, "cloud-file-list"); }
     }
 
     private async void BrowseRefresh_Click(object sender, RoutedEventArgs e) => await BrowseAsync();
-    private async void Back_Click(object sender, RoutedEventArgs e) { _currentPath = CloudFileManagerService.Parent(_currentPath); await BrowseAsync(); }
+    private async void Back_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected is not CloudEndpointAccount account || _currentPath.Equals(account.RootPath, StringComparison.OrdinalIgnoreCase)) return;
+        _currentPath = CloudFileManagerService.Parent(_currentPath);
+        if (!_currentPath.StartsWith(account.RootPath, StringComparison.OrdinalIgnoreCase)) _currentPath = account.RootPath;
+        await BrowseAsync();
+    }
 
     private async void FileList_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
@@ -282,7 +288,7 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async Task<bool> UploadOneAsync(string localPath, bool? forceOverwrite = null)
     {
-        if (Selected is not RcloneAccount account) return false;
+        if (Selected is not CloudEndpointAccount account) return false;
         var exists = (await _files.ListAsync(account.Name, _currentPath)).Any(x => !x.IsDirectory && x.Name.Equals(Path.GetFileName(localPath), StringComparison.OrdinalIgnoreCase));
         var overwrite = forceOverwrite ?? false;
         if (exists && forceOverwrite is null)
@@ -304,7 +310,7 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async Task DownloadAsync(CloudFileEntry entry)
     {
-        if (Selected is not RcloneAccount account) return;
+        if (Selected is not CloudEndpointAccount account) return;
         var dialog = new SaveFileDialog { FileName = entry.Name, Title = "下载文件" };
         if (dialog.ShowDialog(this) != true) return;
         await DownloadToAsync(account.Name, entry, dialog.FileName);
@@ -312,7 +318,7 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async Task OpenAsync(CloudFileEntry entry)
     {
-        if (Selected is not RcloneAccount account) return;
+        if (Selected is not CloudEndpointAccount account) return;
         var folder = Path.Combine(Path.GetTempPath(), "FengSync", "cloud-open", Guid.NewGuid().ToString("N"));
         var local = Path.Combine(folder, entry.Name);
         if (await DownloadToAsync(account.Name, entry, local)) Process.Start(new ProcessStartInfo(local) { UseShellExecute = true });

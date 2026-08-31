@@ -91,6 +91,7 @@ public sealed class RcloneOAuthFlowTests
         public Task<bool> SupportsOAuthControlAsync(CancellationToken cancellationToken = default) => Task.FromResult(SupportsOAuth);
         public Task<IReadOnlyList<string>> ListRemoteNamesAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<string?> GetRemoteTypeAsync(string name, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<RcloneS3Provider>> GetS3ProvidersAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task DeleteAsync(string name, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task VerifyAsync(string name, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task StopOAuthAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

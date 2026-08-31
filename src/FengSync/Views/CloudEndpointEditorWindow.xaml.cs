@@ -1,198 +1,206 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FengSync.Core;
+using FengSync.Core.Rclone.Configuration;
 using FengSync.Services;
 using Kind = FengSync.Services.CloudEndpointService.ProviderKind;
 
 namespace FengSync.Views;
 
-/// <summary>
-/// Modal "新建端点" dialog: pick a service (Google Drive / SFTP / S3), fill a provider-specific form,
-/// test the connection, preview the remote as a directory tree, and save it as an rclone remote.
-/// Mirrors the structure of <see cref="SftpServerSettingsWindow"/> / <see cref="ProfileEditorWindow"/>.
-/// </summary>
 public partial class CloudEndpointEditorWindow : Window
 {
-    // Set once a remote has been successfully created so Test/Preview/Save don't recreate (or re-OAuth) it.
+    private readonly S3EndpointDraft _s3Draft = new();
+    private IReadOnlyList<RcloneS3Provider> _providers = [];
+    private IReadOnlyList<string> _probeDirectories = [];
+    private bool _busy, _secretSync, _initialized;
     private string? _configuredRemote;
     private Kind _configuredKind;
-    private bool _isBusy;
 
-    /// <summary>The rclone remote name that was created; null if the dialog was cancelled.</summary>
     public string? SavedRemoteName { get; private set; }
     public Kind SavedKind { get; private set; }
     public string? SavedRoot { get; private set; }
-    /// <summary>Feng Sync endpoint URI for the saved remote, or null if cancelled.</summary>
     public string? SavedUri => SavedRemoteName is null ? null : CloudEndpointService.BuildUri(SavedKind, SavedRemoteName, SavedRoot);
 
     public CloudEndpointEditorWindow()
     {
         InitializeComponent();
-        Loaded += (_, _) => Service_Changed(this, null!);
+        _initialized = true;
+        S3ProviderBox.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler(S3ProviderText_Changed));
+        S3RegionBox.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler(S3RegionText_Changed));
+        Loaded += async (_, _) => await LoadProvidersAsync();
     }
 
     private Kind SelectedKind => ServiceBox.SelectedIndex switch { 1 => Kind.Sftp, 2 => Kind.S3, _ => Kind.GoogleDrive };
+    private string ProviderName => S3ProviderBox.Text.Trim();
+    private string Secret => S3SecretVisibleBox.Visibility == Visibility.Visible ? S3SecretVisibleBox.Text : S3SecretBox.Password;
+    private string RootPath => SelectedKind switch { Kind.Sftp => SftpRootBox.Text.Trim(), Kind.S3 => CurrentS3Values().RootPath, _ => GDriveRootBox.Text.Trim() };
 
-    private void Service_Changed(object sender, SelectionChangedEventArgs e)
+    private async Task LoadProvidersAsync()
     {
-        if (GoogleDrivePanel is null) return; // still initializing
-        GoogleDrivePanel.Visibility = SelectedKind == Kind.GoogleDrive ? Visibility.Visible : Visibility.Collapsed;
-        SftpPanel.Visibility = SelectedKind == Kind.Sftp ? Visibility.Visible : Visibility.Collapsed;
-        S3Panel.Visibility = SelectedKind == Kind.S3 ? Visibility.Visible : Visibility.Collapsed;
-        // The provider changed, so any previously created remote no longer matches the visible form.
-        _configuredRemote = null;
-        PreviewTree.Items.Clear();
-    }
-
-    private string DisplayName => SelectedKind switch { Kind.Sftp => SftpNameBox.Text, Kind.S3 => S3NameBox.Text, _ => GDriveNameBox.Text };
-
-    private string RootPath => (SelectedKind switch { Kind.Sftp => SftpRootBox.Text, Kind.S3 => S3RootBox.Text, _ => GDriveRootBox.Text } ?? "").Trim();
-
-    /// <summary>Validates and gathers the rclone <c>config create</c> key/value pairs for the visible provider.</summary>
-    private IReadOnlyDictionary<string, string> CollectFields()
-    {
-        switch (SelectedKind)
+        try
         {
-            case Kind.GoogleDrive:
-                return new Dictionary<string, string>
-                {
-                    ["client_id"] = GDriveClientIdBox.Text.Trim(),
-                    ["client_secret"] = GDriveClientSecretBox.Text.Trim(),
-                    ["scope"] = "drive"
-                };
-            case Kind.Sftp:
-                if (string.IsNullOrWhiteSpace(SftpHostBox.Text) || string.IsNullOrWhiteSpace(SftpUserBox.Text))
-                    throw new InvalidOperationException("SFTP 必须填写主机和用户名。");
-                if (!int.TryParse(SftpPortBox.Text, out var port) || port is < 1 or > 65535)
-                    throw new InvalidOperationException("SFTP 端口必须介于 1 和 65535 之间。");
-                if (string.IsNullOrWhiteSpace(SftpPasswordBox.Password) && string.IsNullOrWhiteSpace(SftpKeyFileBox.Text))
-                    throw new InvalidOperationException("SFTP 必须填写密码或私钥文件。");
-                return new Dictionary<string, string>
-                {
-                    ["host"] = SftpHostBox.Text.Trim(),
-                    ["port"] = port.ToString(),
-                    ["user"] = SftpUserBox.Text.Trim(),
-                    ["pass"] = SftpPasswordBox.Password,
-                    ["key_file"] = SftpKeyFileBox.Text.Trim()
-                };
-            case Kind.S3:
-                if (string.IsNullOrWhiteSpace(S3AccessKeyBox.Text) || string.IsNullOrWhiteSpace(S3SecretBox.Password))
-                    throw new InvalidOperationException("S3 必须填写 Access Key 与 Secret。");
-                return new Dictionary<string, string>
-                {
-                    ["provider"] = S3ProviderBox.Text.Trim(),
-                    ["access_key_id"] = S3AccessKeyBox.Text.Trim(),
-                    ["secret_access_key"] = S3SecretBox.Password,
-                    ["region"] = S3RegionBox.Text.Trim(),
-                    ["endpoint"] = S3EndpointBox.Text.Trim()
-                };
-            default:
-                throw new InvalidOperationException("未知服务类型。");
+            _providers = await CloudEndpointService.LoadS3ProvidersAsync();
+            S3ProviderBox.ItemsSource = _providers.Select(provider => provider.Name);
+            S3ProviderBox.Text = _providers.FirstOrDefault()?.Name ?? "";
+            UpdateProviderHelp();
+        }
+        catch (Exception ex)
+        {
+            ProviderDescription.Text = "无法读取 Provider：" + RcloneUiError.Describe(ex, "s3-provider-list");
+            NextButton.IsEnabled = SelectedKind != Kind.S3;
         }
     }
 
-    /// <summary>Creates the rclone remote once per set of form values; returns the remote name.</summary>
-    private async Task<string> EnsureRemoteAsync()
+    private void Service_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (_configuredRemote is not null && _configuredKind == SelectedKind) return _configuredRemote;
-        var fields = CollectFields();
-        var remote = CloudEndpointService.SanitizeRemoteName(DisplayName);
-        var progress = new Progress<string>(message => StatusText.Text = message);
-        await CloudEndpointService.CreateRemoteAsync(SelectedKind, remote, fields, progress);
-        _configuredRemote = remote;
-        _configuredKind = SelectedKind;
-        return remote;
+        if (ProviderChoicePanel is null) return;
+        ProviderChoicePanel.Visibility = SelectedKind == Kind.S3 ? Visibility.Visible : Visibility.Collapsed;
+        NextButton.IsEnabled = SelectedKind != Kind.S3 || _providers.Count > 0;
+    }
+
+    private void S3Provider_SelectionChanged(object sender, SelectionChangedEventArgs e) => Dispatcher.BeginInvoke(() =>
+    {
+        UpdateProviderHelp();
+        if (ProviderName.Equals("Cloudflare", StringComparison.OrdinalIgnoreCase)) S3RegionBox.Text = "auto";
+        else if (string.IsNullOrWhiteSpace(S3RegionBox.Text) || S3RegionBox.Text == "auto") S3RegionBox.Text = "us-east-1";
+        MarkS3Dirty();
+    });
+    private void S3ProviderText_Changed(object sender, TextChangedEventArgs e) => Dispatcher.BeginInvoke(() => { UpdateProviderHelp(); MarkS3Dirty(); });
+    private void S3RegionText_Changed(object sender, TextChangedEventArgs e) => MarkS3Dirty();
+
+    private void UpdateProviderHelp()
+    {
+        var provider = _providers.FirstOrDefault(value => value.Name.Equals(ProviderName, StringComparison.Ordinal));
+        ProviderDescription.Text = provider?.Description ?? "从列表中选择 rclone 支持的 Provider。";
+        S3RegionBox.ItemsSource = provider?.RegionSuggestions;
+        RegionHint.Text = provider?.RegionSuggestions.Count > 0 ? "可选择建议值，也可输入自定义 Region。" : "可输入服务商要求的 Region。";
+        S3Heading.Text = string.IsNullOrWhiteSpace(ProviderName) ? "S3 连接" : $"{ProviderName} S3 连接";
+    }
+
+    private void Next_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedKind == Kind.S3 && !_providers.Any(provider => provider.Name.Equals(ProviderName, StringComparison.Ordinal)))
+        { ProviderError.Text = "请选择列表中的 S3 Provider。"; S3ProviderBox.Focus(); return; }
+        ProviderError.Text = "";
+        ChooseServiceStep.Visibility = Visibility.Collapsed; ConnectionStep.Visibility = Visibility.Visible;
+        GoogleDrivePanel.Visibility = SelectedKind == Kind.GoogleDrive ? Visibility.Visible : Visibility.Collapsed;
+        SftpPanel.Visibility = SelectedKind == Kind.Sftp ? Visibility.Visible : Visibility.Collapsed;
+        S3Panel.Visibility = SelectedKind == Kind.S3 ? Visibility.Visible : Visibility.Collapsed;
+        StepCaption.Text = "第 2 步，共 2 步 · 配置连接";
+        StepOneIndicator.Background = (Brush)FindResource("BorderSubtleBrush"); StepTwoIndicator.Background = (Brush)FindResource("AccentBrush");
+        NextButton.Visibility = Visibility.Collapsed; BackButton.Visibility = TestButton.Visibility = SaveButton.Visibility = Visibility.Visible;
+        if (SelectedKind == Kind.S3) MarkS3Dirty();
+    }
+
+    private void Back_Click(object sender, RoutedEventArgs e)
+    {
+        ChooseServiceStep.Visibility = Visibility.Visible; ConnectionStep.Visibility = Visibility.Collapsed;
+        StepCaption.Text = "第 1 步，共 2 步 · 选择服务";
+        StepOneIndicator.Background = (Brush)FindResource("AccentBrush"); StepTwoIndicator.Background = (Brush)FindResource("BorderSubtleBrush");
+        NextButton.Visibility = Visibility.Visible; BackButton.Visibility = TestButton.Visibility = SaveButton.Visibility = Visibility.Collapsed;
+    }
+
+    private S3EndpointValues CurrentS3Values() => new(S3NameBox.Text.Trim(), ProviderName, S3AccessKeyBox.Text.Trim(), Secret,
+        S3RegionBox.Text.Trim(), S3EndpointBox.Text.Trim(), S3BucketBox.Text.Trim(), S3SubdirectoryBox.Text.Trim());
+    private void MarkS3Dirty() { if (!_initialized) return; _s3Draft.Update(CurrentS3Values()); ProbeResultCard.Visibility = Visibility.Collapsed; StatusText.Text = ""; }
+    private void S3Field_Changed(object sender, TextChangedEventArgs e) => MarkS3Dirty();
+    private void S3Region_Changed(object sender, SelectionChangedEventArgs e) => Dispatcher.BeginInvoke(MarkS3Dirty);
+    private void S3Secret_Changed(object sender, RoutedEventArgs e) { if (!_secretSync) MarkS3Dirty(); }
+    private void S3SecretVisible_Changed(object sender, TextChangedEventArgs e) { if (!_secretSync) MarkS3Dirty(); }
+
+    private void ToggleSecret_Click(object sender, RoutedEventArgs e)
+    {
+        _secretSync = true;
+        if (S3SecretVisibleBox.Visibility == Visibility.Visible)
+        { S3SecretBox.Password = S3SecretVisibleBox.Text; S3SecretVisibleBox.Visibility = Visibility.Collapsed; S3SecretBox.Visibility = Visibility.Visible; S3SecretBox.Focus(); }
+        else
+        { S3SecretVisibleBox.Text = S3SecretBox.Password; S3SecretBox.Visibility = Visibility.Collapsed; S3SecretVisibleBox.Visibility = Visibility.Visible; S3SecretVisibleBox.Focus(); }
+        _secretSync = false;
+    }
+
+    private bool ValidateS3(bool focus)
+    {
+        MarkS3Dirty();
+        var errors = CloudEndpointService.ValidateS3Settings(CurrentS3Values(), _providers.Select(provider => provider.Name).ToList());
+        DisplayNameError.Text = Error("displayName"); ProviderError.Text = Error("provider"); AccessKeyError.Text = Error("accessKey"); SecretError.Text = Error("secret");
+        EndpointError.Text = Error("endpoint"); BucketError.Text = Error("bucket"); SubdirectoryError.Text = Error("subdirectory");
+        if (focus && errors.Count > 0)
+        {
+            Control control = errors.Keys.First() switch { "displayName" => S3NameBox, "provider" => S3ProviderBox, "accessKey" => S3AccessKeyBox, "secret" => S3SecretBox, "endpoint" => S3EndpointBox, "bucket" => S3BucketBox, _ => S3SubdirectoryBox };
+            control.Focus();
+        }
+        return errors.Count == 0;
+        string Error(string key) => errors.TryGetValue(key, out var value) ? value : "";
     }
 
     private async void Test_Click(object sender, RoutedEventArgs e)
     {
-        await RunBusyAsync(TestButton, SelectedKind == Kind.GoogleDrive ? "正在等待浏览器授权…" : "正在验证连接…", async () =>
+        if (SelectedKind == Kind.S3)
         {
-            var remote = await EnsureRemoteAsync();
-            await CloudEndpointService.VerifyAsync(remote);
-            StatusText.Text = "连接验证成功。";
-        });
+            if (!ValidateS3(true)) return;
+            await RunBusyAsync(TestButton, "正在读取指定目录…", async () =>
+            {
+                try
+                {
+                    var result = await CloudEndpointService.ProbeS3Async(CurrentS3Values()); _probeDirectories = result.Directories; _s3Draft.RecordProbe(true);
+                    ProbeResultText.Text = $"读取成功：/{CurrentS3Values().RootPath}。未验证上传权限。"; ProbeResultCard.Visibility = Visibility.Visible; BrowseProbeButton.IsEnabled = true;
+                }
+                catch { _s3Draft.RecordProbe(false); throw; }
+            });
+            return;
+        }
+        await RunBusyAsync(TestButton, SelectedKind == Kind.GoogleDrive ? "正在等待浏览器授权…" : "正在验证连接…", async () => { var remote = await EnsureRemoteAsync(); await CloudEndpointService.VerifyAsync(remote, RootPath); StatusText.Text = "连接验证成功。"; });
     }
 
-    private async void Preview_Click(object sender, RoutedEventArgs e)
+    private void BrowseProbe_Click(object sender, RoutedEventArgs e)
     {
-        await RunBusyAsync(PreviewButton, "正在读取远程目录…", async () =>
-        {
-            var remote = await EnsureRemoteAsync();
-            await LoadPreviewAsync(remote);
-            StatusText.Text = "已加载目录树（展开节点可继续浏览）。";
-        });
+        var list = new ListBox { MinWidth = 420, MinHeight = 260, Margin = new Thickness(12) };
+        if (_probeDirectories.Count == 0) list.Items.Add("（当前目录没有子目录）"); else foreach (var directory in _probeDirectories) list.Items.Add("📁 " + directory);
+        new Window { Title = "测试读取结果", Owner = this, Content = list, Width = 480, Height = 360, WindowStartupLocation = WindowStartupLocation.CenterOwner }.ShowDialog();
     }
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
-        await RunBusyAsync(SaveButton, "正在保存端点…", async () =>
+        if (SelectedKind == Kind.S3)
         {
-            var remote = await EnsureRemoteAsync();
-            SavedRemoteName = remote;
-            SavedKind = SelectedKind;
-            SavedRoot = RootPath;
-            DialogResult = true;
-        });
+            if (!ValidateS3(true)) return;
+            if (!_s3Draft.HasCurrentSuccessfulTest && MessageBox.Show("当前配置尚未通过读取测试。保存后可能无法浏览、上传或同步。\n\n仍要保存吗？", "保存未验证的 S3 端点", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            var remote = CloudEndpointService.SanitizeRemoteName(S3NameBox.Text);
+            var exists = (await CloudEndpointService.LoadAccountsAsync()).Any(account => account.Name.Equals(remote, StringComparison.OrdinalIgnoreCase));
+            var replace = false;
+            if (exists)
+            {
+                var answer = MessageBox.Show($"端点“{remote}”已存在。\n\n是：替换现有配置；否：返回修改显示名称。", "端点名称重复", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (answer != MessageBoxResult.Yes) { S3NameBox.Focus(); return; } replace = true;
+            }
+            await RunBusyAsync(SaveButton, "正在保存…", async () => { await CloudEndpointService.SaveS3Async(remote, CurrentS3Values(), replace); SavedRemoteName = remote; SavedKind = Kind.S3; SavedRoot = CurrentS3Values().RootPath; DialogResult = true; });
+            return;
+        }
+        await RunBusyAsync(SaveButton, "正在保存…", async () => { var remote = await EnsureRemoteAsync(); await CloudEndpointService.SaveMetadataAsync(remote, SelectedKind, RootPath); SavedRemoteName = remote; SavedKind = SelectedKind; SavedRoot = RootPath; DialogResult = true; });
     }
 
-    /// <summary>Runs an rclone-backed action with a busy label and unified error reporting.</summary>
+    private async Task<string> EnsureRemoteAsync()
+    {
+        if (_configuredRemote is not null && _configuredKind == SelectedKind) return _configuredRemote;
+        var remote = CloudEndpointService.SanitizeRemoteName(SelectedKind == Kind.Sftp ? SftpNameBox.Text : GDriveNameBox.Text);
+        await CloudEndpointService.CreateRemoteAsync(SelectedKind, remote, CollectNonS3Fields()); _configuredRemote = remote; _configuredKind = SelectedKind; return remote;
+    }
+
+    private IReadOnlyDictionary<string, string> CollectNonS3Fields()
+    {
+        if (SelectedKind == Kind.GoogleDrive) return new Dictionary<string, string> { ["client_id"] = GDriveClientIdBox.Text.Trim(), ["client_secret"] = GDriveClientSecretBox.Text.Trim(), ["scope"] = "drive" };
+        if (string.IsNullOrWhiteSpace(SftpHostBox.Text) || string.IsNullOrWhiteSpace(SftpUserBox.Text)) throw new InvalidOperationException("SFTP 必须填写主机和用户名。");
+        if (!int.TryParse(SftpPortBox.Text, out var port) || port is < 1 or > 65535) throw new InvalidOperationException("SFTP 端口必须介于 1 和 65535 之间。");
+        if (string.IsNullOrWhiteSpace(SftpPasswordBox.Password) && string.IsNullOrWhiteSpace(SftpKeyFileBox.Text)) throw new InvalidOperationException("SFTP 必须填写密码或私钥文件。");
+        return new Dictionary<string, string> { ["host"] = SftpHostBox.Text.Trim(), ["port"] = port.ToString(), ["user"] = SftpUserBox.Text.Trim(), ["pass"] = SftpPasswordBox.Password, ["key_file"] = SftpKeyFileBox.Text.Trim() };
+    }
+
     private async Task RunBusyAsync(Button button, string busyText, Func<Task> action)
     {
-        if (_isBusy) return;
-        _isBusy = true;
-        var original = button.Content;
-        try
-        {
-            TestButton.IsEnabled = false; PreviewButton.IsEnabled = false; SaveButton.IsEnabled = false;
-            button.Content = busyText; StatusText.Text = busyText;
-            await action();
-        }
-        catch (Exception ex)
-        {
-            var message = RcloneUiError.Describe(ex, "cloud-endpoint-editor");
-            StatusText.Text = message;
-            MessageBox.Show(message, "Feng Sync", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally { TestButton.IsEnabled = true; PreviewButton.IsEnabled = true; SaveButton.IsEnabled = true; button.Content = original; _isBusy = false; }
-    }
-
-    // --- Directory-tree preview (lazy expansion mirrors MainWindow's remote picker) ---
-    private async Task LoadPreviewAsync(string remote)
-    {
-        PreviewTree.Items.Clear();
-        var client = await App.CurrentApp.RcloneHost.GetClientAsync();
-        var filesystem = remote.EndsWith(':') ? remote : remote + ":";
-        var directories = await client.ListDirectoriesAsync(filesystem, "", false);
-        var rootItem = new TreeViewItem { Header = "/（根目录）", Tag = "" };
-        foreach (var directory in directories.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim('/')).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
-            rootItem.Items.Add(CreateNode(filesystem, directory[(directory.LastIndexOf('/') + 1)..], directory));
-        PreviewTree.Items.Add(rootItem);
-        rootItem.IsExpanded = true;
-    }
-
-    private TreeViewItem CreateNode(string filesystem, string name, string path)
-    {
-        var item = new TreeViewItem { Header = "📁 " + name, Tag = path };
-        item.Items.Add(new TreeViewItem { Header = "正在加载…", Tag = null }); // expand affordance, replaced on first open
-        item.Expanded += async (_, _) =>
-        {
-            if (item.Items.Count != 1 || (item.Items[0] as TreeViewItem)?.Tag is not null) return;
-            item.Items.Clear();
-            try
-            {
-                var client = await App.CurrentApp.RcloneHost.GetClientAsync();
-                var children = await client.ListDirectoriesAsync(filesystem, path, false);
-                foreach (var child in children.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => RemoteDirectoryTree.RelativeToListingRoot(x, path)).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
-                {
-                    var childName = child.Contains('/') ? child[(child.LastIndexOf('/') + 1)..] : child;
-                    var childPath = string.IsNullOrEmpty(path) ? child : path.TrimEnd('/') + "/" + child;
-                    item.Items.Add(CreateNode(filesystem, childName, childPath));
-                }
-                if (item.Items.Count == 0) item.Items.Add(new TreeViewItem { Header = "（空目录）", IsEnabled = false });
-            }
-            catch (Exception ex) { item.Items.Add(new TreeViewItem { Header = "无法读取子目录：" + RcloneUiError.Describe(ex, "remote-tree"), IsEnabled = false }); }
-        };
-        return item;
+        if (_busy) return; _busy = true; var original = button.Content;
+        try { BackButton.IsEnabled = TestButton.IsEnabled = SaveButton.IsEnabled = false; button.Content = busyText; StatusText.Text = busyText; await action(); }
+        catch (Exception ex) { var message = RcloneUiError.Describe(ex, "cloud-endpoint-editor"); StatusText.Text = message; MessageBox.Show(message, "Feng Sync", MessageBoxButton.OK, MessageBoxImage.Error); }
+        finally { BackButton.IsEnabled = TestButton.IsEnabled = SaveButton.IsEnabled = true; button.Content = original; _busy = false; }
     }
 }

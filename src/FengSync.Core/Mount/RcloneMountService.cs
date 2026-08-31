@@ -107,7 +107,7 @@ public sealed class RcloneMountService : IAsyncDisposable
         {
             response = await _rc.CallAsync("mount/mount", new
             {
-                fs = target.RemoteName + ":",
+                fs = target.RemoteName + ":" + target.RootPath.Trim('/'),
                 mountPoint = target.MountPoint,
                 mountType,
                 mountOpt = new { },

@@ -1,86 +1,41 @@
 <Window x:Class="FengSync.Views.CloudEndpointEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="新建云端端点"
-        Width="560"
-        Height="680"
-        MinWidth="480"
-        MinHeight="520"
-        WindowStartupLocation="CenterOwner"
-        AutomationProperties.Name="新建云端端点">
-    <Grid Margin="18">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="2*" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <StackPanel>
-            <TextBlock Text="新建云端端点" Style="{StaticResource DisplayTitleTextStyle}" />
-            <TextBlock Text="先选择服务类型，再填写连接信息。Google Drive 会在默认浏览器完成授权；SFTP / S3 使用下方填写的凭据。"
-                       Style="{StaticResource CaptionTextStyle}"
-                       TextWrapping="Wrap"
-                       Margin="0,4,0,0" />
-        </StackPanel>
-
-        <StackPanel Grid.Row="1" Margin="0,14,0,4">
-            <TextBlock x:Name="ServiceLabel" Text="服务" Style="{StaticResource SectionTitleTextStyle}" />
-            <ComboBox x:Name="ServiceBox"
-                      AutomationProperties.AutomationId="CloudServiceType"
-                      AutomationProperties.Name="云端服务类型"
-                      AutomationProperties.LabeledBy="{Binding ElementName=ServiceLabel}"
-                      Margin="0,4,0,0"
-                      SelectedIndex="0"
-                      SelectionChanged="Service_Changed">
-                <ComboBoxItem Content="Google Drive" />
-                <ComboBoxItem Content="SFTP" />
-                <ComboBoxItem Content="S3 Bucket" />
-            </ComboBox>
-        </StackPanel>
-
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
-            <Grid>
-                <StackPanel x:Name="GoogleDrivePanel">
-                    <TextBlock Text="显示名称" /><TextBox x:Name="GDriveNameBox" AutomationProperties.Name="Google Drive 显示名称" Text="Google Drive" Margin="0,3,0,10" />
-                    <TextBlock Text="Client ID（可选，留空使用 rclone 内置 OAuth）" /><TextBox x:Name="GDriveClientIdBox" AutomationProperties.Name="Google Drive Client ID" Margin="0,3,0,10" />
-                    <TextBlock Text="Client Secret（可选）" /><TextBox x:Name="GDriveClientSecretBox" AutomationProperties.Name="Google Drive Client Secret" Margin="0,3,0,10" />
-                    <TextBlock Text="远程根目录（可选，稍后也可用“预览文件”浏览）" /><TextBox x:Name="GDriveRootBox" AutomationProperties.Name="Google Drive 远程根目录" Margin="0,3,0,10" />
-                </StackPanel>
-                <StackPanel x:Name="SftpPanel" Visibility="Collapsed">
-                    <TextBlock Text="显示名称" /><TextBox x:Name="SftpNameBox" AutomationProperties.AutomationId="SftpRemoteName" AutomationProperties.Name="SFTP 显示名称" Text="SFTP 连接" Margin="0,3,0,10" />
-                    <TextBlock Text="主机" /><TextBox x:Name="SftpHostBox" AutomationProperties.AutomationId="SftpRemoteHost" AutomationProperties.Name="SFTP 主机" Margin="0,3,0,10" />
-                    <TextBlock Text="端口" /><TextBox x:Name="SftpPortBox" AutomationProperties.AutomationId="SftpRemotePort" AutomationProperties.Name="SFTP 端口" Text="22" Margin="0,3,0,10" Width="120" HorizontalAlignment="Left" />
-                    <TextBlock Text="用户名" /><TextBox x:Name="SftpUserBox" AutomationProperties.AutomationId="SftpRemoteUser" AutomationProperties.Name="SFTP 用户名" Margin="0,3,0,10" />
-                    <TextBlock Text="密码（如使用密钥登录可留空）" /><PasswordBox x:Name="SftpPasswordBox" AutomationProperties.AutomationId="SftpRemotePassword" AutomationProperties.Name="SFTP 密码" Margin="0,3,0,10" />
-                    <TextBlock Text="私钥文件（可选，与密码二选一）" /><TextBox x:Name="SftpKeyFileBox" AutomationProperties.AutomationId="SftpRemoteKeyFile" AutomationProperties.Name="SFTP 私钥文件" Margin="0,3,0,10" />
-                    <TextBlock Text="远程根目录（可选）" /><TextBox x:Name="SftpRootBox" AutomationProperties.AutomationId="SftpRemoteRoot" AutomationProperties.Name="SFTP 远程根目录" Margin="0,3,0,10" />
-                </StackPanel>
-                <StackPanel x:Name="S3Panel" Visibility="Collapsed">
-                    <TextBlock Text="显示名称" /><TextBox x:Name="S3NameBox" AutomationProperties.AutomationId="S3DisplayName" AutomationProperties.Name="S3 显示名称" Text="S3 Bucket" Margin="0,3,0,10" />
-                    <TextBlock Text="Provider（如 AWS、Minio、Cloudflare 等）" /><TextBox x:Name="S3ProviderBox" AutomationProperties.AutomationId="S3Provider" AutomationProperties.Name="S3 Provider" Text="AWS" Margin="0,3,0,10" />
-                    <TextBlock Text="Access Key ID" /><TextBox x:Name="S3AccessKeyBox" AutomationProperties.AutomationId="S3AccessKeyId" AutomationProperties.Name="S3 Access Key ID" Margin="0,3,0,10" />
-                    <TextBlock Text="Secret Access Key" /><PasswordBox x:Name="S3SecretBox" AutomationProperties.AutomationId="S3SecretAccessKey" AutomationProperties.Name="S3 Secret Access Key" Margin="0,3,0,10" />
-                    <TextBlock Text="Region（如 us-east-1）" /><TextBox x:Name="S3RegionBox" AutomationProperties.AutomationId="S3Region" AutomationProperties.Name="S3 Region" Margin="0,3,0,10" />
-                    <TextBlock Text="Endpoint（可选，非 AWS 服务填写）" /><TextBox x:Name="S3EndpointBox" AutomationProperties.AutomationId="S3Endpoint" AutomationProperties.Name="S3 Endpoint" Margin="0,3,0,10" />
-                    <TextBlock Text="Bucket 与根目录（例如 my-bucket/path）" /><TextBox x:Name="S3RootBox" AutomationProperties.AutomationId="S3BucketPath" AutomationProperties.Name="S3 Bucket 与根目录" Margin="0,3,0,10" />
-                </StackPanel>
-            </Grid>
-        </ScrollViewer>
-
-        <GroupBox Grid.Row="3" Header="文件预览（目录树）" Margin="0,10,0,0">
-            <TreeView x:Name="PreviewTree" MinHeight="80" BorderThickness="0" AutomationProperties.Name="云端文件预览目录树" />
-        </GroupBox>
-
-        <Grid Grid.Row="4" Margin="0,12,0,0">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-            <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="CloudEditorStatus" AutomationProperties.Name="云端端点状态" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" VerticalAlignment="Center" />
-            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <Button x:Name="TestButton" AutomationProperties.AutomationId="TestCloudEndpoint" AutomationProperties.Name="测试云端端点连接" Content="测试连接" Click="Test_Click" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="PreviewButton" AutomationProperties.Name="预览云端端点文件" Content="预览文件" Click="Preview_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="SaveButton" AutomationProperties.AutomationId="SaveCloudEndpoint" AutomationProperties.Name="保存云端端点" Content="保存" Click="Save_Click" IsDefault="True" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
-                <Button AutomationProperties.Name="取消新建云端端点" Content="取消" IsCancel="True" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-            </StackPanel>
-        </Grid>
-    </Grid>
+        Title="新建云端端点" Width="560" Height="680" MinWidth="520" MinHeight="620"
+        WindowStartupLocation="CenterOwner" AutomationProperties.AutomationId="CloudEndpointEditorWindow" AutomationProperties.Name="新建云端端点">
+ <Grid Margin="20">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel>
+   <TextBlock Text="新建云端端点" Style="{StaticResource DisplayTitleTextStyle}"/>
+   <TextBlock x:Name="StepCaption" Text="第 1 步，共 2 步 · 选择服务" Style="{StaticResource CaptionTextStyle}" Margin="0,4,0,0"/>
+   <Grid Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/></Grid.ColumnDefinitions><Border x:Name="StepOneIndicator" Height="4" Background="{DynamicResource AccentBrush}" CornerRadius="2"/><Border x:Name="StepTwoIndicator" Grid.Column="2" Height="4" Background="{DynamicResource BorderSubtleBrush}" CornerRadius="2"/></Grid>
+  </StackPanel>
+  <Grid Grid.Row="1" Margin="0,18,0,12">
+   <StackPanel x:Name="ChooseServiceStep">
+    <TextBlock Text="选择要连接的云端服务" Style="{StaticResource SectionTitleTextStyle}"/><TextBlock Text="下一步只显示该服务需要的连接信息。" Style="{StaticResource CaptionTextStyle}" Margin="0,4,0,12"/>
+    <TextBlock Text="服务"/><ComboBox x:Name="ServiceBox" AutomationProperties.AutomationId="CloudServiceType" AutomationProperties.Name="云端服务类型" SelectedIndex="0" SelectionChanged="Service_Changed" Margin="0,4,0,14"><ComboBoxItem Content="Google Drive"/><ComboBoxItem Content="SFTP"/><ComboBoxItem Content="S3 Bucket"/></ComboBox>
+    <StackPanel x:Name="ProviderChoicePanel" Visibility="Collapsed">
+     <TextBlock Text="S3 Provider"/><ComboBox x:Name="S3ProviderBox" AutomationProperties.AutomationId="S3Provider" AutomationProperties.Name="S3 Provider" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" SelectionChanged="S3Provider_SelectionChanged" Margin="0,4,0,4"/>
+     <TextBlock x:Name="ProviderError" Foreground="{DynamicResource DangerBrush}" Style="{StaticResource CaptionTextStyle}"/>
+     <Border Background="{DynamicResource SurfaceSubtleBrush}" CornerRadius="{StaticResource RadiusMedium}" Padding="12" Margin="0,8,0,0"><TextBlock x:Name="ProviderDescription" Text="正在读取内置 rclone 支持的 Provider…" TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}"/></Border>
+    </StackPanel>
+   </StackPanel>
+   <ScrollViewer x:Name="ConnectionStep" Visibility="Collapsed" VerticalScrollBarVisibility="Auto"><Grid>
+    <StackPanel x:Name="GoogleDrivePanel"><TextBlock Text="Google Drive 连接" Style="{StaticResource SectionTitleTextStyle}"/><TextBlock Text="显示名称" Margin="0,12,0,0"/><TextBox x:Name="GDriveNameBox" Text="Google Drive" Margin="0,4,0,10"/><TextBlock Text="Client ID（可选）"/><TextBox x:Name="GDriveClientIdBox" Margin="0,4,0,10"/><TextBlock Text="Client Secret（可选）"/><TextBox x:Name="GDriveClientSecretBox" Margin="0,4,0,10"/><TextBlock Text="远程根目录（可选）"/><TextBox x:Name="GDriveRootBox" Margin="0,4,0,10"/></StackPanel>
+    <StackPanel x:Name="SftpPanel" Visibility="Collapsed">
+     <TextBlock Text="SFTP 连接" Style="{StaticResource SectionTitleTextStyle}"/><TextBlock Text="显示名称" Margin="0,12,0,0"/><TextBox x:Name="SftpNameBox" AutomationProperties.AutomationId="SftpRemoteName" Text="SFTP 连接" Margin="0,4,0,8"/>
+     <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition Width="120"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="主机"/><TextBox x:Name="SftpHostBox" AutomationProperties.AutomationId="SftpRemoteHost" Margin="0,4,0,8"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="端口"/><TextBox x:Name="SftpPortBox" AutomationProperties.AutomationId="SftpRemotePort" Text="22" Margin="0,4,0,8"/></StackPanel></Grid>
+     <TextBlock Text="用户名"/><TextBox x:Name="SftpUserBox" AutomationProperties.AutomationId="SftpRemoteUser" Margin="0,4,0,8"/><TextBlock Text="密码（使用密钥时可留空）"/><PasswordBox x:Name="SftpPasswordBox" AutomationProperties.AutomationId="SftpRemotePassword" Margin="0,4,0,8"/><TextBlock Text="私钥文件（可选）"/><TextBox x:Name="SftpKeyFileBox" AutomationProperties.AutomationId="SftpRemoteKeyFile" Margin="0,4,0,8"/><TextBlock Text="远程根目录（可选）"/><TextBox x:Name="SftpRootBox" AutomationProperties.AutomationId="SftpRemoteRoot" Margin="0,4,0,8"/>
+    </StackPanel>
+    <StackPanel x:Name="S3Panel" Visibility="Collapsed">
+     <TextBlock x:Name="S3Heading" Text="S3 连接" Style="{StaticResource SectionTitleTextStyle}"/><TextBlock Text="显示名称" Margin="0,8,0,0"/><TextBox x:Name="S3NameBox" AutomationProperties.AutomationId="S3DisplayName" Text="S3 Bucket" TextChanged="S3Field_Changed" Margin="0,3,0,0"/><TextBlock x:Name="DisplayNameError" Foreground="{DynamicResource DangerBrush}" Style="{StaticResource CaptionTextStyle}"/>
+     <Grid Margin="0,4,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Access Key ID"/><TextBox x:Name="S3AccessKeyBox" AutomationProperties.AutomationId="S3AccessKeyId" TextChanged="S3Field_Changed" Margin="0,3,0,0"/><TextBlock x:Name="AccessKeyError" Foreground="{DynamicResource DangerBrush}" Style="{StaticResource CaptionTextStyle}"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Secret Access Key"/><Grid Margin="0,3,0,0"><PasswordBox x:Name="S3SecretBox" AutomationProperties.AutomationId="S3SecretAccessKey" PasswordChanged="S3Secret_Changed" Padding="4,0,34,0"/><TextBox x:Name="S3SecretVisibleBox" Visibility="Collapsed" TextChanged="S3SecretVisible_Changed" Padding="4,0,34,0"/><Button Content="显示" Click="ToggleSecret_Click" Width="40" HorizontalAlignment="Right" Style="{StaticResource TertiaryButtonStyle}" AutomationProperties.Name="显示或隐藏 Secret Access Key"/></Grid><TextBlock x:Name="SecretError" Foreground="{DynamicResource DangerBrush}" Style="{StaticResource CaptionTextStyle}"/></StackPanel></Grid>
+     <Grid Margin="0,4,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Endpoint"/><TextBox x:Name="S3EndpointBox" AutomationProperties.AutomationId="S3Endpoint" TextChanged="S3Field_Changed" Margin="0,3,0,0"/><TextBlock x:Name="EndpointError" Foreground="{DynamicResource DangerBrush}" Style="{StaticResource CaptionTextStyle}"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Region"/><ComboBox x:Name="S3RegionBox" AutomationProperties.AutomationId="S3Region" IsEditable="True" Text="us-east-1" SelectionChanged="S3Region_Changed" Margin="0,3,0,0"/><TextBlock x:Name="RegionHint" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}"/></StackPanel></Grid>
+     <Grid Margin="0,4,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Bucket"/><TextBox x:Name="S3BucketBox" AutomationProperties.AutomationId="S3Bucket" TextChanged="S3Field_Changed" Margin="0,3,0,0"/><TextBlock x:Name="BucketError" Foreground="{DynamicResource DangerBrush}" Style="{StaticResource CaptionTextStyle}"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="子目录（可选）"/><TextBox x:Name="S3SubdirectoryBox" AutomationProperties.AutomationId="S3Subdirectory" TextChanged="S3Field_Changed" Margin="0,3,0,0"/><TextBlock x:Name="SubdirectoryError" Foreground="{DynamicResource DangerBrush}" Style="{StaticResource CaptionTextStyle}"/></StackPanel></Grid>
+     <Border x:Name="ProbeResultCard" Visibility="Collapsed" Background="{DynamicResource SurfaceSubtleBrush}" CornerRadius="{StaticResource RadiusMedium}" Padding="10" Margin="0,6,0,0"><DockPanel><Button x:Name="BrowseProbeButton" Content="浏览目录" Click="BrowseProbe_Click" DockPanel.Dock="Right" Style="{StaticResource TertiaryButtonStyle}"/><TextBlock x:Name="ProbeResultText" TextWrapping="Wrap" VerticalAlignment="Center"/></DockPanel></Border>
+    </StackPanel>
+   </Grid></ScrollViewer>
+  </Grid>
+  <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock x:Name="StatusText" AutomationProperties.AutomationId="CloudEditorStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/><StackPanel Grid.Column="1" Orientation="Horizontal"><Button x:Name="BackButton" AutomationProperties.AutomationId="BackCloudEndpoint" Content="返回" Click="Back_Click" Visibility="Collapsed" Style="{StaticResource TertiaryButtonStyle}"/><Button x:Name="TestButton" AutomationProperties.AutomationId="TestCloudEndpoint" Content="测试连接" Click="Test_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}"/><Button x:Name="NextButton" AutomationProperties.AutomationId="NextCloudEndpoint" Content="下一步" Click="Next_Click" Style="{StaticResource PrimaryButtonStyle}"/><Button x:Name="SaveButton" AutomationProperties.AutomationId="SaveCloudEndpoint" Content="保存" Click="Save_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}"/><Button Content="取消" IsCancel="True" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}"/></StackPanel></Grid>
+ </Grid>
 </Window>

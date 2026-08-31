@@ -49,6 +49,38 @@ public sealed class RcloneConfigurationClient : IRcloneConfigurationApi
             : null;
     }
 
+    public async Task<IReadOnlyList<RcloneS3Provider>> GetS3ProvidersAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await _call("config/providers", new { }, cancellationToken);
+        var backends = response.ValueKind == JsonValueKind.Array ? response
+            : TryGet(response, "providers", out var providerValues) ? providerValues : default;
+        if (backends.ValueKind != JsonValueKind.Array) return [];
+        var s3 = backends.EnumerateArray().FirstOrDefault(value =>
+            TryGet(value, "Name", out var name) && name.GetString()?.Equals("s3", StringComparison.OrdinalIgnoreCase) == true);
+        if (s3.ValueKind != JsonValueKind.Object || !TryGet(s3, "Options", out var options) || options.ValueKind != JsonValueKind.Array) return [];
+        var providerOption = options.EnumerateArray().FirstOrDefault(value =>
+            TryGet(value, "Name", out var name) && name.GetString()?.Equals("provider", StringComparison.OrdinalIgnoreCase) == true);
+        var regionOption = options.EnumerateArray().FirstOrDefault(value =>
+            TryGet(value, "Name", out var name) && name.GetString()?.Equals("region", StringComparison.OrdinalIgnoreCase) == true);
+        if (!TryGet(providerOption, "Examples", out var providers) || providers.ValueKind != JsonValueKind.Array) return [];
+
+        var regions = TryGet(regionOption, "Examples", out var regionExamples) && regionExamples.ValueKind == JsonValueKind.Array
+            ? regionExamples.EnumerateArray().ToList() : [];
+        return providers.EnumerateArray().Select(example =>
+        {
+            var name = TryGet(example, "Value", out var value) ? value.GetString() ?? "" : "";
+            var help = TryGet(example, "Help", out var helpValue) ? helpValue.GetString() ?? "" : "";
+            var suggestions = regions.Where(region =>
+            {
+                if (!TryGet(region, "Provider", out var applies) || applies.ValueKind != JsonValueKind.String) return false;
+                return (applies.GetString() ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Contains(name, StringComparer.OrdinalIgnoreCase);
+            }).Select(region => TryGet(region, "Value", out var regionValue) ? regionValue.GetString() ?? "" : "")
+                .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            return new RcloneS3Provider(name, help, suggestions);
+        }).Where(provider => !string.IsNullOrWhiteSpace(provider.Name)).ToList();
+    }
+
     public Task<RcloneConfigState> CreateAsync(
         string name,
         string type,
@@ -134,6 +166,7 @@ public interface IRcloneConfigurationApi
     Task<bool> SupportsOAuthControlAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<string>> ListRemoteNamesAsync(CancellationToken cancellationToken = default);
     Task<string?> GetRemoteTypeAsync(string name, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<RcloneS3Provider>> GetS3ProvidersAsync(CancellationToken cancellationToken = default);
     Task<RcloneConfigState> CreateAsync(string name, string type, IReadOnlyDictionary<string, string> parameters, RcloneConfigOptions options, CancellationToken cancellationToken = default);
     Task<RcloneConfigState> UpdateAsync(string name, IReadOnlyDictionary<string, string> parameters, RcloneConfigOptions options, CancellationToken cancellationToken = default);
     Task DeleteAsync(string name, CancellationToken cancellationToken = default);
@@ -148,6 +181,8 @@ public sealed record RcloneOAuthStatus(string Status, Uri? AuthorizationUri)
 {
     public bool IsRunning => Status.Equals("running", StringComparison.OrdinalIgnoreCase);
 }
+
+public sealed record RcloneS3Provider(string Name, string Description, IReadOnlyList<string> RegionSuggestions);
 
 public sealed record RcloneConfigOptions(
     bool Obscure = false,

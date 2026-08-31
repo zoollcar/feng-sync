@@ -123,7 +123,11 @@ function Click($element) {
   throw "Element $($element.Current.AutomationId) stayed disabled for too long."
 }
 function Set-Text($element, [string]$value) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p)) { throw "Element has no ValuePattern: $($element.Current.Name)" }; $p.SetValue($value) }
-function Set-Password($element, [string]$value) { $element.SetFocus(); [Windows.Forms.SendKeys]::SendWait($value) }
+function Set-Password($element, [string]$value) {
+  $pattern = $null
+  if ($element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) { $pattern.SetValue($value); return }
+  $element.SetFocus(); [Windows.Forms.SendKeys]::SendWait($value)
+}
 function Select-Ui($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$p)) { throw "Element cannot be selected: $($element.Current.Name)" }; $p.Select() }
 function Select-UiOrAncestor($element) {
   $current = $element
@@ -703,11 +707,17 @@ function New-R2EndpointThroughUi { param($main, [string]$remoteName, [string]$bu
   $service = Find-Id $editor 'CloudServiceType'; $expand = $null
   $service.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null
   $expand.Expand(); Select-Ui (Find-Name $service 'S3 Bucket' 5); Start-Sleep -Milliseconds 200
+  $providerBox = Find-Id $editor 'S3Provider'; $providerExpand = $null
+  $providerBox.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$providerExpand) | Out-Null; $providerExpand.Expand()
+  $cloudflare = Wait-Until { try { Find-Name $providerBox 'Cloudflare' 3 } catch { $null } } 'S3 Provider metadata did not load Cloudflare.' 30
+  Select-Ui $cloudflare
+  Click (Find-Id $editor 'NextCloudEndpoint'); Start-Sleep -Milliseconds 200
   Set-Text (Find-Id $editor 'S3DisplayName') $remoteName
-  Set-Text (Find-Id $editor 'S3Provider') 'Cloudflare'
   Set-Text (Find-Id $editor 'S3Region') 'auto'
   Set-Text (Find-Id $editor 'S3Endpoint') "https://$accountId.r2.cloudflarestorage.com"
-  Set-Text (Find-Id $editor 'S3BucketPath') $bucketPath
+  $bucketParts = $bucketPath.Trim('/').Split('/', 2)
+  Set-Text (Find-Id $editor 'S3Bucket') $bucketParts[0]
+  if ($bucketParts.Count -gt 1) { Set-Text (Find-Id $editor 'S3Subdirectory') $bucketParts[1] }
   Capture-Element $editor 'remote-editor-r2-before-credentials.png' 'remote-endpoint-editor' 'Cloudflare R2 fields before credentials'
   Set-Text (Find-Id $editor 'S3AccessKeyId') $accessKeyId
   Set-Password (Find-Id $editor 'S3SecretAccessKey') $secretAccessKey
@@ -997,7 +1007,18 @@ try {
         try { $expand.Collapse() } catch { }
         Scroll-ToTop $editor
         Capture-Element $editor ("remote-editor-{0}.png" -f ($serviceName.ToLowerInvariant().Replace(' ', '-'))) 'remote-endpoint-editor' "$serviceName settings"
+        if ($serviceName -eq 'S3 Bucket') {
+          $providerBox = Find-Id $editor 'S3Provider'; $providerExpand = $null
+          $providerBox.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$providerExpand) | Out-Null; $providerExpand.Expand()
+          $cloudflare = Wait-Until { try { Find-Name $providerBox 'Cloudflare' 3 } catch { $null } } 'S3 Provider metadata did not load Cloudflare.' 30
+          Select-Ui $cloudflare
+          Click (Find-Id $editor 'NextCloudEndpoint'); Start-Sleep -Milliseconds 200
+          foreach ($id in @('S3DisplayName', 'S3AccessKeyId', 'S3SecretAccessKey', 'S3Endpoint', 'S3Region', 'S3Bucket', 'S3Subdirectory', 'TestCloudEndpoint', 'SaveCloudEndpoint')) { Assert-RectangleInside (Find-Id $editor $id) $editor "S3 editor/$id" }
+          Capture-Element $editor 'remote-editor-s3-connection.png' 'remote-endpoint-editor' 'S3 connection fields'
+          Click (Find-Id $editor 'BackCloudEndpoint'); Start-Sleep -Milliseconds 200
+        }
       }
+      Click (Find-Id $editor 'NextCloudEndpoint'); Start-Sleep -Milliseconds 200
       Set-Text (Find-Id $editor 'SftpRemoteName') $remoteName; Set-Text (Find-Id $editor 'SftpRemoteHost') '127.0.0.1'; Set-Text (Find-Id $editor 'SftpRemotePort') "$port"; Set-Text (Find-Id $editor 'SftpRemoteUser') 'ui'; Set-Text (Find-Id $editor 'SftpRemoteRoot') ''
       Capture-Element $editor 'remote-editor-sftp-configured-without-password.png' 'remote-endpoint-editor' 'SFTP fields populated before entering password'
       Set-Password (Find-Id $editor 'SftpRemotePassword') $password

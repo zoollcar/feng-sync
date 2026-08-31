@@ -10,4 +10,4 @@ public enum MountTargetKind
 }
 
 /// <summary>Mount intent supplied by the UI. The remote name is the rclone.conf remote id.</summary>
-public sealed record MountTarget(string RemoteName, string Provider, string MountPoint, MountTargetKind Kind);
+public sealed record MountTarget(string RemoteName, string Provider, string MountPoint, MountTargetKind Kind, string RootPath = "");
