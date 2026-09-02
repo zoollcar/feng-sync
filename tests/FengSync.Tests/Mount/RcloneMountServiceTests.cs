@@ -85,10 +85,32 @@ public sealed class RcloneMountServiceTests
         Assert.Equal(2, rc.Calls.Count(x => x.Operation == "mount/unmount"));
     }
 
+    [Fact]
+    public async Task StopAllFengSyncMountsAsync_keeps_failed_mount_available_for_retry()
+    {
+        var rc = new FakeLifecycleClient();
+        rc.Mounts.AddRange([new("driveA:", "X:"), new("driveB:", "Y:")]);
+        rc.UnmountFailures.Add("X:");
+        var service = new RcloneMountService(rc, new FakeProcessEnumerator([]));
+
+        var firstResult = await service.StopAllFengSyncMountsAsync();
+
+        Assert.False(firstResult.AllStopped);
+        Assert.Equal("X:", Assert.Single(firstResult.Failures).MountPoint);
+        Assert.Equal("X:", Assert.Single(rc.Mounts).MountPoint);
+
+        rc.UnmountFailures.Clear();
+        var retryResult = await service.StopAllFengSyncMountsAsync();
+
+        Assert.True(retryResult.AllStopped);
+        Assert.Empty(rc.Mounts);
+    }
+
     private sealed class FakeLifecycleClient : IRcloneLifecycleClient
     {
         public List<(string Fs, string MountPoint)> Mounts { get; } = [];
         public List<(string Operation, JsonElement Payload)> Calls { get; } = [];
+        public HashSet<string> UnmountFailures { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public Task<JsonElement> CallAsync(string operation, object payload, CancellationToken cancellationToken = default)
         {
@@ -109,6 +131,8 @@ public sealed class RcloneMountServiceTests
         private JsonElement Unmount(JsonElement payload)
         {
             var point = payload.GetProperty("mountPoint").GetString();
+            if (point is not null && UnmountFailures.Contains(point))
+                throw new InvalidOperationException("Unmount failed.");
             Mounts.RemoveAll(x => string.Equals(x.MountPoint, point, StringComparison.OrdinalIgnoreCase));
             return JsonSerializer.SerializeToElement(new { });
         }

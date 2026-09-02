@@ -43,6 +43,7 @@ public sealed class RcloneMountService : IAsyncDisposable
     public async Task<IReadOnlyList<MountInfo>> ScanAsync(CancellationToken ct = default)
     {
         var rcMounts = await ListManagedMountPointsAsync(ct).ConfigureAwait(false);
+        var drives = GetDriveIndex();
         var result = new List<MountInfo>();
         var managedPoints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var mount in rcMounts)
@@ -53,7 +54,7 @@ public sealed class RcloneMountService : IAsyncDisposable
             var remoteName = metadata?.RemoteName ?? RemoteNameFromFs(mount.Fs);
             var kind = KindFromMountPoint(point);
             result.Add(new MountInfo(null, remoteName, metadata?.Provider ?? "rclone", point, kind,
-                metadata?.StartedUtc, MountOrigin.FengSyncManaged, IsMountPointHealthy(point, kind)));
+                metadata?.StartedUtc, MountOrigin.FengSyncManaged, IsMountPointHealthy(point, kind, drives)));
         }
 
         // External discovery is informational only. We parse enough command-line state to display it,
@@ -72,7 +73,7 @@ public sealed class RcloneMountService : IAsyncDisposable
             if (managedPoints.Contains(point)) continue;
             var kind = KindFromMountPoint(point);
             result.Add(new MountInfo(process.Pid, RemoteNameFromFs(parsed.RemoteSpec), "rclone", point, kind,
-                process.StartedUtc, MountOrigin.External, IsMountPointHealthy(point, kind)));
+                process.StartedUtc, MountOrigin.External, IsMountPointHealthy(point, kind, drives)));
         }
 
         return result.OrderBy(x => x.Origin == MountOrigin.FengSyncManaged ? 0 : 1)
@@ -167,9 +168,21 @@ public sealed class RcloneMountService : IAsyncDisposable
         foreach (var mount in mounts)
         {
             var point = NormalizeMountPoint(mount.MountPoint);
-            try { await _rc.CallAsync("mount/unmount", new { mountPoint = point }, ct).ConfigureAwait(false); }
-            catch (Exception ex) { failures.Add(new MountStopFailure(point, -1, DescribeFailure(ex, "mount/unmount"))); }
-            if (_managed.Remove(point, out var metadata)) TryDeleteCache(MountOptions.CacheDirectoryFor(metadata.SessionId));
+            try
+            {
+                await _rc.CallAsync("mount/unmount", new { mountPoint = point }, ct).ConfigureAwait(false);
+                if (!await WaitForManagedMountAsync(point, shouldExist: false, ct).ConfigureAwait(false))
+                {
+                    failures.Add(new MountStopFailure(point, -1, "rclone 已接受取消请求，但挂载点仍然存在。"));
+                    continue;
+                }
+                if (_managed.Remove(point, out var metadata))
+                    TryDeleteCache(MountOptions.CacheDirectoryFor(metadata.SessionId));
+            }
+            catch (Exception ex)
+            {
+                failures.Add(new MountStopFailure(point, -1, DescribeFailure(ex, "mount/unmount")));
+            }
         }
         return new(failures);
     }
@@ -242,12 +255,30 @@ public sealed class RcloneMountService : IAsyncDisposable
         return colon > 0 ? fs[..colon] : string.IsNullOrWhiteSpace(fs) ? "(rclone)" : fs;
     }
 
-    private static bool IsMountPointHealthy(string mountPoint, MountTargetKind kind)
+    private static IReadOnlyDictionary<string, DriveInfo> GetDriveIndex()
+    {
+        try
+        {
+            var drives = new Dictionary<string, DriveInfo>(StringComparer.OrdinalIgnoreCase);
+            foreach (var drive in DriveInfo.GetDrives())
+                drives[NormalizeMountPoint(drive.Name)] = drive;
+            return drives;
+        }
+        catch
+        {
+            return new Dictionary<string, DriveInfo>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private static bool IsMountPointHealthy(
+        string mountPoint,
+        MountTargetKind kind,
+        IReadOnlyDictionary<string, DriveInfo> drives)
     {
         try
         {
             if (kind == MountTargetKind.Directory) return Directory.Exists(mountPoint);
-            return DriveInfo.GetDrives().Any(d => d.Name.TrimEnd('\\').Equals(mountPoint, StringComparison.OrdinalIgnoreCase) && d.IsReady);
+            return drives.TryGetValue(NormalizeMountPoint(mountPoint), out var drive) && drive.IsReady;
         }
         catch { return false; }
     }
