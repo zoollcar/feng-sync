@@ -4,9 +4,14 @@ on:
   push:
     tags: ['v*']
 
-# The release job uses this to create a GitHub Release and attach its package.
+# A force-updated tag must not leave two release builds running at once.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+# Keep the default token read-only. The release job gets the only write permission.
 permissions:
-  contents: write
+  contents: read
 
 env:
   DOTNET_NOLOGO: true
@@ -17,10 +22,15 @@ env:
 jobs:
   release:
     runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
 
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
@@ -71,6 +81,8 @@ jobs:
           "sha_path=$shaPath" >> $env:GITHUB_OUTPUT
 
       - name: Create or update GitHub Release
+        # Release assets are the single durable copy. Do not also upload this
+        # package with actions/upload-artifact: that consumes Actions storage.
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true

@@ -504,9 +504,14 @@ function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds
                 }
               }
               if (-not $completedBeforeMetricCheck) {
-                if ($speedText.Current.BoundingRectangle.Height -lt 48) { throw 'Sync speed metric does not reserve enough height for wrapped ETA text.' }
-                Capture-Element $progress ("sync-{0:D2}-progress.png" -f $script:syncScreenshotCount) 'sync-progress' $script:activeSyncLabel
-                $script:activeSyncProgressCaptured = $true
+                if ($speedText.Current.BoundingRectangle.Height -lt 48) {
+                  if ((Get-UiStatus) -match '同步完成') { $completedBeforeMetricCheck = $true }
+                  else { throw 'Sync speed metric does not reserve enough height for wrapped ETA text.' }
+                }
+                if (-not $completedBeforeMetricCheck) {
+                  Capture-Element $progress ("sync-{0:D2}-progress.png" -f $script:syncScreenshotCount) 'sync-progress' $script:activeSyncLabel
+                  $script:activeSyncProgressCaptured = $true
+                }
               }
             }
           }
@@ -745,7 +750,8 @@ try {
     $start = [Diagnostics.ProcessStartInfo]::new($rclone); $start.Arguments = 'serve sftp ":local:' + $share + '" --addr 127.0.0.1:' + $port + ' --user ui --key "' + $hostKey + '" --vfs-cache-mode writes --cache-dir "' + (Join-Path $root 'sftp-cache') + '"'; $start.UseShellExecute=$false; $start.CreateNoWindow=$true; $start.EnvironmentVariables['RCLONE_PASS']=$password
     $server = [Diagnostics.Process]::Start($start); Wait-Until { try { $tcp=[Net.Sockets.TcpClient]::new();$tcp.Connect('127.0.0.1',$port);$tcp.Dispose();$true } catch {$false} } 'SFTP fixture did not start'
     if ($Scenario -eq 'sftp-to-local') { $config = Join-Path $appData 'rclone\rclone.conf'; New-Item -ItemType Directory -Force -Path (Split-Path $config) | Out-Null
-      & $rclone config create ui_sftp sftp host 127.0.0.1 user ui port "$port" pass $password --config $config; if ($LASTEXITCODE -ne 0) { throw 'Could not configure isolated SFTP remote.' }; $sftpUri='sftp://ui_sftp' }
+      $obscuredPassword = & $rclone obscure $password; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($obscuredPassword)) { throw 'Could not obscure the isolated SFTP password.' }
+      & $rclone config create ui_sftp sftp host 127.0.0.1 user ui port "$port" pass $obscuredPassword --config $config; if ($LASTEXITCODE -ne 0) { throw 'Could not configure isolated SFTP remote.' }; $sftpUri='sftp://ui_sftp' }
   }
   if ($Scenario -in @('gdrive', 'gdrive-volume')) {
     Enable-RcloneWindowsProxy
