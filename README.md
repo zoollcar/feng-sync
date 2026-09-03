@@ -2,20 +2,20 @@
 
 Feng Sync 是一个面向 Windows 的桌面文件同步工具。它提供可视化的比较与确认流程，也提供适合计划任务的命令行入口；可在本地文件夹、SFTP、Google Drive 与 S3 存储之间同步文件。
 
-项目基于 .NET 10 和 WPF 构建，远程端点通过随应用分发的 rclone 访问。界面和 CLI 使用同一套比较、风险校验、执行、日志与基线逻辑。
+项目基于 .NET 10、 WPF、 [rclone](https://github.com/rclone/rclone) 开发。
+
+<img width="1625" height="945" alt="abe3eaf494525922ac2805e19faa85ab" src="https://github.com/user-attachments/assets/27f55cc1-7f2d-4317-842a-4a98b9bcfc0a" />
+<img width="1478" height="925" alt="image" src="https://github.com/user-attachments/assets/ee377cf1-b4d6-46b7-8594-b9acfc6e95f0" />
 
 ## 已实现功能
 
 ### 端点与同步模式
 
 - 本地文件夹，以及 `sftp://`、`gdrive://`、`s3://` 格式的远程端点。
-- 内置界面用于创建、测试、浏览、重连和管理 SFTP、Google Drive、S3 rclone 连接；Google Drive 授权在默认浏览器完成。
-- 双向同步：以两端基线识别新增、修改与删除；同一文件被两侧同时修改时产生冲突，必须先在界面中裁决。
-- 镜像：以左端为准同步到右端，包括删除右端多余内容。
-- 更新：仅将左端新增或变更复制到右端，保留右端独有内容。
-- 比较预览、逐项勾选、临时忽略，以及手动指定“左侧覆盖右侧”或反向覆盖。
-
-“自定义”同步模式在界面中可见，但尚未实现，已禁用。
+- 同步界面用于创建、测试、浏览、重连和管理 SFTP、Google Drive、S3 连接；Google Drive 授权在浏览器完成。
+- 云盘界面用于手动上传下载管理远程端点的文件。
+- 内置sftp服务器，用于方便局域网文件同步。
+- 将远程端点挂载为磁盘。
 
 ### 安全与可靠性
 
