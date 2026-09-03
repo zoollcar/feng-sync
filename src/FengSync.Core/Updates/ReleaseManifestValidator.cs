@@ -23,7 +23,7 @@ public static class ReleaseManifestValidator
             if (file.Sha256.Length != 64 || !file.Sha256.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f')) errors.Add($"SHA-256 必须为小写十六进制：{file.Path}");
         }
         if (manifest.Files.Count == 0) errors.Add("发布清单不得为空。");
-        return errors;
+        return errors.Distinct(StringComparer.Ordinal).ToArray();
     }
 
     public static bool IsSafeRelativePath(string? path)

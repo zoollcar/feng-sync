@@ -41,6 +41,10 @@ jobs:
         shell: pwsh
         run: dotnet build ./FengSync.sln -c $env:CONFIGURATION --nologo
 
+      - name: Verify manifest generation and update package compatibility
+        shell: pwsh
+        run: dotnet test ./tests/FengSync.Tests/FengSync.Tests.csproj -c $env:CONFIGURATION --no-build --nologo --filter "FullyQualifiedName~ReleaseManifestTests|FullyQualifiedName~UpdatePackageSafetyTests"
+
       - name: Publish release package
         id: package
         shell: pwsh

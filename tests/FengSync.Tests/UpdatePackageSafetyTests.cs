@@ -72,6 +72,24 @@ public sealed class UpdatePackageSafetyTests : IDisposable
         var missing = Path.Combine(_root, "missing.zip"); using (var archive = ZipFile.Open(missing, ZipArchiveMode.Create)) { await using var writer = new StreamWriter(archive.CreateEntry("FengSync.exe").Open()); await writer.WriteAsync("app"); }
         await Assert.ThrowsAsync<InvalidDataException>(() => new UpdatePackageExtractor().ExtractAndValidateAsync(missing, Path.Combine(_root, "task-two"), "v0.1.16"));
     }
+    [Fact]
+    public async Task Extractor_reports_repeated_sorting_failures_only_once()
+    {
+        var source = Path.Combine(_root, "unsorted"); Directory.CreateDirectory(source);
+        var files = new List<ReleaseManifestFile>();
+        foreach (var path in new[] { "z.bin", "FengSync.exe", "FengSync.Updater.exe" })
+        {
+            var fullPath = Path.Combine(source, path);
+            await File.WriteAllTextAsync(fullPath, "payload");
+            files.Add(new(path, new FileInfo(fullPath).Length, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(fullPath))).ToLowerInvariant()));
+        }
+        await new ReleaseManifest("FengSync", "0.2.0", "win-x64", files).SaveAsync(Path.Combine(source, "release-manifest.json"));
+        var zip = Path.Combine(_root, "unsorted.zip"); ZipFile.CreateFromDirectory(source, zip);
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => new UpdatePackageExtractor().ExtractAndValidateAsync(zip, _root, "v0.2.0"));
+        Assert.Equal("files 必须按 path 排序。", error.Message);
+        Assert.False(Directory.Exists(Path.Combine(_root, "staging")));
+    }
+
     public void Dispose() { try { Directory.Delete(_root, true); } catch { } }
     private sealed class FakeHandler(byte[] zip, string hash) : HttpMessageHandler { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(request.RequestUri!.AbsolutePath.EndsWith("sha256") ? hash + "  a.zip" : Convert.ToBase64String(zip)) }); }
     private sealed class DownloadHandler(byte[] bytes, string hash, long? declaredLength = null) : HttpMessageHandler

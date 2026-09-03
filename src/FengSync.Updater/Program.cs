@@ -16,7 +16,10 @@ internal static partial class Program
             if (!Safe(o, out var reason)) { Log(o.TaskDirectory, o.Id, "path-safety-failed", reason); return UnsafePath; }
             try { var p = Process.GetProcessById(o.WaitPid); if (!p.WaitForExit(120_000)) { Log(o.TaskDirectory, o.Id, "wait-timeout"); return WaitTimeout; } } catch (ArgumentException) { }
             var old = File.Exists(o.OldManifest) ? await Manifest.Load(o.OldManifest) : new Manifest("FengSync", o.FromVersion, "win-x64", []);
-            if (!old.Valid(o.FromVersion, allowEmpty: true)) { Log(o.TaskDirectory, o.Id, "old-manifest-invalid"); return UnsafePath; }
+            // Older release scripts emitted unsorted manifests. Their order does not
+            // affect backup/removal; retain every other safety check and require
+            // strict ordering for the incoming package below.
+            if (!old.Valid(o.FromVersion, allowEmpty: true, requireSorted: false)) { Log(o.TaskDirectory, o.Id, "old-manifest-invalid"); return UnsafePath; }
             var next = await Manifest.Load(o.NewManifest);
             if (!next.Valid(o.ToVersion) || !await next.MatchesFilesAsync(o.Staging)) { Log(o.TaskDirectory, o.Id, "new-manifest-invalid-or-tampered"); return UnsafePath; }
             var faultInjector = FaultInjector.Create(o.Installation);
@@ -108,13 +111,13 @@ internal static partial class Program
     private sealed record Manifest(string Product, string Version, string Runtime, List<Entry> Files)
     {
         public static async Task<Manifest> Load(string path) => JsonSerializer.Deserialize(await File.ReadAllTextAsync(path), UpdaterJsonContext.Default.Manifest) ?? throw new InvalidDataException();
-        public bool Valid(string version, bool allowEmpty = false)
+        public bool Valid(string version, bool allowEmpty = false, bool requireSorted = true)
         {
             if (Product != "FengSync" || Runtime != "win-x64" || Version != version || (!allowEmpty && Files.Count == 0)) return false;
             var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase); string? previous = null;
             foreach (var file in Files)
             {
-                if (!Safe(file.Path) || file.Size < 0 || file.Sha256.Length != 64 || !file.Sha256.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f') || !paths.Add(file.Path) || (previous is not null && StringComparer.Ordinal.Compare(previous, file.Path) >= 0)) return false;
+                if (!Safe(file.Path) || file.Size < 0 || file.Sha256.Length != 64 || !file.Sha256.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f') || !paths.Add(file.Path) || (requireSorted && previous is not null && StringComparer.Ordinal.Compare(previous, file.Path) >= 0)) return false;
                 previous = file.Path;
             }
             return true;
@@ -124,7 +127,8 @@ internal static partial class Program
             foreach (var entry in Files)
             {
                 var path = Target(root, entry.Path); if (!File.Exists(path) || new FileInfo(path).Length != entry.Size) return false;
-                var actual = Convert.ToHexString(await SHA256.HashDataAsync(File.OpenRead(path))).ToLowerInvariant();
+                await using var stream = File.OpenRead(path);
+                var actual = Convert.ToHexString(await SHA256.HashDataAsync(stream)).ToLowerInvariant();
                 if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(actual), Convert.FromHexString(entry.Sha256))) return false;
             }
             return true;

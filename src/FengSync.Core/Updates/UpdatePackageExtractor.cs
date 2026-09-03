@@ -23,7 +23,7 @@ public sealed class UpdatePackageExtractor
             }
             var dirs = Directory.GetDirectories(staging); var files = Directory.GetFiles(staging); var payload = dirs.Length == 1 && files.Length == 0 ? dirs[0] : staging;
             if (Directory.EnumerateFiles(payload, "FengSync.exe", SearchOption.TopDirectoryOnly).Count() != 1 || !File.Exists(Path.Combine(payload, "FengSync.Updater.exe")) || !File.Exists(Path.Combine(payload, "release-manifest.json"))) throw new InvalidDataException("更新包缺少必要程序文件。");
-            var manifest = await ReleaseManifest.LoadAsync(Path.Combine(payload, "release-manifest.json"), cancellationToken); var errors = (await ReleaseManifestValidator.ValidateFilesAsync(manifest, payload, cancellationToken)).Concat(ReleaseManifestValidator.Validate(manifest, releaseTag)).ToList(); if (errors.Count > 0) throw new InvalidDataException(string.Join(" ", errors));
+            var manifest = await ReleaseManifest.LoadAsync(Path.Combine(payload, "release-manifest.json"), cancellationToken); var errors = (await ReleaseManifestValidator.ValidateFilesAsync(manifest, payload, cancellationToken)).Concat(ReleaseManifestValidator.Validate(manifest, releaseTag)).Distinct(StringComparer.Ordinal).ToList(); if (errors.Count > 0) throw new InvalidDataException(string.Join(" ", errors));
             return payload;
         }
         catch { try { Directory.Delete(staging, true); } catch { } throw; }

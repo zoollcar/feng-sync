@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using FengSync.Core.Updates;
 
 namespace FengSync.Tests;
 
@@ -23,9 +24,45 @@ public sealed class PortableUpdaterIntegrationTests : IDisposable
         Assert.Equal("new-one", await File.ReadAllTextAsync(Path.Combine(layout.Installation, "one.bin")));
         Assert.Equal("new-two", await File.ReadAllTextAsync(Path.Combine(layout.Installation, "two.bin")));
         Assert.Equal("keep me", await File.ReadAllTextAsync(Path.Combine(layout.Installation, "my-notes.txt")));
+        Assert.False(Directory.Exists(layout.Staging));
+        Assert.False(Directory.Exists(Path.Combine(layout.Task, "backup")));
         Assert.Contains("2.0.0", await File.ReadAllTextAsync(Path.Combine(layout.Installation, "release-manifest.json")));
         Assert.Contains("false", await File.ReadAllTextAsync(Path.Combine(userData, "FengSync.local.json")));
         Assert.Contains("e2e profile", await File.ReadAllTextAsync(Path.Combine(userData, "profiles.json")));
+    }
+
+    [Fact]
+    public async Task Updater_accepts_unsorted_legacy_manifest_and_preserves_unknown_files()
+    {
+        var layout = await CreateLayoutAsync();
+        var old = await ReleaseManifest.LoadAsync(layout.OldManifest);
+        await (old with { Files = old.Files.Reverse().ToArray() }).SaveAsync(layout.OldManifest);
+        await File.WriteAllTextAsync(Path.Combine(layout.Task, "success"), "confirmed");
+
+        Assert.Equal(0, await RunUpdaterAsync(layout, null));
+        Assert.Equal("new-one", await File.ReadAllTextAsync(Path.Combine(layout.Installation, "one.bin")));
+        Assert.Equal("new-two", await File.ReadAllTextAsync(Path.Combine(layout.Installation, "two.bin")));
+        Assert.Equal("keep me", await File.ReadAllTextAsync(Path.Combine(layout.Installation, "my-notes.txt")));
+    }
+
+    [Theory]
+    [InlineData("unsafe-old")]
+    [InlineData("duplicate-old")]
+    [InlineData("unsorted-new")]
+    public async Task Legacy_order_compatibility_retains_manifest_safety_checks(string invalidKind)
+    {
+        var layout = await CreateLayoutAsync();
+        var path = invalidKind == "unsorted-new" ? layout.NewManifest : layout.OldManifest;
+        var manifest = await ReleaseManifest.LoadAsync(path);
+        var files = manifest.Files.Reverse().ToArray();
+        if (invalidKind == "unsafe-old") files[1] = files[1] with { Path = "../outside.bin" };
+        if (invalidKind == "duplicate-old") files[1] = files[0];
+        await (manifest with { Files = files }).SaveAsync(path);
+
+        Assert.Equal(11, await RunUpdaterAsync(layout, null));
+        Assert.Equal("old-one", await File.ReadAllTextAsync(Path.Combine(layout.Installation, "one.bin")));
+        Assert.Equal("old-two", await File.ReadAllTextAsync(Path.Combine(layout.Installation, "two.bin")));
+        Assert.False(Directory.Exists(Path.Combine(layout.Task, "backup")));
     }
 
     [Fact]
