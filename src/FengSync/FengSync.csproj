@@ -8,6 +8,7 @@
   <ItemGroup>
     <None Remove="Assets\rclone\rclone.exe" />
     <Content Include="Assets\rclone\rclone.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\..\THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FluentIcons.Wpf" Version="2.1.333" />

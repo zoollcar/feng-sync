@@ -14,3 +14,16 @@ artifacts/
 # Local user configuration and task journal
 FengSync.local.json
 FreeFileSync
+
+# Local credentials and configuration exports. Commit a deliberately named,
+# reviewed fixture instead when a test needs sample data.
+.env
+.env.*
+!.env.example
+**/rclone.conf
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa
+id_ed25519
