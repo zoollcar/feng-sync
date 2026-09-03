@@ -76,7 +76,7 @@ CLI 始终输出一行 JSON。退出码区分成功、冲突、配置错误、�
 
 ## 数据与凭据
 
-应用数据默认保存在用户本地应用数据目录，也可以通过 `FENGSYNC_DATA_DIR` 指定隔离的数据目录（尤其适合测试）。Profile 不保存远程密码、私钥或 OAuth 信息；远程连接由 rclone 配置管理，运行时凭据不写入 Profile、CLI 参数或运行日志。
+应用数据默认保存在用户本地应用数据目录，也可以通过 `FENGSYNC_DATA_DIR` 指定隔离的数据目录。Profile 不保存远程密码、私钥或 OAuth 信息；远程连接由 rclone 配置管理，运行时凭据不写入 Profile、CLI 参数或运行日志。
 
 对于内置 SFTP 服务，请仅监听受信任的网络地址；每个服务实例暴露一个可读写共享根目录和一个密码账号。
 
@@ -97,10 +97,6 @@ pwsh -File .\scripts\Test-All.ps1 -Level Online
 
 也可以单独运行 `dotnet test .\tests\FengSync.Tests` 或 `dotnet test .\tests\FengSync.UiTests`。线上服务 UI 用 `FENGSYNC_TEST_ONLINE_SERVICES=1` 启用；`-Level Online` 会自动设置并在结束后清除该环境变量。
 
-GUI 测试会创建隔离的 `.fengsync-test` 测试数据并保存截图。更详细的手动 GUI 冒烟测试说明见 [docs/GUI_TESTING.md](docs/GUI_TESTING.md)。
-
-Google Drive 回环测试会自动检测当前 Feng Sync 的 rclone 配置；发现 Google Drive 凭据后，它只会在该远端的 `test/FengSync-Automated-Tests/<run-id>` 创建临时目录，UI 上传并下载验证后只清理该子目录。在线级别还会在双向、镜像、更新三种模式下分别同步并验证 10 个扁平小文件。当前线上 UI 覆盖的是 Google Drive；未来 S3 等服务商的线上 UI 测试也应标记为 `External`，并由 `-Level Online` 统一执行。未发现凭据时，外部场景会显式跳过。失败时，本地 `.fengsync-test` 证据目录会被保留。
-
 ## 项目结构
 
 ```text
@@ -108,5 +104,4 @@ src/FengSync.Core  同步规划、执行、安全校验、端点、配置、历�
 src/FengSync       Windows WPF 桌面程序
 src/FengSync.Cli   无人值守的比较与同步命令行程序
 tests              xUnit 核心/集成测试和 PowerShell GUI 验收测试
-docs               GUI 测试说明、架构审查与实施设计记录
 ```
