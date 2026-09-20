@@ -333,6 +333,31 @@ public sealed class RcloneEndpointTests : IDisposable
         Assert.True(_handler.HasDeleteFor("delete.txt"));
     }
 
+    [Theory]
+    [InlineData(EndpointType.Sftp)]
+    [InlineData(EndpointType.GoogleDrive)]
+    public async Task Remote_directory_delete_is_non_recursive_and_runs_after_child_delete(EndpointType type)
+    {
+        var remote = Remote(type);
+        var directory = new EntrySnapshot("folder", EntryKind.Directory, null);
+        var file = new EntrySnapshot("folder/file.txt", EntryKind.File, new(4, DateTimeOffset.UnixEpoch, "hash"));
+        var deleteFile = new SyncOperation(file.Path, OperationKind.DeleteRight, "linked child delete");
+        var deleteDirectory = new SyncOperation(directory.Path, OperationKind.DeleteRight, "linked parent delete");
+        var plan = new SyncPlan([deleteDirectory, deleteFile]);
+        var snapshot = new PlanSnapshot(plan, new Dictionary<Guid, Fingerprint?>(),
+            new Dictionary<string, EntrySnapshot>(),
+            new Dictionary<string, EntrySnapshot> { [directory.Path] = directory, [file.Path] = file });
+
+        var result = await new SyncExecutorV2().ExecuteAsync(snapshot, new LocalEndpoint(_root), remote);
+
+        AssertSucceeded(result, _handler);
+        var requests = _handler.Requests.Select(x => x.AbsolutePath).ToList();
+        var fileDelete = requests.FindIndex(x => x.EndsWith("operations/deletefile", StringComparison.Ordinal));
+        var directoryDelete = requests.FindIndex(x => x.EndsWith("operations/rmdir", StringComparison.Ordinal));
+        Assert.True(fileDelete >= 0 && directoryDelete > fileDelete);
+        Assert.DoesNotContain(requests, x => x.EndsWith("operations/purge", StringComparison.Ordinal));
+    }
+
     private static void AssertSucceeded(SyncRunResult result, RecordingHandler handler)
     {
         var operations = string.Join(Environment.NewLine, result.Operations.Select(x => $"path={x.Path}; kind={x.Kind}; stage={x.Stage}; published={x.Published}; error={x.Error ?? "<none>"}"));

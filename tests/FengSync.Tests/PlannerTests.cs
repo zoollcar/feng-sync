@@ -97,10 +97,42 @@ public sealed class PlannerTests
         operation.OverrideCopyDirection(false);
         Assert.Equal(OperationKind.CopyRightToLeft, operation.Kind);
     }
-    [Fact] public void OverrideCopyDirection_rejects_unrelated_kinds()
+    [Fact] public void Reversing_right_directory_creation_deletes_left_directory()
     {
         var create = new SyncOperation("dir", OperationKind.CreateRightDirectory, "create");
-        Assert.Throws<InvalidOperationException>(() => create.OverrideCopyDirection(true));
+        create.OverrideCopyDirection(false, new("dir", EntryKind.Directory, null), null);
+        Assert.Equal(OperationKind.DeleteLeft, create.Kind);
+    }
+    [Fact] public void Reversing_left_directory_creation_deletes_right_directory()
+    {
+        var create = new SyncOperation("dir", OperationKind.CreateLeftDirectory, "create");
+        create.OverrideCopyDirection(true, null, new("dir", EntryKind.Directory, null));
+        Assert.Equal(OperationKind.DeleteRight, create.Kind);
+    }
+    [Fact] public void Reversing_directory_creation_links_all_descendant_operations_once()
+    {
+        var root = new SyncOperation("photos", OperationKind.CreateRightDirectory, "create");
+        var childDirectory = new SyncOperation("photos/trip", OperationKind.CreateRightDirectory, "create");
+        var childFile = new SyncOperation("photos/trip/a.jpg", OperationKind.CopyLeftToRight, "copy");
+        var sibling = new SyncOperation("photos-old/a.jpg", OperationKind.CopyLeftToRight, "copy");
+
+        var expanded = DirectionOverrideExpander.Expand([root, childDirectory, childFile, sibling], [root, childFile], keepLeft: false);
+
+        Assert.Equal(3, expanded.Count);
+        Assert.Contains(root, expanded); Assert.Contains(childDirectory, expanded); Assert.Contains(childFile, expanded);
+        Assert.DoesNotContain(sibling, expanded);
+
+        foreach (var operation in expanded)
+        {
+            var left = operation == childFile ? File(operation.Path, "photo") : new EntrySnapshot(operation.Path, EntryKind.Directory, null);
+            operation.OverrideCopyDirection(keepLeft: false, left, right: null);
+        }
+        Assert.All(expanded, operation => Assert.Equal(OperationKind.DeleteLeft, operation.Kind));
+    }
+    [Fact] public void OverrideCopyDirection_rejects_unrelated_kinds()
+    {
+        var move = new SyncOperation("dir", OperationKind.Move, "move");
+        Assert.Throws<InvalidOperationException>(() => move.OverrideCopyDirection(true));
     }
     [Fact] public void KeepLeft_on_copy_with_empty_left_collapses_to_delete_right()
     {

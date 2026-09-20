@@ -131,9 +131,53 @@ public sealed class SyncOperation
                 Kind = keepLeft ? OperationKind.CopyLeftToRight : OperationKind.CopyRightToLeft;
                 Reason = keepLeft ? "用户覆盖：左侧覆盖右侧" : "用户覆盖：右侧覆盖左侧";
                 return;
+            case OperationKind.CreateRightDirectory:
+                Kind = keepLeft ? OperationKind.CreateRightDirectory : OperationKind.DeleteLeft;
+                Reason = keepLeft
+                    ? "用户覆盖：左侧覆盖右侧，创建右侧文件夹"
+                    : "用户覆盖：右侧覆盖左侧，右侧为空；现删除左侧文件夹";
+                return;
+            case OperationKind.CreateLeftDirectory:
+                Kind = keepLeft ? OperationKind.DeleteRight : OperationKind.CreateLeftDirectory;
+                Reason = keepLeft
+                    ? "用户覆盖：左侧覆盖右侧，左侧为空；现删除右侧文件夹"
+                    : "用户覆盖：右侧覆盖左侧，创建左侧文件夹";
+                return;
             default:
-                throw new InvalidOperationException("仅复制、删除与冲突项支持覆盖方向；目录创建或被屏蔽项无法覆盖。");
+                throw new InvalidOperationException("仅复制、删除、目录创建与冲突项支持覆盖方向；移动或被屏蔽项无法覆盖。");
         }
+    }
+}
+
+/// <summary>
+/// Expands a manual direction override to the descendants of a directory whose
+/// creation is being reversed into a deletion. Those descendants must adopt the
+/// same empty-side winner so a non-recursive directory delete can run last.
+/// </summary>
+public static class DirectionOverrideExpander
+{
+    public static IReadOnlyList<SyncOperation> Expand(IEnumerable<SyncOperation> allOperations,
+        IEnumerable<SyncOperation> requestedOperations, bool keepLeft)
+    {
+        var requested = requestedOperations.DistinctBy(x => x.OperationId).ToList();
+        var deletionRoots = requested.Where(x =>
+            (x.Kind == OperationKind.CreateRightDirectory && !keepLeft) ||
+            (x.Kind == OperationKind.CreateLeftDirectory && keepLeft)).ToList();
+        if (deletionRoots.Count == 0) return requested;
+
+        var result = requested.ToDictionary(x => x.OperationId);
+        foreach (var operation in allOperations)
+            if (deletionRoots.Any(root => IsDescendant(operation.Path, root.Path)))
+                result.TryAdd(operation.OperationId, operation);
+        return result.Values.ToList();
+    }
+
+    public static bool IsDescendant(string path, string directory)
+    {
+        var normalizedPath = path.Replace('\\', '/').Trim('/');
+        var normalizedDirectory = directory.Replace('\\', '/').Trim('/');
+        return normalizedPath.Length > normalizedDirectory.Length &&
+            normalizedPath.StartsWith(normalizedDirectory + "/", StringComparison.Ordinal);
     }
 }
 public sealed record SyncPlan(IReadOnlyList<SyncOperation> Operations)

@@ -248,14 +248,40 @@ public partial class MainWindow : Window
     }
     private void ApplyDirection(IEnumerable<ComparisonRow> rows, bool keepLeft)
     {
-        var changed = 0; var errors = new List<string>();
-        foreach (var row in rows)
+        var requested = rows.DistinctBy(x => x.Operation.OperationId).ToList();
+        var reversingDirectories = requested.Where(x =>
+            (x.Operation.Kind == OperationKind.CreateRightDirectory && !keepLeft) ||
+            (x.Operation.Kind == OperationKind.CreateLeftDirectory && keepLeft)).ToList();
+        var filteredDescendant = _rows.FirstOrDefault(candidate => candidate.IsFilterExcluded &&
+            reversingDirectories.Any(root => DirectionOverrideExpander.IsDescendant(candidate.Operation.Path, root.Operation.Path)));
+        if (filteredDescendant is not null)
         {
-            try { row.Operation.OverrideCopyDirection(keepLeft, row.Left, row.Right); row.Refresh(); changed++; }
+            Status.Text = $"无法反向删除文件夹：其下项目“{filteredDescendant.Operation.Path}”被 Profile 过滤。请先调整过滤规则并重新比较。";
+            return;
+        }
+
+        var expanded = DirectionOverrideExpander.Expand(_rows.Select(x => x.Operation), requested.Select(x => x.Operation), keepLeft);
+        var expandedIds = expanded.Select(x => x.OperationId).ToHashSet();
+        var affectedRows = _rows.Where(x => expandedIds.Contains(x.Operation.OperationId)).ToList();
+        var linked = Math.Max(0, affectedRows.Count - requested.Count);
+        var changed = 0; var errors = new List<string>();
+        foreach (var row in affectedRows)
+        {
+            try
+            {
+                // Reversing a directory is an explicit decision about its whole
+                // subtree, so temporary per-row ignores within that subtree must
+                // be re-enabled to make the parent deletion achievable.
+                row.IsIgnored = false;
+                row.Operation.Selected = true;
+                row.Operation.OverrideCopyDirection(keepLeft, row.Left, row.Right);
+                row.Refresh(); changed++;
+            }
             catch (Exception ex) { errors.Add($"{row.Operation.Path}：{RcloneUiError.Describe(ex, "operation-retry")}"); }
         }
         Comparison.Items.Refresh(); RefreshSummary();
-        Status.Text = errors.Count == 0 ? $"已将 {changed} 项设置为{(keepLeft ? "左侧覆盖右侧" : "右侧覆盖左侧")}。" : $"已修改 {changed} 项；{string.Join(" ", errors)}";
+        var linkage = linked > 0 ? $"（已联动 {linked} 个文件夹内项目）" : "";
+        Status.Text = errors.Count == 0 ? $"已将 {changed} 项设置为{(keepLeft ? "左侧覆盖右侧" : "右侧覆盖左侧")}{linkage}。" : $"已修改 {changed} 项；{string.Join(" ", errors)}";
     }
     private void ActionMenu_KeepLeft_Click(object sender, RoutedEventArgs e) => ApplyActionFromMenu(sender, true);
     private void ActionMenu_KeepRight_Click(object sender, RoutedEventArgs e) => ApplyActionFromMenu(sender, false);

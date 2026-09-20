@@ -196,6 +196,7 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
         RunJobAsync("sync/move", new { srcFs = sourceFs, dstFs = targetFs, createEmptySrcDirs = true, deleteEmptySrcDirs = true, _async = true }, ct);
     public Task DeleteFileAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/deletefile", new { fs, remote }, ct);
     public Task MakeDirectoryAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/mkdir", new { fs, remote }, ct);
+    public Task RemoveDirectoryAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/rmdir", new { fs, remote }, ct);
     public Task PurgeAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/purge", new { fs, remote }, ct);
 
     public async Task<JsonElement> RunJobAsync(string operation, object payload, CancellationToken ct = default)
@@ -320,7 +321,10 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
     {
         try
         {
-            if (directory) await client.PurgeAsync(Fs, At(relativePath), cancellationToken).ConfigureAwait(false);
+            // Keep directory deletion non-recursive. A confirmed plan contains
+            // explicit descendant deletes, which the executor runs first. Using
+            // purge here could remove filtered or deselected children implicitly.
+            if (directory) await client.RemoveDirectoryAsync(Fs, At(relativePath), cancellationToken).ConfigureAwait(false);
             else await client.DeleteFileAsync(Fs, At(relativePath), cancellationToken).ConfigureAwait(false);
         }
         catch (RcloneException ex) when (ex.Failure.Category == RcloneFailureCategory.NotFound)
