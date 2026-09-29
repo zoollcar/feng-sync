@@ -372,10 +372,7 @@ public partial class MainWindow : Window
         UpdateActionButtons();
     }
 
-    private record SafetyState(string Headline, string Description, string Severity)
-    {
-        public bool IsEmpty => string.IsNullOrEmpty(Headline);
-    }
+    private record SafetyState(string Headline, string Description, string Severity);
     private SafetyState _safetySummary = new("", "选择左右端点后即可比较。", "Neutral");
 
     private void UpdateActionButtons()
@@ -847,8 +844,6 @@ public sealed class ComparisonRow : INotifyPropertyChanged
     public string Name { get; private set; } = "";
     public string RelativePath { get; private set; } = "";
     public string DirectionDisplay { get; private set; } = "";
-    public OperationKind OperationKindValue => Operation.Kind;
-    public OperationKind DisplayKind => IsIgnored || IsFilterExcluded ? OperationKind.Blocked : Operation.Kind;
     public string OperationLabel { get; private set; } = "—";
     public string OperationSeverity { get; private set; } = "Neutral";
     public FluentIcon LeftEntryIcon => Left?.Kind == EntryKind.Directory ? FluentIcon.Folder : FluentIcon.Document;

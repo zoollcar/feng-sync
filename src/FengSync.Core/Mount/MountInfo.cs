@@ -3,7 +3,7 @@ namespace FengSync.Core.Mount;
 /// <summary>How a running mount came to exist relative to this Feng Sync installation.</summary>
 public enum MountOrigin
 {
-    /// <summary>The PID matches a record we wrote in <see cref="MountSessionStore"/>.</summary>
+    /// <summary>The mount was created by this Feng Sync instance through the private rclone RC daemon.</summary>
     FengSyncManaged,
     /// <summary>The PID was not written by us but the mount point looks healthy.</summary>
     External,
@@ -36,8 +36,7 @@ public sealed record MountInfo(
                 MountOrigin.Unreadable => "[无权限]",
                 _ => "[外部]"
             };
-            var target = Kind == MountTargetKind.DriveLetter ? MountPoint : MountPoint;
-            return $"{prefix} {RemoteName}  →  {target}";
+            return $"{prefix} {RemoteName}  →  {MountPoint}";
         }
     }
 }

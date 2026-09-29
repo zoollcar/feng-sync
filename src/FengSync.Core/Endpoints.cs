@@ -197,7 +197,6 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     public Task DeleteFileAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/deletefile", new { fs, remote }, ct);
     public Task MakeDirectoryAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/mkdir", new { fs, remote }, ct);
     public Task RemoveDirectoryAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/rmdir", new { fs, remote }, ct);
-    public Task PurgeAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/purge", new { fs, remote }, ct);
 
     public async Task<JsonElement> RunJobAsync(string operation, object payload, CancellationToken ct = default)
     {

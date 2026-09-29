@@ -18,26 +18,17 @@ public sealed record MountStopFailure(string MountPoint, int Pid, string Reason)
 /// Feng Sync mounts. WMI is retained only to show externally-owned mounts and is never used to stop one.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class RcloneMountService : IAsyncDisposable
+public sealed class RcloneMountService
 {
     private static readonly TimeSpan MountStateTimeout = TimeSpan.FromSeconds(8);
     private readonly IRcloneLifecycleClient _rc;
     private readonly IProcessEnumerator _externalEnumerator;
-    private readonly bool _ownsClient;
     private readonly Dictionary<string, ManagedMountMetadata> _managed = new(StringComparer.OrdinalIgnoreCase);
 
     public RcloneMountService(IRcloneLifecycleClient rc, IProcessEnumerator? externalEnumerator = null)
     {
         _rc = rc;
         _externalEnumerator = externalEnumerator ?? new WmiProcessEnumerator();
-    }
-
-    /// <summary>Compatibility constructor. Application code should inject its shared lifecycle host.</summary>
-    public RcloneMountService(IProcessEnumerator? enumerator = null, MountSessionStore? store = null, string? rcloneExecutable = null, string? configPath = null)
-    {
-        _rc = new RcloneLifecycleHost();
-        _externalEnumerator = enumerator ?? new WmiProcessEnumerator();
-        _ownsClient = true;
     }
 
     public async Task<IReadOnlyList<MountInfo>> ScanAsync(CancellationToken ct = default)
@@ -294,11 +285,6 @@ public sealed class RcloneMountService : IAsyncDisposable
         if (exception is not RcloneException rclone) return exception.Message;
         RcloneFailureLog.Write(rclone.Failure, context);
         return $"{rclone.Failure.UserMessage} {rclone.Failure.SuggestedAction}（诊断 ID：{rclone.Failure.CorrelationId}）";
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_ownsClient && _rc is IAsyncDisposable disposable) await disposable.DisposeAsync().ConfigureAwait(false);
     }
 
     private sealed record ManagedMountMetadata(string RemoteName, string Provider, Guid SessionId, DateTimeOffset StartedUtc);
