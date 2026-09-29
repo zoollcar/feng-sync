@@ -42,7 +42,7 @@ Use this file as a fast routing map. Inspect only the relevant subtree and its f
 - Route normal comparisons/runs through `ProfileRunner`; it is the shared workflow for UI, CLI, and automation. Do not duplicate planning or bypass validation in a new entry point.
 - A comparison captures a paired snapshot once. Planning, safety validation, freshness validation, and baseline commits must preserve that contract; avoid adding a broad re-scan to the execution path.
 - `ThreeWayPlanner` uses the persisted paired baseline. A missing per-path baseline is first-sync behavior and must not propagate deletions. Unresolved conflicts must remain non-executable until the user resolves them.
-- `SyncExecutorV2` is the normal executor. Preserve its bounded-channel/worker-pool concurrency, per-path freshness checks, temp-file atomic publish, copy verification option, journals, and cancellation behavior. `SyncExecutor` is legacy fallback code; do not switch production flow to it casually.
+- `SyncExecutorV2` is the sole executor; no legacy fallback exists. Preserve its bounded-channel/worker-pool concurrency, per-path freshness checks, temp-file atomic publish, copy verification option, journals, and cancellation behavior.
 - Do not commit a new baseline after a failed run. Partial commits and recovery state are deliberate safety behavior.
 - Endpoint operations must preserve `IEndpoint` capability and path-semantics differences. Treat remote endpoints as potentially case-sensitive and not necessarily able to enumerate empty directories.
 - Destructive actions (deletes, overwrites, mirror/update plans, updater replacement) need explicit safety validation and focused regression tests. Keep user confirmation and delete thresholds intact.
