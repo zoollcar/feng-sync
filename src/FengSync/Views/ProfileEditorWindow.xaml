@@ -152,6 +152,12 @@
                         <CheckBox x:Name="VerifyCopies" Content="复制后验证文件" Margin="0,3,0,10" />
                         <CheckBox x:Name="UseDefaultConcurrency" AutomationProperties.AutomationId="ProfileUseDefaultConcurrency" Content="并发数使用程序默认值" Checked="UseDefaultConcurrency_Changed" Unchecked="UseDefaultConcurrency_Changed" />
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,10"><TextBlock Text="最大并发数：" VerticalAlignment="Center" /><TextBox x:Name="ConcurrencyBox" AutomationProperties.AutomationId="ProfileConcurrency" Width="60" /></StackPanel>
+                        <CheckBox x:Name="UseDefaultResume" AutomationProperties.AutomationId="ProfileUseDefaultResume" Content="续传阈值使用程序默认值" Checked="UseDefaultResume_Changed" Unchecked="UseDefaultResume_Changed" />
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,2">
+                            <TextBlock Text="启用断点续传的最小文件大小：" VerticalAlignment="Center" />
+                            <TextBox x:Name="ResumeMinimumBox" AutomationProperties.AutomationId="ProfileResumeMinimum" Width="90" />
+                        </StackPanel>
+                        <TextBlock Text="不小于该大小的文件先写入 xxx.fengsync.partial，传输完成后改名发布；中断后下载方向可从断点继续。填 0 表示所有文件都续传，支持 500M、2G 这类写法。" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryForegroundBrush}" Margin="0,0,0,10" />
                         <TextBlock Text="删除安全阈值" FontWeight="Bold" Margin="0,12,0,3" />
                         <TextBlock Text="超过任一阈值时，执行前必须输入 Profile 名称一次性确认。" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryForegroundBrush}" />
                         <WrapPanel Margin="0,5,0,0">

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Runtime.CompilerServices;
@@ -191,8 +193,66 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
         var speed = response.TryGetProperty("speed", out var speedValue) && speedValue.TryGetDouble(out var rate) ? rate : 0;
         return new(transferred, total, speed);
     }
-    public Task MoveFileAsync(string fs, string source, string target, CancellationToken ct = default) => CallAsync("operations/movefile", new { srcFs = fs, srcRemote = source, dstFs = fs, dstRemote = target }, ct);
-    public Task MoveDirectoryAsync(string sourceFs, string targetFs, CancellationToken ct = default) =>
+
+    /// <summary>
+    /// Opens one object's bytes from <paramref name="offset"/> onward through the daemon's
+    /// <c>--rc-serve</c> endpoint. Returns <c>null</c> when the daemon does not answer with a partial
+    /// response, which is the caller's signal that the transfer cannot be continued.
+    /// <para>
+    /// This is the only byte-offset read rclone offers: the RC API's copy operations are whole-object
+    /// only, and rclone's own copy path restarts every interrupted transfer from zero.
+    /// </para>
+    /// </summary>
+    public async Task<RcloneRangeContent?> OpenRangeAsync(string fs, string remote, long offset, CancellationToken ct = default)
+    {
+        var response = await SendFileRequestAsync(HttpMethod.Get, fs, remote, offset, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode || (offset > 0 && response.StatusCode != HttpStatusCode.PartialContent))
+        {
+            response.Dispose();
+            return null;
+        }
+        var length = response.Content.Headers.ContentRange?.Length ?? response.Content.Headers.ContentLength;
+        var modified = response.Content.Headers.LastModified;
+        var content = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        return new RcloneRangeContent(content, length ?? -1, modified);
+    }
+
+    /// <summary>Object size and modification time, read without transferring any content.</summary>
+    public async Task<RcloneFileIdentity?> ProbeAsync(string fs, string remote, CancellationToken ct = default)
+    {
+        using var response = await SendFileRequestAsync(HttpMethod.Head, fs, remote, 0, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode) return null;
+        var length = response.Content.Headers.ContentRange?.Length ?? response.Content.Headers.ContentLength;
+        return length is null ? null : new RcloneFileIdentity(length.Value, response.Content.Headers.LastModified);
+    }
+
+    private async Task<HttpResponseMessage> SendFileRequestAsync(HttpMethod method, string fs, string remote, long offset, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(method, new Uri(baseUri, FileServePath(fs, remote)));
+        request.Headers.Authorization = new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}")));
+        if (offset > 0) request.Headers.Range = new RangeHeaderValue(offset, null);
+        return await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds the <c>--rc-serve</c> object path, which is <c>/[&lt;fs&gt;]/&lt;path&gt;</c>. The fs specifier keeps its
+    /// colon inside the brackets because rclone reads an unqualified name there as a local path, and
+    /// each remote segment is escaped so a file name holding a space, '#' or '%' still resolves.
+    /// </summary>
+    internal static string FileServePath(string fs, string remote)
+    {
+        var path = new StringBuilder("[");
+        foreach (var segment in fs.Split('/', StringSplitOptions.RemoveEmptyEntries)) path.Append(EscapePathSegment(segment)).Append('/');
+        path.Append(']');
+        foreach (var segment in remote.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries)) path.Append('/').Append(EscapePathSegment(segment));
+        return path.ToString();
+    }
+
+    /// <summary>A colon is legal in a URL path segment, so it is left readable; rclone's fs syntax depends on it.</summary>
+    private static string EscapePathSegment(string segment) =>
+        Uri.EscapeDataString(segment).Replace("%3A", ":", StringComparison.OrdinalIgnoreCase);
+
+    public Task MoveFileAsync(string fs, string source, string target, CancellationToken ct = default) => CallAsync("operations/movefile", new { srcFs = fs, srcRemote = source, dstFs = fs, dstRemote = target }, ct);    public Task MoveDirectoryAsync(string sourceFs, string targetFs, CancellationToken ct = default) =>
         RunJobAsync("sync/move", new { srcFs = sourceFs, dstFs = targetFs, createEmptySrcDirs = true, deleteEmptySrcDirs = true, _async = true }, ct);
     public Task DeleteFileAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/deletefile", new { fs, remote }, ct);
     public Task MakeDirectoryAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/mkdir", new { fs, remote }, ct);
@@ -252,6 +312,15 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
 
 public sealed record RcloneTransferStats(long BytesTransferred, long TotalBytes, double BytesPerSecond);
 public sealed record RcloneDirectoryEntry(string Path, bool IsDirectory, long Size, DateTimeOffset? ModifiedUtc);
+
+/// <summary>A byte-range read of one remote object; <paramref name="Length"/> is the object's full size.</summary>
+public sealed record RcloneRangeContent(Stream Content, long Length, DateTimeOffset? ModifiedUtc) : IDisposable
+{
+    public void Dispose() => Content.Dispose();
+}
+
+/// <summary>Size and modification time of one remote object, read without transferring content.</summary>
+public sealed record RcloneFileIdentity(long Length, DateTimeOffset? ModifiedUtc);
 
 /// <summary>rclone-backed SFTP, Google Drive, or S3 endpoint. Authentication is supplied exclusively by rclone.conf.</summary>
 public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profile, EndpointCapabilities capabilities) : IEndpoint, IEndpointStateStorage

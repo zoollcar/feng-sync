@@ -110,8 +110,16 @@ public sealed class LocalEndpoint(string root) : IEndpoint, IEndpointStateStorag
             cancellationToken.ThrowIfCancellationRequested();
             var relative = Path.GetRelativePath(Root, file).Replace('\\', '/');
             if (!SyncInternalPaths.TryGetTransferTemporaryOriginalPath(relative, out var original)) continue;
-            var info = new FileInfo(file);
-            files.Add(new(relative, original, info.Length, info.LastWriteTimeUtc));
+            // Enumeration and this read are not atomic: a concurrent transfer copying into the same
+            // root can publish (rename away) or discard its own staging file in between. A staging
+            // file that is already gone has nothing left to resume, so it is simply not a candidate —
+            // letting the exception escape here would fail an unrelated, perfectly healthy transfer.
+            try
+            {
+                var info = new FileInfo(file);
+                files.Add(new(relative, original, info.Length, info.LastWriteTimeUtc));
+            }
+            catch (IOException) { }
         }
         return Task.FromResult<IReadOnlyList<TransferTemporaryFile>>(files);
     }

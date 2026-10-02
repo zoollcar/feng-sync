@@ -199,7 +199,7 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         Assert.False(run.Succeeded);
         Assert.Equal(BaselineTransactionState.NeedsRecovery, committed.State);
         Assert.Null(await new BaselineRepository().LoadAsync(left, right));
-        Assert.Single(Directory.EnumerateFiles(Right, "*.fengsync-*.partial", SearchOption.AllDirectories));
+        Assert.Single(Directory.EnumerateFiles(Right, "*.fengsync*.partial", SearchOption.AllDirectories));
     }
 
     [Fact] public void Recycle_bin_is_allowed_only_for_windows_local_profiles()

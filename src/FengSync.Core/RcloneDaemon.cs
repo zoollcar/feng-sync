@@ -37,6 +37,11 @@ public sealed class RcloneDaemon : IAsyncDisposable
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
         var proxyConfiguration = RcloneEnvironment.Prepare(start, proxyOptions);
         start.ArgumentList.Add("rcd"); start.ArgumentList.Add("--use-json-log"); start.ArgumentList.Add("--rc-addr"); start.ArgumentList.Add($"127.0.0.1:{port}"); start.ArgumentList.Add("--config"); start.ArgumentList.Add(configPath);
+        // Serve objects over the RC port as well as control them. This is the only byte-offset read
+        // rclone exposes (GET with a Range header -> 206), which is what lets an interrupted download
+        // continue instead of restarting. It is safe here because the port is loopback-only and every
+        // request carries the per-run credentials below; rclone refuses to serve without them.
+        start.ArgumentList.Add("--rc-serve");
         start.Environment["RCLONE_RC_USER"] = user; start.Environment["RCLONE_RC_PASS"] = password;
         var process = Process.Start(start) ?? throw new InvalidOperationException("无法启动 rclone。");
         // Cloud backends may need a token refresh and an initial page walk.  Keep this bounded, but do not race a healthy Drive request.

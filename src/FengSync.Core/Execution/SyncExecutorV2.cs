@@ -17,7 +17,8 @@ public sealed class SyncExecutorV2
 
     public async Task<SyncRunResult> ExecuteAsync(PlanSnapshot snapshot, IEndpoint left, IEndpoint right, IProgress<TransferProgress>? progress = null,
         CancellationToken ct = default, bool verifyCopies = true, VersioningPolicy? versioning = null,
-        ResourceGovernor? resourceGovernor = null, TaskJournalStore? journals = null, int maxConcurrentCopies = 3, int? channelCapacity = null)
+        ResourceGovernor? resourceGovernor = null, TaskJournalStore? journals = null, int maxConcurrentCopies = 3, int? channelCapacity = null,
+        long resumeMinimumBytes = 0)
     {
         if (!snapshot.Plan.CanExecute) throw new InvalidOperationException("计划含未裁决的冲突、或未选择任何动作。");
 
@@ -175,9 +176,9 @@ public sealed class SyncExecutorV2
                         // The changed endpoint already contains the destination
                         // content. Publish a no-overwrite copy to the execution
                         // endpoint, then delete its planned old object.
-                        var temporary = move.ToPath + ".fengsync-" + Guid.NewGuid().ToString("N") + ".partial";
+                        var temporary = SyncInternalPaths.TransferTemporary(move.ToPath);
                         await EnsureCopyParentAsync(target, move.ToPath, ct);
-                        await CopyAsync(source, target, move.ToPath, temporary, null, ct);
+                        await EndpointTransfer.CopyAsync(source, target, move.ToPath, temporary, null, ct);
                         await target.MoveAsync(temporary, move.ToPath, ct);
                         await target.DeleteAsync(move.FromPath, move.Kind == EntryKind.Directory, ct);
                     }
@@ -220,7 +221,7 @@ public sealed class SyncExecutorV2
                 {
                     var nowActive = 0;
                     lock (activeLock) nowActive = ++active;
-                    try { await RunOneCopyAsync(op, nowActive, verifyCopies, snapshot, left, right, governor, resumeCandidates, EnsureCopyParentAsync, progress, Mark, Record, ct); }
+                    try { await RunOneCopyAsync(op, nowActive, verifyCopies, snapshot, left, right, governor, resumeCandidates, EnsureCopyParentAsync, progress, Mark, Record, resumeMinimumBytes, ct); }
                     finally { lock (activeLock) active--; }
                 }
             }
@@ -281,6 +282,7 @@ public sealed class SyncExecutorV2
         IProgress<TransferProgress>? progress,
         Func<SyncOperation, JournalState, TransferStage, long, string?, Task> mark,
         Func<SyncOperation, TransferStage, long, Fingerprint?, Fingerprint?, bool, string?, Task> record,
+        long resumeMinimumBytes,
         CancellationToken ct)
     {
         var source = op.Kind == OperationKind.CopyLeftToRight ? left : right;
@@ -298,19 +300,14 @@ public sealed class SyncExecutorV2
                 IReadOnlyList<TransferTemporaryFile>? candidates = null;
                 if (target is LocalEndpoint resumeTarget && resumeCandidates.TryGetValue(resumeTarget, out var byPath))
                     byPath.TryGetValue(op.Path, out candidates);
-                var (temporary, _) = await TransferResume.PrepareAsync(source, target, op.Path, candidates ?? [], ct);
-                await ensureCopyParent(target, op.Path, ct);
-                if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget)
-                    await TransferResume.AppendLocalAsync(localSource, localTarget, op.Path, temporary,
-                        completed => progress?.Report(new(op.OperationId, op.Path, TransferStage.Transferring, completed, bytes, nowActive)), ct);
-                else
-                    await CopyRemoteWithProgressAsync(source, target, op.Path, temporary, op.OperationId, bytes, nowActive, progress, ct);
+                var temporary = await EndpointTransfer.CopyToStagingAsync(source, target, op.Path, candidates, op.OperationId, bytes, nowActive, progress,
+                    ensureDestinationAsync: token => ensureCopyParent(target, op.Path, token), resumeMinimumBytes: resumeMinimumBytes, ct: ct);
                 await mark(op, JournalState.Transferred, TransferStage.Transferring, bytes, null);
                 progress?.Report(new(op.OperationId, op.Path, TransferStage.Transferring, bytes, bytes, nowActive));
                 if (verifyCopies)
                 {
                     progress?.Report(new(op.OperationId, op.Path, TransferStage.Verifying, bytes, bytes, nowActive));
-                    await PublishStagedAsync(target, temporary, op.Path, overwrite: true, ct: ct);
+                    await EndpointTransfer.PublishAsync(target, temporary, op.Path, overwrite: true, ct);
                     // M2: per-file StatAsync on the target only — never ScanAsync
                     var verified = await new StatVerifier().VerifyAsync(source, target, op.Path, ct);
                     committed = true;
@@ -318,7 +315,7 @@ public sealed class SyncExecutorV2
                 }
                 else
                 {
-                    await PublishStagedAsync(target, temporary, op.Path, overwrite: true, ct: ct);
+                    await EndpointTransfer.PublishAsync(target, temporary, op.Path, overwrite: true, ct);
                     committed = true;
                     // Capture post-publish fingerprints so the M5 baseline commit
                     // can derive the next two-way state from real endpoint data.
@@ -339,7 +336,7 @@ public sealed class SyncExecutorV2
                 // Remote backends are deliberately retried from zero, so remove their staging object.
                 if (!committed && target is not LocalEndpoint)
                 {
-                    try { await TransferResume.DiscardCandidatesAsync(target, op.Path, CancellationToken.None); }
+                    try { await EndpointTransfer.DiscardStagingAsync(target, op.Path); }
                     catch { /* preserve original failure */ }
                 }
             }
@@ -359,11 +356,6 @@ public sealed class SyncExecutorV2
         return separator <= 0 ? null : normalized[..separator];
     }
 
-    private static Task PublishStagedAsync(IEndpoint target, string temporary, string destination, bool overwrite, CancellationToken ct) =>
-        target is IStagedPublishEndpoint publisher
-            ? publisher.PublishStagedAsync(temporary, destination, overwrite, ct)
-            : target.MoveAsync(temporary, destination, ct);
-
     private static IDeletionStrategy CreateDeletionStrategy(VersioningPolicy? versioning) => versioning?.Mode switch
     {
         VersioningMode.TimestampedArchive when !string.IsNullOrWhiteSpace(versioning.ArchiveDirectory) => new ArchiveStrategy(versioning.ArchiveDirectory),
@@ -371,45 +363,6 @@ public sealed class SyncExecutorV2
         VersioningMode.RecycleBin => new RecycleBinStrategy(),
         _ => new PermanentDeleteStrategy()
     };
-
-    private static async Task CopyRemoteWithProgressAsync(IEndpoint source, IEndpoint target, string path, string temporary, Guid operationId, long totalBytes, int activeTransfers, IProgress<TransferProgress>? progress, CancellationToken ct)
-    {
-        var remote = source as RcloneEndpoint ?? target as RcloneEndpoint ?? throw new NotSupportedException("不支持的端点组合。");
-        var statsGroup = "fengsync-" + operationId.ToString("N");
-        var copy = CopyAsync(source, target, path, temporary, statsGroup, ct);
-        while (!copy.IsCompleted)
-        {
-            await Task.WhenAny(copy, Task.Delay(TimeSpan.FromMilliseconds(350), ct));
-            if (copy.IsCompleted) break;
-            try
-            {
-                var stats = await remote.Client.GetTransferStatsAsync(statsGroup, ct);
-                if (stats is not null)
-                    progress?.Report(new(operationId, path, TransferStage.Transferring, stats.BytesTransferred, totalBytes > 0 ? totalBytes : stats.TotalBytes, activeTransfers));
-            }
-            catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
-            {
-                // Progress telemetry must never interrupt a healthy transfer.
-            }
-        }
-        await copy;
-    }
-
-    private static async Task CopyAsync(IEndpoint source, IEndpoint target, string path, string temporary, string? statsGroup, CancellationToken ct)
-    {
-        if (source is LocalEndpoint localSource && target is LocalEndpoint localTarget)
-        {
-            await localSource.CopyToAsync(path, localTarget, temporary, ct);
-            return;
-        }
-        var remote = source as RcloneEndpoint ?? target as RcloneEndpoint ?? throw new NotSupportedException("不支持的端点组合。");
-        await remote.Client.CopyFileAsync(
-            source is LocalEndpoint sl ? sl.Root : ((RcloneEndpoint)source).FileSystem,
-            source is LocalEndpoint ? RcloneLocalPathEncoding.ToRclonePath(path) : ((RcloneEndpoint)source).RemotePath(path),
-            target is LocalEndpoint tl ? tl.Root : ((RcloneEndpoint)target).FileSystem,
-            target is LocalEndpoint ? temporary : ((RcloneEndpoint)target).RemotePath(temporary),
-            ct, statsGroup);
-    }
 
     private static IReadOnlyList<string> LocalRoots(IEndpoint left, IEndpoint right) =>
         new[] { left, right }.OfType<LocalEndpoint>().Select(x => x.Root).ToList();

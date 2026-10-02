@@ -78,7 +78,7 @@ public sealed class RcloneEndpointTests : IDisposable
         var result = await new SyncExecutorV2().ExecuteAsync(await PlanSnapshot.CaptureAsync(plan, local, remote), local, remote);
         AssertSucceeded(result, _handler);
         Assert.Contains(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/copyfile")); Assert.Contains(_handler.Requests, x => x.AbsolutePath.EndsWith("operations/movefile"));
-        Assert.Contains(_handler.Bodies, x => x.Contains(".fengsync-", StringComparison.Ordinal));
+        Assert.Contains(_handler.Bodies, x => x.Contains(".fengsync.partial", StringComparison.Ordinal));
     }
 
     [Fact]

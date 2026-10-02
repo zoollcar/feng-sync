@@ -6,4 +6,5 @@ public sealed record ProfileSettings(
     bool? VerifyCopies = null,
     SyncFilter? Filter = null,
     VersioningPolicy? Versioning = null,
-    int? TimeToleranceSeconds = null);
+    int? TimeToleranceSeconds = null,
+    long? ResumeMinimumBytes = null);

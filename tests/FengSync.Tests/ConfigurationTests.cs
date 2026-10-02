@@ -193,4 +193,94 @@ public sealed class ConfigurationTests
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }
+
+    [Fact]
+    public void Resume_threshold_defaults_to_five_hundred_megabytes()
+    {
+        // The product default: files at or above 500 MiB are staged under a deterministic name so an
+        // interrupted transfer can continue; smaller ones use rclone's faster multi-stream copy.
+        Assert.Equal(500L * 1024 * 1024, new ApplicationSettings().DefaultResumeMinimumBytes);
+    }
+
+    [Fact]
+    public void Effective_settings_prefers_the_profile_resume_threshold_over_the_application_default()
+    {
+        var defaults = new ApplicationSettings { DefaultResumeMinimumBytes = 500L * 1024 * 1024 };
+        var profile = SyncProfile.Create("P", "left", "right") with { Settings = new ProfileSettings(ResumeMinimumBytes: 1024) };
+
+        Assert.Equal(1024, EffectiveProfileSettings.Resolve(profile, defaults).ResumeMinimumBytes);
+    }
+
+    [Fact]
+    public void Effective_settings_inherits_the_application_resume_threshold_when_the_profile_does_not_set_one()
+    {
+        var defaults = new ApplicationSettings { DefaultResumeMinimumBytes = 7 };
+
+        Assert.Equal(7, EffectiveProfileSettings.Resolve(SyncProfile.Create("P", "left", "right"), defaults).ResumeMinimumBytes);
+    }
+
+    [Fact]
+    public void Validator_accepts_zero_but_rejects_a_negative_resume_threshold()
+    {
+        // Zero is meaningful ("continue every file"), so it must not be treated as "unset".
+        Assert.Empty(ConfigurationValidator.Validate(new ApplicationSettings { DefaultResumeMinimumBytes = 0 }));
+        Assert.NotEmpty(ConfigurationValidator.Validate(new ApplicationSettings { DefaultResumeMinimumBytes = -1 }));
+    }
+
+    [Theory]
+    [InlineData("500M", 500L * 1024 * 1024)]
+    [InlineData("500MB", 500L * 1024 * 1024)]
+    [InlineData("500MiB", 500L * 1024 * 1024)]
+    [InlineData("500m", 500L * 1024 * 1024)]
+    [InlineData("2 GB", 2L * 1024 * 1024 * 1024)]
+    [InlineData("1.5T", (long)(1.5 * 1024 * 1024 * 1024 * 1024))]
+    [InlineData("1K", 1024)]
+    [InlineData("1024", 1024)]
+    [InlineData("0", 0)]
+    public void Byte_size_parses_the_forms_the_settings_windows_accept(string text, long expected)
+    {
+        Assert.True(ByteSize.TryParse(text, out var bytes), text);
+        Assert.Equal(expected, bytes);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    [InlineData("abc")]
+    [InlineData("500X")]
+    [InlineData("-1")]
+    [InlineData("1e30")]
+    public void Byte_size_rejects_input_it_cannot_scale(string? text)
+    {
+        Assert.False(ByteSize.TryParse(text, out var bytes));
+        Assert.Equal(0, bytes);
+    }
+
+    [Fact]
+    public void Byte_size_format_round_trips_through_parse()
+    {
+        // The settings window writes Format() and reads TryParse(), so every value it can emit has to
+        // survive the trip unchanged.
+        foreach (var value in new long[] { 0, 1, 1024, 500L * 1024 * 1024, 1024L * 1024 * 1024 * 1024, 1L << 40 })
+        {
+            var text = ByteSize.Format(value);
+            Assert.True(ByteSize.TryParse(text, out var parsed), text);
+            Assert.Equal(value, parsed);
+        }
+    }
+
+    [Theory]
+    [InlineData(500L * 1024 * 1024, "500M")]
+    [InlineData(2L * 1024 * 1024 * 1024, "2G")]
+    [InlineData(1024L, "1K")]
+    [InlineData(4096L, "4K")]
+    [InlineData(1L, "1")]
+    [InlineData(0L, "0")]
+    public void Byte_size_is_shown_with_the_largest_exact_unit(long bytes, string expected)
+    {
+        // Round-tripping alone would not catch Format() degrading to a raw byte count, which is what
+        // the settings boxes actually display.
+        Assert.Equal(expected, ByteSize.Format(bytes));
+    }
 }

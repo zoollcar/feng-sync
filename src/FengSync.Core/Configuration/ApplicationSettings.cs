@@ -6,6 +6,11 @@ public sealed record ApplicationSettings
     public int SchemaVersion { get; init; } = ConfigurationMigrator.CurrentSchemaVersion;
     public int DefaultMaxConcurrentCopies { get; init; } = 3;
     public bool DefaultVerifyCopies { get; init; } = true;
+    /// <summary>
+    /// Files at or above this size keep a resumable staging file, so an interrupted download can be
+    /// continued instead of restarted. 0 continues every file, however small. Defaults to 500 MB.
+    /// </summary>
+    public long DefaultResumeMinimumBytes { get; init; } = 500L * 1024 * 1024;
     public SyncFilter DefaultFilter { get; init; } = SyncFilter.Empty;
     public VersioningPolicy DefaultVersioning { get; init; } = new();
     /// <summary>Timestamp drift accepted by newly created/inheriting profiles.</summary>

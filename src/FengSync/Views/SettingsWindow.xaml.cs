@@ -110,6 +110,16 @@ public partial class SettingsWindow : Window
         sp.Children.Add(NewHeader("默认值", section));
         sp.Children.Add(NewLabeledRow("默认最大并发传输数", NewTextBox("SettingsConcurrency", _initial.DefaultMaxConcurrentCopies.ToString()), caption));
         sp.Children.Add(NewCheckbox("SettingsVerifyCopies", "默认在复制后验证文件大小", _initial.DefaultVerifyCopies));
+        sp.Children.Add(NewLabeledRow("启用断点续传的最小文件大小",
+            NewTextBox("SettingsResumeMinimum", ByteSize.Format(_initial.DefaultResumeMinimumBytes)), caption));
+        sp.Children.Add(new TextBlock
+        {
+            Text = "不小于该大小的文件先写入 xxx.fengsync.partial，传输完成后改名发布，中断后可从断点继续（下载方向）。"
+                 + "填 0 表示所有文件都续传；支持 500M、2G 这类写法。低于该大小使用 rclone 多流传输，速度更快但中断后需重新开始。",
+            Style = caption,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
         sp.Children.Add(NewLabeledRow("默认时间容差（秒）", NewTextBox("SettingsTimeTolerance", _initial.DefaultTimeToleranceSeconds.ToString()), caption));
         sp.Children.Add(NewLabeledRow("默认包含规则（每行一条）", NewTextBox("SettingsIncludeRules",
             string.Join(Environment.NewLine, _initial.DefaultFilter.Include ?? []), height: 60, multiline: true), caption));
@@ -292,6 +302,9 @@ public partial class SettingsWindow : Window
             return id switch
             {
                 "SettingsConcurrency" => int.TryParse(text, out var c) ? value with { DefaultMaxConcurrentCopies = c } : value,
+                // An unreadable size becomes a sentinel so ConfigurationValidator reports it, rather
+                // than silently keeping the previous value while the box shows something else.
+                "SettingsResumeMinimum" => value with { DefaultResumeMinimumBytes = ByteSize.TryParse(text, out var resume) ? resume : -1 },
                 "SettingsTimeTolerance" => int.TryParse(text, out var t) ? value with { DefaultTimeToleranceSeconds = t } : value,
                 "SettingsKeepDays" => int.TryParse(text, out var k) ? value with { DefaultVersioning = value.DefaultVersioning with { KeepDays = k } } : value,
                 "SettingsLogRetention" => int.TryParse(text, out var l) ? value with { LogRetentionDays = l } : value,

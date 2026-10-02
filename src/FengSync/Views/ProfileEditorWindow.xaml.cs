@@ -14,17 +14,20 @@ public partial class ProfileEditorWindow : Window
 {
     private readonly ProfileEditorViewModel _viewModel;
     private readonly ObservableCollection<EditableFilterRule> _rules = [];
+    private readonly ApplicationSettings _application;
     private bool _backgroundActionInProgress;
     public SyncProfile? SavedProfile { get; private set; }
-    public ProfileEditorWindow(SyncProfile profile)
+    public ProfileEditorWindow(SyncProfile profile, ApplicationSettings? application = null)
     {
         InitializeComponent(); _viewModel = new(profile); DataContext = _viewModel;
+        _application = application ?? new();
         NameBox.Text = profile.Name; DescriptionBox.Text = profile.Description; LeftPathBox.Text = profile.LeftPath; RightPathBox.Text = profile.RightPath; ModeBox.SelectedIndex = (int)profile.Mode; Enabled.IsChecked = profile.Enabled;
         var setting = profile.Settings;
         foreach (var rule in (setting?.Filter ?? profile.Filter ?? SyncFilter.Empty).ToRules()) _rules.Add(new(rule));
         RuleGrid.ItemsSource = _rules;
         UseDefaultCopies.IsChecked = setting?.VerifyCopies is null; VerifyCopies.IsChecked = setting?.VerifyCopies ?? profile.VerifyCopies; MaxDeletesBox.Text = profile.MaxDeletes.ToString(); MaxDeleteRatioBox.Text = profile.MaxDeleteRatio.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
         UseDefaultConcurrency.IsChecked = setting?.MaxConcurrentCopies is null; ConcurrencyBox.Text = (setting?.MaxConcurrentCopies ?? profile.MaxConcurrentCopies).ToString();
+        UseDefaultResume.IsChecked = setting?.ResumeMinimumBytes is null; ResumeMinimumBox.Text = ByteSize.Format(setting?.ResumeMinimumBytes ?? _application.DefaultResumeMinimumBytes);
         TimeToleranceBox.Text = (setting?.TimeToleranceSeconds ?? 2).ToString();
         var versioning = setting?.Versioning ?? profile.Versioning ?? new(); VersioningBox.SelectedIndex = versioning.Mode == VersioningMode.TimestampedArchive ? 1 : versioning.Mode == VersioningMode.RecycleBin ? 2 : 0; ArchiveBox.Text = versioning.ArchiveDirectory; KeepDaysBox.Text = versioning.KeepDays?.ToString() ?? ""; MaxVersionsBox.Text = versioning.MaxVersionsPerFile?.ToString() ?? ""; MaxTotalMbBox.Text = versioning.MaxTotalBytes is long bytes ? (bytes / 1024d / 1024d).ToString("0.##") : "";
         RefreshState();
@@ -60,10 +63,16 @@ public partial class ProfileEditorWindow : Window
         if (!double.TryParse(MaxDeleteRatioBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var maxDeleteRatio) || maxDeleteRatio is < 0 or > 1) { Sections.SelectedIndex = 5; MessageBox.Show("最大删除比例必须在 0 到 1 之间。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (!int.TryParse(TimeToleranceBox.Text, out var tolerance) || tolerance is < 0 or > 86400) { Sections.SelectedIndex = 1; MessageBox.Show("时间容差必须在 0 到 86400 秒之间。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (!TryNullableInt(KeepDaysBox.Text, out var keepDays, "保留天数") || !TryNullableInt(MaxVersionsBox.Text, out var maxVersions, "每文件版本数") || !TryTotalBytes(MaxTotalMbBox.Text, out var maxTotalBytes)) { Sections.SelectedIndex = 4; return; }
+        long? resumeMinimum = null;
+        if (UseDefaultResume.IsChecked != true)
+        {
+            if (!ByteSize.TryParse(ResumeMinimumBox.Text, out var parsedResume)) { Sections.SelectedIndex = 5; MessageBox.Show("续传最小文件大小无效，请使用 500M、2G 这类写法（0 表示所有文件都续传）。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            resumeMinimum = parsedResume;
+        }
         var filter = new SyncFilter(Rules: Rules());
         var mode = (SyncMode)Math.Max(0, ModeBox.SelectedIndex);
         var versioning = VersioningBox.SelectedIndex switch { 1 => new VersioningPolicy(VersioningMode.TimestampedArchive, ArchiveBox.Text, keepDays, maxVersions, maxTotalBytes), 2 => new VersioningPolicy(VersioningMode.RecycleBin), _ => new VersioningPolicy() };
-        var settings = new ProfileSettings(UseDefaultConcurrency.IsChecked == true ? null : concurrency, UseDefaultCopies.IsChecked == true ? null : VerifyCopies.IsChecked == true, filter, versioning, tolerance);
+        var settings = new ProfileSettings(UseDefaultConcurrency.IsChecked == true ? null : concurrency, UseDefaultCopies.IsChecked == true ? null : VerifyCopies.IsChecked == true, filter, versioning, tolerance, resumeMinimum);
         _viewModel.Update(p => p with { Name = NameBox.Text.Trim(), Description = DescriptionBox.Text, LeftPath = LeftPathBox.Text.Trim(), RightPath = RightPathBox.Text.Trim(), Mode = mode, Enabled = Enabled.IsChecked == true, MaxDeletes = maxDeletes, MaxDeleteRatio = maxDeleteRatio, Settings = settings });
         var validation = ProfileValidator.Validate(_viewModel.Profile);
         if (!validation.IsValid) { Sections.SelectedIndex = validation.Errors.Any(x => x.Contains("端点") || x.Contains("名称")) ? 0 : 4; MessageBox.Show(string.Join(Environment.NewLine, validation.Errors), "无法保存 Profile", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
@@ -72,6 +81,7 @@ public partial class ProfileEditorWindow : Window
     private void RefreshState() { CompatibilityText.Text = _viewModel.Compatibility.CanRun ? "" : "需要修复：" + _viewModel.Compatibility.Summary; DirtyLabel.Text = "编辑副本仅在保存后生效"; }
     private void UseDefaultCopies_Changed(object sender, RoutedEventArgs e) => VerifyCopies.IsEnabled = UseDefaultCopies.IsChecked != true;
     private void UseDefaultConcurrency_Changed(object sender, RoutedEventArgs e) => ConcurrencyBox.IsEnabled = UseDefaultConcurrency.IsChecked != true;
+    private void UseDefaultResume_Changed(object sender, RoutedEventArgs e) => ResumeMinimumBox.IsEnabled = UseDefaultResume.IsChecked != true;
     private void AddIncludeRule_Click(object sender, RoutedEventArgs e) => AddRule(FilterRuleKind.Include);
     private void AddExcludeRule_Click(object sender, RoutedEventArgs e) => AddRule(FilterRuleKind.Exclude);
     private void AddRule(FilterRuleKind kind) { var rule = new EditableFilterRule(kind, "**", ""); _rules.Add(rule); RuleGrid.SelectedItem = rule; }

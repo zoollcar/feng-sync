@@ -1,7 +1,7 @@
 namespace FengSync.Core.Configuration;
 
 /// <summary>Immutable runtime snapshot; callers never mutate application settings while using a profile.</summary>
-public sealed record EffectiveProfileSettings(int MaxConcurrentCopies, bool VerifyCopies, SyncFilter Filter, VersioningPolicy Versioning, int TimeToleranceSeconds)
+public sealed record EffectiveProfileSettings(int MaxConcurrentCopies, bool VerifyCopies, SyncFilter Filter, VersioningPolicy Versioning, int TimeToleranceSeconds, long ResumeMinimumBytes)
 {
     public static EffectiveProfileSettings Resolve(SyncProfile profile, ApplicationSettings application)
     {
@@ -11,6 +11,7 @@ public sealed record EffectiveProfileSettings(int MaxConcurrentCopies, bool Veri
             settings?.VerifyCopies ?? profile.VerifyCopies,
             settings?.Filter ?? profile.Filter ?? application.DefaultFilter,
             settings?.Versioning ?? profile.Versioning ?? application.DefaultVersioning,
-            settings?.TimeToleranceSeconds ?? application.DefaultTimeToleranceSeconds);
+            settings?.TimeToleranceSeconds ?? application.DefaultTimeToleranceSeconds,
+            settings?.ResumeMinimumBytes ?? application.DefaultResumeMinimumBytes);
     }
 }

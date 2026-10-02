@@ -77,12 +77,15 @@ public sealed class UiFeatureBehaviorTests
     {
         RunSta(() =>
         {
-            var application = new Application();
-            foreach (var resource in new[] { "DesignTokens.xaml", "Typography.xaml", "Icons.xaml", "Controls.xaml" })
-                application.Resources.MergedDictionaries.Add(new ResourceDictionary
-                {
-                    Source = new Uri($"pack://application:,,,/FengSync;component/Themes/{resource}")
-                });
+            // WPF allows exactly one Application per AppDomain, and xunit decides which STA test runs
+            // first, so this must adopt an existing instance instead of assuming it is the first.
+            var application = Application.Current ?? new Application();
+            if (application.Resources.MergedDictionaries.Count == 0)
+                foreach (var resource in new[] { "DesignTokens.xaml", "Typography.xaml", "Icons.xaml", "Controls.xaml" })
+                    application.Resources.MergedDictionaries.Add(new ResourceDictionary
+                    {
+                        Source = new Uri($"pack://application:,,,/FengSync;component/Themes/{resource}")
+                    });
             var release = new GitHubReleaseInfo("Stable", "v9.9.9", "Important fixes", new Uri("https://example.test/release"),
                 new Uri("https://example.test/package"), new Uri("https://example.test/hash"), 2 * 1024 * 1024, null);
             var window = new UpdateWindow("1.0.0", release);

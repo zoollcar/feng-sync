@@ -38,8 +38,8 @@ public class TaskJournalStore(string? root = null)
     public int RemoveOrphanedPartialFiles(params string[] endpointRoots)
     {
         var active = Directory.Exists(_root) ? Directory.EnumerateFiles(_root, "*.json").SelectMany(file => JsonSerializer.Deserialize<SyncJournal>(File.ReadAllText(file))?.Items ?? []).Select(x => x.Path).ToHashSet(StringComparer.OrdinalIgnoreCase) : [];
-        var removed = 0; foreach (var root in endpointRoots.Where(Directory.Exists)) foreach (var file in Directory.EnumerateFiles(root, "*.fengsync-*.partial", SearchOption.AllDirectories))
-        { var relative = Path.GetRelativePath(root, file).Replace('\\', '/'); if (!active.Contains(relative)) { File.Delete(file); removed++; } }
+        var removed = 0; foreach (var root in endpointRoots.Where(Directory.Exists)) foreach (var file in Directory.EnumerateFiles(root, "*.fengsync*.partial", SearchOption.AllDirectories))
+        { var relative = Path.GetRelativePath(root, file).Replace('\\', '/'); if (!SyncInternalPaths.IsTransferTemporary(relative)) continue; if (!active.Contains(relative)) { File.Delete(file); removed++; } }
         return removed;
     }
 }

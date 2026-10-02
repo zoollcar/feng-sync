@@ -47,7 +47,7 @@ public sealed class ProfileRunner
             // transfer integrity and build the next baseline.
             var snapshot = PlanSnapshot.FromComparison(prepared.Plan, prepared.Comparison);
             run = await new Execution.SyncExecutorV2().ExecuteAsync(snapshot, prepared.Left, prepared.Right,
-                progress is null ? null : new Progress<TransferProgress>(x => progress.Report(x.Path)), ct, prepared.Effective.VerifyCopies, prepared.Effective.Versioning, resourceGovernor: null, journals: new TaskJournalStore(), maxConcurrentCopies: prepared.Effective.MaxConcurrentCopies);
+                progress is null ? null : new Progress<TransferProgress>(x => progress.Report(x.Path)), ct, prepared.Effective.VerifyCopies, prepared.Effective.Versioning, resourceGovernor: null, journals: new TaskJournalStore(), maxConcurrentCopies: prepared.Effective.MaxConcurrentCopies, resumeMinimumBytes: prepared.Effective.ResumeMinimumBytes);
             transaction = run.Operations.Where(x => x.Stage == TransferStage.Committed)
                 .Aggregate(transaction, (current, item) => current.RecordCommitted(item.Path));
             await prepared.BaselineRepository.SaveAsync(transaction, ct);

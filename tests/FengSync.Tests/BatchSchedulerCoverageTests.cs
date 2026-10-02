@@ -47,7 +47,10 @@ public sealed class BatchSchedulerCoverageTests
         var results = await run;
 
         Assert.True(results[0].Succeeded);
-        Assert.IsType<OperationCanceledException>(results[1].Error);
+        // Task.Delay(Timeout.Infinite, token) surfaces a TaskCanceledException, which derives from
+        // OperationCanceledException. Asserting the exact type made this test depend on which of the
+        // two the runtime happened to throw; the contract is only that the job was cancelled.
+        Assert.IsAssignableFrom<OperationCanceledException>(results[1].Error);
     }
 
     private static void SetMaximum(ref int maximum, int value)
