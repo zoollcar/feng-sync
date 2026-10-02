@@ -1,0 +1,17 @@
+<Application x:Class="FengSync.DriveHub.DriveHubApp"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    ThemeMode="System">
+    <!-- No StartupUri: the window is created in OnStartup so the service host is installed first. -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- The cloud manager window is defined in the main assembly, so its themes come from there. -->
+                <ResourceDictionary Source="pack://application:,,,/FengSync;component/Themes/DesignTokens.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/FengSync;component/Themes/Typography.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/FengSync;component/Themes/Icons.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/FengSync;component/Themes/Controls.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

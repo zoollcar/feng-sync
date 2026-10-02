@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'sftp-service', 'batch-run', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume', 'r2', 'r2-volume')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'sftp-service', 'cloud-transfers', 'batch-run', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume', 'r2', 'r2-volume')][string]$Scenario,
     [Parameter(Mandatory)][string]$AppPath,
     [Parameter(Mandatory)][string]$Workspace
 )
@@ -1072,6 +1072,34 @@ try {
       Wait-Until { (Find-Id $sftpSettings 'SftpServerStatus').Current.Name -match '端口已释放' } 'Built-in SFTP status did not report a clean stop.' 30 | Out-Null
       Close-Window $sftpSettings; Close-Window $settings
     }
+    'cloud-transfers' {
+      # The standalone transfer window is the only surface that owns upload/download progress,
+      # cancellation and 断点续传, and it is reachable from the real shell without any credential:
+      # the cloud manager opens with no endpoints configured. This pins the wiring the two windows
+      # depend on, which no other scenario touches.
+      Click (Find-Id $main 'RemoteEndpointsButton')
+      $manager = Find-WindowById 'RemoteEndpointManagerWindow' 30
+      # The manager reports aggregate transfer progress, so its bar must exist before anything is queued.
+      if (-not (Find-Name $manager '文件传输进度' 10)) { throw 'The cloud manager did not expose its transfer progress bar.' }
+      Capture-Element $manager 'cloud-manager-empty.png' 'cloud-manager' 'cloud manager before any endpoint exists'
+      Click (Find-Id $manager 'OpenCloudTransfers')
+      $transfers = Find-WindowById 'CloudTransferWindow' 30
+      # Both TextBlocks expose their live text as the accessible name, so the status is what a screen
+      # reader reads and what this scenario asserts.
+      $summary = (Find-Id $transfers 'CloudTransferSummary').Current.Name
+      if ($summary -notmatch '暂无传输任务') { throw "The transfer window did not start empty: '$summary'." }
+      # With nothing queued every action must be off rather than silently doing nothing.
+      foreach ($id in @('ResumeCloudTransfers', 'CancelAllCloudTransfers', 'ClearCloudTransfers')) {
+        if ((Find-Id $transfers $id 5).Current.IsEnabled) { throw "The transfer window enabled $id with no transfers queued." }
+      }
+      $hint = (Find-Id $transfers 'CloudTransferHint').Current.Name
+      if ($hint -notmatch '拖入' -or $hint -notmatch '拖到') { throw "The transfer window did not explain how a transfer starts: '$hint'." }
+      Capture-Element $transfers 'cloud-transfers-empty.png' 'cloud-transfers' 'standalone transfer window with nothing queued'
+      Close-Window $transfers
+      Wait-Until { $null -eq (Find-AppWindow { param($window) $window.Current.AutomationId -eq 'CloudTransferWindow' }) } 'The transfer window did not close.' 30 | Out-Null
+      Close-Window $manager
+      Wait-Until { $null -eq (Find-AppWindow { param($window) $window.Current.AutomationId -eq 'RemoteEndpointManagerWindow' }) } 'The cloud manager did not close.' 30 | Out-Null
+    }
     'batch-run' {
       $left = Join-Path $root 'batch-left'; $right = Join-Path $root 'batch-right'; New-Item -ItemType Directory -Force -Path @($left, $right) | Out-Null
       [IO.File]::WriteAllText((Join-Path $left 'batch-proof.txt'), 'batch-window-proof')
@@ -1128,6 +1156,10 @@ try {
       $profileName = 'threshold-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
       Click (Find-Id $main 'EditCurrentProfileButton'); $editor = Find-WindowById 'ProfileEditorWindow'; Set-Text (Find-Id $editor 'ProfileName') $profileName; Set-Text (Find-Id $editor 'ProfileLeftPath') $left; Set-Text (Find-Id $editor 'ProfileRightPath') $right
       $sections = Find-Id $editor 'ProfileSections'; Select-Ui (Find-Name $sections '性能与可靠性' 5)
+      # The resume threshold only accepts input once the profile stops inheriting the application default.
+      $useDefaultResume = Find-Id $editor 'ProfileUseDefaultResume'
+      if ((Get-ToggleState $useDefaultResume) -eq [System.Windows.Automation.ToggleState]::On) { Toggle-Ui $useDefaultResume }
+      Set-Text (Find-Id $editor 'ProfileResumeMinimum') '1G'
       Set-Text (Find-Id $editor 'ProfileMaxDeletes') '0'; Set-Text (Find-Id $editor 'ProfileMaxDeleteRatio') '0'; Capture-Element $editor 'profile-delete-threshold.png' 'profile-editor' 'performance and destructive safety'; Click (Find-Id $editor 'ProfileSave')
       Select-Mode $main '镜像到右侧'; Compare-Ui $main $left $right; Wait-Until { (Find-Id $main 'SyncButton').Current.IsEnabled } 'Mirror threshold plan was not executable.'
       Click (Find-Id $main 'SyncButton'); $confirm = Wait-Until { try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'SyncConfirmationWindow' } } catch { $null } } 'Threshold confirm window did not appear' 30
@@ -1141,11 +1173,14 @@ try {
       $settings = Open-SettingsCenter
       # The General page is selected by default; the previously separate Defaults tab is gone.
       Set-Text (Find-Id $settings 'SettingsConcurrency') '3'; Set-Text (Find-Id $settings 'SettingsTimeTolerance') '7'; Set-Text (Find-Id $settings 'SettingsIncludeRules') '**/*.keep'; Set-Text (Find-Id $settings 'SettingsExcludeRules') '**/*.skip'
+      # The resume threshold is a byte size, so it must survive a save/reopen as the size the user typed.
+      Set-Text (Find-Id $settings 'SettingsResumeMinimum') '2G'
       Capture-Element $settings 'settings-general-modified.png' 'settings' 'general settings with unsaved changes'
       Click (Find-Id $settings 'SettingsApply'); Click (Find-Id $settings 'SettingsOk')
       Wait-Until { (Find-Id $main 'Status').Current.Name -match '已应用|程序设置已应用' } 'Settings did not report apply.'
       $settings = Open-SettingsCenter
       if ((Get-Text (Find-Id $settings 'SettingsConcurrency')) -ne '3' -or (Get-Text (Find-Id $settings 'SettingsTimeTolerance')) -ne '7' -or (Get-Text (Find-Id $settings 'SettingsIncludeRules')) -ne '**/*.keep' -or (Get-Text (Find-Id $settings 'SettingsExcludeRules')) -ne '**/*.skip') { throw 'Applied application defaults were not persisted on re-open.' }
+      if ((Get-Text (Find-Id $settings 'SettingsResumeMinimum')) -ne '2G') { throw "The resume threshold was not persisted as the size that was entered: '$(Get-Text (Find-Id $settings 'SettingsResumeMinimum'))'." }
       Capture-Element $settings 'settings-general-persisted.png' 'settings' 'persisted general settings'
       Select-Ui (Find-Id $settings 'RunHistoryNav'); Start-Sleep -Milliseconds 200; Capture-Element $settings 'settings-run-history.png' 'settings' 'run history settings page'
       Select-Ui (Find-Id $settings 'LogsNav'); Start-Sleep -Milliseconds 200; Capture-Element $settings 'settings-logs.png' 'settings' 'logs settings page'

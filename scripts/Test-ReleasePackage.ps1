@@ -24,6 +24,13 @@ if (!(Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Release output missi
 $productVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion
 if ($productVersion -cne $Version) { throw "FengSync.exe ProductVersion '$productVersion' must equal release version '$Version'." }
 
+# The release folder offers several entry points. DriveHub is the standalone cloud drive manager; it is
+# a separate executable into the same product, so it must ship and carry the same product version.
+$driveHub = Join-Path $publish 'DriveHub.exe'
+if (!(Test-Path -LiteralPath $driveHub -PathType Leaf)) { throw "Release output missing: DriveHub.exe" }
+$driveHubVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($driveHub).ProductVersion
+if ($driveHubVersion -cne $Version) { throw "DriveHub.exe ProductVersion '$driveHubVersion' must equal release version '$Version'." }
+
 $manifestPath = Join-Path $publish 'release-manifest.json'
 if (!(Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'Release output missing: release-manifest.json' }
 $manifestJson = Get-Content -LiteralPath $manifestPath -Raw

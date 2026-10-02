@@ -7,10 +7,19 @@ namespace FengSync.Services;
 
 public enum EndpointProbeStatus { NotTested, Succeeded, Failed }
 
+/// <param name="Provider">Name shown to the user, and what the endpoint metadata records.</param>
+/// <param name="RcloneProvider">
+/// Value rclone's <c>provider</c> option receives when it differs from <paramref name="Provider"/>,
+/// for example the Backblaze preset that rclone only knows as <c>Other</c>.
+/// </param>
 public sealed record S3EndpointValues(string DisplayName, string Provider, string AccessKey, string Secret,
-    string Region, string Endpoint, string Bucket, string Subdirectory)
+    string Region, string Endpoint, string Bucket, string Subdirectory, string? RcloneProvider = null)
 {
-    public string RootPath => CloudEndpointMetadata.NormalizeRoot(Bucket, Subdirectory);
+    /// <summary>
+    /// The bucket/prefix this endpoint is confined to: <c>bucket/subdirectory</c>. S3 has no directories,
+    /// so the "subdirectory" is literally a key prefix, and the endpoint may never address a key outside it.
+    /// </summary>
+    public string Prefix => CloudEndpointMetadata.NormalizeRoot(Bucket, Subdirectory);
 }
 
 public sealed class S3EndpointDraft
@@ -37,9 +46,25 @@ public sealed class S3EndpointDraft
     }
 }
 
-public sealed record CloudEndpointMetadata(string RemoteName, string Type, string Provider, string Bucket, string Subdirectory)
+/// <param name="AliasOf">
+/// Name of the hidden backing <c>s3</c> remote when this endpoint enforces its prefix through an rclone
+/// <c>alias</c>. <see langword="null"/> for every endpoint that keeps its prefix only in metadata.
+/// </param>
+public sealed record CloudEndpointMetadata(string RemoteName, string Type, string Provider, string Bucket, string Subdirectory, string? AliasOf = null)
 {
-    [JsonIgnore] public string RootPath => NormalizeRoot(Bucket, Subdirectory);
+    /// <summary>The bucket/prefix the user configured, as shown in the UI.</summary>
+    [JsonIgnore] public string Prefix => NormalizeRoot(Bucket, Subdirectory);
+
+    /// <summary>
+    /// The path relative to the rclone remote that browsing and endpoint URIs use. Empty for an
+    /// alias-backed endpoint: rclone already applies the prefix, so repeating it would address
+    /// <c>bucket/prefix/bucket/prefix</c>.
+    /// </summary>
+    [JsonIgnore] public string RootPath => AliasOf is null ? Prefix : "";
+
+    /// <summary>True when rclone — not this application's UI — enforces the prefix.</summary>
+    [JsonIgnore] public bool PrefixIsEnforced => AliasOf is not null;
+
     public static string NormalizeRoot(string? bucket, string? subdirectory) =>
         string.Join('/', new[] { bucket, subdirectory }.Select(value => (value ?? "").Trim().Trim('/')).Where(value => value.Length > 0));
 }
@@ -49,10 +74,15 @@ public sealed record CloudEndpointAccount(RcloneAccount Remote, CloudEndpointMet
     public string Name => Remote.Name;
     public string Type => Remote.Type;
     public string Provider => Metadata?.Provider ?? Remote.Provider;
+    /// <summary>Path relative to the rclone remote; empty when the prefix lives in an alias.</summary>
     public string RootPath => Metadata?.RootPath ?? "";
-    public string Display => string.IsNullOrWhiteSpace(RootPath)
+    /// <summary>The bucket/prefix shown to the user, and the only thing the endpoint can reach.</summary>
+    public string Prefix => Metadata?.Prefix ?? "";
+    /// <summary>True when rclone enforces the prefix, so no path can address anything outside it.</summary>
+    public bool PrefixIsEnforced => Metadata?.PrefixIsEnforced ?? false;
+    public string Display => string.IsNullOrWhiteSpace(Prefix)
         ? $"{Remote.Display}  ·  未设置默认根目录"
-        : $"{Remote.Display}  ·  /{RootPath}";
+        : $"{Remote.Display}  ·  /{Prefix}";
 }
 
 public sealed class CloudEndpointMetadataStore(string? path = null)

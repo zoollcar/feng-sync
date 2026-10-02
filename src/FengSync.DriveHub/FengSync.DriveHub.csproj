@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- The release folder ships several entry points; this one is deliberately named DriveHub. -->
+    <AssemblyName>DriveHub</AssemblyName>
+    <RootNamespace>FengSync.DriveHub</RootNamespace>
+    <ApplicationIcon>..\FengSync\Assets\Branding\FengSync.ico</ApplicationIcon>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Keep in step with src\FengSync\FengSync.csproj; both files declare the product version. -->
+    <Version>0.2.1</Version>
+    <AssemblyVersion>0.2.1.0</AssemblyVersion>
+    <FileVersion>0.2.1.0</FileVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Reuses the main shell's cloud manager window, services and theme resources. -->
+    <ProjectReference Include="..\FengSync\FengSync.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- rclone is located beside the executable, so DriveHub must not depend on transitive content. -->
+    <Content Include="..\FengSync\Assets\rclone\rclone.exe" Link="Assets\rclone\rclone.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+  <!-- Mirror the CLI: the main output folder is the supported "run every entry point from one folder" layout. -->
+  <Target Name="CopyDriveHubBesideFengSync" AfterTargets="Build">
+    <ItemGroup>
+      <DriveHubOutputFiles Include="$(OutDir)DriveHub.exe;$(OutDir)DriveHub.dll;$(OutDir)DriveHub.deps.json;$(OutDir)DriveHub.runtimeconfig.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DriveHubOutputFiles)" DestinationFolder="$(MSBuildProjectDirectory)\..\FengSync\bin\$(Configuration)\$(TargetFramework)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

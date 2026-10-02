@@ -175,7 +175,7 @@ public partial class MainWindow : Window
             Status.Text = $"正在以 {effective.MaxConcurrentCopies} 路并发同步…";
             var baselineRepository = new BaselineRepository(); var transaction = await baselineRepository.BeginAsync(_left, _right, _syncCancellation.Token);
             progressDialog.BeginTransfers(effective.MaxConcurrentCopies);
-            var run = await new SyncExecutorV2().ExecuteAsync(_snapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), _syncCancellation.Token, effective.VerifyCopies, effective.Versioning, journals: new TaskJournalStore(), maxConcurrentCopies: effective.MaxConcurrentCopies);
+            var run = await new SyncExecutorV2().ExecuteAsync(_snapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), _syncCancellation.Token, effective.VerifyCopies, effective.Versioning, journals: new TaskJournalStore(), maxConcurrentCopies: effective.MaxConcurrentCopies, resumeMinimumBytes: effective.ResumeMinimumBytes);
             transaction = run.Operations.Where(x => x.Stage == TransferStage.Committed).Aggregate(transaction, (current, item) => current.RecordCommitted(item.Path));
             BaselineCommitResult? baselineCommit = null;
             if (_comparison is not null && run.SucceededOperations > 0)
@@ -186,7 +186,7 @@ public partial class MainWindow : Window
             progressDialog.SetRetry(operations, async retryPlan =>
             {
                 var retrySnapshot = await PlanSnapshot.CaptureAsync(retryPlan, _left, _right);
-                return await new SyncExecutorV2().ExecuteAsync(retrySnapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), CancellationToken.None, effective.VerifyCopies, effective.Versioning, journals: new TaskJournalStore(), maxConcurrentCopies: effective.MaxConcurrentCopies);
+                return await new SyncExecutorV2().ExecuteAsync(retrySnapshot, _left, _right, new Progress<TransferProgress>(p => progressDialog.Report(p)), CancellationToken.None, effective.VerifyCopies, effective.Versioning, journals: new TaskJournalStore(), maxConcurrentCopies: effective.MaxConcurrentCopies, resumeMinimumBytes: effective.ResumeMinimumBytes);
             });
             if (!run.Succeeded)
             {
@@ -456,6 +456,7 @@ public partial class MainWindow : Window
         {
             var loaded = await new SettingsStore().LoadAsync();
             _settings = loaded.Settings;
+            AppServices.TryCurrent?.CloudTransfers.ResumeMinimumBytes = _settings.DefaultResumeMinimumBytes;
             SidebarColumn.Width = new GridLength(ClampSidebarWidth(_settings.MainWindowSidebarWidth));
             UpdateSettingsText();
             UpdateEndpointHeaders();
@@ -513,7 +514,7 @@ public partial class MainWindow : Window
     {
         if (ProfileList.SelectedItem is not SyncProfile original) { Status.Text = "请先选择一个 Profile。"; return; }
         var editable = original with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode };
-        var updated = new ProfileDialogService().Edit(this, editable);
+        var updated = new ProfileDialogService().Edit(this, editable, _settings);
         if (updated is null) return;
         var index = _profiles.IndexOf(original);
         if (index >= 0) _profiles[index] = updated; else _profiles.Add(updated);
@@ -668,7 +669,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) throw new InvalidOperationException("请先填写两个端点。");
         await DisposeRcloneAsync();
         var needsRemote = IsCloud(left) || IsCloud(right);
-        if (needsRemote) _rcloneClient = await App.CurrentApp.RcloneHost.GetClientAsync();
+        if (needsRemote) _rcloneClient = await AppServices.Current.RcloneHost.GetClientAsync();
         return (CreateEndpoint(left), CreateEndpoint(right));
     }
     private IEndpoint CreateEndpoint(string value)
@@ -713,6 +714,7 @@ public partial class MainWindow : Window
         settings = settings with { MainWindowSidebarWidth = ClampSidebarWidth(SidebarColumn.ActualWidth) };
         await new SettingsStore().SaveAsync(settings);
         _settings = settings;
+        AppServices.TryCurrent?.CloudTransfers.ResumeMinimumBytes = settings.DefaultResumeMinimumBytes;
         UpdateSettingsText();
         Status.Text = "程序设置已应用。";
     }

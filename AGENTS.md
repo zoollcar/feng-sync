@@ -32,6 +32,7 @@ Use this file as a fast routing map. Inspect only the relevant subtree and its f
 | `src/FengSync.Core/Mount/`, `SftpServer/` | rclone mount discovery/lifecycle and bundled-rclone SFTP server. |
 | `src/FengSync.Core/Updates/` + `src/FengSync.Updater/` | Update metadata/download/install workflow and isolated self-updater. |
 | `src/FengSync/` | WPF shell: XAML views, view models, UI services, themes, bundled `Assets/rclone/rclone.exe`. |
+| `src/FengSync.DriveHub/` | Second executable entry point (`DriveHub.exe`): hosts the shared cloud drive manager window on its own rclone daemon; a post-build target copies `DriveHub.*` beside `FengSync.exe`. |
 | `src/FengSync.Cli/` | JSON-line `compare` and `run` CLI over `ProfileRunner`. |
 | `tests/FengSync.Tests/` | xUnit unit, integration, CLI, update, real-SFTP, and core tests. |
 | `tests/FengSync.UiTests/` | Windows UI Automation acceptance tests and their PowerShell scenarios. |
@@ -49,6 +50,9 @@ Use this file as a fast routing map. Inspect only the relevant subtree and its f
 - Destructive actions (deletes, overwrites, mirror/update plans, updater replacement) need explicit safety validation and focused regression tests. Keep user confirmation and delete thresholds intact.
 - Credentials belong to rclone/app data, never profiles, CLI arguments, fixtures, logs, or source control. `FENGSYNC_DATA_DIR` is the supported isolated-data override for tests.
 - The updater has strict path and manifest validation. Retain path-containment checks, hashes, rollback behavior, and its prohibition on using a source checkout as an installation directory.
+- Every shell (the main `App` and `DriveHubApp`) installs its services through `AppServices.Install` and implements `IAppServiceHost`. Shared windows and services must resolve dependencies from `AppServices` — never by casting `Application.Current` to a shell type — so any entry point can host them. `IAppServiceHost` deliberately excludes the SFTP server: two shells must not compete for one listen port.
+- An S3 endpoint's prefix is enforced by an rclone `alias`, not by the UI: saving writes a hidden `<name>_s3` remote holding the credentials plus an `<name>` alias targeting `<backing>:<bucket>/<prefix>`. Consequences to preserve — the alias carries the user-facing name, so profiles and listings are unchanged; `CloudEndpointMetadata.RootPath` is therefore empty for an alias-backed endpoint (the alias root *is* the prefix, and repeating it would address the prefix twice) while `Prefix` keeps the value for display; `SelectEndpointRemotes` hides the backing store and surfaces no alias it did not create; deleting an endpoint must delete both remotes. S3 backends have no prefix option of their own (`rclone help backend s3`), so this pair is the only way to get a boundary rclone itself refuses to cross.
+- Mount lifecycle state (`RcloneMountService`'s managed set) is per process, not persisted, so each executable owns its own daemon and only stops the mounts that daemon created. Each shipped entry point must therefore be published self-contained; WPF native dependencies do not flow through a `ProjectReference`.
 
 ## Change workflow
 
@@ -64,11 +68,14 @@ Use this file as a fast routing map. Inspect only the relevant subtree and its f
 - `artifacts/` contains generated release packages and is ignored.
 - Test fixtures are versioned in `tests/fixtures/`; never place real endpoints, tokens, passwords, private keys, or personal paths there.
 - `ResumableDownloadTests` and `ConcurrentStagingReproTests` drive the real bundled `rclone.exe` — a local backend behind an `alias` remote, so bytes genuinely travel through the daemon's RC endpoint. They need no network and no credentials. Do not swap them for a fake client: the behavior under test is exactly what rclone does and does not support.
+- Window behavior belongs in in-process tests, not in a desktop scenario: `CloudTransferWindowBehaviorTests`, `CloudTransferBehaviorTests`, `ResumeSettingsUiTests`, `S3PrefixBoundaryTests`, `DriveHubEntryPointTests` and the window cases in `UiFeatureBehaviorTests` build the real window on an STA thread (`RunSta`) with the shared theme dictionaries merged (`EnsureApplicationResources`) and drive it through `RaiseEvent`/the queue. They need no foreground session, run in milliseconds, and are the right place for "the buttons do what they say". `Invoke-UiScenario.ps1` scenarios are for what only the real shell can prove: reachability, UIA wiring, and AutomationIds.
+- A `TextBlock` that displays live text (a status, a summary, a hint) must carry an `AutomationId` and **no** static `AutomationProperties.Name`. A static name replaces the text as the accessible name, so a screen reader announces the label instead of the content — and the desktop scenario can no longer read the value either.
 - Build outputs (`bin/`, `obj/`) and `.vs/` are generated files; do not edit or commit them.
 
 ## Release notes
 
-- The WPF project version is currently declared in `src/FengSync/FengSync.csproj`; keep `Version`, `AssemblyVersion`, and `FileVersion` coherent when cutting a release.
+- The WPF project version is currently declared in `src/FengSync/FengSync.csproj`; keep `Version`, `AssemblyVersion`, and `FileVersion` coherent when cutting a release. `src/FengSync.DriveHub/FengSync.DriveHub.csproj` declares the same version and must be kept in step.
+- The release folder ships multiple entry points: `FengSync.exe` (main shell), `DriveHub.exe` (cloud drive manager) and `FengSync.Updater.exe`. DriveHub is published self-contained and only its four `DriveHub.*` files are copied into the publish folder, because the FengSync publish already provides everything else. `Test-ReleasePackage.ps1` requires `DriveHub.exe` and checks its `ProductVersion`; `DriveHubEntryPointTests` fails if the build stops emitting it.
 - Generate `release-manifest.json` with `scripts/New-ReleaseManifest.ps1`; package naming, manifest contents, version, and checksum are verified by `Test-ReleasePackage.ps1`.
 - `rclone.exe` is a committed, bundled runtime dependency. Replace it only deliberately and verify WPF, CLI, SFTP, mount behavior, and the `--rc-serve` range read that resume depends on (a `GET /[<fs>:]/<path>` with a `Range` header must answer `206` with a correct `Content-Range`).
 

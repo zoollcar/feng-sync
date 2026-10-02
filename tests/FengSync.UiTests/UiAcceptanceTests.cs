@@ -42,6 +42,10 @@ public sealed class UiAcceptanceTests
 
     [Fact]
     [Trait("Category", "UI")]
+    public Task Standalone_transfer_window_opens_from_the_cloud_manager_and_starts_empty() => RunAsync("cloud-transfers");
+
+    [Fact]
+    [Trait("Category", "UI")]
     public Task Batch_window_runs_a_saved_profile_and_reports_its_summary() => RunAsync("batch-run");
 
     [Fact]

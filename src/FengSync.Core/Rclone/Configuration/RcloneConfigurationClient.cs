@@ -182,7 +182,20 @@ public sealed record RcloneOAuthStatus(string Status, Uri? AuthorizationUri)
     public bool IsRunning => Status.Equals("running", StringComparison.OrdinalIgnoreCase);
 }
 
-public sealed record RcloneS3Provider(string Name, string Description, IReadOnlyList<string> RegionSuggestions);
+public sealed record RcloneS3Provider(
+    string Name,
+    string Description,
+    IReadOnlyList<string> RegionSuggestions,
+    string? RcloneProvider = null)
+{
+    /// <summary>
+    /// Value written to rclone's <c>provider</c> option. Feng Sync may surface a friendlier name than
+    /// the value rclone understands — Backblaze B2's S3-compatible API is rclone's generic
+    /// <c>Other</c> provider, and sending <c>provider = Backblaze</c> makes rclone log
+    /// "s3 provider \"Backblaze\" not known - please set correctly" on every use.
+    /// </summary>
+    public string RcloneValue => string.IsNullOrWhiteSpace(RcloneProvider) ? Name : RcloneProvider;
+}
 
 public sealed record RcloneConfigOptions(
     bool Obscure = false,

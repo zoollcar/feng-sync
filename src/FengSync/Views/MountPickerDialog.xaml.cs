@@ -20,7 +20,12 @@ public partial class MountPickerDialog : Window
 
     public MountTarget? SelectedTarget { get; private set; }
 
-    public MountPickerDialog(string remoteName, string provider, IReadOnlyList<string> occupiedMountPoints, string rootPath = "")
+    /// <param name="rootPath">Path handed to rclone; empty for an alias-backed endpoint, whose root already is the prefix.</param>
+    /// <param name="displayRoot">
+    /// What to show the user instead, when the mount root and the visible prefix differ. Without it an
+    /// enforced-prefix endpoint would read as <c>name:/</c> and hide which prefix it is confined to.
+    /// </param>
+    public MountPickerDialog(string remoteName, string provider, IReadOnlyList<string> occupiedMountPoints, string rootPath = "", string? displayRoot = null)
     {
         InitializeComponent();
         _remoteName = remoteName;
@@ -28,7 +33,8 @@ public partial class MountPickerDialog : Window
         _rootPath = rootPath.Trim('/');
         _occupiedMountPoints = occupiedMountPoints;
         HeaderText.Text = $"挂载 {_remoteName}";
-        SubHeaderText.Text = $"选择本地盘符或目录，将 {_remoteName}:/{_rootPath} 挂载到 Feng Sync 可访问的位置。";
+        var shown = string.IsNullOrWhiteSpace(displayRoot) ? _rootPath : displayRoot.Trim().Trim('/');
+        SubHeaderText.Text = $"选择本地盘符或目录，将 {_remoteName}:/{shown} 挂载到 Feng Sync 可访问的位置。";
         DriveLetterList.ItemsSource = MountPointInspector.EnumerateDriveLetters();
         UpdateStatus();
     }

@@ -40,7 +40,7 @@
             </GroupBox>
         </Grid>
 
-        <Grid Grid.Column="2">
+        <Grid Grid.Column="2" AllowDrop="True" DragOver="FileBrowser_DragOver" DragLeave="FileBrowser_DragLeave" Drop="FileBrowser_Drop">
             <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
             <TextBlock Text="文件浏览器" Style="{StaticResource DisplayTitleTextStyle}" />
             <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,8">
@@ -49,9 +49,9 @@
                 <TextBlock x:Name="PathText" AutomationProperties.Name="当前远程路径" VerticalAlignment="Center" Margin="14,0,0,0" Style="{StaticResource BodyStrongTextStyle}" />
                 <Button AutomationProperties.Name="上传文件到当前目录" Content="上传文件" Click="UploadFiles_Click" Margin="20,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
                 <Button AutomationProperties.Name="上传文件夹到当前目录" Content="上传文件夹" Click="UploadFolder_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button AutomationProperties.Name="继续未完成的传输" Content="断点续传" Click="Resume_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button AutomationProperties.AutomationId="OpenCloudTransfers" AutomationProperties.Name="打开云盘传输窗口" Content="查看传输" Click="OpenTransfers_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
             </StackPanel>
-            <ListView x:Name="FileList" Grid.Row="2" AutomationProperties.Name="当前目录中的文件" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening">
+            <ListView x:Name="FileList" Grid.Row="2" AutomationProperties.Name="当前目录中的文件" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening" PreviewMouseLeftButtonDown="FileList_PreviewMouseLeftButtonDown" PreviewMouseMove="FileList_PreviewMouseMove">
                 <ListView.View><GridView>
                     <GridViewColumn Header="名称" Width="310"><GridViewColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="{Binding Icon}" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource LibraryIconStyle}" /><TextBlock Text="{Binding Name}" VerticalAlignment="Center" /></StackPanel></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
                     <GridViewColumn Header="类型" Width="90" DisplayMemberBinding="{Binding Type}" />
@@ -59,6 +59,12 @@
                     <GridViewColumn Header="修改时间" Width="150" DisplayMemberBinding="{Binding ModifiedDisplay}" />
                 </GridView></ListView.View>
             </ListView>
+            <Border x:Name="DropHint" Grid.Row="2" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="{StaticResource RadiusMedium}" Background="{DynamicResource AccentBrush}" Opacity="0.94" Margin="2">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="松开鼠标即可上传" Foreground="White" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="DropHintText" Foreground="White" FontSize="13" Margin="0,8,0,0" HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
             <StackPanel Grid.Row="3" Margin="0,8,0,0">
                 <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" AutomationProperties.Name="文件传输进度" />
                 <TextBlock x:Name="StatusText" AutomationProperties.Name="文件传输状态" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,5,0,0" />

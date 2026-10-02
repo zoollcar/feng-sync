@@ -13,7 +13,10 @@ Feng Sync 是一个面向 Windows 的桌面文件同步工具。它提供可视�
 
 - 本地文件夹，以及 `sftp://`、`gdrive://`、`s3://` 格式的远程端点。
 - 同步界面用于创建、测试、浏览、重连和管理 SFTP、Google Drive、S3 连接；Google Drive 授权在浏览器完成。
+- S3 端点可以配置**前缀**：保存时除了存放凭据的 s3 remote 外，还会额外生成一个 rclone `alias` 指向 `<bucket>/<前缀>`，端点只能访问该前缀下的内容，越界（`..` 或绝对路径）由 rclone 直接拒绝，浏览、上传、下载、同步、挂载都受同一限制。前缀留空则只能访问该 Bucket。
 - 云盘界面用于手动上传下载管理远程端点的文件。
+- 云盘管理支持把文件或文件夹拖入文件浏览器上传、把云端文件拖出下载；上传和下载都显示进度、可中途取消，并复用同步引擎既有的暂存/续传机制。
+- 云盘管理可独立运行：发行包除 `FengSync.exe` 主入口外还提供 `DriveHub.exe`，双击即可只打开云盘管理窗口，不必启动完整同步界面。
 - 内置sftp服务器，用于方便局域网文件同步。
 - 将远程端点挂载为磁盘。
 
@@ -58,6 +61,17 @@ s3://<rclone-remote>/<bucket-or-path>
 ```
 
 首次双向同步会建立基线；之后才能可靠判断删除和双侧修改。冲突不会自动覆盖。
+
+### 单独打开云盘管理（DriveHub）
+
+发行包中除了主入口 `FengSync.exe`，还有独立的 `DriveHub.exe`，双击即可只打开云盘管理窗口：
+
+```powershell
+# 从源码直接运行
+dotnet run --project src/FengSync.DriveHub
+```
+
+它与主程序共用同一份云端端点配置（rclone.conf），但各自运行独立的 rclone 守护进程和传输队列：单独使用或与主程序同时运行都可以，两者各自管理自己创建的挂载，互不影响。
 
 ### 使用命令行
 
@@ -104,6 +118,7 @@ pwsh -File .\scripts\Test-All.ps1 -Level Online
 ```text
 src/FengSync.Core   同步规划、执行、安全校验、端点、配置、历史、自动化与 SFTP 服务核心
 src/FengSync        Windows WPF 桌面程序
+src/FengSync.DriveHub  独立的云盘管理入口（DriveHub.exe），复用主程序的窗口与服务
 src/FengSync.Cli    无人值守的比较与同步命令行程序
 tests               xUnit 核心/集成测试和 PowerShell GUI 验收测试
 ```

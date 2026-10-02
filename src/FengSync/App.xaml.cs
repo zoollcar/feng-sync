@@ -1,20 +1,25 @@
 using FengSync.Core.Mount;
 using FengSync.Core.Rclone.Lifecycle;
 using FengSync.Core.SftpServer;
+using FengSync.Services;
 using System.IO;
 
 namespace FengSync;
-public partial class App : System.Windows.Application
+public partial class App : System.Windows.Application, IAppServiceHost
 {
     private readonly RcloneLifecycleHost _rcloneLifecycle = new();
     private readonly SftpServerHostedService _sftpService;
     private readonly RcloneMountService _mountService;
+    private readonly CloudTransferQueue _cloudTransfers = new();
     private int _shutdownStarted;
 
     public App()
     {
         _sftpService = new SftpServerHostedService(_rcloneLifecycle);
         _mountService = new RcloneMountService(_rcloneLifecycle);
+        // Installed here, not in OnStartup: StartupUri windows are created after the constructor, and
+        // windows read AppServices.Current while their own constructors run.
+        AppServices.Install(this);
     }
     public static App CurrentApp => (App)Current;
     public SftpServerHostedService SftpService => _sftpService;
@@ -22,6 +27,11 @@ public partial class App : System.Windows.Application
     public IRcloneLifecycleClient RcloneLifecycle => _rcloneLifecycle;
     /// <summary>Application-owned mount service so other windows can observe the same instance.</summary>
     public RcloneMountService MountService => _mountService;
+    /// <summary>
+    /// Application-owned cloud transfer queue so uploads and downloads keep running (and stay visible
+    /// in the standalone transfer window) after the cloud manager window is closed.
+    /// </summary>
+    public CloudTransferQueue CloudTransfers => _cloudTransfers;
 
     protected override void OnStartup(System.Windows.StartupEventArgs e)
     {

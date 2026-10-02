@@ -34,7 +34,7 @@ public partial class CloudEndpointEditorWindow : Window
     private Kind SelectedKind => ServiceBox.SelectedIndex switch { 1 => Kind.Sftp, 2 => Kind.S3, _ => Kind.GoogleDrive };
     private string ProviderName => S3ProviderBox.Text.Trim();
     private string Secret => S3SecretVisibleBox.Visibility == Visibility.Visible ? S3SecretVisibleBox.Text : S3SecretBox.Password;
-    private string RootPath => SelectedKind switch { Kind.Sftp => SftpRootBox.Text.Trim(), Kind.S3 => CurrentS3Values().RootPath, _ => GDriveRootBox.Text.Trim() };
+    private string RootPath => SelectedKind switch { Kind.Sftp => SftpRootBox.Text.Trim(), Kind.S3 => CurrentS3Values().Prefix, _ => GDriveRootBox.Text.Trim() };
 
     private async Task LoadProvidersAsync()
     {
@@ -62,10 +62,22 @@ public partial class CloudEndpointEditorWindow : Window
     private void S3Provider_SelectionChanged(object sender, SelectionChangedEventArgs e) => Dispatcher.BeginInvoke(() =>
     {
         UpdateProviderHelp();
-        if (ProviderName.Equals("Cloudflare", StringComparison.OrdinalIgnoreCase)) S3RegionBox.Text = "auto";
-        else if (string.IsNullOrWhiteSpace(S3RegionBox.Text) || S3RegionBox.Text == "auto") S3RegionBox.Text = "us-east-1";
+        ApplyProviderDefaults();
         MarkS3Dirty();
     });
+
+    /// <summary>
+    /// Seeds Region with a value that matches the selected provider. Feng Sync presets (Backblaze)
+    /// deliberately seed nothing: their region is part of the endpoint the user copies from the
+    /// service console, so a prefilled AWS region would be actively misleading.
+    /// </summary>
+    private void ApplyProviderDefaults()
+    {
+        if (ProviderName.Equals("Cloudflare", StringComparison.OrdinalIgnoreCase)) { S3RegionBox.Text = "auto"; return; }
+        if (CloudEndpointService.FindPreset(ProviderName) is not null) { S3RegionBox.Text = ""; return; }
+        if (string.IsNullOrWhiteSpace(S3RegionBox.Text) || S3RegionBox.Text == "auto") S3RegionBox.Text = "us-east-1";
+    }
+
     private void S3ProviderText_Changed(object sender, TextChangedEventArgs e) => Dispatcher.BeginInvoke(() => { UpdateProviderHelp(); MarkS3Dirty(); });
     private void S3RegionText_Changed(object sender, TextChangedEventArgs e) => MarkS3Dirty();
 
@@ -102,7 +114,8 @@ public partial class CloudEndpointEditorWindow : Window
     }
 
     private S3EndpointValues CurrentS3Values() => new(S3NameBox.Text.Trim(), ProviderName, S3AccessKeyBox.Text.Trim(), Secret,
-        S3RegionBox.Text.Trim(), S3EndpointBox.Text.Trim(), S3BucketBox.Text.Trim(), S3SubdirectoryBox.Text.Trim());
+        S3RegionBox.Text.Trim(), S3EndpointBox.Text.Trim(), S3BucketBox.Text.Trim(), S3SubdirectoryBox.Text.Trim(),
+        _providers.FirstOrDefault(provider => provider.Name.Equals(ProviderName, StringComparison.Ordinal))?.RcloneValue);
     private void MarkS3Dirty() { if (!_initialized) return; _s3Draft.Update(CurrentS3Values()); ProbeResultCard.Visibility = Visibility.Collapsed; StatusText.Text = ""; }
     private void S3Field_Changed(object sender, TextChangedEventArgs e) => MarkS3Dirty();
     private void S3Region_Changed(object sender, SelectionChangedEventArgs e) => Dispatcher.BeginInvoke(MarkS3Dirty);
@@ -144,7 +157,11 @@ public partial class CloudEndpointEditorWindow : Window
                 try
                 {
                     var result = await CloudEndpointService.ProbeS3Async(CurrentS3Values()); _probeDirectories = result.Directories; _s3Draft.RecordProbe(true);
-                    ProbeResultText.Text = $"读取成功：/{CurrentS3Values().RootPath}。未验证上传权限。"; ProbeResultCard.Visibility = Visibility.Visible; BrowseProbeButton.IsEnabled = true;
+                    var prefix = CurrentS3Values().Prefix;
+                    ProbeResultText.Text = string.IsNullOrEmpty(prefix)
+                        ? "读取成功：该 Bucket 根目录。端点将只能访问此 Bucket。未验证上传权限。"
+                        : $"读取成功：/{prefix}。保存后该前缀由 rclone 强制，端点只能访问此前缀下的内容。未验证上传权限。";
+                    ProbeResultCard.Visibility = Visibility.Visible; BrowseProbeButton.IsEnabled = true;
                 }
                 catch { _s3Draft.RecordProbe(false); throw; }
             });
@@ -174,7 +191,10 @@ public partial class CloudEndpointEditorWindow : Window
                 var answer = MessageBox.Show($"端点“{remote}”已存在。\n\n是：替换现有配置；否：返回修改显示名称。", "端点名称重复", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (answer != MessageBoxResult.Yes) { S3NameBox.Focus(); return; } replace = true;
             }
-            await RunBusyAsync(SaveButton, "正在保存…", async () => { await CloudEndpointService.SaveS3Async(remote, CurrentS3Values(), replace); SavedRemoteName = remote; SavedKind = Kind.S3; SavedRoot = CurrentS3Values().RootPath; DialogResult = true; });
+            await RunBusyAsync(SaveButton, "正在保存…", async () => { await CloudEndpointService.SaveS3Async(remote, CurrentS3Values(), replace); SavedRemoteName = remote; SavedKind = Kind.S3; 
+                // The saved endpoint is an rclone alias whose root already is the prefix, so the profile
+                // path that addresses the prefix itself is empty.
+                SavedRoot = ""; DialogResult = true; });
             return;
         }
         await RunBusyAsync(SaveButton, "正在保存…", async () => { var remote = await EnsureRemoteAsync(); await CloudEndpointService.SaveMetadataAsync(remote, SelectedKind, RootPath); SavedRemoteName = remote; SavedKind = SelectedKind; SavedRoot = RootPath; DialogResult = true; });

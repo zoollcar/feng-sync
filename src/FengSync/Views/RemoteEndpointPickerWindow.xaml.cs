@@ -65,7 +65,12 @@ public partial class RemoteEndpointPickerWindow : Window
     {
         if (Selected is not CloudEndpointAccount account) { ResolvedUriText.Text = ""; AddButton.IsEnabled = false; return; }
         var kind = CloudEndpointService.KindFromRcloneType(account.Type);
-        ResolvedUriText.Text = "将添加：" + CloudEndpointService.BuildUri(kind, account.Name, RemotePathBox.Text);
+        var uri = CloudEndpointService.BuildUri(kind, account.Name, RemotePathBox.Text);
+        // An enforced prefix is worth stating here: it is why the browse tree stops where it does, and it
+        // means this endpoint can never be pointed at a sibling key.
+        ResolvedUriText.Text = account.PrefixIsEnforced
+            ? $"将添加：{uri}（只能访问 /{account.Prefix} 下的内容，由 rclone 强制）"
+            : "将添加：" + uri;
         AddButton.IsEnabled = true;
     }
 
@@ -90,7 +95,7 @@ public partial class RemoteEndpointPickerWindow : Window
         await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
         try
         {
-            var picked = await PickRemoteDirectoryAsync(account.Name, RemotePathBox.Text);
+            var picked = await PickRemoteDirectoryAsync(account, RemotePathBox.Text);
             RemotePathBox.Text = picked;
             UpdateResolved();
         }
@@ -110,16 +115,20 @@ public partial class RemoteEndpointPickerWindow : Window
     }
 
     // --- Remote directory picker: a modal TreeView with lazy expansion (same approach as MainWindow). ---
-    private async Task<string> PickRemoteDirectoryAsync(string remote, string currentPath)
+    private async Task<string> PickRemoteDirectoryAsync(CloudEndpointAccount account, string currentPath)
     {
-        var client = await App.CurrentApp.RcloneHost.GetClientAsync();
+        var remote = account.Name;
+        var client = await AppServices.Current.RcloneHost.GetClientAsync();
         var filesystem = remote.EndsWith(':') ? remote : remote + ":";
+        // The listing root is the endpoint's own root, so an enforced prefix is already the top of this
+        // tree: there is nothing above it to navigate to.
+        var rootLabel = account.PrefixIsEnforced ? $"/（前缀根目录 {account.Prefix}）" : "/（根目录）";
         var directories = await client.ListDirectoriesAsync(filesystem, "", false);
         var tree = new TreeView { Margin = new Thickness(12), MinWidth = 420, MinHeight = 360 };
 
         TreeViewItem Create(string name, string path)
         {
-            var item = new TreeViewItem { Header = string.IsNullOrEmpty(path) ? "/（根目录）" : "📁 " + name, Tag = path };
+            var item = new TreeViewItem { Header = string.IsNullOrEmpty(path) ? rootLabel : "📁 " + name, Tag = path };
             item.Expanded += async (_, _) =>
             {
                 if (item.Items.Count != 1 || (item.Items[0] as TreeViewItem)?.Tag is not null) return;

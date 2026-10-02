@@ -10,6 +10,12 @@
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2"><PrivateAssets>all</PrivateAssets></PackageReference>
     <ProjectReference Include="..\..\src\FengSync\FengSync.csproj" />
+    <!--
+      Referenced so the second shipping entry point (DriveHub.exe) is always built and copied into this
+      test folder, exactly as it is copied beside FengSync.exe for the release package. Removing this
+      reference makes DriveHubEntryPointTests fail instead of silently dropping the entry point.
+    -->
+    <ProjectReference Include="..\..\src\FengSync.DriveHub\FengSync.DriveHub.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Scripts\**\*" CopyToOutputDirectory="PreserveNewest" />

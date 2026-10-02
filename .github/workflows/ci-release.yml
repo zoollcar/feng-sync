@@ -56,6 +56,7 @@ jobs:
 
           $publishDir = Join-Path $env:RUNNER_TEMP 'feng-sync-publish'
           $updaterDir = Join-Path $env:RUNNER_TEMP 'feng-sync-updater'
+          $driveHubDir = Join-Path $env:RUNNER_TEMP 'feng-sync-drivehub'
           $packageRoot = Join-Path $env:RUNNER_TEMP "FengSync-$version-win-x64"
           $zipPath = Join-Path $env:GITHUB_WORKSPACE "FengSync-$version-win-x64.zip"
 
@@ -68,8 +69,19 @@ jobs:
           dotnet publish ./src/FengSync.Updater/FengSync.Updater.csproj -c $env:CONFIGURATION -r $env:RUNTIME_IDENTIFIER --self-contained true -p:Version=$version -p:InformationalVersion=$version -p:IncludeSourceRevisionInInformationalVersion=false -o $updaterDir
           if ($LASTEXITCODE -ne 0) { throw 'Updater publish failed.' }
           Copy-Item -LiteralPath (Join-Path $updaterDir 'FengSync.Updater.exe') -Destination (Join-Path $publishDir 'FengSync.Updater.exe') -Force
+
+          # DriveHub is a second entry point into the same product, not a separate product: it reuses the
+          # assemblies already published above, so only its own four files are new. They must come from a
+          # self-contained publish — a framework-dependent copy would demand a shared .NET runtime the
+          # package deliberately does not require.
+          dotnet publish ./src/FengSync.DriveHub/FengSync.DriveHub.csproj -c $env:CONFIGURATION -r $env:RUNTIME_IDENTIFIER --self-contained true -p:Version=$version -p:InformationalVersion=$version -p:IncludeSourceRevisionInInformationalVersion=false -o $driveHubDir
+          if ($LASTEXITCODE -ne 0) { throw 'DriveHub publish failed.' }
+          foreach ($name in @('DriveHub.exe', 'DriveHub.dll', 'DriveHub.deps.json', 'DriveHub.runtimeconfig.json')) {
+            Copy-Item -LiteralPath (Join-Path $driveHubDir $name) -Destination (Join-Path $publishDir $name) -Force
+          }
+
           ./scripts/New-ReleaseManifest.ps1 -PublishDirectory $publishDir -Version $version
-          foreach ($required in @('FengSync.exe', 'FengSync.Updater.exe', 'release-manifest.json', 'Assets/rclone/rclone.exe')) { if (!(Test-Path (Join-Path $publishDir $required))) { throw "Release output missing: $required" } }
+          foreach ($required in @('FengSync.exe', 'FengSync.Updater.exe', 'DriveHub.exe', 'release-manifest.json', 'Assets/rclone/rclone.exe')) { if (!(Test-Path (Join-Path $publishDir $required))) { throw "Release output missing: $required" } }
           New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
           Copy-Item -Path (Join-Path $publishDir '*') -Destination $packageRoot -Recurse -Force
           Compress-Archive -Path $packageRoot -DestinationPath $zipPath -CompressionLevel Optimal
