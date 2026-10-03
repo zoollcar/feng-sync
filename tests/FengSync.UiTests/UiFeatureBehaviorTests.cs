@@ -1,9 +1,12 @@
 using System.Runtime.ExceptionServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FengSync.Core;
+using FengSync.Core.Mount;
 using FengSync.Core.Rclone.Configuration;
+using FengSync.Core.Rclone.Lifecycle;
 using FengSync.Core.Updates;
 using FengSync.Services;
 using FengSync.Views;
@@ -247,6 +250,42 @@ public sealed class UiFeatureBehaviorTests
     }
 
     [Fact]
+    public void The_endpoint_manager_offers_renaming_beside_the_other_endpoint_actions()
+    {
+        RunSta(() =>
+        {
+            EnsureApplicationResources();
+            var previous = AppServices.TryCurrent;
+            AppServices.Install(new HeadlessShell());
+            try
+            {
+                var window = new RemoteEndpointManagerWindow();
+
+                // Renaming is a distinct action from editing: it moves the endpoint's identity, so it has its
+                // own AutomationId for the desktop scenario to drive, and it uses a whitelisted button style.
+                Assert.Equal("RenameCloudEndpoint", AutomationProperties.GetAutomationId(window.RenameEndpointButton));
+                Assert.NotNull(window.RenameEndpointButton.Style);
+                Assert.Equal("重命名", window.RenameEndpointButton.Content);
+                // Editing keeps its own button: the two must not be merged, because a rename migrates profiles
+                // while an edit does not.
+                Assert.Equal("EditCloudEndpoint", AutomationProperties.GetAutomationId(window.EditButton));
+                window.Close();
+            }
+            finally { AppServices.Install(previous); }
+        });
+    }
+
+    [Fact]
+    public void The_rename_status_line_reports_how_many_sync_tasks_moved()
+    {
+        // Zero is reported differently on purpose: saying "0 个同步任务" reads like something failed.
+        Assert.DoesNotContain("0 个", RemoteEndpointManagerWindow.DescribeRename(new("nas", "archive", 0)));
+        Assert.Contains("nas", RemoteEndpointManagerWindow.DescribeRename(new("nas", "archive", 0)), StringComparison.Ordinal);
+        Assert.Contains("archive", RemoteEndpointManagerWindow.DescribeRename(new("nas", "archive", 0)), StringComparison.Ordinal);
+        Assert.Contains("2 个同步任务", RemoteEndpointManagerWindow.DescribeRename(new("nas", "archive", 2)), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void An_edit_form_keeps_the_stored_sftp_password_unless_one_is_typed()
     {
         const string stored = "obscured-value-read-from-rclone";
@@ -389,6 +428,29 @@ public sealed class UiFeatureBehaviorTests
             Assert.Equal("us-west-004", window.S3RegionBox.Text);
             window.Close();
         });
+    }
+
+    /// <summary>
+    /// Just enough of a shell to construct a window that asks for application services. The rclone side
+    /// throws on use rather than starting a daemon, so a test that accidentally reaches the network fails
+    /// loudly instead of quietly opening a process.
+    /// </summary>
+    private sealed class HeadlessShell : IAppServiceHost
+    {
+        private readonly IRcloneLifecycleClient _rclone = new UnreachableRclone();
+
+        public HeadlessShell() => MountService = new RcloneMountService(_rclone);
+
+        public RcloneLifecycleHost RcloneHost { get; } = new();
+        public IRcloneLifecycleClient RcloneLifecycle => _rclone;
+        public RcloneMountService MountService { get; }
+        public CloudTransferQueue CloudTransfers { get; } = new();
+
+        private sealed class UnreachableRclone : IRcloneLifecycleClient
+        {
+            public Task<JsonElement> CallAsync(string operation, object payload, CancellationToken cancellationToken = default) =>
+                throw new InvalidOperationException($"这个测试不调用 rclone（{operation}）。");
+        }
     }
 
     private static void EnsureApplicationResources()
