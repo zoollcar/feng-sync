@@ -1,8 +1,8 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **24** 个已提交，未 push）。工作区还有一批**未提交**的改动。
-> 最后更新：2026-10-03。
+> 分支：`dev`（领先 `origin/dev` **31** 个已提交，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
+> 最后更新：2026-10-04。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
 > 原先那份独立的《云盘功能缺口盘点与演进计划》已把仍有价值的内容（剩余项的现状/缺口/参考做法、实现约束）
@@ -15,47 +15,42 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）。见 §2。 |
-| **已完成但未提交** | **A3 端点搜索/排序 + A4「测试全部」**。代码、测试、桌面场景都写完了，单测与 `sftp-ui` 场景**单跑通过**；但**全量门禁还没跑，也还没 commit**。见 §1 与 §3。 |
-| **下一步** | ① 跑全量门禁 → ② 门禁绿后提交 A3/A4 → ③ 继续 **A5 代理**。 |
-| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）。见 §2。 |
+| **已完成未提交** | **A7 端点导出/导入** —— 代码、单测（11 纯函数 + 2 STA）、桌面矩形断言都写完了，单测与 UI 护栏通过；**全量门禁未跑，还未 commit**。见 §1 与 §2 的 A7。 |
+| **下一步** | ① 跑全量门禁 → ② 提交 A7 → ③ 进 **B0 队列泛化 → B 组文件浏览器**。 |
+| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）。 |
 
 ---
 
-## 1. 立刻要做的三件事
+## 1. 接手先做的三件事
 
-### ① 跑全量门禁
+### ① 先跑一次全量门禁，确认 A6 基线是绿的
 
 ```powershell
 pwsh -NoProfile -File .\scripts\Test-All.ps1 -Level UiOffline
 ```
+
+A3–A6 是分批提交的，只有 A3/A4 有「单跑通过」的记录；A5/A6 依赖提交时门禁绿，但**接手时先自证一次基线**，
+后续任何红都能明确归因到新改动上。
 
 - 约 **2m30s**。调用工具时**超时必须给 600000ms**，否则会被掐断在半路。
 - 判定标准：日志里出现 **`Passed!  - Failed: 0` 汇总行**。只看日志尾部会误判 —— 被超时掐断时日志正好停在
   `A total of 1 test files matched the specified pattern.` 之后，看起来像正常进行中。
 - 日志**写 `$env:TEMP`**，不要写进 `.fengsync-test/`：那个目录会被 `Reset-TestArtifacts` 清空，
   文件被占用时脚本 3 秒就退出（`The process cannot access the file ... because it is being used by another process`）。
-- 预期读数：**Core 370（本批不变）/ UI 212（186 + 25 + 1）**。这两个数是**预期**，必须实跑确认。
+- 读数会比文档 §3 的旧预期更高（A5/A6 各加了测试）；以 `Failed: 0` 为准，不追死具体数字。
 
-### ② 提交 A3/A4（门禁绿之后）
+### ② A7 已实现 —— 跑门禁并提交
 
-用**显式路径** `git add`（**不要 `git add -A`**；`.workbuddy-ai/` 已在 `.gitignore` 里，但仍保持这个习惯）。
-建议拆 2 个 commit：
+A7 的代码与测试已完成（见 §2 的 A7，设计与安全规则留档在 §5）。门禁绿后按 §1 ③ 的粒度提交；这是 A 组最后一项，提交后整个 A 组收尾。
 
-```
-feat(endpoints): search, order and check every endpoint from the list
-test(endpoints): cover the endpoint list's search, order and batch probe
-```
+### ③ A7 完成后按约定的粒度提交
 
-（本文档单独一个 `docs:` commit。）**只提交不 push。**
-
-### ③ 继续 A5 代理
-
-见 §5 的 A5。
+按层次拆 `feat` / `test`（`docs` 单独），用**显式路径** `git add`（**不要 `git add -A`**）。**只提交不 push。**
 
 ---
 
-## 2. 已完成并提交的工作
+## 2. 已完成的工作
 
 | commit | 批次 | 内容 |
 | --- | --- | --- |
@@ -64,6 +59,15 @@ test(endpoints): cover the endpoint list's search, order and batch probe
 | `e18462d` | A2 | `feat(endpoints): rename an endpoint by rewriting its rclone.conf section` |
 | `324ff7e` | A2 | `test(endpoints): cover endpoint rename, its rollback and profile migration` |
 | `23a945f` | A2 | `test(ui): rename through the real shell, and tolerate a collapsed progress window` |
+| `5bafb2b` | — | `docs: replace the gap analysis with a single handoff document` |
+| `65de367` | A3+A4 | `feat(endpoints): search, order and check every endpoint from the list` |
+| `1264812` | A3+A4 | `test(endpoints): cover the endpoint list's search, order and batch probe` |
+| `52b50ac` | A5 | `feat(settings): let the user pin a proxy for the rclone processes we start` |
+| `8a6995a` | A5 | `test(proxy): cover the setting, the resolver fallback and the shell wiring` |
+| `f4c2476` | A6 | `feat(endpoints): file endpoints under groups and tag them` |
+| `6d2001d` | A6 | `test(endpoints): cover grouping, tagging and the heading each row carries` |
+| （待提交） | A7 | `feat(endpoints): export and import endpoints without their credentials` |
+| （待提交） | A7 | `test(endpoints): cover the export shape and the import file's validation` |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -124,33 +128,77 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 「元素必须有可见矩形」的检查，再判断「截图跳过」；一个完成太快的本地同步（进度窗正在收起、矩形已归零）
 会让整个套件失败（`local` 场景就这么挂过）。已把该检查移进真正的截图分支。
 
+### A3+A4 —— 端点搜索/排序 + 「测试全部」（`65de367` + `1264812`）
+
+- `src/FengSync/Services/CloudEndpointList.cs`（新）—— 纯函数：`CloudEndpointSortColumn { Name, Provider, Health }`；
+  `Matches(account, query)`（**每个**空白分词都要命中 `name + provider + type + prefix + Display`，第二个词是收窄）；
+  `Arrange(rows, query, column, descending)`（名称**恒为最终 tie-break 且不反转**）；`Rank(health)` 升序 = 待办清单
+  `NeedsLogin → Unreachable → Unknown → Checking → Connected`。
+- `CloudEndpointStatusService` 加 `ProbeConcurrency = 3` + `RunBoundedAsync<T>`（`SemaphoreSlim` 限流、单条失败被收集、取消不算失败、`acquired` 防误释放）。
+- UI：`RemoteEndpointManagerWindow` 端点 GroupBox 改为 2 行 Grid（`Auto` 工具条 + `*` 列表），工具条是 **`WrapPanel`**
+  （左列仅 340px，必须能换行）：`CloudEndpointSearch` / `CloudEndpointSort` / `CloudEndpointSortDirection` / `CheckAllCloudEndpoints`。
+- 测试：`CloudEndpointListTests`（13）、`CloudEndpointCheckAllTests`（12）、`UiFeatureBehaviorTests` +1 个 STA 测试；`sftp-ui` 场景加 4 个控件矩形断言与搜索/排序/全检回读。
+
+### A5 —— 代理（`52b50ac` + `8a6995a`）
+
+**机制原本就在，缺的只是接线**：`RcloneProxyOptions` / `RcloneProxyResolver.Resolve`（优先级 Application > Environment > WinInet）
+与 `RcloneDaemon.StartAsync(..., RcloneProxyOptions?)` 早已接受代理，但没人从设置里读。
+
+- `ApplicationSettings.RcloneProxy`（**注意字段名是 `RcloneProxy`，不是计划里写的 `CloudProxy`**）。命名跟随 rclone 而非页面：
+  每个进程只有一个 daemon，代理在**进程启动时固定**，它同时管挂载、SFTP 服务和同步运行 —— 所以设置页文案**没有**
+  沿用计划里「仅影响云盘」的说法。
+- `RcloneProxySettings.From(settings)`（Core）把设置转成 `RcloneProxyOptions`；`LoadAsync` 读盘后解析。
+- `RcloneLifecycleHost.ProxyOptionsProvider`（`Func<CancellationToken, Task<RcloneProxyOptions?>>?`）在启动锁内、
+  子进程创建前**只调一次**；provider 抛异常则**记日志并回退到环境**，绝不因此拒绝启动 daemon。
+- **两个入口都接线**（`FengSync.App` 与 `DriveHub.App`）—— 各自独立 daemon，接一个不接另一个会静默失效。
+- ⚠️ **实证修正**：rclone 的 HTTP 客户端**不读 `ALL_PROXY`**（用死端口逐个验证：`ALL_PROXY` 那轮仍能到达目标，
+  `HTTP_PROXY`/`HTTPS_PROXY` 那轮 `proxyconnect tcp` 失败）。`RcloneProxyResolver` 现在会把只有 `all_proxy`
+  的值镜像进 `http`/`https`。地址只校验**可达性**（不能含空格、必须有 host），不校验 scheme。
+- 测试：`RcloneProxySettingsTests`（Core）、`RcloneProxyResolverTests`（Core）、`CloudProxySettingsUiTests`（UI）；`sftp-ui` 场景加了设置往返。
+
+### A6 —— 分组/标签（`f4c2476` + `6d2001d`）
+
+计划里写的是「给 `CloudEndpointMetadata` 加 `Group`/`Tags`」，实现把**业务逻辑**抽成纯函数而非堆在窗口里：
+
+- `CloudEndpointMetadata` 加 `Group`（空 = 未分组）与 `Tags`（`IReadOnlyList<string>?`）。两者都是**本应用自己的概念**，
+  rclone 无处存放，只进 `cloud-endpoints.json`，**绝不进 `rclone.conf`**；旧文件缺这两个字段时按 null 读，向后兼容。
+- `src/FengSync/Services/CloudEndpointOrganization.cs`（新）—— `NormalizeGroup` / `NormalizeTags` / `ParseTags`
+  （接受全角 `，；`、顿号 `、`、换行）/ `FormatTags` / `GroupLabel`（未分组统一显示为「未分组」）/ `Merge`（保存分组时
+  优先用盘上记录，端点是手工加的、没有 metadata 时新建一条，保证「保存分组绝不静默失败」）/ `Preserve`（创建/编辑端点
+  重建记录时**保留**用户的分组与标签 —— 否则改一次根目录就把归档抹掉）/ `Describe`（状态文案，单独可测）。
+- UI：`CloudEndpointOrganizationWindow`（新）编辑单个端点的分组/标签；`RemoteEndpointManagerWindow` 列表**按组分区**显示，
+  搜索也命中标签。
+- 测试：`CloudEndpointOrganizationTests`（Core/UI 纯函数 ~195 行）、`CloudEndpointListTests` +116、`UiFeatureBehaviorTests` +95；`sftp-ui` 场景加了组织编辑往返。
+
+### A7 —— 端点导出/导入（**已完成，未提交**）
+
+- `src/FengSync/Services/CloudEndpointPortability.cs`（新）—— 纯逻辑与不可信输入校验：
+  `CloudEndpointExport` / `CloudEndpointExportBundle` / `CloudEndpointDraft` / `CloudEndpointImport`；
+  `Serialize` / `ToExport` / `Parse` / `ValidateRemoteName` / `ValidateParameterName` / `UniqueName`；
+  源生成 context 用 camelCase + `WriteIndented`，文件可读且可 diff。
+- **导出只读参数名，不读值**：`CloudEndpointService.LoadParameterNamesAsync(account)` 取
+  `GetRemoteParametersAsync` 的 `Keys`（S3 强制前缀端点读隐藏 backing remote），`BuildExportBundleAsync` 组装。
+  导出文件的结构里**没有放凭据的字段** —— 安全来自形状，而不是靠调用方自觉。
+- **导入是不可信输入**：`Parse` 逐条校验 —— 版本必须为 `1`；`type` 必须能映射到 `EndpointSchemes` **且**有
+  `CloudProviderCatalog.TryFor` 的 descriptor；remote 名拒绝 `:` `/` `\`、前后空白、以 `.` 开头、超 64 字符
+  （防段头注入）；参数名只允许字母数字与 `_ -`；同文件重名按大小写不敏感拒掉后来的。坏行丢弃并返回消息，
+  不让一行毁掉整个迁移。
+- `CloudEndpointService.SaveOrganizationAsync` 在编辑器创建端点后补写分组/标签（编辑器不负责归档）。
+- `CloudEndpointEditorWindow` 新增 `CloudEndpointEditorWindow(CloudEndpointDraft)` **预填新建**模式：固定服务、
+  预填名称与根目录，名称可编辑、凭据全空，保存走既有 `EnsureRemoteAsync` / `SaveS3Async` 路径。
+  `LoadProvidersAsync` 与 `ApplyProviderDefaults` 对 draft 各加了一处保护（不覆盖预填的 provider、不 seed 默认 region）。
+- UI：`RemoteEndpointManagerWindow` 工具条加 `导出…` / `导入…`（`ExportCloudEndpoints` / `ImportCloudEndpoints`，
+  Tertiary 样式）。导出走 `SaveFileDialog`；导入走 `OpenFileDialog` → 校验 → 逐端点打开编辑器，**冲突名用
+  `UniqueName` 自动改名而不是覆盖**，取消即跳过，结束时刷新并汇总“成功/跳过”。
+- 测试：`CloudEndpointPortabilityTests`（11 纯函数：导出形状、不含凭据、往返、版本、坏 JSON、注入名、未知类型、
+  坏参数名、重名、`UniqueName`）；`UiFeatureBehaviorTests` +2 STA（draft 预填 SFTP 与 S3）；`sftp-ui` 场景的
+  工具条矩形断言加上两个新控件。
+
 ---
 
-## 3. 未提交的 A3 + A4
+## 3. A3/A4 的设计要点与遗留缺口
 
-`git status --short` 共 8 项：
-
-```
- M src/FengSync/Services/CloudEndpointStatusService.cs
- M src/FengSync/Views/RemoteEndpointManagerWindow.xaml
- M src/FengSync/Views/RemoteEndpointManagerWindow.xaml.cs
- M tests/FengSync.UiTests/Scripts/Invoke-UiScenario.ps1
- M tests/FengSync.UiTests/UiFeatureBehaviorTests.cs
-?? src/FengSync/Services/CloudEndpointList.cs
-?? tests/FengSync.UiTests/CloudEndpointCheckAllTests.cs
-?? tests/FengSync.UiTests/CloudEndpointListTests.cs
-```
-
-| 文件 | 内容 |
-| --- | --- |
-| `src/FengSync/Services/CloudEndpointList.cs`（新，~65 行） | `CloudEndpointSortColumn { Name, Provider, Health }`；`Matches(account, query)` —— **每个**空白分词都要命中 `name + provider + type + prefix + Display`（所以第二个词是**收窄**而不是放宽）；`Arrange(rows, query, column, descending)` —— 名称**恒为最终 tie-break 且不反转**；`Rank(health)` —— 升序 = 待办清单：`NeedsLogin → Unreachable → Unknown → Checking → Connected` |
-| `src/FengSync/Services/CloudEndpointStatusService.cs` | `ProbeConcurrency = 3` + `RunBoundedAsync<T>(items, concurrency, action, ct)`：`SemaphoreSlim` 限流、**单条失败被收集**而不是首错即抛、**取消不算失败且会停下**、`acquired` 标记防止释放未获取的槽位 |
-| `src/FengSync/Views/RemoteEndpointManagerWindow.xaml` | 端点 GroupBox 从裸 `ListBox` 改成 2 行 Grid（`Auto` 工具条 + `*` 列表），工具条是 **`WrapPanel`**（左列只有 340px，必须能换行）：`CloudEndpointSearch` / `CloudEndpointSort` / `CloudEndpointSortDirection` / `CheckAllCloudEndpoints`，四个控件都用白名单样式 |
-| `src/FengSync/Views/RemoteEndpointManagerWindow.xaml.cs` | `_loaded` / `_browsedEndpoint` / `_rearranging` / `EndpointSortOptions` / `ApplyEndpointView(selectName, browse)` / `FollowSelectionAsync` / `EndpointSearch_TextChanged` / `EndpointSort_Changed` / `EndpointSortDirection_Click` / `CheckAll_Click` / `DescribeCheckAll` / `LoadEndpointsForTest` |
-| `tests/FengSync.UiTests/CloudEndpointListTests.cs`（新） | **13** 个纯函数测试（搜索/排序/tie-break/空列表） |
-| `tests/FengSync.UiTests/CloudEndpointCheckAllTests.cs`（新） | **12** 个（`RunBoundedAsync` 6 + `DescribeCheckAll` 5 + 并发常量 1） |
-| `tests/FengSync.UiTests/UiFeatureBehaviorTests.cs` | +1 个 STA 测试（驱动真实控件）+ 5 个辅助（`EndpointRow`/`VisibleNames`/`SelectedName`/`Click`/`AssertNoDirectoryListing`） |
-| `tests/FengSync.UiTests/Scripts/Invoke-UiScenario.ps1` | `sftp-ui` 场景新增：4 个控件矩形断言、搜索命中/不命中（**不命中时文件面板也必须空**）、清空恢复浏览、排序选「名称」并回读、方向按钮后文件面板仍在、点「测试全部」断言行变「已连接」且状态行出现「检查结束」 |
+代码已提交，文件与测试清单见 §2 的 A3+A4。这里只留**日后改这块必须知道的三件事**和**一处尚未补的缺口**。
 
 ### ⚠️ 三个必须知道的设计要点（最容易踩）
 
@@ -164,18 +212,11 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
    （搜索框在跑的过程中是活的，过滤变了不能让进度读数和总结统计到另一批）。`DescribeCheckAll(0,0,0)` 有单独分支
    —— 「0 个端点全部连接正常」是一句真话，但意思正好相反。
 
-### 本批已验证 / 未验证
+### 遗留缺口
 
-已验证：
-
-- `dotnet build src/FengSync` → 0 warning / 0 error；`dotnet build tests/FengSync.UiTests` → 0 warning / 0 error。
-- `CloudEndpointListTests` + `CloudEndpointCheckAllTests` → **25 passed / 0 failed**。
-- `UiFeatureBehaviorTests` → **22 passed / 0 failed**（整类 502ms，说明新增的那个 STA 测试没有起 rclone）。
-- `sftp-ui` 桌面场景 → `Passed sftp-ui; completed in 00:00:16.5`。
-  单跑命令：`pwsh -NoProfile -File tests/FengSync.UiTests/Scripts/Invoke-UiScenario.ps1 -Scenario sftp-ui -AppPath tests/FengSync.UiTests/bin/Debug/net10.0-windows/FengSync.exe -Workspace .`
-
-未验证：**全量门禁**（见 §1）。另外 A1 遗留一项：`sftp-ui` 的 Provider 遍历目前只有
-`Google Drive / S3 Bucket / SFTP`，**未覆盖新增的 OneDrive/Dropbox/Box/WebDAV 编辑表单**。
+- **A1 未覆盖的新 Provider 编辑表单**：`sftp-ui` 桌面场景的 Provider 遍历目前只有
+  `Google Drive / S3 Bucket / SFTP`，**未覆盖新增的 OneDrive/Dropbox/Box/WebDAV**。建议在 A7 之后、进 B 组之前补上
+  （这是「加 Provider 请照抄既有模式」这条约定的现成反例）。
 
 ---
 
@@ -200,6 +241,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | rclone 的 s3 backend 自带 **53 个 provider**（含 `TencentCOS`/`Alibaba`/`HuaweiOBS`/`Qiniu`/`NetEase`），**没有 Backblaze** | 「加国产 S3 兼容」是零代码路径；B2 走 s3 的通用 `Other` provider |
 | OAuth 状态机对所有 OAuth backend **完全相同** | Drive/OneDrive/Dropbox/Box 共用一套流程 |
 | `rclone mount` 的 fs 串是 `<name>:`，在**挂载时**解析 | 改名时若有活跃挂载 → 直接阻断（A2 已实现） |
+| rclone 的 HTTP 客户端**只读 `HTTP_PROXY`/`HTTPS_PROXY`**，**不读 `ALL_PROXY`**；RC 无全局 proxy 透传 | 代理只能靠子进程环境变量传；`RcloneProxyResolver` 把 only-`all_proxy` 镜像进 http/https（A5） |
 
 ### WPF / 测试
 
@@ -215,35 +257,33 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 ---
 
-## 5. 剩余路线图（A5 → E）
+## 5. 剩余路线图（A7 → E）
 
-> 这一节同时是那份 307 行改进计划的替代。**剩余项的顺序与依赖**：A5/A6/A7 互不依赖；
-> B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**；D 与 A/B/C 完全解耦；E 是收尾集成。
+> 这一节同时是那份 307 行改进计划的替代。**A0–A6 已完成**（见 §2），本节的 A5/A6 已移入 §2。
+> **剩余项的顺序与依赖**：A7 独立；B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**；
+> D 与 A/B/C 完全解耦；E 是收尾集成。**A7 已完成，下一批是 B0。**
 
-### A5. 代理（原 A7）
+### A7. 端点导出/导入（原 A9）—— ✅ 已完成，见 §2
 
-- `ApplicationSettings.CloudProxy`（URL 或空）。
-- **机制已经存在，不用新造**：`src/FengSync.Core/Rclone/Transport/RcloneProxyConfiguration.cs` 里的
-  `RcloneProxyOptions` / `RcloneProxyResolver.Resolve(application, environment, winInet)`
-  （优先级 **Application > Environment > WinInet**）；`RcloneDaemon.StartAsync(..., RcloneProxyOptions?)` 与
-  `RcloneEnvironment.Prepare(...)` 都已接受它，注入 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY`
-  并设 `GODEBUG=netdns=go` + `FENGSYNC_RCLONE_PROXY_SOURCE`。
-- **缺的只是接线**：谁读 `ApplicationSettings.CloudProxy` 并把它传给 `RcloneDaemon.StartAsync`。
-- 设置页必须注明「**仅影响云盘**」（同步路径的代理是另一套）。
-- 设置项三件套别忘了（见 §7）。
-- 遗留的实证点：RC 是否有全局 proxy 透传（`_config` 支持哪些键），还是必须走环境变量。
+**实现已完成**（见 §2 的 A7）；下面是设计与安全规则的留档。地基齐了：`CloudEndpointMetadataStore` 已有原子写（temp + `File.Move(..., true)`）与 `Gate` 串行化；
+`RcloneConfigFile` 已有第 0 列段头的解析基础。**复用它们，不要新造写盘逻辑。**
 
-### A6. 多账户分组/标签（原 A8）
+**导出什么**（非敏感子集，**值一律留空**）：
+- `cloud-endpoints.json` 的记录本身不含凭据：`RemoteName` / `Type` / `Provider` / `Bucket` / `Subdirectory` /
+  `AliasOf` / `Group` / `Tags` 直接可导。
+- 每个端点的**参数名清单**：从 `rclone.conf` 的段里读**键名**。⚠️ `sftp.pass` 是 obscured、`s3.secret_access_key` 是明文
+  —— **两种都只写键名，不写值**。
+- 文件头带 `Version` + 生成时间，方便将来演进与拒绝不认识的版本。
 
-`CloudEndpointMetadata` 加 `Group` / `Tags` 字段，列表页**按组分区**显示；分组信息存 `cloud-endpoints.json`。
-注意 `CloudEndpointMetadata` 是 `System.Text.Json` 序列化的（`CloudEndpointJsonContext`），加字段要保持**向后兼容**
-（旧文件没有这两个字段时要能读）。
+**导入怎么做**：让用户逐端点补参数，再走**既有的创建路径**（`CloudEndpointEditorWindow` / `CloudEndpointService`），
+由它把值写进 `rclone.conf`。两条硬约束：**导入不得直接写 `rclone.conf` 的凭据段**；
+**导入的 JSON 不可信** —— 远端名与路径要校验，防止 `:` 段头注入或 `../` 越界。
 
-### A7. 端点导出/导入（原 A9）
-
-导出 `cloud-endpoints.json` 的**非敏感**子集 + 每个端点的**参数名清单**（值一律留空，绝不写 secret/token/obscured 值）；
-导入时让用户补参数。测试要断言**导出内容不含 conf 里的密码串**。
-（铁律：凭据只留在 `rclone.conf`。）
+**测试点**（照 §7 铁律）：
+- 断言导出内容**不含** conf 里的密码/secret/token/obscured 串（用已知口令的 SFTP 与 S3 端点跑）。
+- 参数名清单含 `host`/`user`/`pass`，但 `pass` 的值为空。
+- 导入被篡改的 JSON（多出段头、远端名带 `:`）应被**拒绝**而不是写坏 conf。
+- 往返：分组/标签/别名（S3 强制前缀）都保留。
 
 ### B0. 队列泛化（**前置**，与批次 C 共用）
 
@@ -355,10 +395,12 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 
 ---
 
-## 6. 实现前必须先实证的 6 个点（不准猜，先验证再写）
+## 6. 实现前必须先实证的点（不准猜，先验证再写）
 
 1. `use_trash=false` 的 alias 方案在 v1.75 的 RC 路径下是否可用（**B5 永久删除**）。
-2. RC 是否有全局 proxy 透传（`_config` 支持哪些键），还是必须走环境变量（**A5**）。
+2. ✅ **已实证（A5，2026-10-03）**：RC **没有**全局 proxy 透传；rclone 的 HTTP 客户端**只读 `HTTP_PROXY`/`HTTPS_PROXY`，
+   **不读 `ALL_PROXY`**（死端口法验证：`ALL_PROXY` 那轮仍到达目标，`HTTP_PROXY`/`HTTPS_PROXY` 那轮 `proxyconnect tcp` 失败）。
+   代理只能靠**子进程环境变量**传；`RcloneProxyResolver` 已把只有 `all_proxy` 的值镜像进 http/https。实现见 §2 的 A5。
 3. `operations/publiclink` 对各 Provider 的支持矩阵与失败形态（**B4**）。
 4. rclone `mountPoint` 是否接受 UNC 路径（**D6**）。
 5. rclone 是否暴露版本列表（**B11**）。
@@ -419,7 +461,12 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `src/FengSync/Services/CloudProviderCatalog.cs` | UI 侧 Provider 描述符（7 条）；加 Provider = 加一行 + 字段 |
 | `src/FengSync.Core/RcloneConfigFile.cs` | 纯 ini 段手术（重命名端点的地基） |
 | `src/FengSync/Services/CloudEndpointRename.cs` | 端点重命名：校验 → 备份 → 改写 → 回读验证 → 迁移 → 失败一起还原 |
-| `src/FengSync/Services/CloudEndpointList.cs` | 端点列表的搜索与排序纯函数（本批新增） |
+| `src/FengSync/Services/CloudEndpointList.cs` | 端点列表的搜索与排序纯函数（批次 A3） |
+| `src/FengSync/Services/CloudEndpointOrganization.cs` | 端点分组/标签的纯函数（批次 A6）；`Merge` / `Preserve` 是「保存归档绝不静默失败」的两处关键 |
+| `src/FengSync/Services/CloudEndpointPortability.cs` | 端点导出/导入的纯逻辑与不可信输入校验（批次 A7）；导出结构里没有放凭据的字段 |
+| `src/FengSync/Views/CloudEndpointOrganizationWindow.xaml(.cs)` | 编辑单个端点的分组/标签（批次 A6） |
+| `src/FengSync.Core/Configuration/RcloneProxySettings.cs` | 把 `ApplicationSettings.RcloneProxy` 转成 `RcloneProxyOptions`（批次 A5） |
+| `src/FengSync.Core/Rclone/Lifecycle/RcloneLifecycleHost.cs` | `ProxyOptionsProvider`：启动锁内、子进程创建前只读一次代理（批次 A5） |
 | `src/FengSync/Services/CloudEndpointStatusService.cs` | 端点体检：`ProbeAsync` / `Classify` / `RunBoundedAsync` / `FormatBytes` |
 | `src/FengSync/Services/CloudEndpointService.cs` | 端点 CRUD 与 URI 构造的门面（转发到 catalog + schemes） |
 | `src/FengSync/Views/RemoteEndpointManagerWindow.xaml(.cs)` | **三合一**窗口：端点管理 + 挂载管理 + 文件浏览器 |
