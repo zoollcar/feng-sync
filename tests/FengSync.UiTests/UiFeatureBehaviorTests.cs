@@ -1,5 +1,6 @@
 using System.Runtime.ExceptionServices;
 using System.Windows;
+using FengSync.Core;
 using FengSync.Core.Updates;
 using FengSync.Services;
 using FengSync.Views;
@@ -191,6 +192,139 @@ public sealed class UiFeatureBehaviorTests
             Assert.Equal(Visibility.Collapsed, window.SaveButton.Visibility);
             window.Close();
         });
+    }
+
+    [Fact]
+    public void Only_a_google_drive_endpoint_offers_the_browser_re_login()
+    {
+        var drive = new CloudEndpointAccount(new RcloneAccount("personal", "drive"), null);
+        var sftp = new CloudEndpointAccount(new RcloneAccount("nas", "sftp"), null);
+        var s3 = new CloudEndpointAccount(new RcloneAccount("archive", "s3"), null);
+        var alias = new CloudEndpointAccount(new RcloneAccount("docs", "alias"), null);
+
+        // SFTP and S3 are fully described by their stored parameters, so re-login would be a dead end
+        // for them; only Google Drive completes authorization in a browser.
+        Assert.True(RemoteEndpointManagerWindow.NeedsReconnect(drive));
+        Assert.False(RemoteEndpointManagerWindow.NeedsReconnect(sftp));
+        Assert.False(RemoteEndpointManagerWindow.NeedsReconnect(s3));
+        Assert.False(RemoteEndpointManagerWindow.NeedsReconnect(alias));
+        // The manager opens with nothing selected when no endpoint exists yet.
+        Assert.False(RemoteEndpointManagerWindow.NeedsReconnect(null));
+    }
+
+    [Fact]
+    public void An_edit_form_keeps_the_stored_sftp_password_unless_one_is_typed()
+    {
+        const string stored = "obscured-value-read-from-rclone";
+
+        // A blank box re-sends the obscured value and says so, because obscuring an obscured password
+        // corrupts it. A filled box is a new plaintext password and must be obscured by the write.
+        Assert.Equal((stored, true), CloudEndpointService.ResolveStoredPassword("", stored));
+        Assert.Equal(("hunter2", false), CloudEndpointService.ResolveStoredPassword("hunter2", stored));
+        // Key-file authentication with no stored password stays empty rather than writing a blank secret.
+        Assert.Equal(("", false), CloudEndpointService.ResolveStoredPassword("", ""));
+        Assert.Equal(("", false), CloudEndpointService.ResolveStoredPassword("", null));
+    }
+
+    [Fact]
+    public void The_endpoint_editor_opens_an_existing_endpoint_on_its_connection_step()
+    {
+        RunSta(() =>
+        {
+            EnsureApplicationResources();
+            var account = new CloudEndpointAccount(
+                new RcloneAccount("nas", "sftp"),
+                new CloudEndpointMetadata("nas", "sftp", "SFTP", "share", "team", null));
+            var target = new CloudEndpointEditTarget(account, CloudEndpointService.ProviderKind.Sftp,
+                new Dictionary<string, string>
+                {
+                    ["host"] = "nas.local",
+                    ["port"] = "2222",
+                    ["user"] = "bob",
+                    ["pass"] = "obscured-value",
+                    ["key_file"] = "/keys/id_rsa"
+                });
+
+            var window = new CloudEndpointEditorWindow(target);
+
+            // Editing starts on the connection step with Save available. The service picker is out of
+            // reach because an endpoint's backend is part of its identity, and its name is fixed because
+            // renaming would strand every profile that references it.
+            Assert.Equal("编辑云端端点", window.Title);
+            Assert.Equal("编辑云端端点", window.HeadingText.Text);
+            Assert.Equal(Visibility.Collapsed, window.NextButton.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.BackButton.Visibility);
+            Assert.Equal(Visibility.Visible, window.SaveButton.Visibility);
+            Assert.Equal(Visibility.Visible, window.ConnectionStep.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.ChooseServiceStep.Visibility);
+            Assert.False(window.ServiceBox.IsEnabled);
+            Assert.True(window.SftpNameBox.IsReadOnly);
+
+            Assert.Equal("nas", window.SftpNameBox.Text);
+            Assert.Equal("nas.local", window.SftpHostBox.Text);
+            Assert.Equal("2222", window.SftpPortBox.Text);
+            Assert.Equal("bob", window.SftpUserBox.Text);
+            Assert.Equal("/keys/id_rsa", window.SftpKeyFileBox.Text);
+            Assert.Equal("share/team", window.SftpRootBox.Text);
+            // rclone stores the password obscured, so the box stays empty and the label says what that means.
+            Assert.Equal("", window.SftpPasswordBox.Password);
+            Assert.Contains("保持原密码", window.SftpPasswordLabel.Text, StringComparison.Ordinal);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public void The_endpoint_editor_pre_fills_an_s3_endpoint_from_its_saved_parameters()
+    {
+        RunSta(() =>
+        {
+            EnsureApplicationResources();
+            var account = new CloudEndpointAccount(
+                new RcloneAccount("docs", "alias"),
+                new CloudEndpointMetadata("docs", "alias", "Backblaze", "bucket", "team/files", "docs_s3"));
+            var target = new CloudEndpointEditTarget(account, CloudEndpointService.ProviderKind.S3,
+                new Dictionary<string, string>
+                {
+                    ["provider"] = "Other",
+                    ["access_key_id"] = "key-id",
+                    ["secret_access_key"] = "secret-value",
+                    ["region"] = "us-west-004",
+                    ["endpoint"] = "https://s3.us-west-004.backblazeb2.com"
+                });
+
+            var window = new CloudEndpointEditorWindow(target);
+
+            // The displayed provider comes from Feng Sync's metadata, because rclone only knows Backblaze
+            // as its generic "Other". The saved region must survive as-is: replacing it with a provider
+            // default would silently retarget the endpoint at a different region.
+            Assert.Equal("Backblaze", window.S3ProviderBox.Text);
+            Assert.Equal("key-id", window.S3AccessKeyBox.Text);
+            Assert.Equal("secret-value", window.S3SecretBox.Password);
+            Assert.Equal("us-west-004", window.S3RegionBox.Text);
+            Assert.Equal("https://s3.us-west-004.backblazeb2.com", window.S3EndpointBox.Text);
+            // The bucket and prefix are not in the remote at all: an alias target is opaque to rclone, so
+            // they come from metadata.
+            Assert.Equal("bucket", window.S3BucketBox.Text);
+            Assert.Equal("team/files", window.S3SubdirectoryBox.Text);
+            Assert.True(window.S3NameBox.IsReadOnly);
+
+            // Setting the provider text is handled through the dispatcher, and that handler also refreshes
+            // the region suggestions. Pumping the queue proves the saved region survives it.
+            window.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+            Assert.Equal("us-west-004", window.S3RegionBox.Text);
+            window.Close();
+        });
+    }
+
+    private static void EnsureApplicationResources()
+    {
+        var application = Application.Current ?? new Application();
+        if (application.Resources.MergedDictionaries.Count > 0) return;
+        foreach (var resource in new[] { "DesignTokens.xaml", "Typography.xaml", "Icons.xaml", "Controls.xaml" })
+            application.Resources.MergedDictionaries.Add(new ResourceDictionary
+            {
+                Source = new Uri($"pack://application:,,,/FengSync;component/Themes/{resource}")
+            });
     }
 
     private static void RunSta(Action action)

@@ -85,6 +85,27 @@ public sealed record CloudEndpointAccount(RcloneAccount Remote, CloudEndpointMet
         : $"{Remote.Display}  ·  /{Prefix}";
 }
 
+/// <summary>
+/// What the endpoint editor needs to open in edit mode: the endpoint as the manager lists it, its
+/// flavour, and the rclone parameters currently behind it. An enforced-prefix S3 endpoint keeps its
+/// credentials in the hidden backing remote, so <see cref="Parameters"/> is read from there.
+/// </summary>
+/// <param name="Parameters">
+/// The raw values rclone stores. A password field (<c>sftp.pass</c>) is obscured; a merely sensitive
+/// field (<c>s3.secret_access_key</c>) is in the clear.
+/// </param>
+public sealed record CloudEndpointEditTarget(
+    CloudEndpointAccount Account,
+    CloudEndpointService.ProviderKind Kind,
+    IReadOnlyDictionary<string, string> Parameters)
+{
+    /// <summary>The name the endpoint keeps: renaming it would strand every profile that references it.</summary>
+    public string RemoteName => Account.Name;
+
+    /// <summary>One stored parameter, or an empty string when rclone does not hold it.</summary>
+    public string Parameter(string key) => Parameters.TryGetValue(key, out var value) ? value : "";
+}
+
 public sealed class CloudEndpointMetadataStore(string? path = null)
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);

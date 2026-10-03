@@ -215,6 +215,28 @@ public static class CloudEndpointService
             metadata.TryGetValue(account.Name, out var value) ? value : null)).ToList();
     }
 
+    /// <summary>
+    /// Reads the settings behind an endpoint so the editor can pre-fill an edit form. An enforced-prefix
+    /// S3 endpoint is an <c>alias</c> whose credentials live in the hidden backing remote, so the
+    /// parameters are read from there — reading the alias itself would return only its target.
+    /// </summary>
+    public static async Task<CloudEndpointEditTarget> LoadEditTargetAsync(CloudEndpointAccount account, CancellationToken ct = default)
+    {
+        var source = account.Metadata?.AliasOf is { Length: > 0 } backing ? backing : account.Name;
+        return new(account, KindFromRcloneType(account.Type), await ConfigurationApi.GetRemoteParametersAsync(source, ct));
+    }
+
+    /// <summary>
+    /// The password to write for an endpoint that already exists. An edit form starts with an empty box
+    /// because rclone stores the password obscured, and the form has no way to show a readable one; a
+    /// blank box therefore re-sends the stored obscured value. It has to travel with
+    /// <see cref="RcloneConfigOptions.NoObscure"/>: rclone obscures a password field that is not already
+    /// obscured, so obscuring it a second time would corrupt the stored password. A filled box is a new
+    /// plaintext password and is obscured normally.
+    /// </summary>
+    public static (string Value, bool AlreadyObscured) ResolveStoredPassword(string typed, string? stored) =>
+        string.IsNullOrEmpty(typed) && !string.IsNullOrEmpty(stored) ? (stored, true) : (typed, false);
+
     public static async Task DeleteAsync(string remoteName, CancellationToken ct = default)
     {
         var metadata = await Metadata.LoadAsync(ct);
@@ -329,14 +351,26 @@ public static class CloudEndpointService
     /// Creates (or overwrites) an rclone remote. Google Drive completes OAuth in the default browser;
     /// the other backends are non-interactive. Failures remain structured RC errors.
     /// </summary>
-    public static Task CreateRemoteAsync(ProviderKind kind, string remoteName, IReadOnlyDictionary<string, string> fields, CancellationToken ct = default)
-        => CreateRemoteAsync(kind, remoteName, fields, progress: null, ct);
+    /// <param name="valuesAreObscured">
+    /// True when the password fields in <paramref name="fields"/> were read back out of rclone's config
+    /// rather than typed by the user. The write then declares them as already obscured so rclone stores
+    /// them verbatim instead of obscuring an obscured value into a corrupt one. Ignored for Google Drive,
+    /// whose credentials only take effect through the OAuth flow.
+    /// </param>
+    public static Task CreateRemoteAsync(
+        ProviderKind kind,
+        string remoteName,
+        IReadOnlyDictionary<string, string> fields,
+        bool valuesAreObscured = false,
+        CancellationToken ct = default)
+        => CreateRemoteAsync(kind, remoteName, fields, progress: null, valuesAreObscured, ct);
 
     public static async Task CreateRemoteAsync(
         ProviderKind kind,
         string remoteName,
         IReadOnlyDictionary<string, string> fields,
         IProgress<string>? progress,
+        bool valuesAreObscured = false,
         CancellationToken ct = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(BundledRclone.ConfigPath)!);
@@ -347,7 +381,7 @@ public static class CloudEndpointService
             await new RcloneOAuthFlow(api, OpenBrowser).CreateGoogleDriveAsync(remoteName, fields, progress, ct);
             return;
         }
-        await CreateStaticRemoteAsync(ConfigurationApi, remoteName, RcloneType(kind), DisplayName(kind), fields, ct);
+        await CreateStaticRemoteAsync(ConfigurationApi, remoteName, RcloneType(kind), DisplayName(kind), fields, ct, valuesAreObscured);
     }
 
     /// <summary>
@@ -360,14 +394,17 @@ public static class CloudEndpointService
         string rcloneType,
         string label,
         IReadOnlyDictionary<string, string> fields,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool valuesAreObscured = false)
     {
         var parameters = fields.Where(pair => !string.IsNullOrWhiteSpace(pair.Value)).ToDictionary(pair => pair.Key, pair => pair.Value);
         var output = await client.CreateAsync(
             remoteName,
             rcloneType,
             parameters,
-            new RcloneConfigOptions(Obscure: true, NoOutput: true),
+            valuesAreObscured
+                ? new RcloneConfigOptions(Obscure: false, NoObscure: true, NoOutput: true)
+                : new RcloneConfigOptions(Obscure: true, NoOutput: true),
             ct);
         if (!string.IsNullOrWhiteSpace(output.Error))
             throw new RcloneException(RcloneFailureClassifier.FromJob("config/create", output.Error));

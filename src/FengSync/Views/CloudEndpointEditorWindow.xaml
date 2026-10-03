@@ -6,9 +6,9 @@
  <Grid Margin="20">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <StackPanel>
-   <TextBlock Text="新建云端端点" Style="{StaticResource DisplayTitleTextStyle}"/>
+   <TextBlock x:Name="HeadingText" Text="新建云端端点" Style="{StaticResource DisplayTitleTextStyle}"/>
    <TextBlock x:Name="StepCaption" Text="第 1 步，共 2 步 · 选择服务" Style="{StaticResource CaptionTextStyle}" Margin="0,4,0,0"/>
-   <Grid Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/></Grid.ColumnDefinitions><Border x:Name="StepOneIndicator" Height="4" Background="{DynamicResource AccentBrush}" CornerRadius="2"/><Border x:Name="StepTwoIndicator" Grid.Column="2" Height="4" Background="{DynamicResource BorderSubtleBrush}" CornerRadius="2"/></Grid>
+   <Grid x:Name="StepIndicator" Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/></Grid.ColumnDefinitions><Border x:Name="StepOneIndicator" Height="4" Background="{DynamicResource AccentBrush}" CornerRadius="2"/><Border x:Name="StepTwoIndicator" Grid.Column="2" Height="4" Background="{DynamicResource BorderSubtleBrush}" CornerRadius="2"/></Grid>
   </StackPanel>
   <Grid Grid.Row="1" Margin="0,18,0,12">
    <StackPanel x:Name="ChooseServiceStep">
@@ -25,7 +25,7 @@
     <StackPanel x:Name="SftpPanel" Visibility="Collapsed">
      <TextBlock Text="SFTP 连接" Style="{StaticResource SectionTitleTextStyle}"/><TextBlock Text="显示名称" Margin="0,12,0,0"/><TextBox x:Name="SftpNameBox" AutomationProperties.AutomationId="SftpRemoteName" Text="SFTP 连接" Margin="0,4,0,8"/>
      <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition Width="120"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="主机"/><TextBox x:Name="SftpHostBox" AutomationProperties.AutomationId="SftpRemoteHost" Margin="0,4,0,8"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="端口"/><TextBox x:Name="SftpPortBox" AutomationProperties.AutomationId="SftpRemotePort" Text="22" Margin="0,4,0,8"/></StackPanel></Grid>
-     <TextBlock Text="用户名"/><TextBox x:Name="SftpUserBox" AutomationProperties.AutomationId="SftpRemoteUser" Margin="0,4,0,8"/><TextBlock Text="密码（使用密钥时可留空）"/><PasswordBox x:Name="SftpPasswordBox" AutomationProperties.AutomationId="SftpRemotePassword" Margin="0,4,0,8"/><TextBlock Text="私钥文件（可选）"/><TextBox x:Name="SftpKeyFileBox" AutomationProperties.AutomationId="SftpRemoteKeyFile" Margin="0,4,0,8"/><TextBlock Text="远程根目录（可选）"/><TextBox x:Name="SftpRootBox" AutomationProperties.AutomationId="SftpRemoteRoot" Margin="0,4,0,8"/>
+     <TextBlock Text="用户名"/><TextBox x:Name="SftpUserBox" AutomationProperties.AutomationId="SftpRemoteUser" Margin="0,4,0,8"/><TextBlock x:Name="SftpPasswordLabel" Text="密码（使用密钥时可留空）"/><PasswordBox x:Name="SftpPasswordBox" AutomationProperties.AutomationId="SftpRemotePassword" Margin="0,4,0,8"/><TextBlock Text="私钥文件（可选）"/><TextBox x:Name="SftpKeyFileBox" AutomationProperties.AutomationId="SftpRemoteKeyFile" Margin="0,4,0,8"/><TextBlock Text="远程根目录（可选）"/><TextBox x:Name="SftpRootBox" AutomationProperties.AutomationId="SftpRemoteRoot" Margin="0,4,0,8"/>
     </StackPanel>
     <StackPanel x:Name="S3Panel" Visibility="Collapsed">
      <TextBlock x:Name="S3Heading" Text="S3 连接" Style="{StaticResource SectionTitleTextStyle}"/><TextBlock Text="显示名称" Margin="0,8,0,0"/><TextBox x:Name="S3NameBox" AutomationProperties.AutomationId="S3DisplayName" Text="S3 Bucket" TextChanged="S3Field_Changed" Margin="0,3,0,0"/><TextBlock x:Name="DisplayNameError" Foreground="{DynamicResource DangerBrush}" Style="{StaticResource CaptionTextStyle}"/>

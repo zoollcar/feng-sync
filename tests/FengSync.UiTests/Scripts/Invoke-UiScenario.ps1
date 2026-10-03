@@ -1035,6 +1035,18 @@ try {
       Select-UiOrAncestor $remoteItem
       Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } 'Cloud file manager did not browse the endpoint created through its editor.' 30 | Out-Null
       Capture-Element $manager 'remote-file-manager-sftp.png' 'remote-file-manager' 'SFTP endpoint directory listing'
+      # Editing an existing endpoint has to round-trip the password rclone keeps obscured: a rewrite that
+      # obscured it a second time would corrupt it, and nothing about the save would report an error — the
+      # endpoint would simply stop authenticating. Re-browsing after the save is what catches that.
+      Click (Find-Id $manager 'EditCloudEndpoint')
+      $edit = Wait-Until { try { Find-AppWindow { param($window) $window.Current.Name -like '*编辑云端*' } } catch { $null } } 'Cloud endpoint edit window did not appear' 30
+      if ((Get-Text (Find-Id $edit 'SftpRemoteName')) -ne $remoteName) { throw 'The edit form did not show the name of the endpoint it is editing.' }
+      if ((Get-Text (Find-Id $edit 'SftpRemoteHost')) -ne '127.0.0.1') { throw 'The edit form did not pre-fill the saved host.' }
+      if ((Get-Text (Find-Id $edit 'SftpRemoteUser')) -ne 'ui') { throw 'The edit form did not pre-fill the saved user.' }
+      Capture-Element $edit 'remote-endpoint-editor-edit.png' 'remote-endpoint-editor' 'editing an existing SFTP endpoint'
+      Click (Find-Id $edit 'SaveCloudEndpoint')
+      Wait-Until { try { $null -eq (Find-AppWindow { param($window) $window.Current.AutomationId -eq 'CloudEndpointEditorWindow' }) } catch { $false } } 'Cloud endpoint editor did not close after saving an edit.' 30 | Out-Null
+      Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } 'The edited endpoint stopped browsing its directory.' 30 | Out-Null
       Close-Window $manager
       # Build the sftp:// URI directly so the test does not depend on the manager's browse workflow.
       $upload = Join-Path $root 'ui-upload'; New-Item -ItemType Directory -Force -Path $upload | Out-Null; [IO.File]::WriteAllText((Join-Path $upload 'created-through-ui.txt'), 'endpoint-ui-proof')

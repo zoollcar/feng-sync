@@ -19,9 +19,27 @@ public sealed class RcloneConfigurationClientTests
         var types = await Task.WhenAll(names.Select(name => api.GetRemoteTypeAsync(name)));
 
         Assert.Equal(["archive", "personal"], names);
+        // The endpoint list only needs each remote's backend type. The stored values are read separately
+        // and deliberately — see the endpoint-editor test below.
         Assert.Equal(["s3", "drive"], types.Select(type => type!).ToArray());
         Assert.DoesNotContain(handler.Bodies, body => body.Contains("config/dump", StringComparison.Ordinal));
         Assert.All(handler.Bodies.Skip(1), body => Assert.Contains("\"name\"", body));
+    }
+
+    [Fact]
+    public async Task Reads_every_stored_parameter_of_one_remote_for_the_endpoint_editor()
+    {
+        var handler = new ConfigurationHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://rc.test/") };
+        var api = new RcloneConfigurationClient(new RcloneRcClient(http, http.BaseAddress, "user", "pass"));
+
+        var parameters = await api.GetRemoteParametersAsync("archive");
+
+        // The editor pre-fills its fields from this map, so nothing may be filtered out of it: an SFTP
+        // password arrives obscured and an S3 secret arrives in the clear, and the caller decides how to
+        // write each one back.
+        Assert.Equal("s3", parameters["type"]);
+        Assert.Equal("stored-secret", parameters["secret_access_key"]);
     }
 
     [Fact]
@@ -38,6 +56,24 @@ public sealed class RcloneConfigurationClientTests
         Assert.Equal("sftp", request.GetProperty("type").GetString());
         Assert.Equal("very-secret", request.GetProperty("parameters").GetProperty("pass").GetString());
         Assert.True(request.GetProperty("opt").GetProperty("obscure").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Writing_a_stored_password_back_declares_it_as_already_obscured()
+    {
+        var handler = new ConfigurationHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://rc.test/") };
+        var api = new RcloneConfigurationClient(new RcloneRcClient(http, http.BaseAddress, "user", "pass"));
+
+        // An edit form leaves the password box empty, so the obscured value read back out of the config is
+        // written again. rclone obscures any password field that is not already obscured, which would
+        // corrupt it — the write has to say the value is already obscured.
+        await api.CreateAsync("server", "sftp", new Dictionary<string, string> { ["pass"] = "obscured-value" },
+            new(Obscure: false, NoObscure: true, NoOutput: true));
+
+        var request = JsonDocument.Parse(handler.Bodies.Single(body => body.Contains("obscured-value", StringComparison.Ordinal))).RootElement;
+        Assert.True(request.GetProperty("opt").GetProperty("noObscure").GetBoolean());
+        Assert.False(request.GetProperty("opt").GetProperty("obscure").GetBoolean());
     }
 
     [Fact]
@@ -91,8 +127,8 @@ public sealed class RcloneConfigurationClientTests
             {
                 "/config/listremotes" => "{\"remotes\":[\"personal:\",\"archive:\"]}",
                 "/config/get" => Bodies[^1].Contains("archive", StringComparison.Ordinal)
-                    ? "{\"type\":\"s3\",\"secret_access_key\":\"must-not-escape\"}"
-                    : "{\"type\":\"drive\",\"token\":\"must-not-escape\"}",
+                    ? "{\"type\":\"s3\",\"secret_access_key\":\"stored-secret\"}"
+                    : "{\"type\":\"drive\",\"token\":\"stored-token\"}",
                 "/rc/list" => "{\"commands\":[{\"Path\":\"config/oauthstatus\"},{\"Path\":\"config/oauthstop\"}]}",
                 "/config/oauthstatus" => "{\"status\":\"running\",\"authUrl\":\"http://127.0.0.1:1234/auth?state=x\"}",
                 "/config/providers" => "{\"providers\":[{\"Name\":\"s3\",\"Options\":[{\"Name\":\"provider\",\"Examples\":[{\"Value\":\"AWS\",\"Help\":\"Amazon\"},{\"Value\":\"Cloudflare\",\"Help\":\"R2\"}]},{\"Name\":\"region\",\"Examples\":[{\"Value\":\"us-east-1\",\"Provider\":\"AWS\"},{\"Value\":\"auto\",\"Provider\":\"Cloudflare\"}]}]}]}",

@@ -14,7 +14,7 @@ namespace FengSync.Views;
 
 /// <summary>
 /// "远程端点管理" — opens from the Tools menu and consolidates two admin-style concerns:
-/// (1) managing the cloud endpoints stored in rclone.conf (refresh / new / re-login / delete), and
+/// (1) managing the cloud endpoints stored in rclone.conf (refresh / new / edit / re-login / delete), and
 /// (2) managing live <c>rclone mount</c> processes on the host (refresh / start a mount for the
 /// selected endpoint / unmount an existing one). The browse-and-pick flow used when adding an
 /// endpoint to a sync side lives in <see cref="RemoteEndpointPickerWindow"/> instead.
@@ -68,6 +68,7 @@ public partial class RemoteEndpointManagerWindow : Window
             StatusText.Text = _accounts.Count == 0 ? "尚无云端端点。点击“新建端点”创建一个。" : $"共 {_accounts.Count} 个云端端点。";
         }
         catch (Exception ex) { StatusText.Text = "无法读取云端端点：" + RcloneUiError.Describe(ex, "endpoint-manager-list"); }
+        UpdateEndpointButtons();
         await RefreshMountsAsync();
     }
 
@@ -95,10 +96,27 @@ public partial class RemoteEndpointManagerWindow : Window
     private async void EndpointList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _currentPath = Selected?.RootPath ?? "";
+        UpdateEndpointButtons();
         UpdateMountButtons();
         await BrowseAsync();
     }
     private void MountsList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateMountButtons();
+
+    /// <summary>
+    /// Keeps the endpoint actions in step with the selection. Only Google Drive can be re-authorized in
+    /// the browser, so the button is hidden for SFTP and S3 rather than failing after the click.
+    /// </summary>
+    private void UpdateEndpointButtons()
+    {
+        EditButton.IsEnabled = Selected is not null;
+        ReconnectButton.Visibility = NeedsReconnect(Selected) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Split out from the button update so the rule is testable without a window: SFTP and S3 endpoints
+    /// are fully described by their stored parameters, so re-login would be a dead end for them.
+    /// </summary>
+    internal static bool NeedsReconnect(CloudEndpointAccount? account) => account?.Remote.IsGoogleDrive == true;
 
     private async void Refresh_Click(object sender, RoutedEventArgs e)
         => await RunBusyAsync(RefreshButton, "正在刷新…", "正在读取云端端点列表…", RefreshAsync);
@@ -113,6 +131,23 @@ public partial class RemoteEndpointManagerWindow : Window
             var index = _accounts.ToList().FindIndex(x => x.Name == editor.SavedRemoteName);
             if (index >= 0) EndpointList.SelectedIndex = index;
             StatusText.Text = $"已创建端点：{editor.SavedRemoteName}。";
+        });
+    }
+
+    private async void Edit_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择要编辑的端点。"; return; }
+        await RunBusyAsync(EditButton, "正在打开…", "正在读取端点参数…", async () =>
+        {
+            // Read the parameters before opening the form: an edit form must show the settings rclone
+            // actually holds, not the subset the endpoint list displays.
+            var target = await CloudEndpointService.LoadEditTargetAsync(account);
+            var editor = new CloudEndpointEditorWindow(target) { Owner = this };
+            if (editor.ShowDialog() != true || editor.SavedRemoteName is null) return;
+            await RefreshAsync();
+            var index = _accounts.ToList().FindIndex(x => x.Name == editor.SavedRemoteName);
+            if (index >= 0) EndpointList.SelectedIndex = index;
+            StatusText.Text = $"已更新端点：{editor.SavedRemoteName}。";
         });
     }
 

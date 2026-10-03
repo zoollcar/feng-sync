@@ -21,11 +21,18 @@
             <GroupBox Grid.Row="1" Header="云盘端点" Margin="0,12,0,0">
                 <ListBox x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="云盘端点列表" BorderThickness="0" DisplayMemberPath="Display" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged" />
             </GroupBox>
-            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
-                <Button x:Name="RefreshButton" AutomationProperties.Name="刷新云盘端点列表" Content="刷新列表" Click="Refresh_Click" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="NewButton" AutomationProperties.Name="新建云盘端点" Content="新建端点" Click="New_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
-                <Button x:Name="ReconnectButton" AutomationProperties.Name="重新登录所选云盘端点" Content="重新登录" Click="Reconnect_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="DeleteButton" AutomationProperties.Name="删除所选云盘端点" Content="删除" Click="Delete_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+            <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="NewButton" AutomationProperties.Name="新建云盘端点" Content="新建端点" Click="New_Click" Style="{StaticResource PrimaryButtonStyle}" />
+                    <Button x:Name="EditButton" AutomationProperties.AutomationId="EditCloudEndpoint" AutomationProperties.Name="编辑所选云盘端点" Content="编辑端点" Click="Edit_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="RefreshButton" AutomationProperties.Name="刷新云盘端点列表" Content="刷新列表" Click="Refresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <!-- Collapsed unless the selected endpoint is Google Drive: only that backend needs an
+                         interactive browser authorization, so for SFTP/S3 the button would lead nowhere. -->
+                    <Button x:Name="ReconnectButton" AutomationProperties.Name="重新登录所选云盘端点" Content="重新登录" Click="Reconnect_Click" Visibility="Collapsed" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="DeleteButton" AutomationProperties.Name="删除所选云盘端点" Content="删除" Click="Delete_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+                </StackPanel>
             </StackPanel>
             <GroupBox Grid.Row="3" Header="挂载管理" Margin="0,14,0,0">
                 <StackPanel Margin="4">

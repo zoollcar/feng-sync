@@ -4,8 +4,11 @@ using FengSync.Core.Rclone.Lifecycle;
 namespace FengSync.Core.Rclone.Configuration;
 
 /// <summary>
-/// Strongly typed access to rclone's configuration RC endpoints. Configuration values are kept
-/// inside request bodies and are never returned by this adapter except for the non-secret backend type.
+/// Strongly typed access to rclone's configuration RC endpoints. Configuration values travel inside
+/// request bodies, and the only read that hands them back is <see cref="GetRemoteParametersAsync"/>:
+/// the endpoint editor needs a remote's current settings to pre-fill an edit form, and rclone stores
+/// the values either obscured (<c>sftp.pass</c>) or in the clear (<c>s3.secret_access_key</c>), so the
+/// caller must write them back with the matching <see cref="RcloneConfigOptions"/>.
 /// </summary>
 public sealed class RcloneConfigurationClient : IRcloneConfigurationApi
 {
@@ -47,6 +50,21 @@ public sealed class RcloneConfigurationClient : IRcloneConfigurationApi
         return TryGet(response, "type", out var type) && type.ValueKind == JsonValueKind.String
             ? type.GetString()
             : null;
+    }
+
+    /// <summary>
+    /// Every stored parameter of one remote, exactly as rclone keeps it. A password field
+    /// (<c>sftp.pass</c>) comes back obscured and must be written back with
+    /// <see cref="RcloneConfigOptions.NoObscure"/>; a merely sensitive field
+    /// (<c>s3.secret_access_key</c>, <c>drive.client_secret</c>) comes back in the clear.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, string>> GetRemoteParametersAsync(string name, CancellationToken cancellationToken = default)
+    {
+        var response = await _call("config/get", new { name }, cancellationToken);
+        if (response.ValueKind != JsonValueKind.Object) return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        return response.EnumerateObject()
+            .Where(property => property.Value.ValueKind == JsonValueKind.String)
+            .ToDictionary(property => property.Name, property => property.Value.GetString() ?? "", StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task<IReadOnlyList<RcloneS3Provider>> GetS3ProvidersAsync(CancellationToken cancellationToken = default)
@@ -166,6 +184,7 @@ public interface IRcloneConfigurationApi
     Task<bool> SupportsOAuthControlAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<string>> ListRemoteNamesAsync(CancellationToken cancellationToken = default);
     Task<string?> GetRemoteTypeAsync(string name, CancellationToken cancellationToken = default);
+    Task<IReadOnlyDictionary<string, string>> GetRemoteParametersAsync(string name, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RcloneS3Provider>> GetS3ProvidersAsync(CancellationToken cancellationToken = default);
     Task<RcloneConfigState> CreateAsync(string name, string type, IReadOnlyDictionary<string, string> parameters, RcloneConfigOptions options, CancellationToken cancellationToken = default);
     Task<RcloneConfigState> UpdateAsync(string name, IReadOnlyDictionary<string, string> parameters, RcloneConfigOptions options, CancellationToken cancellationToken = default);
@@ -203,11 +222,16 @@ public sealed record RcloneConfigOptions(
     bool NonInteractive = false,
     bool Continue = false,
     string State = "",
-    string Result = "")
+    string Result = "",
+    bool NoObscure = false)
 {
     internal object ToPayload() => new
     {
         obscure = Obscure,
+        // Declares that the password fields are already obscured, so rclone stores them verbatim.
+        // Needed whenever a value read back out of the config is written again: rclone obscures a
+        // password field that is not already obscured, and re-obscuring an obscured value corrupts it.
+        noObscure = NoObscure,
         noOutput = NoOutput,
         nonInteractive = NonInteractive,
         @continue = Continue,
