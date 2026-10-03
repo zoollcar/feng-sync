@@ -160,8 +160,9 @@ public partial class RemoteEndpointManagerWindow : Window
     private void MountsList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateMountButtons();
 
     /// <summary>
-    /// Keeps the endpoint actions in step with the selection. Only Google Drive can be re-authorized in the
-    /// browser, so the button is hidden for SFTP and S3 rather than failing after the click.
+    /// Keeps the endpoint actions in step with the selection. Only a provider whose descriptor requires a
+    /// browser authorization can be re-authorized, so the button is hidden for the rest rather than failing
+    /// after the click.
     /// </summary>
     private void UpdateEndpointButtons()
     {
@@ -171,14 +172,17 @@ public partial class RemoteEndpointManagerWindow : Window
     }
 
     /// <summary>
-    /// Split out from the button update so the rule is testable without a window: SFTP and S3 endpoints
-    /// are fully described by their stored parameters, so re-login would be a dead end for them.
+    /// Split out from the button update so the rule is testable without a window: an endpoint whose provider
+    /// is fully described by its stored parameters has nothing to re-authorize, so re-login would be a dead
+    /// end for it. The answer comes from the provider descriptor, which is what makes OneDrive, Dropbox and
+    /// Box behave like Drive here without a second list to keep in step.
     /// </summary>
-    internal static bool NeedsReconnect(CloudEndpointAccount? account) => account?.Remote.IsGoogleDrive == true;
+    internal static bool NeedsReconnect(CloudEndpointAccount? account) =>
+        account is not null && CloudProviderCatalog.RequiresOAuth(KindOf(account));
 
     /// <summary>The flavour of an endpoint, which decides whether a delete can be undone.</summary>
-    internal static CloudEndpointService.ProviderKind KindOf(CloudEndpointAccount? account) =>
-        account is null ? CloudEndpointService.ProviderKind.Sftp : CloudEndpointService.KindFromRcloneType(account.Type);
+    internal static EndpointType KindOf(CloudEndpointAccount? account) =>
+        account is null ? EndpointType.Sftp : CloudEndpointService.KindFromRcloneType(account.Type);
 
     /// <summary>What the status line says after a check, kept separate so the wording is testable.</summary>
     internal static string DescribeStatus(CloudEndpointRow row) => row.Status.Health switch
@@ -229,11 +233,13 @@ public partial class RemoteEndpointManagerWindow : Window
     private async void Reconnect_Click(object sender, RoutedEventArgs e)
     {
         if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
-        if (!account.Remote.IsGoogleDrive) { StatusText.Text = "只有 Google Drive 端点需要浏览器重新登录。"; return; }
+        var kind = KindOf(account);
+        if (!CloudProviderCatalog.RequiresOAuth(kind))
+        { StatusText.Text = $"只有需要浏览器授权的端点可以重新登录；{CloudEndpointService.DisplayName(kind)} 请直接编辑端点参数。"; return; }
         await RunBusyAsync(ReconnectButton, "正在登录…", "正在重新登录，请在浏览器完成授权…", async () =>
         {
             var progress = new Progress<string>(message => StatusText.Text = message);
-            await CloudEndpointService.ReconnectAsync(account.Name, progress);
+            await CloudEndpointService.ReconnectAsync(kind, account.Name, progress);
             await RefreshAsync();
             StatusText.Text = $"“{account.Name}”已重新登录。";
         });

@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using FengSync.Core;
 using FengSync.Core.Configuration;
 using FengSync.Core.Rclone.Diagnostics;
 using FengSync.Services;
@@ -186,9 +187,9 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
     [Fact]
     public void Only_a_backend_with_a_trash_is_presented_as_recoverable()
     {
-        Assert.True(CloudDeleteSafety.SupportsTrash(CloudEndpointService.ProviderKind.GoogleDrive));
-        Assert.False(CloudDeleteSafety.SupportsTrash(CloudEndpointService.ProviderKind.Sftp));
-        Assert.False(CloudDeleteSafety.SupportsTrash(CloudEndpointService.ProviderKind.S3));
+        Assert.True(CloudDeleteSafety.SupportsTrash(EndpointType.GoogleDrive));
+        Assert.False(CloudDeleteSafety.SupportsTrash(EndpointType.Sftp));
+        Assert.False(CloudDeleteSafety.SupportsTrash(EndpointType.S3));
     }
 
     [Fact]

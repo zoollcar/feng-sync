@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FengSync.Core;
 using FengSync.Core.Rclone.Configuration;
 using FengSync.Services;
 using Xunit;
@@ -7,6 +8,8 @@ namespace FengSync.UiTests;
 
 public sealed class RcloneOAuthFlowTests
 {
+    private static CloudProviderDescriptor Drive => CloudProviderCatalog.For(EndpointType.GoogleDrive);
+
     [Fact]
     public async Task Create_uses_rc_state_protocol_and_opens_oauthstatus_url()
     {
@@ -17,9 +20,8 @@ public sealed class RcloneOAuthFlowTests
         Uri? opened = null;
         var flow = new RcloneOAuthFlow(api, uri => { opened = uri; api.AuthorizationCompleted.TrySetResult(); });
 
-        await flow.CreateGoogleDriveAsync("drive_test", new Dictionary<string, string>
+        await flow.CreateAsync("drive_test", Drive, new Dictionary<string, string>
         {
-            ["scope"] = "drive",
             ["client_id"] = "client"
         });
 
@@ -30,7 +32,23 @@ public sealed class RcloneOAuthFlowTests
         Assert.Equal("true", api.Calls[1].Options.Result);
         Assert.Equal("false", api.Calls[2].Options.Result);
         Assert.Equal("true", api.Calls[0].Parameters["config_auth_no_browser"]);
+        // The descriptor's constant parameter travels with the call, which is what keeps Google Drive's
+        // scope out of the provider list in the catalog and in the one place that writes it.
+        Assert.Equal("drive", api.Calls[0].Parameters["scope"]);
         Assert.Equal("http://127.0.0.1:53682/auth?state=abc", opened?.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task Create_uses_the_descriptors_backend_type_not_a_hardcoded_drive()
+    {
+        var api = new FakeConfigurationApi();
+        api.Outputs.Enqueue(State(""));
+        var flow = new RcloneOAuthFlow(api, _ => { });
+
+        await flow.CreateAsync("work", CloudProviderCatalog.For(EndpointType.OneDrive),
+            new Dictionary<string, string> { ["client_id"] = "client" });
+
+        Assert.Equal("onedrive", api.Calls[0].Type);
     }
 
     [Fact]
@@ -41,7 +59,7 @@ public sealed class RcloneOAuthFlowTests
         api.Outputs.Enqueue(State(""));
         var flow = new RcloneOAuthFlow(api, _ => { });
 
-        await flow.ReconnectGoogleDriveAsync("existing");
+        await flow.ReconnectAsync("existing", Drive);
 
         Assert.Equal("update", api.Calls[0].Operation);
         Assert.True(api.Calls[0].Options.NonInteractive);
@@ -55,7 +73,7 @@ public sealed class RcloneOAuthFlowTests
         api.Outputs.Enqueue(State("unknown", "account_choice", required: true, hasDefault: false));
         var flow = new RcloneOAuthFlow(api, _ => { });
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => flow.ReconnectGoogleDriveAsync("existing"));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => flow.ReconnectAsync("existing", Drive));
 
         Assert.Contains("account_choice", error.Message);
     }
@@ -66,7 +84,7 @@ public sealed class RcloneOAuthFlowTests
         var api = new FakeConfigurationApi { SupportsOAuth = false };
         var flow = new RcloneOAuthFlow(api, _ => { });
 
-        var error = await Assert.ThrowsAsync<NotSupportedException>(() => flow.ReconnectGoogleDriveAsync("existing"));
+        var error = await Assert.ThrowsAsync<NotSupportedException>(() => flow.ReconnectAsync("existing", Drive));
 
         Assert.Contains("config/oauthstatus", error.Message);
         Assert.Empty(api.Calls);

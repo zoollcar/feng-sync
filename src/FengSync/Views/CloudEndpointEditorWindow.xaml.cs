@@ -5,7 +5,6 @@ using System.Windows.Media;
 using FengSync.Core;
 using FengSync.Core.Rclone.Configuration;
 using FengSync.Services;
-using Kind = FengSync.Services.CloudEndpointService.ProviderKind;
 
 namespace FengSync.Views;
 
@@ -16,22 +15,32 @@ namespace FengSync.Views;
 /// Edit mode is opened with a <see cref="CloudEndpointEditTarget"/> read from rclone's own configuration,
 /// so the form starts on step 2 already populated. Two rules are specific to editing and are not obvious:
 /// the endpoint keeps its name and backend (a rename would strand every profile that references it, and
-/// switching the backend is a different endpoint, not an edit), and the SFTP password box starts empty
-/// because rclone stores it obscured — leaving it empty re-sends the stored value untouched.
+/// switching the backend is a different endpoint, not an edit), and a password box starts empty because
+/// rclone stores it obscured — leaving it empty re-sends the stored value untouched.
+/// </para>
+/// <para>
+/// The connection form for every provider except S3 is generated from <see cref="CloudProviderCatalog"/>.
+/// S3 keeps a hand-written panel because it needs a provider list, a prefix boundary and a probe that no
+/// other backend has, and because its AutomationIds are part of the desktop acceptance scenario.
 /// </para>
 /// </summary>
 public partial class CloudEndpointEditorWindow : Window
 {
     private readonly S3EndpointDraft _s3Draft = new();
     private readonly CloudEndpointEditTarget? _edit;
+    /// <summary>Input controls of the generated form, keyed by rclone config key.</summary>
+    private readonly Dictionary<string, Control> _fieldInputs = new(StringComparer.Ordinal);
+    /// <summary>The label rendered above each generated input, keyed by the same rclone config key.</summary>
+    private readonly Dictionary<string, TextBlock> _fieldLabels = new(StringComparer.Ordinal);
     private IReadOnlyList<RcloneS3Provider> _providers = [];
     private IReadOnlyList<string> _probeDirectories = [];
+    private TextBox? _nameBox, _rootBox;
     private bool _busy, _secretSync, _initialized;
     private string? _configuredRemote;
-    private Kind _configuredKind;
+    private EndpointType _configuredKind;
 
     public string? SavedRemoteName { get; private set; }
-    public Kind SavedKind { get; private set; }
+    public EndpointType SavedKind { get; private set; }
     public string? SavedRoot { get; private set; }
     public string? SavedUri => SavedRemoteName is null ? null : CloudEndpointService.BuildUri(SavedKind, SavedRemoteName, SavedRoot);
 
@@ -45,6 +54,12 @@ public partial class CloudEndpointEditorWindow : Window
     {
         _edit = edit;
         InitializeComponent();
+        // The service list is data, not markup: it comes from the provider catalog so a new provider needs
+        // no change here. Each item carries its descriptor, which keeps the selection and the descriptor
+        // impossible to disagree.
+        foreach (var descriptor in CloudProviderCatalog.Providers)
+            ServiceBox.Items.Add(new ComboBoxItem { Content = descriptor.DisplayName, Tag = descriptor });
+        ServiceBox.SelectedIndex = 0;
         _initialized = true;
         S3ProviderBox.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler(S3ProviderText_Changed));
         S3RegionBox.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler(S3RegionText_Changed));
@@ -52,34 +67,20 @@ public partial class CloudEndpointEditorWindow : Window
         if (edit is not null) EnterEditMode(edit);
     }
 
-    private Kind SelectedKind => ServiceBox.SelectedIndex switch { 1 => Kind.Sftp, 2 => Kind.S3, _ => Kind.GoogleDrive };
+    private CloudProviderDescriptor SelectedProvider =>
+        (ServiceBox.SelectedItem as ComboBoxItem)?.Tag as CloudProviderDescriptor
+        ?? CloudProviderCatalog.Providers[0];
+
+    private EndpointType SelectedKind => SelectedProvider.Kind;
     private string ProviderName => S3ProviderBox.Text.Trim();
     private string Secret => S3SecretVisibleBox.Visibility == Visibility.Visible ? S3SecretVisibleBox.Text : S3SecretBox.Password;
-    private string RootPath => SelectedKind switch { Kind.Sftp => SftpRootBox.Text.Trim(), Kind.S3 => CurrentS3Values().Prefix, _ => GDriveRootBox.Text.Trim() };
+    private string RootPath => SelectedProvider.IsS3Compatible ? CurrentS3Values().Prefix : _rootBox?.Text.Trim() ?? "";
 
     /// <summary>
     /// The provider an existing endpoint was saved with. It is stored in Feng Sync's metadata rather than
     /// read back from rclone because the two can differ (Backblaze is rclone's generic <c>Other</c>).
     /// </summary>
     private string EditS3Provider => _edit is null ? "" : _edit.Account.Metadata?.Provider is { Length: > 0 } provider ? provider : _edit.Parameter("provider");
-
-    /// <summary>
-    /// The SFTP password to write, and whether it is the obscured value already stored in rclone's config.
-    /// Only an edit form can produce the latter, and the flag has to reach the write: obscuring an already
-    /// obscured password corrupts it.
-    /// </summary>
-    private (string Value, bool AlreadyObscured) SftpPassword => _edit is null
-        ? (SftpPasswordBox.Password, false)
-        : CloudEndpointService.ResolveStoredPassword(SftpPasswordBox.Password, _edit.Parameter("pass"));
-
-    /// <summary>
-    /// Google Drive credentials only take effect through rclone's OAuth flow, so saving has to re-authorize
-    /// when they changed — but an unchanged client must not force a browser round-trip just to move the
-    /// endpoint's root folder.
-    /// </summary>
-    private bool GoogleDriveCredentialsChanged => _edit is not null && SelectedKind == Kind.GoogleDrive
-        && (!string.Equals(GDriveClientIdBox.Text.Trim(), _edit.Parameter("client_id"), StringComparison.Ordinal)
-            || !string.Equals(GDriveClientSecretBox.Text.Trim(), _edit.Parameter("client_secret"), StringComparison.Ordinal));
 
     /// <summary>
     /// Puts the form on the connection step, pre-filled, without the service picker: an endpoint's backend
@@ -90,54 +91,47 @@ public partial class CloudEndpointEditorWindow : Window
         Title = "编辑云端端点";
         AutomationProperties.SetName(this, "编辑云端端点");
         HeadingText.Text = "编辑云端端点";
-        ServiceBox.SelectedIndex = edit.Kind switch { Kind.Sftp => 1, Kind.S3 => 2, _ => 0 };
+
+        var descriptor = CloudProviderCatalog.TryFor(edit.Kind);
+        ServiceBox.SelectedItem = ServiceBox.Items.OfType<ComboBoxItem>()
+            .FirstOrDefault(item => ReferenceEquals(item.Tag, descriptor)) ?? ServiceBox.SelectedItem;
         ServiceBox.IsEnabled = false;
 
         StepIndicator.Visibility = Visibility.Collapsed;
         StepCaption.Text = $"编辑端点 · {CloudEndpointService.DisplayName(edit.Kind)} · 名称与类型不可修改";
         ChooseServiceStep.Visibility = Visibility.Collapsed;
         ConnectionStep.Visibility = Visibility.Visible;
-        GoogleDrivePanel.Visibility = edit.Kind == Kind.GoogleDrive ? Visibility.Visible : Visibility.Collapsed;
-        SftpPanel.Visibility = edit.Kind == Kind.Sftp ? Visibility.Visible : Visibility.Collapsed;
-        S3Panel.Visibility = edit.Kind == Kind.S3 ? Visibility.Visible : Visibility.Collapsed;
+        BuildProviderFields();
+        S3Panel.Visibility = SelectedProvider.IsS3Compatible ? Visibility.Visible : Visibility.Collapsed;
+        ProviderFieldsPanel.Visibility = SelectedProvider.IsS3Compatible ? Visibility.Collapsed : Visibility.Visible;
 
         NextButton.Visibility = Visibility.Collapsed;
         BackButton.Visibility = Visibility.Collapsed;
         TestButton.Visibility = SaveButton.Visibility = Visibility.Visible;
 
-        switch (edit.Kind)
+        if (SelectedProvider.IsS3Compatible)
         {
-            case Kind.GoogleDrive:
-                GDriveNameBox.Text = edit.RemoteName; GDriveNameBox.IsReadOnly = true;
-                GDriveClientIdBox.Text = edit.Parameter("client_id");
-                GDriveClientSecretBox.Text = edit.Parameter("client_secret");
-                GDriveRootBox.Text = edit.Account.RootPath;
-                break;
-            case Kind.Sftp:
-                SftpNameBox.Text = edit.RemoteName; SftpNameBox.IsReadOnly = true;
-                SftpHostBox.Text = edit.Parameter("host");
-                SftpPortBox.Text = edit.Parameter("port");
-                SftpUserBox.Text = edit.Parameter("user");
-                SftpKeyFileBox.Text = edit.Parameter("key_file");
-                SftpRootBox.Text = edit.Account.RootPath;
-                // rclone stores the password obscured, so the box cannot be pre-filled with anything
-                // readable. Empty therefore means "keep the stored password", and the hint says so.
-                SftpPasswordLabel.Text = "密码（留空表示保持原密码不变）";
-                break;
-            case Kind.S3:
-                S3NameBox.Text = edit.RemoteName; S3NameBox.IsReadOnly = true;
-                // Set here as well as after the provider list loads, so the saved provider is on screen
-                // from the first frame instead of appearing a moment later.
-                S3ProviderBox.Text = EditS3Provider;
-                S3AccessKeyBox.Text = edit.Parameter("access_key_id");
-                S3SecretBox.Password = edit.Parameter("secret_access_key");
-                S3RegionBox.Text = edit.Parameter("region");
-                S3EndpointBox.Text = edit.Parameter("endpoint");
-                S3BucketBox.Text = edit.Account.Metadata?.Bucket ?? "";
-                S3SubdirectoryBox.Text = edit.Account.Metadata?.Subdirectory ?? "";
-                MarkS3Dirty();
-                break;
+            S3NameBox.Text = edit.RemoteName; S3NameBox.IsReadOnly = true;
+            // Set here as well as after the provider list loads, so the saved provider is on screen
+            // from the first frame instead of appearing a moment later.
+            S3ProviderBox.Text = EditS3Provider;
+            S3AccessKeyBox.Text = edit.Parameter("access_key_id");
+            S3SecretBox.Password = edit.Parameter("secret_access_key");
+            S3RegionBox.Text = edit.Parameter("region");
+            S3EndpointBox.Text = edit.Parameter("endpoint");
+            S3BucketBox.Text = edit.Account.Metadata?.Bucket ?? "";
+            S3SubdirectoryBox.Text = edit.Account.Metadata?.Subdirectory ?? "";
+            MarkS3Dirty();
+            return;
         }
+
+        if (_nameBox is not null) { _nameBox.Text = edit.RemoteName; _nameBox.IsReadOnly = true; }
+        if (_rootBox is not null) _rootBox.Text = edit.Account.RootPath;
+        // A password field is deliberately left empty. rclone stores it obscured, so the form has no
+        // readable value to show; an empty box means "keep the stored one", which is exactly what the
+        // write does. Pre-filling it would send the obscured value back as if it were plaintext.
+        foreach (var field in SelectedProvider.Fields.Where(field => field.Kind != CloudFormFieldKind.Password))
+            SetField(field, edit.Parameter(field.Key));
     }
 
     private async Task LoadProvidersAsync()
@@ -152,20 +146,20 @@ public partial class CloudEndpointEditorWindow : Window
             // its text when its ItemsSource changes. An edit form therefore restates the region it loaded
             // instead of trusting the control to have kept it: losing it would silently retarget the
             // endpoint at a different region.
-            if (_edit is not null && SelectedKind == Kind.S3) S3RegionBox.Text = _edit.Parameter("region");
+            if (_edit is not null && SelectedProvider.IsS3Compatible) S3RegionBox.Text = _edit.Parameter("region");
         }
         catch (Exception ex)
         {
             ProviderDescription.Text = "无法读取 Provider：" + RcloneUiError.Describe(ex, "s3-provider-list");
-            NextButton.IsEnabled = SelectedKind != Kind.S3;
+            NextButton.IsEnabled = !SelectedProvider.IsS3Compatible;
         }
     }
 
     private void Service_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (ProviderChoicePanel is null) return;
-        ProviderChoicePanel.Visibility = SelectedKind == Kind.S3 ? Visibility.Visible : Visibility.Collapsed;
-        NextButton.IsEnabled = SelectedKind != Kind.S3 || _providers.Count > 0;
+        ProviderChoicePanel.Visibility = SelectedProvider.IsS3Compatible ? Visibility.Visible : Visibility.Collapsed;
+        NextButton.IsEnabled = !SelectedProvider.IsS3Compatible || _providers.Count > 0;
     }
 
     private void S3Provider_SelectionChanged(object sender, SelectionChangedEventArgs e) => Dispatcher.BeginInvoke(() =>
@@ -208,17 +202,17 @@ public partial class CloudEndpointEditorWindow : Window
 
     private void Next_Click(object sender, RoutedEventArgs e)
     {
-        if (SelectedKind == Kind.S3 && !_providers.Any(provider => provider.Name.Equals(ProviderName, StringComparison.Ordinal)))
+        if (SelectedProvider.IsS3Compatible && !_providers.Any(provider => provider.Name.Equals(ProviderName, StringComparison.Ordinal)))
         { ProviderError.Text = "请选择列表中的 S3 Provider。"; S3ProviderBox.Focus(); return; }
         ProviderError.Text = "";
         ChooseServiceStep.Visibility = Visibility.Collapsed; ConnectionStep.Visibility = Visibility.Visible;
-        GoogleDrivePanel.Visibility = SelectedKind == Kind.GoogleDrive ? Visibility.Visible : Visibility.Collapsed;
-        SftpPanel.Visibility = SelectedKind == Kind.Sftp ? Visibility.Visible : Visibility.Collapsed;
-        S3Panel.Visibility = SelectedKind == Kind.S3 ? Visibility.Visible : Visibility.Collapsed;
+        BuildProviderFields();
+        S3Panel.Visibility = SelectedProvider.IsS3Compatible ? Visibility.Visible : Visibility.Collapsed;
+        ProviderFieldsPanel.Visibility = SelectedProvider.IsS3Compatible ? Visibility.Collapsed : Visibility.Visible;
         StepCaption.Text = "第 2 步，共 2 步 · 配置连接";
         StepOneIndicator.Background = (Brush)FindResource("BorderSubtleBrush"); StepTwoIndicator.Background = (Brush)FindResource("AccentBrush");
         NextButton.Visibility = Visibility.Collapsed; BackButton.Visibility = TestButton.Visibility = SaveButton.Visibility = Visibility.Visible;
-        if (SelectedKind == Kind.S3) MarkS3Dirty();
+        if (SelectedProvider.IsS3Compatible) MarkS3Dirty();
     }
 
     private void Back_Click(object sender, RoutedEventArgs e)
@@ -227,6 +221,139 @@ public partial class CloudEndpointEditorWindow : Window
         StepCaption.Text = "第 1 步，共 2 步 · 选择服务";
         StepOneIndicator.Background = (Brush)FindResource("AccentBrush"); StepTwoIndicator.Background = (Brush)FindResource("BorderSubtleBrush");
         NextButton.Visibility = Visibility.Visible; BackButton.Visibility = TestButton.Visibility = SaveButton.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Renders the selected provider's connection form. Rebuilt rather than reused because the fields
+    /// differ per provider; the values the user typed into the previous provider's form are deliberately
+    /// not carried over, since they describe a different service.
+    /// </summary>
+    private void BuildProviderFields()
+    {
+        _fieldInputs.Clear();
+        _fieldLabels.Clear();
+        _nameBox = null;
+        _rootBox = null;
+        ProviderFieldsPanel.Children.Clear();
+        var descriptor = SelectedProvider;
+        if (descriptor.IsS3Compatible) return;
+
+        ProviderFieldsPanel.Children.Add(new TextBlock
+        {
+            Text = $"{descriptor.DisplayName} 连接",
+            Style = (Style)FindResource("SectionTitleTextStyle")
+        });
+        ProviderFieldsPanel.Children.Add(Label("显示名称", 12));
+        _nameBox = new TextBox { Text = descriptor.NamePlaceholder, Margin = new Thickness(0, 4, 0, 8) };
+        AutomationProperties.SetAutomationId(_nameBox, descriptor.NameAutomationId);
+        ProviderFieldsPanel.Children.Add(_nameBox);
+
+        foreach (var field in descriptor.Fields)
+        {
+            var label = Label(_edit is null ? field.Label : field.EditLabel ?? field.Label, 8);
+            _fieldLabels[field.Key] = label;
+            ProviderFieldsPanel.Children.Add(label);
+            var input = field.Kind == CloudFormFieldKind.Password ? (Control)new PasswordBox() : new TextBox();
+            if (field.DefaultValue is { Length: > 0 } defaultValue)
+            {
+                if (input is PasswordBox password) password.Password = defaultValue; else ((TextBox)input).Text = defaultValue;
+            }
+            input.Margin = new Thickness(0, 4, 0, field.Hint is { Length: > 0 } ? 2 : 8);
+            if (field.AutomationId is { Length: > 0 } automationId) AutomationProperties.SetAutomationId(input, automationId);
+            _fieldInputs[field.Key] = input;
+            ProviderFieldsPanel.Children.Add(input);
+            if (field.Hint is { Length: > 0 } hint)
+                ProviderFieldsPanel.Children.Add(new TextBlock
+                {
+                    Text = hint,
+                    TextWrapping = TextWrapping.Wrap,
+                    Style = (Style)FindResource("CaptionTextStyle"),
+                    Foreground = (Brush)FindResource("TextSecondaryBrush"),
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+        }
+
+        ProviderFieldsPanel.Children.Add(Label("远程根目录（可选）", 0));
+        _rootBox = new TextBox { Text = descriptor.DefaultRoot, Margin = new Thickness(0, 4, 0, 8) };
+        AutomationProperties.SetAutomationId(_rootBox, descriptor.RootAutomationId);
+        ProviderFieldsPanel.Children.Add(_rootBox);
+    }
+
+    private static TextBlock Label(string text, double topMargin) =>
+        new() { Text = text, Margin = new Thickness(0, topMargin, 0, 0) };
+
+    /// <summary>
+    /// The generated form's control for an rclone config key, its display-name and root boxes, and the
+    /// label rendered above a field. Exposed so the in-process window tests can read what the dynamic form
+    /// built: the alternative — a named field per provider per control — is exactly the coupling this
+    /// replaced, and it is what made adding a provider a XAML change.
+    /// </summary>
+    internal Control? FieldInput(string key) => _fieldInputs.GetValueOrDefault(key);
+    internal TextBox? NameInput => _nameBox;
+    internal TextBox? RootInput => _rootBox;
+    internal string FieldLabel(string key) => _fieldLabels.TryGetValue(key, out var label) ? label.Text : "";
+    /// <summary>The provider the form is currently configured for.</summary>
+    internal EndpointType SelectedKindForTest => SelectedKind;
+
+    private string ReadField(CloudFormField field)
+    {
+        if (!_fieldInputs.TryGetValue(field.Key, out var input)) return "";
+        return input is PasswordBox password ? password.Password : input is TextBox text ? text.Text : "";
+    }
+
+    private void SetField(CloudFormField field, string value)
+    {
+        if (!_fieldInputs.TryGetValue(field.Key, out var input)) return;
+        if (input is PasswordBox password) password.Password = value; else if (input is TextBox text) text.Text = value;
+    }
+
+    /// <summary>
+    /// The parameters to write, and whether the password fields among them are the obscured values already
+    /// stored in rclone's config. Only an edit form can produce the latter, and the flag has to reach the
+    /// write: rclone obscures a password field that is not already obscured, so obscuring it a second time
+    /// would corrupt the stored password. A blank password box on an edit form means "keep the stored one",
+    /// which is exactly what re-sending the obscured value does.
+    /// </summary>
+    private (IReadOnlyDictionary<string, string> Values, bool PasswordsAreObscured) CollectProviderFields()
+    {
+        var descriptor = SelectedProvider;
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        var passwords = descriptor.Fields.Where(field => field.Kind == CloudFormFieldKind.Password).ToList();
+        var obscured = 0;
+        foreach (var field in descriptor.Fields)
+        {
+            var typed = ReadField(field).Trim();
+            if (field.Kind == CloudFormFieldKind.Password && typed.Length == 0 && _edit is not null)
+            {
+                typed = _edit.Parameter(field.Key);
+                if (typed.Length > 0) obscured++;
+            }
+            values[field.Key] = typed;
+        }
+        Validate(descriptor, values);
+        // Every password field has to be obscured for the flag to be safe to send: it applies to the whole
+        // write, so one newly typed password among stored ones would corrupt the others.
+        return (values, passwords.Count > 0 && obscured == passwords.Count);
+    }
+
+    /// <summary>
+    /// Rejects a form rclone would accept but fail on later. The rules come from the descriptor — required
+    /// fields, a numeric range, and any rule no single field can state — so a new provider inherits the
+    /// generic checks and only has to describe what is special about it.
+    /// </summary>
+    private void Validate(CloudProviderDescriptor descriptor, IReadOnlyDictionary<string, string> values)
+    {
+        if (_nameBox is not null && string.IsNullOrWhiteSpace(_nameBox.Text))
+            throw new InvalidOperationException("请输入显示名称。");
+        foreach (var field in descriptor.Fields)
+        {
+            if (field.Required && string.IsNullOrWhiteSpace(values.GetValueOrDefault(field.Key)))
+                throw new InvalidOperationException($"请填写{field.Label}。");
+            if (field.Kind == CloudFormFieldKind.Number && values.GetValueOrDefault(field.Key) is { Length: > 0 } number
+                && (!int.TryParse(number, out var parsed) || parsed is < 1 or > 65535))
+                throw new InvalidOperationException($"{field.Label}必须介于 1 和 65535 之间。");
+        }
+        if (descriptor.CrossFieldRule?.Invoke(values) is { Length: > 0 } error) throw new InvalidOperationException(error);
     }
 
     private S3EndpointValues CurrentS3Values() => new(S3NameBox.Text.Trim(), ProviderName, S3AccessKeyBox.Text.Trim(), Secret,
@@ -265,7 +392,7 @@ public partial class CloudEndpointEditorWindow : Window
 
     private async void Test_Click(object sender, RoutedEventArgs e)
     {
-        if (SelectedKind == Kind.S3)
+        if (SelectedProvider.IsS3Compatible)
         {
             if (!ValidateS3(true)) return;
             await RunBusyAsync(TestButton, "正在读取指定目录…", async () =>
@@ -285,12 +412,12 @@ public partial class CloudEndpointEditorWindow : Window
         }
         if (_edit is not null)
         {
-            // The endpoint already exists, so testing it only has to reach the configured root. For Google
-            // Drive that also avoids a browser round-trip the user did not ask for by opening the editor.
+            // The endpoint already exists, so testing it only has to reach the configured root. For an OAuth
+            // provider that also avoids a browser round-trip the user did not ask for by opening the editor.
             await RunBusyAsync(TestButton, "正在验证连接…", async () => { await CloudEndpointService.VerifyAsync(_edit.RemoteName, RootPath); StatusText.Text = "连接验证成功。"; });
             return;
         }
-        await RunBusyAsync(TestButton, SelectedKind == Kind.GoogleDrive ? "正在等待浏览器授权…" : "正在验证连接…", async () => { var remote = await EnsureRemoteAsync(); await CloudEndpointService.VerifyAsync(remote, RootPath); StatusText.Text = "连接验证成功。"; });
+        await RunBusyAsync(TestButton, SelectedProvider.RequiresOAuth ? "正在等待浏览器授权…" : "正在验证连接…", async () => { var remote = await EnsureRemoteAsync(); await CloudEndpointService.VerifyAsync(remote, RootPath); StatusText.Text = "连接验证成功。"; });
     }
 
     private void BrowseProbe_Click(object sender, RoutedEventArgs e)
@@ -302,7 +429,7 @@ public partial class CloudEndpointEditorWindow : Window
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
-        if (SelectedKind == Kind.S3)
+        if (SelectedProvider.IsS3Compatible)
         {
             if (!ValidateS3(true)) return;
             // An existing endpoint is assumed to have been usable already; the probe warning exists to stop
@@ -319,7 +446,7 @@ public partial class CloudEndpointEditorWindow : Window
                     if (answer != MessageBoxResult.Yes) { S3NameBox.Focus(); return; } replace = true;
                 }
             }
-            await RunBusyAsync(SaveButton, "正在保存…", async () => { await CloudEndpointService.SaveS3Async(remote, CurrentS3Values(), replace); SavedRemoteName = remote; SavedKind = Kind.S3; 
+            await RunBusyAsync(SaveButton, "正在保存…", async () => { await CloudEndpointService.SaveS3Async(remote, CurrentS3Values(), replace); SavedRemoteName = remote; SavedKind = EndpointType.S3;
                 // The saved endpoint is an rclone alias whose root already is the prefix, so the profile
                 // path that addresses the prefix itself is empty.
                 SavedRoot = ""; DialogResult = true; });
@@ -330,7 +457,7 @@ public partial class CloudEndpointEditorWindow : Window
             // Only the connection parameters live in rclone; an endpoint's default root lives in Feng
             // Sync's metadata, so moving it never has to touch rclone.conf.
             var remote = _edit.RemoteName;
-            var reauthorize = GoogleDriveCredentialsChanged;
+            var reauthorize = OAuthCredentialsChanged();
             await RunBusyAsync(SaveButton, reauthorize ? "正在等待浏览器授权…" : "正在保存…", async () =>
             {
                 if (reauthorize) remote = await EnsureRemoteAsync();
@@ -342,24 +469,33 @@ public partial class CloudEndpointEditorWindow : Window
         await RunBusyAsync(SaveButton, "正在保存…", async () => { var remote = await EnsureRemoteAsync(); await CloudEndpointService.SaveMetadataAsync(remote, SelectedKind, RootPath); SavedRemoteName = remote; SavedKind = SelectedKind; SavedRoot = RootPath; DialogResult = true; });
     }
 
+    /// <summary>
+    /// Whether saving has to send the user through the browser again. An OAuth provider's credentials only
+    /// take effect through the authorization flow, but an unchanged one must not force a browser round-trip
+    /// just to move the endpoint's root folder. A blank password box on an edit form is never a change: it
+    /// means "keep the stored value".
+    /// </summary>
+    private bool OAuthCredentialsChanged()
+    {
+        if (_edit is null || !SelectedProvider.RequiresOAuth) return false;
+        foreach (var field in SelectedProvider.Fields)
+        {
+            var typed = ReadField(field).Trim();
+            if (field.Kind == CloudFormFieldKind.Password && typed.Length == 0) continue;
+            if (!string.Equals(typed, _edit.Parameter(field.Key), StringComparison.Ordinal)) return true;
+        }
+        return false;
+    }
+
     private async Task<string> EnsureRemoteAsync()
     {
         if (_configuredRemote is not null && _configuredKind == SelectedKind) return _configuredRemote;
         // An edited endpoint keeps the name it was listed under; renaming would silently break every
         // profile, CLI job and schedule that addresses it.
-        var remote = _edit?.RemoteName ?? CloudEndpointService.SanitizeRemoteName(SelectedKind == Kind.Sftp ? SftpNameBox.Text : GDriveNameBox.Text);
-        await CloudEndpointService.CreateRemoteAsync(SelectedKind, remote, CollectNonS3Fields(), SftpPassword.AlreadyObscured);
+        var remote = _edit?.RemoteName ?? CloudEndpointService.SanitizeRemoteName(_nameBox?.Text);
+        var (values, passwordsAreObscured) = CollectProviderFields();
+        await CloudEndpointService.CreateRemoteAsync(SelectedKind, remote, values, passwordsAreObscured);
         _configuredRemote = remote; _configuredKind = SelectedKind; return remote;
-    }
-
-    private IReadOnlyDictionary<string, string> CollectNonS3Fields()
-    {
-        if (SelectedKind == Kind.GoogleDrive) return new Dictionary<string, string> { ["client_id"] = GDriveClientIdBox.Text.Trim(), ["client_secret"] = GDriveClientSecretBox.Text.Trim(), ["scope"] = "drive" };
-        if (string.IsNullOrWhiteSpace(SftpHostBox.Text) || string.IsNullOrWhiteSpace(SftpUserBox.Text)) throw new InvalidOperationException("SFTP 必须填写主机和用户名。");
-        if (!int.TryParse(SftpPortBox.Text, out var port) || port is < 1 or > 65535) throw new InvalidOperationException("SFTP 端口必须介于 1 和 65535 之间。");
-        var password = SftpPassword;
-        if (string.IsNullOrWhiteSpace(password.Value) && string.IsNullOrWhiteSpace(SftpKeyFileBox.Text)) throw new InvalidOperationException("SFTP 必须填写密码或私钥文件。");
-        return new Dictionary<string, string> { ["host"] = SftpHostBox.Text.Trim(), ["port"] = port.ToString(), ["user"] = SftpUserBox.Text.Trim(), ["pass"] = password.Value, ["key_file"] = SftpKeyFileBox.Text.Trim() };
     }
 
     private async Task RunBusyAsync(Button button, string busyText, Func<Task> action)

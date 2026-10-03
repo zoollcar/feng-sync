@@ -19,6 +19,10 @@
 | 挂载参数 | 全部硬编码：缓存 10 GB、缓存期 1 h、回写 5 s、`CacheMode=writes`、`NoChecksum`、`NoModTime` | `MountOptions`（static class + const） |
 | 云盘设置 | **无任何云盘专属设置项**；`ResumeMinimumBytes` 直接复用同步的 `DefaultResumeMinimumBytes` | `ApplicationSettings`、`MainWindow.xaml.cs:459` |
 
+> 上表是写这份文档时的评估基准，刻意保留原样。此后已落地的部分：
+> 「端点类型」已由 `CloudProviderCatalog`（描述符）与 `EndpointSchemes`（scheme/backend 映射）取代，
+> 现有 Google Drive、OneDrive、Dropbox、Box、WebDAV、SFTP、S3 七种，`CloudEndpointService.ProviderKind` 已删除。
+
 一个关键结论先说在前面：**`IEndpoint` 里已经具备增删改的能力，只是云盘 UI 一个都没接。**
 
 - `IEndpoint.CreateDirectoryAsync` / `DeleteAsync` / `MoveAsync` / `MoveDirectoryAsync` / `StatAsync` — 全部存在（`Endpoints.cs:385-452`）

@@ -1,3 +1,4 @@
+using FengSync.Core;
 using FengSync.Core.Configuration;
 
 namespace FengSync.Services;
@@ -60,12 +61,12 @@ public static class CloudDeleteSafety
     private const int PreviewLimit = 8;
 
     /// <summary>
-    /// Whether a backend's delete can be undone. Only Google Drive keeps a trash that rclone uses by
-    /// default (<c>--drive-use-trash</c> is on unless the remote turned it off); SFTP and S3 delete for
-    /// real, and an S3 endpoint reached through a prefix-enforcing alias is still S3.
+    /// Whether a backend's delete can be undone. The answer is the provider descriptor's, so the rule lives
+    /// next to everything else known about that backend; only Google Drive is currently verified to keep a
+    /// trash rclone uses by default (<c>--drive-use-trash</c> is on unless the remote turned it off). SFTP
+    /// and S3 delete for real, and an S3 endpoint reached through a prefix-enforcing alias is still S3.
     /// </summary>
-    public static bool SupportsTrash(CloudEndpointService.ProviderKind kind) =>
-        kind == CloudEndpointService.ProviderKind.GoogleDrive;
+    public static bool SupportsTrash(EndpointType kind) => CloudProviderCatalog.SupportsTrash(kind);
 
     public static CloudDeleteConfirmation Describe(IReadOnlyList<CloudFileEntry> entries, bool supportsTrash)
     {

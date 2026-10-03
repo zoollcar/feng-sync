@@ -70,7 +70,7 @@ public sealed class S3PrefixBoundaryTests
 
     [Fact]
     public void An_alias_is_exposed_as_an_s3_endpoint() =>
-        Assert.Equal(CloudEndpointService.ProviderKind.S3, CloudEndpointService.KindFromRcloneType("alias"));
+        Assert.Equal(EndpointType.S3, CloudEndpointService.KindFromRcloneType("alias"));
 
     [Fact]
     public void Only_the_alias_of_an_enforced_prefix_endpoint_is_listed_as_an_endpoint()

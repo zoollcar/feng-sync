@@ -1,6 +1,9 @@
 using System.Runtime.ExceptionServices;
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using FengSync.Core;
+using FengSync.Core.Rclone.Configuration;
 using FengSync.Core.Updates;
 using FengSync.Services;
 using FengSync.Views;
@@ -28,7 +31,7 @@ public sealed class UiFeatureBehaviorTests
     public void S3_endpoint_uri_keeps_the_bucket_out_of_the_service_endpoint()
     {
         Assert.Equal("s3://r2/feng-sync-e2e-test/path",
-            CloudEndpointService.BuildUri(CloudEndpointService.ProviderKind.S3, "r2", "/feng-sync-e2e-test/path/"));
+            CloudEndpointService.BuildUri(EndpointType.S3, "r2", "/feng-sync-e2e-test/path/"));
     }
 
     [Fact]
@@ -94,6 +97,29 @@ public sealed class UiFeatureBehaviorTests
         Assert.Equal("Backblaze", entry.RcloneValue);
         Assert.Equal("rclone's own help", entry.Description);
         Assert.Contains("us-west-004", entry.RegionSuggestions);
+    }
+
+    [Fact]
+    public void The_s3_compatible_chinese_providers_rclone_reports_are_surfaced_not_hidden()
+    {
+        // Tencent COS, Alibaba OSS and the rest are not separate backends in Feng Sync: rclone's s3 backend
+        // already lists them as provider values, so adding one is a row in the ordering, not a code path.
+        // This asserts the ordering drops nothing and only reorders.
+        var reported = new[]
+        {
+            new RcloneS3Provider("Wasabi", "Wasabi", []),
+            new RcloneS3Provider("TencentCOS", "Tencent Cloud Object Storage (COS)", []),
+            new RcloneS3Provider("Alibaba", "Alibaba Cloud Object Storage System (OSS)", []),
+            new RcloneS3Provider("AWS", "Amazon Web Services (AWS) S3", ["us-east-1"])
+        };
+
+        var merged = CloudEndpointService.MergeS3Providers(reported);
+
+        Assert.Equal(merged.Count, merged.Select(provider => provider.Name).Distinct().Count());
+        Assert.All(reported, provider => Assert.Contains(merged, entry => entry.Name == provider.Name));
+        // The ones a Feng Sync user is most likely to want come first — including the Backblaze preset
+        // Feng Sync adds — and the rest keep alphabetical order.
+        Assert.Equal(["AWS", "Backblaze", "Alibaba", "TencentCOS", "Wasabi"], merged.Select(provider => provider.Name));
     }
 
     [Fact]
@@ -195,17 +221,25 @@ public sealed class UiFeatureBehaviorTests
     }
 
     [Fact]
-    public void Only_a_google_drive_endpoint_offers_the_browser_re_login()
+    public void Only_a_provider_that_authorizes_in_a_browser_offers_re_login()
     {
         var drive = new CloudEndpointAccount(new RcloneAccount("personal", "drive"), null);
+        var oneDrive = new CloudEndpointAccount(new RcloneAccount("work", "onedrive"), null);
+        var dropbox = new CloudEndpointAccount(new RcloneAccount("dropbox", "dropbox"), null);
+        var box = new CloudEndpointAccount(new RcloneAccount("box", "box"), null);
         var sftp = new CloudEndpointAccount(new RcloneAccount("nas", "sftp"), null);
+        var webDav = new CloudEndpointAccount(new RcloneAccount("nextcloud", "webdav"), null);
         var s3 = new CloudEndpointAccount(new RcloneAccount("archive", "s3"), null);
         var alias = new CloudEndpointAccount(new RcloneAccount("docs", "alias"), null);
 
-        // SFTP and S3 are fully described by their stored parameters, so re-login would be a dead end
-        // for them; only Google Drive completes authorization in a browser.
+        // The rule comes from the provider descriptor, so every OAuth backend offers re-login and every
+        // parameter-described one does not — a hand-written list here is what would go stale.
         Assert.True(RemoteEndpointManagerWindow.NeedsReconnect(drive));
+        Assert.True(RemoteEndpointManagerWindow.NeedsReconnect(oneDrive));
+        Assert.True(RemoteEndpointManagerWindow.NeedsReconnect(dropbox));
+        Assert.True(RemoteEndpointManagerWindow.NeedsReconnect(box));
         Assert.False(RemoteEndpointManagerWindow.NeedsReconnect(sftp));
+        Assert.False(RemoteEndpointManagerWindow.NeedsReconnect(webDav));
         Assert.False(RemoteEndpointManagerWindow.NeedsReconnect(s3));
         Assert.False(RemoteEndpointManagerWindow.NeedsReconnect(alias));
         // The manager opens with nothing selected when no endpoint exists yet.
@@ -235,7 +269,7 @@ public sealed class UiFeatureBehaviorTests
             var account = new CloudEndpointAccount(
                 new RcloneAccount("nas", "sftp"),
                 new CloudEndpointMetadata("nas", "sftp", "SFTP", "share", "team", null));
-            var target = new CloudEndpointEditTarget(account, CloudEndpointService.ProviderKind.Sftp,
+            var target = new CloudEndpointEditTarget(account, EndpointType.Sftp,
                 new Dictionary<string, string>
                 {
                     ["host"] = "nas.local",
@@ -258,17 +292,58 @@ public sealed class UiFeatureBehaviorTests
             Assert.Equal(Visibility.Visible, window.ConnectionStep.Visibility);
             Assert.Equal(Visibility.Collapsed, window.ChooseServiceStep.Visibility);
             Assert.False(window.ServiceBox.IsEnabled);
-            Assert.True(window.SftpNameBox.IsReadOnly);
+            Assert.Equal(EndpointType.Sftp, window.SelectedKindForTest);
+            Assert.True(window.NameInput!.IsReadOnly);
 
-            Assert.Equal("nas", window.SftpNameBox.Text);
-            Assert.Equal("nas.local", window.SftpHostBox.Text);
-            Assert.Equal("2222", window.SftpPortBox.Text);
-            Assert.Equal("bob", window.SftpUserBox.Text);
-            Assert.Equal("/keys/id_rsa", window.SftpKeyFileBox.Text);
-            Assert.Equal("share/team", window.SftpRootBox.Text);
+            Assert.Equal("nas", window.NameInput.Text);
+            Assert.Equal("nas.local", ((TextBox)window.FieldInput("host")!).Text);
+            Assert.Equal("2222", ((TextBox)window.FieldInput("port")!).Text);
+            Assert.Equal("bob", ((TextBox)window.FieldInput("user")!).Text);
+            Assert.Equal("/keys/id_rsa", ((TextBox)window.FieldInput("key_file")!).Text);
+            Assert.Equal("share/team", window.RootInput!.Text);
             // rclone stores the password obscured, so the box stays empty and the label says what that means.
-            Assert.Equal("", window.SftpPasswordBox.Password);
-            Assert.Contains("保持原密码", window.SftpPasswordLabel.Text, StringComparison.Ordinal);
+            Assert.Equal("", ((PasswordBox)window.FieldInput("pass")!).Password);
+            Assert.Contains("保持原密码", window.FieldLabel("pass"), StringComparison.Ordinal);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public void The_endpoint_editor_generates_a_form_for_a_provider_with_no_hand_written_panel()
+    {
+        RunSta(() =>
+        {
+            EnsureApplicationResources();
+            var account = new CloudEndpointAccount(
+                new RcloneAccount("nextcloud", "webdav"),
+                new CloudEndpointMetadata("nextcloud", "webdav", "WebDAV", "remote.php/dav/files/bob", "", null));
+            var target = new CloudEndpointEditTarget(account, EndpointType.WebDav,
+                new Dictionary<string, string>
+                {
+                    ["url"] = "https://cloud.example.com/remote.php/dav/files/bob",
+                    ["vendor"] = "nextcloud",
+                    ["user"] = "bob",
+                    ["pass"] = "obscured-value"
+                });
+
+            var window = new CloudEndpointEditorWindow(target);
+
+            // WebDAV has no panel in the XAML: the whole form comes from its descriptor, which is what makes
+            // adding a provider a data change instead of a markup change.
+            Assert.Equal(EndpointType.WebDav, window.SelectedKindForTest);
+            Assert.Equal(Visibility.Visible, window.ProviderFieldsPanel.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.S3Panel.Visibility);
+            Assert.Equal("nextcloud", window.NameInput!.Text);
+            Assert.Equal("https://cloud.example.com/remote.php/dav/files/bob", ((TextBox)window.FieldInput("url")!).Text);
+            Assert.Equal("nextcloud", ((TextBox)window.FieldInput("vendor")!).Text);
+            Assert.Equal("bob", ((TextBox)window.FieldInput("user")!).Text);
+            Assert.Equal("remote.php/dav/files/bob", window.RootInput!.Text);
+            // The descriptor's AutomationIds are what the desktop scenario drives the form by.
+            Assert.Equal("WebDavUrl", AutomationProperties.GetAutomationId(window.FieldInput("url")));
+            Assert.Equal("WebDavRemoteName", AutomationProperties.GetAutomationId(window.NameInput));
+            Assert.Equal("WebDavRemoteRoot", AutomationProperties.GetAutomationId(window.RootInput));
+            // A password box starts empty on an edit form; see the SFTP case for why.
+            Assert.Equal("", ((PasswordBox)window.FieldInput("pass")!).Password);
             window.Close();
         });
     }
@@ -282,7 +357,7 @@ public sealed class UiFeatureBehaviorTests
             var account = new CloudEndpointAccount(
                 new RcloneAccount("docs", "alias"),
                 new CloudEndpointMetadata("docs", "alias", "Backblaze", "bucket", "team/files", "docs_s3"));
-            var target = new CloudEndpointEditTarget(account, CloudEndpointService.ProviderKind.S3,
+            var target = new CloudEndpointEditTarget(account, EndpointType.S3,
                 new Dictionary<string, string>
                 {
                     ["provider"] = "Other",

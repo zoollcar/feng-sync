@@ -29,7 +29,7 @@ public sealed class CloudEndpointEditTests
             var account = Assert.Single(await CloudEndpointService.LoadEndpointAccountsAsync());
             var target = await CloudEndpointService.LoadEditTargetAsync(account);
 
-            Assert.Equal(CloudEndpointService.ProviderKind.S3, target.Kind);
+            Assert.Equal(EndpointType.S3, target.Kind);
             Assert.Equal("docs", target.RemoteName);
             // The alias carries only its target; the credentials live in the backing remote.
             Assert.Equal("key-id", target.Parameter("access_key_id"));
@@ -48,7 +48,7 @@ public sealed class CloudEndpointEditTests
     {
         await WithIsolatedShellAsync(async () =>
         {
-            await CloudEndpointService.CreateRemoteAsync(CloudEndpointService.ProviderKind.Sftp, "nas",
+            await CloudEndpointService.CreateRemoteAsync(EndpointType.Sftp, "nas",
                 new Dictionary<string, string> { ["host"] = "nas.local", ["port"] = "2222", ["user"] = "bob", ["pass"] = "hunter2" });
 
             var stored = await StoredPasswordAsync();
@@ -78,7 +78,7 @@ public sealed class CloudEndpointEditTests
     }
 
     private static async Task SaveSftpAsync(string password, bool alreadyObscured) =>
-        await CloudEndpointService.CreateRemoteAsync(CloudEndpointService.ProviderKind.Sftp, "nas",
+        await CloudEndpointService.CreateRemoteAsync(EndpointType.Sftp, "nas",
             new Dictionary<string, string> { ["host"] = "changed.local", ["port"] = "2222", ["user"] = "bob", ["pass"] = password },
             alreadyObscured);
 

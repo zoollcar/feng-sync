@@ -96,7 +96,7 @@ public sealed record CloudEndpointAccount(RcloneAccount Remote, CloudEndpointMet
 /// </param>
 public sealed record CloudEndpointEditTarget(
     CloudEndpointAccount Account,
-    CloudEndpointService.ProviderKind Kind,
+    EndpointType Kind,
     IReadOnlyDictionary<string, string> Parameters)
 {
     /// <summary>The name the endpoint keeps: renaming it would strand every profile that references it.</summary>

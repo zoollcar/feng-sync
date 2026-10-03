@@ -7,26 +7,37 @@ namespace FengSync.Services;
 /// <summary>
 /// Drives rclone's supported RC configuration protocol. The authorization URL is obtained from
 /// config/oauthstatus; rclone log text is deliberately never parsed.
+/// <para>
+/// The flow is the same for every OAuth backend rclone supports — Drive, OneDrive, Dropbox and Box all
+/// answer the same <c>config/create</c> / <c>config/update</c> state machine and all expose their
+/// authorization URI the same way — so the backend type and its label come from the caller's descriptor
+/// rather than being baked in here. Only the wording the user sees differs.
+/// </para>
 /// </summary>
 internal sealed class RcloneOAuthFlow(IRcloneConfigurationApi api, Action<Uri> openBrowser)
 {
     private const int MaxSteps = 12;
 
-    public Task CreateGoogleDriveAsync(
+    /// <summary>Starts authorization for a provider that does not exist in rclone.conf yet.</summary>
+    public Task CreateAsync(
         string remoteName,
+        CloudProviderDescriptor descriptor,
         IReadOnlyDictionary<string, string> fields,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
-        => RunAsync(remoteName, fields, create: true, progress, cancellationToken);
+        => RunAsync(remoteName, descriptor, fields, create: true, progress, cancellationToken);
 
-    public Task ReconnectGoogleDriveAsync(
+    /// <summary>Re-runs authorization for an endpoint that already exists, leaving its parameters alone.</summary>
+    public Task ReconnectAsync(
         string remoteName,
+        CloudProviderDescriptor descriptor,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
-        => RunAsync(remoteName, new Dictionary<string, string>(), create: false, progress, cancellationToken);
+        => RunAsync(remoteName, descriptor, new Dictionary<string, string>(), create: false, progress, cancellationToken);
 
     private async Task RunAsync(
         string remoteName,
+        CloudProviderDescriptor descriptor,
         IReadOnlyDictionary<string, string> fields,
         bool create,
         IProgress<string>? progress,
@@ -35,8 +46,7 @@ internal sealed class RcloneOAuthFlow(IRcloneConfigurationApi api, Action<Uri> o
         if (!await api.SupportsOAuthControlAsync(cancellationToken))
             throw new NotSupportedException("内置 rclone 不支持结构化 OAuth 状态接口（config/oauthstatus、config/oauthstop）。请升级 rclone 后重试；Feng Sync 不会回退到解析命令行文本。");
 
-        var parameters = fields
-            .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+        var parameters = descriptor.MergeParameters(fields)
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         parameters["config_auth_no_browser"] = "true";
         var state = "";
@@ -56,7 +66,7 @@ internal sealed class RcloneOAuthFlow(IRcloneConfigurationApi api, Action<Uri> o
                     State: state,
                     Result: result);
                 var configure = create && first
-                    ? api.CreateAsync(remoteName, "drive", parameters, options, cancellationToken)
+                    ? api.CreateAsync(remoteName, descriptor.RcloneType, parameters, options, cancellationToken)
                     : api.UpdateAsync(remoteName, parameters, options, cancellationToken);
 
                 while (!configure.IsCompleted)
@@ -75,7 +85,7 @@ internal sealed class RcloneOAuthFlow(IRcloneConfigurationApi api, Action<Uri> o
                         ValidateAuthorizationUri(authorizationUri);
                         openBrowser(authorizationUri);
                         browserOpened = true;
-                        progress?.Report("浏览器已打开，请完成 Google 授权…");
+                        progress?.Report($"浏览器已打开，请完成 {descriptor.DisplayName} 授权…");
                     }
                     await Task.WhenAny(configure, Task.Delay(100, cancellationToken));
                 }

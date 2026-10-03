@@ -623,10 +623,13 @@ public partial class MainWindow : Window
     private static (string Title, FluentIcon Icon) DescribeEndpoint(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return ("未选择端点", FluentIcon.Folder);
-        if (path.StartsWith("gdrive://", StringComparison.OrdinalIgnoreCase)) return ("Google Drive", FluentIcon.Cloud);
-        if (path.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase)) return ("SFTP", FluentIcon.Cloud);
-        if (path.StartsWith("s3://", StringComparison.OrdinalIgnoreCase)) return ("S3", FluentIcon.Cloud);
-        return ("本地文件夹", FluentIcon.Folder);
+        if (EndpointSchemes.SchemeOf(path) is not { } scheme) return ("本地文件夹", FluentIcon.Folder);
+        var label = EndpointSchemes.TypeForScheme(scheme) is { } type
+            ? EndpointSchemes.DisplayNameFor(type)
+            : scheme.ToUpperInvariant();
+        // "S3 Bucket" reads as a heading for a bucket rather than for the endpoint, so the header keeps
+        // the short form the profile list has always shown.
+        return (label == "S3 Bucket" ? "S3" : label, FluentIcon.Cloud);
     }
     private async Task BuildPlanAsync(CancellationToken cancellationToken)
     {
@@ -681,11 +684,12 @@ public partial class MainWindow : Window
     {
         if (!IsCloud(value)) return new LocalEndpoint(value);
         if (_rcloneClient is null) throw new InvalidOperationException("云端连接未启动。");
-        var split = value.Split("://", 2, StringSplitOptions.None); var remoteAndRoot = split[1].Split('/', 2); var type = CloudEndpointType(split[0]);
-        return new RcloneEndpoint(_rcloneClient, new EndpointProfile(Guid.NewGuid(), type, remoteAndRoot.Length == 2 ? remoteAndRoot[1] : "", remoteAndRoot[0]), new(false, true, type == EndpointType.GoogleDrive, TimeSpan.FromSeconds(1)));
+        // Deliberately the factory's endpoint, not a hand-built one: it carries the per-backend move and
+        // path capabilities, and a second copy of that table here had already drifted (it claimed every
+        // cloud backend could rename a directory natively, which S3, SFTP and OneDrive cannot).
+        return EndpointFactory.CreateWithClient(value, _rcloneClient);
     }
-    private static EndpointType CloudEndpointType(string scheme) => scheme.ToLowerInvariant() switch { "gdrive" => EndpointType.GoogleDrive, "sftp" => EndpointType.Sftp, "s3" => EndpointType.S3, _ => throw new InvalidOperationException("不支持的云端端点协议。") };
-    private static bool IsCloud(string value) => value.StartsWith("gdrive://", StringComparison.OrdinalIgnoreCase) || value.StartsWith("sftp://", StringComparison.OrdinalIgnoreCase) || value.StartsWith("s3://", StringComparison.OrdinalIgnoreCase);
+    private static bool IsCloud(string value) => EndpointSchemes.IsRemote(value);
     private Task DisposeRcloneAsync() { _rcloneClient = null; return Task.CompletedTask; }
     private void AddCloudEndpoint_Click(object sender, RoutedEventArgs e) => AddCloudEndpoint((sender as FrameworkElement)?.Tag as string);
     private void AddCloudEndpoint(string? side)

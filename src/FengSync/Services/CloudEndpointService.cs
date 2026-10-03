@@ -13,7 +13,13 @@ namespace FengSync.Services;
 /// </summary>
 public static class CloudEndpointService
 {
-    private static readonly string[] PreferredS3Providers = ["AWS", "Backblaze", "Cloudflare", "Minio"];
+    /// <summary>
+    /// The order rclone's S3 provider list is shown in. Everything rclone reports is kept — this only moves
+    /// the entries a Feng Sync user is most likely to want to the top, so a list of fifty providers does not
+    /// bury them alphabetically.
+    /// </summary>
+    private static readonly string[] PreferredS3Providers =
+        ["AWS", "Cloudflare", "Backblaze", "Minio", "Alibaba", "TencentCOS", "HuaweiOBS", "Qiniu", "NetEase"];
     /// <summary>
     /// Resolved per use rather than cached: <see cref="AppDataPaths.Root"/> honours FENGSYNC_DATA_DIR on
     /// every read, and a store built once at type-initialization would keep writing to the real application
@@ -53,47 +59,27 @@ public static class CloudEndpointService
     public static S3ProviderPreset? FindPreset(string? providerName) =>
         S3Presets.FirstOrDefault(preset => preset.Name.Equals((providerName ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Supported rclone backends surfaced by the management UI.</summary>
-    public enum ProviderKind { GoogleDrive, Sftp, S3 }
+    /// <summary>
+    /// The rclone backend type a provider is stored under. Kept as a thin forwarder because callers read it
+    /// as "the type this endpoint will be created with", which is the descriptor's business, not Core's.
+    /// </summary>
+    public static string RcloneType(EndpointType kind) => EndpointSchemes.RcloneTypeFor(kind);
 
-    public static string RcloneType(ProviderKind kind) => kind switch
-    {
-        ProviderKind.GoogleDrive => "drive",
-        ProviderKind.Sftp => "sftp",
-        ProviderKind.S3 => "s3",
-        _ => throw new ArgumentOutOfRangeException(nameof(kind))
-    };
-
-    public static string DisplayName(ProviderKind kind) => kind switch
-    {
-        ProviderKind.GoogleDrive => "Google Drive",
-        ProviderKind.Sftp => "SFTP",
-        ProviderKind.S3 => "S3 Bucket",
-        _ => "未知"
-    };
+    public static string DisplayName(EndpointType kind) => EndpointSchemes.DisplayNameFor(kind);
 
     /// <summary>Feng Sync's stable endpoint URI form understood by <see cref="EndpointFactory"/>.</summary>
-    public static string BuildUri(ProviderKind kind, string remoteName, string? root)
-    {
-        var scheme = kind switch
-        {
-            ProviderKind.GoogleDrive => "gdrive://",
-            ProviderKind.Sftp => "sftp://",
-            ProviderKind.S3 => "s3://",
-            _ => throw new ArgumentOutOfRangeException(nameof(kind))
-        };
-        var trimmed = (root ?? "").Trim().Trim('/');
-        return scheme + remoteName + (string.IsNullOrEmpty(trimmed) ? "" : "/" + trimmed);
-    }
+    public static string BuildUri(EndpointType kind, string remoteName, string? root) =>
+        EndpointSchemes.BuildUri(kind, remoteName, root);
 
-    public static ProviderKind KindFromRcloneType(string type) => type.ToLowerInvariant() switch
-    {
-        "drive" => ProviderKind.GoogleDrive,
-        // An alias only ever appears here for an S3 endpoint whose prefix is enforced: LoadAccountsAsync
-        // surfaces no other alias, because a hand-made one could point anywhere.
-        "s3" or "alias" => ProviderKind.S3,
-        _ => ProviderKind.Sftp
-    };
+    /// <summary>
+    /// The provider an rclone backend type denotes. An <c>alias</c> only ever appears here for an S3
+    /// endpoint whose prefix is enforced: <see cref="LoadAccountsAsync"/> surfaces no other alias, because a
+    /// hand-made one could point anywhere. An unknown backend falls back to SFTP, which is the only
+    /// remaining backend whose behaviour (no server-side rename of directories, key-file authentication)
+    /// is the safe assumption for something Feng Sync cannot describe.
+    /// </summary>
+    public static EndpointType KindFromRcloneType(string type) =>
+        EndpointSchemes.TypeForRcloneType(type) ?? EndpointType.Sftp;
 
     /// <summary>
     /// Name of the hidden <c>s3</c> remote behind an enforced-prefix endpoint. Deriving it from the
@@ -201,7 +187,7 @@ public static class CloudEndpointService
         var known = metadata.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
         return types
             .Where(pair => !hidden.Contains(pair.Key))
-            .Where(pair => pair.Value is "drive" or "sftp" or "s3" || (pair.Value is "alias" && known.Contains(pair.Key)))
+            .Where(pair => EndpointSchemes.IsSelfDescribingRcloneType(pair.Value) || (pair.Value is "alias" && known.Contains(pair.Key)))
             .Select(pair => new RcloneAccount(pair.Key, pair.Value!))
             .OrderBy(account => account.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -265,7 +251,7 @@ public static class CloudEndpointService
             var configuration = new RcloneConfigurationClient(daemon.Client);
             var backing = "fengsync_probe_" + Guid.NewGuid().ToString("N");
             var alias = backing + "_alias";
-            await CreateStaticRemoteAsync(configuration, backing, "s3", DisplayName(ProviderKind.S3), S3Parameters(values), ct);
+            await CreateStaticRemoteAsync(configuration, backing, "s3", DisplayName(EndpointType.S3), S3Parameters(values), ct);
             await CreateStaticRemoteAsync(configuration, alias, "alias", "别名", AliasParameters(backing, values.Prefix), ct);
             // The path is empty on purpose: the alias root is already the prefix. rclone refuses anything
             // above it, so this listing cannot reach a sibling key.
@@ -312,7 +298,7 @@ public static class CloudEndpointService
             if (existing.Contains(remoteName, StringComparer.OrdinalIgnoreCase)) await ConfigurationApi.DeleteAsync(remoteName, ct);
             if (existing.Contains(backing, StringComparer.OrdinalIgnoreCase)) await ConfigurationApi.DeleteAsync(backing, ct);
 
-            await CreateStaticRemoteAsync(ConfigurationApi, backing, "s3", DisplayName(ProviderKind.S3), S3Parameters(values), ct);
+            await CreateStaticRemoteAsync(ConfigurationApi, backing, "s3", DisplayName(EndpointType.S3), S3Parameters(values), ct);
             await CreateStaticRemoteAsync(ConfigurationApi, remoteName, "alias", "别名", AliasParameters(backing, prefix), ct);
             await Metadata.UpsertAsync(new(remoteName, "alias", values.Provider, values.Bucket.Trim(), values.Subdirectory.Trim().Trim('/'), backing), ct);
         }
@@ -325,7 +311,7 @@ public static class CloudEndpointService
         finally { if (File.Exists(backup)) File.Delete(backup); }
     }
 
-    public static Task SaveMetadataAsync(string remoteName, ProviderKind kind, string rootPath, CancellationToken ct = default) =>
+    public static Task SaveMetadataAsync(string remoteName, EndpointType kind, string rootPath, CancellationToken ct = default) =>
         Metadata.UpsertAsync(new(remoteName, RcloneType(kind), DisplayName(kind), rootPath.Trim().Trim('/'), ""), ct);
 
     /// <summary>rclone configuration parameters for an S3 endpoint. Visible to tests via InternalsVisibleTo.</summary>
@@ -339,26 +325,35 @@ public static class CloudEndpointService
         ["endpoint"] = values.Endpoint.Trim()
     };
 
-    public static async Task ReconnectAsync(string remoteName, IProgress<string>? progress = null, CancellationToken ct = default)
+    /// <summary>
+    /// Re-runs the browser authorization for an endpoint whose provider needs one. The provider is passed
+    /// in rather than read from the name because rclone.conf is keyed by name, not by backend type, and the
+    /// caller already knows which endpoint it selected.
+    /// </summary>
+    public static async Task ReconnectAsync(EndpointType kind, string remoteName, IProgress<string>? progress = null, CancellationToken ct = default)
     {
+        if (!CloudProviderCatalog.RequiresOAuth(kind))
+            throw new NotSupportedException($"{DisplayName(kind)} 不需要浏览器授权，请直接编辑端点参数。");
         await RcloneEnvironment.WarmOAuthDnsAsync(ct);
+        var descriptor = CloudProviderCatalog.For(kind);
         var api = ConfigurationApi;
-        await new RcloneOAuthFlow(api, OpenBrowser).ReconnectGoogleDriveAsync(remoteName, progress, ct);
+        await new RcloneOAuthFlow(api, OpenBrowser).ReconnectAsync(remoteName, descriptor, progress, ct);
         await api.VerifyAsync(remoteName, ct);
     }
 
     /// <summary>
-    /// Creates (or overwrites) an rclone remote. Google Drive completes OAuth in the default browser;
-    /// the other backends are non-interactive. Failures remain structured RC errors.
+    /// Creates (or overwrites) an rclone remote. A provider whose descriptor requires OAuth completes the
+    /// authorization in the default browser; every other backend is configured non-interactively. Failures
+    /// remain structured RC errors.
     /// </summary>
     /// <param name="valuesAreObscured">
     /// True when the password fields in <paramref name="fields"/> were read back out of rclone's config
     /// rather than typed by the user. The write then declares them as already obscured so rclone stores
-    /// them verbatim instead of obscuring an obscured value into a corrupt one. Ignored for Google Drive,
-    /// whose credentials only take effect through the OAuth flow.
+    /// them verbatim instead of obscuring an obscured value into a corrupt one. Ignored for an OAuth
+    /// provider, whose credentials only take effect through the authorization flow.
     /// </param>
     public static Task CreateRemoteAsync(
-        ProviderKind kind,
+        EndpointType kind,
         string remoteName,
         IReadOnlyDictionary<string, string> fields,
         bool valuesAreObscured = false,
@@ -366,22 +361,24 @@ public static class CloudEndpointService
         => CreateRemoteAsync(kind, remoteName, fields, progress: null, valuesAreObscured, ct);
 
     public static async Task CreateRemoteAsync(
-        ProviderKind kind,
+        EndpointType kind,
         string remoteName,
         IReadOnlyDictionary<string, string> fields,
         IProgress<string>? progress,
         bool valuesAreObscured = false,
         CancellationToken ct = default)
     {
+        var descriptor = CloudProviderCatalog.For(kind);
         Directory.CreateDirectory(Path.GetDirectoryName(BundledRclone.ConfigPath)!);
-        if (kind == ProviderKind.GoogleDrive)
+        if (descriptor.RequiresOAuth)
         {
             await RcloneEnvironment.WarmOAuthDnsAsync(ct);
             var api = ConfigurationApi;
-            await new RcloneOAuthFlow(api, OpenBrowser).CreateGoogleDriveAsync(remoteName, fields, progress, ct);
+            await new RcloneOAuthFlow(api, OpenBrowser).CreateAsync(remoteName, descriptor, fields, progress, ct);
             return;
         }
-        await CreateStaticRemoteAsync(ConfigurationApi, remoteName, RcloneType(kind), DisplayName(kind), fields, ct, valuesAreObscured);
+        await CreateStaticRemoteAsync(ConfigurationApi, remoteName, descriptor.RcloneType, descriptor.DisplayName,
+            descriptor.MergeParameters(fields), ct, valuesAreObscured);
     }
 
     /// <summary>

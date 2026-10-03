@@ -9,7 +9,13 @@ using FengSync.Core.Rclone.Diagnostics;
 
 namespace FengSync.Core;
 
-public enum EndpointType { Local, Sftp, GoogleDrive, S3 }
+/// <summary>
+/// The flavours of endpoint Feng Sync can address. Values are appended, never reordered or renamed:
+/// <see cref="Baseline.BaselineTransaction"/> and <see cref="Execution.TransferResumeStateStore"/> both
+/// persist <c>EndpointType.ToString()</c> as part of an endpoint's identity, so a rename would silently
+/// invalidate every existing baseline and resume record.
+/// </summary>
+public enum EndpointType { Local, Sftp, GoogleDrive, S3, OneDrive, Dropbox, Box, WebDav }
 public sealed record EndpointProfile(Guid Id, EndpointType Type, string Root, string? Remote = null, string? Identity = null);
 public sealed record EndpointPathSemantics(bool CaseSensitive, NormalizationForm UnicodeNormalization, char Separator = '/')
 {
