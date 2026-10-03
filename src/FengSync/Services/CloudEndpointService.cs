@@ -202,6 +202,47 @@ public static class CloudEndpointService
     }
 
     /// <summary>
+    /// The names of the rclone parameters behind an endpoint — never their values. An enforced-prefix S3
+    /// endpoint reads them from its hidden backing remote, for the same reason
+    /// <see cref="LoadEditTargetAsync"/> does.
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> LoadParameterNamesAsync(CloudEndpointAccount account, CancellationToken ct = default)
+    {
+        var source = account.Metadata?.AliasOf is { Length: > 0 } backing ? backing : account.Name;
+        var parameters = await ConfigurationApi.GetRemoteParametersAsync(source, ct);
+        return parameters.Keys.OrderBy(key => key, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>
+    /// Everything the export file contains: for each endpoint, the metadata Feng Sync owns plus the names of
+    /// the rclone parameters the user will have to re-enter. No value is ever read, so no credential can
+    /// reach the file.
+    /// </summary>
+    public static async Task<CloudEndpointExportBundle> BuildExportBundleAsync(
+        IReadOnlyList<CloudEndpointAccount> accounts, DateTimeOffset now, CancellationToken ct = default)
+    {
+        var entries = new List<CloudEndpointExport>(accounts.Count);
+        foreach (var account in accounts)
+            entries.Add(CloudEndpointPortability.ToExport(account, await LoadParameterNamesAsync(account, ct)));
+        return new(CloudEndpointPortability.CurrentVersion, now, entries);
+    }
+
+    /// <summary>
+    /// Restores the group and tags an imported endpoint was filed under. The editor that created the endpoint
+    /// knows nothing about organisation, so the import flow applies this after the endpoint exists.
+    /// </summary>
+    public static async Task SaveOrganizationAsync(string remoteName, string? group, IReadOnlyList<string>? tags, CancellationToken ct = default)
+    {
+        var store = Metadata;
+        if (await store.FindAsync(remoteName, ct) is not { } existing) return;
+        await store.UpsertAsync(existing with
+        {
+            Group = CloudEndpointOrganization.NormalizeGroup(group),
+            Tags = CloudEndpointOrganization.NormalizeTags(tags)
+        }, ct);
+    }
+
+    /// <summary>
     /// Reads the settings behind an endpoint so the editor can pre-fill an edit form. An enforced-prefix
     /// S3 endpoint is an <c>alias</c> whose credentials live in the hidden backing remote, so the
     /// parameters are read from there — reading the alias itself would return only its target.

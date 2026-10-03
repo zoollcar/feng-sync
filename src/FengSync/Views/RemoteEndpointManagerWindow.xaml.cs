@@ -501,6 +501,80 @@ public partial class RemoteEndpointManagerWindow : Window
         var (count, some, _) => $"检查结束：{some}/{count} 个端点连接正常，其余需要重新登录或无法连接。"
     };
 
+    /// <summary>
+    /// Writes every endpoint's non-secret configuration to a file. Parameter values are never read — only
+    /// their names — so no credential can leave <c>rclone.conf</c>.
+    /// </summary>
+    private async void ExportEndpoints_Click(object sender, RoutedEventArgs e)
+    {
+        await RunBusyAsync(ExportEndpointsButton, "正在导出…", "正在读取端点配置…", async () =>
+        {
+            var accounts = await CloudEndpointService.LoadEndpointAccountsAsync();
+            if (accounts.Count == 0) { StatusText.Text = "没有可导出的端点。"; return; }
+            var dialog = new SaveFileDialog
+            {
+                Title = "导出云盘端点",
+                FileName = "fengsync-endpoints.json",
+                DefaultExt = ".json",
+                Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*"
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            var bundle = await CloudEndpointService.BuildExportBundleAsync(accounts, DateTimeOffset.Now);
+            await File.WriteAllTextAsync(dialog.FileName, CloudEndpointPortability.Serialize(bundle));
+            StatusText.Text = $"已导出 {bundle.Endpoints.Count} 个端点的非敏感配置；凭据未写入文件。";
+        });
+    }
+
+    /// <summary>
+    /// Restores endpoints from an export file. Each one opens the normal editor with its non-secret values
+    /// pre-filled, so the user supplies the credentials and the same validation and create path run as for a
+    /// hand-entered endpoint. A name already in use is never overwritten: the newcomer is renamed.
+    /// </summary>
+    private async void ImportEndpoints_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "导入云盘端点",
+            DefaultExt = ".json",
+            Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*"
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        string json;
+        try { json = await File.ReadAllTextAsync(dialog.FileName); }
+        catch (Exception ex) { StatusText.Text = "无法读取文件：" + ex.Message; return; }
+
+        var import = CloudEndpointPortability.Parse(json);
+        if (import.Errors.Count > 0)
+        {
+            MessageBox.Show(this, string.Join("\n", import.Errors), "导入文件有问题", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (import.Endpoints.Count == 0) { StatusText.Text = "导出文件里没有端点。"; return; }
+        if (MessageBox.Show(this,
+                $"将导入 {import.Endpoints.Count} 个端点。每个端点都需要补填凭据，填写后取消的会被跳过。\n\n继续吗？",
+                "导入云盘端点", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+
+        await RunBusyAsync(ImportEndpointsButton, "正在导入…", "正在打开导入向导…", async () =>
+        {
+            var taken = (await CloudEndpointService.LoadEndpointAccountsAsync())
+                .Select(account => account.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var imported = 0;
+            var skipped = 0;
+            foreach (var draft in import.Endpoints)
+            {
+                var name = CloudEndpointPortability.UniqueName(draft.RemoteName, taken);
+                var editor = new CloudEndpointEditorWindow(draft with { RemoteName = name }) { Owner = this };
+                if (editor.ShowDialog() != true || editor.SavedRemoteName is null) { skipped++; continue; }
+                await CloudEndpointService.SaveOrganizationAsync(editor.SavedRemoteName, draft.Group, draft.Tags);
+                taken.Add(editor.SavedRemoteName);
+                imported++;
+            }
+            await RefreshAsync();
+            StatusText.Text = $"导入完成：{imported} 个成功，{skipped} 个跳过。";
+        });
+    }
+
     private async void Delete_Click(object sender, RoutedEventArgs e)
     {
         if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择要删除的端点。"; return; }

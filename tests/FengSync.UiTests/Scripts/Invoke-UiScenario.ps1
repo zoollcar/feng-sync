@@ -1400,7 +1400,7 @@ try {
       Capture-Element $manager 'remote-file-manager-sftp-renamed.png' 'remote-file-manager' 'the SFTP endpoint after being renamed'
       # The endpoint list's toolbar sits in a 340 px column, so every control in it has to survive the wrap
       # rather than being clipped away.
-      foreach ($id in @('CloudEndpointSearch', 'CloudEndpointSort', 'CloudEndpointSortDirection', 'CheckAllCloudEndpoints')) { Assert-RectangleInside (Find-Id $manager $id) $manager "endpoint list/$id" }
+      foreach ($id in @('CloudEndpointSearch', 'CloudEndpointSort', 'CloudEndpointSortDirection', 'CheckAllCloudEndpoints', 'ExportCloudEndpoints', 'ImportCloudEndpoints')) { Assert-RectangleInside (Find-Id $manager $id) $manager "endpoint list/$id" }
       # Searching is not a cosmetic filter: a query that matches nothing has to empty the file pane too, and a
       # query that matches the endpoint has to bring both back. Asserting only the list would miss a pane left
       # showing the contents of an endpoint the user can no longer see.

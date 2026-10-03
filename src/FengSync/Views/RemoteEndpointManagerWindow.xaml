@@ -30,6 +30,8 @@
                         <ComboBox x:Name="EndpointSortBox" AutomationProperties.AutomationId="CloudEndpointSort" AutomationProperties.Name="云盘端点排序依据" Width="92" Margin="8,0,0,0" SelectionChanged="EndpointSort_Changed" />
                         <Button x:Name="EndpointSortDirectionButton" AutomationProperties.AutomationId="CloudEndpointSortDirection" AutomationProperties.Name="切换云盘端点列表的升降序" Content="升序" Click="EndpointSortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                         <Button x:Name="CheckAllButton" AutomationProperties.AutomationId="CheckAllCloudEndpoints" AutomationProperties.Name="检查全部云盘端点的连接与容量" Content="测试全部" Click="CheckAll_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button x:Name="ExportEndpointsButton" AutomationProperties.AutomationId="ExportCloudEndpoints" AutomationProperties.Name="导出全部云盘端点的非敏感配置" Content="导出…" Click="ExportEndpoints_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                        <Button x:Name="ImportEndpointsButton" AutomationProperties.AutomationId="ImportCloudEndpoints" AutomationProperties.Name="从导出文件导入云盘端点" Content="导入…" Click="ImportEndpoints_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                     </WrapPanel>
                     <ListBox Grid.Row="1" x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="云盘端点列表" BorderThickness="0" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged">
                         <ListBox.ItemTemplate>

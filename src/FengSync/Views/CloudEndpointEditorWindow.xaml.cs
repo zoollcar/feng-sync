@@ -28,6 +28,8 @@ public partial class CloudEndpointEditorWindow : Window
 {
     private readonly S3EndpointDraft _s3Draft = new();
     private readonly CloudEndpointEditTarget? _edit;
+    /// <summary>Set when the form was opened to import an endpoint described by an export file.</summary>
+    private readonly CloudEndpointDraft? _draft;
     /// <summary>Input controls of the generated form, keyed by rclone config key.</summary>
     private readonly Dictionary<string, Control> _fieldInputs = new(StringComparer.Ordinal);
     /// <summary>The label rendered above each generated input, keyed by the same rclone config key.</summary>
@@ -44,15 +46,25 @@ public partial class CloudEndpointEditorWindow : Window
     public string? SavedRoot { get; private set; }
     public string? SavedUri => SavedRemoteName is null ? null : CloudEndpointService.BuildUri(SavedKind, SavedRemoteName, SavedRoot);
 
-    public CloudEndpointEditorWindow() : this(null) { }
+    public CloudEndpointEditorWindow() : this((CloudEndpointEditTarget?)null, null) { }
 
     /// <param name="edit">
     /// <see langword="null"/> creates a new endpoint; otherwise the form opens on the connection step with
     /// the endpoint's saved parameters filled in, and saving updates that endpoint in place.
     /// </param>
-    public CloudEndpointEditorWindow(CloudEndpointEditTarget? edit)
+    public CloudEndpointEditorWindow(CloudEndpointEditTarget? edit) : this(edit, null) { }
+
+    /// <summary>
+    /// Opens the form for an endpoint an export file described: the service, the name and the root are
+    /// pre-filled, and every credential is left blank for the user to type. Saving creates a new endpoint
+    /// through the same path a hand-entered one takes.
+    /// </summary>
+    public CloudEndpointEditorWindow(CloudEndpointDraft draft) : this(null, draft) { }
+
+    private CloudEndpointEditorWindow(CloudEndpointEditTarget? edit, CloudEndpointDraft? draft)
     {
         _edit = edit;
+        _draft = draft;
         InitializeComponent();
         // The service list is data, not markup: it comes from the provider catalog so a new provider needs
         // no change here. Each item carries its descriptor, which keeps the selection and the descriptor
@@ -65,6 +77,7 @@ public partial class CloudEndpointEditorWindow : Window
         S3RegionBox.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler(S3RegionText_Changed));
         Loaded += async (_, _) => await LoadProvidersAsync();
         if (edit is not null) EnterEditMode(edit);
+        else if (draft is not null) EnterDraftMode(draft);
     }
 
     private CloudProviderDescriptor SelectedProvider =>
@@ -134,13 +147,57 @@ public partial class CloudEndpointEditorWindow : Window
             SetField(field, edit.Parameter(field.Key));
     }
 
+    /// <summary>
+    /// Puts the form on the connection step for an endpoint an export file described: the service is fixed
+    /// and the non-secret values are known. The name stays editable — an import may have renamed it to avoid
+    /// a collision — and no credential is guessed, so the user has to supply them.
+    /// </summary>
+    private void EnterDraftMode(CloudEndpointDraft draft)
+    {
+        Title = "导入云端端点";
+        AutomationProperties.SetName(this, "导入云端端点");
+        HeadingText.Text = "导入云端端点";
+
+        var descriptor = CloudProviderCatalog.TryFor(draft.Kind);
+        ServiceBox.SelectedItem = ServiceBox.Items.OfType<ComboBoxItem>()
+            .FirstOrDefault(item => ReferenceEquals(item.Tag, descriptor)) ?? ServiceBox.SelectedItem;
+        ServiceBox.IsEnabled = false;
+
+        StepIndicator.Visibility = Visibility.Collapsed;
+        StepCaption.Text = $"导入端点 · {CloudEndpointService.DisplayName(draft.Kind)} · 请补填凭据后保存";
+        ChooseServiceStep.Visibility = Visibility.Collapsed;
+        ConnectionStep.Visibility = Visibility.Visible;
+        BuildProviderFields();
+        S3Panel.Visibility = SelectedProvider.IsS3Compatible ? Visibility.Visible : Visibility.Collapsed;
+        ProviderFieldsPanel.Visibility = SelectedProvider.IsS3Compatible ? Visibility.Collapsed : Visibility.Visible;
+
+        NextButton.Visibility = Visibility.Collapsed;
+        BackButton.Visibility = Visibility.Collapsed;
+        TestButton.Visibility = SaveButton.Visibility = Visibility.Visible;
+
+        if (SelectedProvider.IsS3Compatible)
+        {
+            S3NameBox.Text = draft.RemoteName;
+            S3ProviderBox.Text = draft.Provider;
+            S3BucketBox.Text = draft.Bucket;
+            S3SubdirectoryBox.Text = draft.Subdirectory;
+            MarkS3Dirty();
+            return;
+        }
+
+        if (_nameBox is not null) _nameBox.Text = draft.RemoteName;
+        if (_rootBox is not null) _rootBox.Text = draft.Subdirectory;
+    }
+
     private async Task LoadProvidersAsync()
     {
         try
         {
             _providers = await CloudEndpointService.LoadS3ProvidersAsync();
             S3ProviderBox.ItemsSource = _providers.Select(provider => provider.Name);
-            S3ProviderBox.Text = _edit is null ? _providers.FirstOrDefault()?.Name ?? "" : EditS3Provider;
+            S3ProviderBox.Text = _draft is not null ? _draft.Provider
+                : _edit is not null ? EditS3Provider
+                : _providers.FirstOrDefault()?.Name ?? "";
             UpdateProviderHelp();
             // UpdateProviderHelp replaces the region's suggestion list, and an editable ComboBox may drop
             // its text when its ItemsSource changes. An edit form therefore restates the region it loaded
@@ -177,8 +234,9 @@ public partial class CloudEndpointEditorWindow : Window
     private void ApplyProviderDefaults()
     {
         // An edit form already holds the endpoint's saved region, and seeding a default here would
-        // silently overwrite it. Defaults are a new-endpoint convenience.
-        if (_edit is not null) return;
+        // silently overwrite it. An import draft likewise knows nothing about the region, so it is left
+        // for the user. Defaults are a new-endpoint convenience.
+        if (_edit is not null || _draft is not null) return;
         if (ProviderName.Equals("Cloudflare", StringComparison.OrdinalIgnoreCase)) { S3RegionBox.Text = "auto"; return; }
         if (CloudEndpointService.FindPreset(ProviderName) is not null) { S3RegionBox.Text = ""; return; }
         if (string.IsNullOrWhiteSpace(S3RegionBox.Text) || S3RegionBox.Text == "auto") S3RegionBox.Text = "us-east-1";
