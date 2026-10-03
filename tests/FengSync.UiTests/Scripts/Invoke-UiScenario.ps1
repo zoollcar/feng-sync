@@ -1398,6 +1398,41 @@ try {
       }
       if ($staleRows.Count -gt 0) { throw "The old endpoint name survived the rename: $($staleRows -join '; ')" }
       Capture-Element $manager 'remote-file-manager-sftp-renamed.png' 'remote-file-manager' 'the SFTP endpoint after being renamed'
+      # The endpoint list's toolbar sits in a 340 px column, so every control in it has to survive the wrap
+      # rather than being clipped away.
+      foreach ($id in @('CloudEndpointSearch', 'CloudEndpointSort', 'CloudEndpointSortDirection', 'CheckAllCloudEndpoints')) { Assert-RectangleInside (Find-Id $manager $id) $manager "endpoint list/$id" }
+      # Searching is not a cosmetic filter: a query that matches nothing has to empty the file pane too, and a
+      # query that matches the endpoint has to bring both back. Asserting only the list would miss a pane left
+      # showing the contents of an endpoint the user can no longer see.
+      Set-Text (Find-Id $manager 'CloudEndpointSearch') 'no-endpoint-matches-this'
+      Wait-Until { try { $null -eq (Find-NameContaining (Find-Id $manager 'CloudEndpointList') $renamedName 1) } catch { $true } } 'The search box did not hide the endpoint it does not match.' 15 | Out-Null
+      Wait-Until { try { $null -eq (Find-Name $manager 'remote-proof.txt' 1) } catch { $true } } 'The file pane kept listing an endpoint the search box had hidden.' 15 | Out-Null
+      Set-Text (Find-Id $manager 'CloudEndpointSearch') $renamedName
+      Wait-Until { try { (Find-NameContaining (Find-Id $manager 'CloudEndpointList') $renamedName 2).Current.Name -like "*$renamedName*" } catch { $false } } 'The search box hid the endpoint it does match.' 15 | Out-Null
+      Set-Text (Find-Id $manager 'CloudEndpointSearch') ''
+      Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } 'Clearing the search box did not restore the browser.' 30 | Out-Null
+      # Re-ordering is a view change, not a navigation: the endpoint stays selected and its files stay on
+      # screen. A sort that re-selected would be one round trip to the cloud service per click.
+      $sortBox = Find-Id $manager 'CloudEndpointSort'
+      $sortExpand = $null
+      if (-not $sortBox.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$sortExpand)) { throw 'The endpoint sort picker has no expand pattern.' }
+      $sortExpand.Expand(); Start-Sleep -Milliseconds 200
+      Select-Ui (Find-Name $sortBox '名称' 5); Start-Sleep -Milliseconds 200
+      try { $sortExpand.Collapse() } catch { }
+      $sortSelection = $null
+      if (-not $sortBox.TryGetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern, [ref]$sortSelection)) { throw 'The endpoint sort picker has no selection pattern.' }
+      $chosenSort = $sortSelection.Current.GetSelection()[0].Current.Name
+      if ($chosenSort -ne '名称') { throw "The endpoint sort picker did not take the choice: '$chosenSort'." }
+      Click (Find-Id $manager 'CloudEndpointSortDirection')
+      Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } 'Re-ordering the endpoint list emptied the file pane.' 30 | Out-Null
+      Capture-Element $manager 'remote-file-manager-sftp-searched.png' 'remote-file-manager' 'the endpoint list after searching and re-ordering'
+      # "测试全部" goes through the running daemon to the SFTP server this scenario started, so the row has to
+      # come back saying it answered — and the status line has to report the run rather than leaving the row
+      # reading 未检查, which is what a button wired to nothing would look like.
+      Click (Find-Id $manager 'CheckAllCloudEndpoints')
+      Wait-Until { try { (Find-NameContaining (Find-Id $manager 'CloudEndpointList') '已连接' 2).Current.Name -like '*已连接*' } catch { $false } } '“测试全部” did not report the reachable endpoint as connected.' 90 | Out-Null
+      Wait-Until { try { $null -ne (Find-NameContaining $manager '检查结束' 2) } catch { $false } } 'The status line did not report the result of checking every endpoint.' 90 | Out-Null
+      Assert-NoUiFailure 'check-every-endpoint' | Out-Null
       Close-Window $manager
       # Build the sftp:// URI directly so the test does not depend on the manager's browse workflow. It uses
       # the renamed endpoint, so a rename that left the credentials behind fails here too.

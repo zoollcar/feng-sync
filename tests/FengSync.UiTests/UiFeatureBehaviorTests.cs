@@ -286,6 +286,70 @@ public sealed class UiFeatureBehaviorTests
     }
 
     [Fact]
+    public void The_endpoint_list_searches_and_orders_through_its_own_controls()
+    {
+        RunSta(() =>
+        {
+            EnsureApplicationResources();
+            var previous = AppServices.TryCurrent;
+            AppServices.Install(new HeadlessShell());
+            try
+            {
+                var window = new RemoteEndpointManagerWindow();
+                // Installing rows does not start rclone, and the search box is live: nothing below reaches the
+                // network, which is what lets this cover the wiring rather than the pure rules again.
+                window.LoadEndpointsForTest(
+                [
+                    EndpointRow("nas", "sftp", "SFTP", "team/docs", CloudEndpointHealth.Connected),
+                    EndpointRow("archive", "s3", "Cloudflare", "team/files", CloudEndpointHealth.Unknown),
+                    EndpointRow("work", "drive", "Google Drive", "team/work", CloudEndpointHealth.NeedsLogin)
+                ]);
+
+                // The controls the desktop scenario drives, each with its own reachable id.
+                Assert.Equal("CloudEndpointSearch", AutomationProperties.GetAutomationId(window.EndpointSearchBox));
+                Assert.Equal("CloudEndpointSort", AutomationProperties.GetAutomationId(window.EndpointSortBox));
+                Assert.Equal("CloudEndpointSortDirection", AutomationProperties.GetAutomationId(window.EndpointSortDirectionButton));
+                Assert.Equal("CheckAllCloudEndpoints", AutomationProperties.GetAutomationId(window.CheckAllButton));
+                Assert.Equal(["状态", "名称", "类型"], window.EndpointSortBox.Items.Cast<string>());
+                Assert.Equal("升序", window.EndpointSortDirectionButton.Content);
+                AssertNoDirectoryListing(window);
+
+                // The default order is by health, ascending: the broken endpoint is what the user came for.
+                Assert.Equal(["work", "archive", "nas"], VisibleNames(window));
+
+                window.EndpointSearchBox.Text = "work";
+                Assert.Equal(["work"], VisibleNames(window));
+                // A filter that hides rows says how many it hid, so an unexpectedly short list is explained.
+                Assert.Contains("1 / 3", window.EndpointSearchBox.ToolTip?.ToString() ?? "", StringComparison.Ordinal);
+                window.EndpointSearchBox.Text = "";
+                Assert.Equal(["work", "archive", "nas"], VisibleNames(window));
+                Assert.Null(window.EndpointSearchBox.ToolTip);
+
+                window.EndpointSortBox.SelectedIndex = 1;
+                Assert.Equal(["archive", "nas", "work"], VisibleNames(window));
+                Click(window.EndpointSortDirectionButton);
+                Assert.Equal("降序", window.EndpointSortDirectionButton.Content);
+                Assert.Equal(["work", "nas", "archive"], VisibleNames(window));
+                // Re-ordering and filtering never move the browser off the endpoint it is showing: doing so
+                // would be one round trip to the cloud service per keystroke.
+                Assert.Equal("work", SelectedName(window));
+                AssertNoDirectoryListing(window);
+
+                // A filter that matches nothing empties the list, the file pane, and the check-everything action
+                // together, and says so instead of leaving a stale pane beside an empty list.
+                window.EndpointSearchBox.Text = "nothing-matches";
+                Assert.Empty(window.VisibleEndpoints);
+                Assert.Equal("", window.CurrentPath);
+                Assert.False(window.CheckAllButton.IsEnabled);
+                Click(window.CheckAllButton);
+                Assert.Equal("没有可检查的端点。", window.StatusText.Text);
+                window.Close();
+            }
+            finally { AppServices.Install(previous); }
+        });
+    }
+
+    [Fact]
     public void An_edit_form_keeps_the_stored_sftp_password_unless_one_is_typed()
     {
         const string stored = "obscured-value-read-from-rclone";
@@ -429,6 +493,35 @@ public sealed class UiFeatureBehaviorTests
             window.Close();
         });
     }
+
+    /// <summary>One row of the endpoint list, in the state the list's ordering rules read.</summary>
+    private static CloudEndpointRow EndpointRow(string name, string type, string provider, string prefix, CloudEndpointHealth health)
+    {
+        var parts = prefix.Split('/', 2);
+        var metadata = new CloudEndpointMetadata(name, type, provider, parts[0], parts.Length > 1 ? parts[1] : "");
+        var row = new CloudEndpointRow(new CloudEndpointAccount(new RcloneAccount(name, type), metadata));
+        row.Status = new CloudEndpointStatus(health, "");
+        return row;
+    }
+
+    /// <summary>The endpoint names the list is showing, in the order it is showing them.</summary>
+    private static IReadOnlyList<string> VisibleNames(RemoteEndpointManagerWindow window) =>
+        [.. window.VisibleEndpoints.Select(row => row.Account.Name)];
+
+    private static string? SelectedName(RemoteEndpointManagerWindow window) =>
+        (window.EndpointList.SelectedItem as CloudEndpointRow)?.Account.Name;
+
+    /// <summary>Raises a button's click, which is how the desktop harness drives it too.</summary>
+    private static void Click(Button button) =>
+        button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+    /// <summary>
+    /// The status line is the first thing a directory listing writes to, so an untouched one is the proof that
+    /// re-arranging the list did not start one — which is the rule under test, and the difference between a
+    /// keystroke and a network round trip to the cloud service.
+    /// </summary>
+    private static void AssertNoDirectoryListing(RemoteEndpointManagerWindow window) =>
+        Assert.Equal("", window.StatusText.Text);
 
     /// <summary>
     /// Just enough of a shell to construct a window that asks for application services. The rclone side
