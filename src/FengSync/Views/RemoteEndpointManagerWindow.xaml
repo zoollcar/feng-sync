@@ -19,19 +19,32 @@
                 <TextBlock Text="管理云盘端点与挂载，并浏览和传输文件。" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
             </StackPanel>
             <GroupBox Grid.Row="1" Header="云盘端点" Margin="0,12,0,0">
-                <ListBox x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="云盘端点列表" BorderThickness="0" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <!-- Three lines per row: the endpoint, whether it still answers, and its quota. The
-                                 failure reason stays in the tooltip so a long error cannot stretch the list. -->
-                            <StackPanel Margin="0,3">
-                                <TextBlock Text="{Binding Display}" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding StatusText}" Style="{StaticResource CaptionTextStyle}" ToolTip="{Binding Detail}" />
-                                <TextBlock Text="{Binding QuotaText}" Style="{StaticResource CaptionTextStyle}" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <!-- A WrapPanel rather than a StackPanel: the left column is 340 px, and the endpoint
+                         actions must degrade to a second line instead of being clipped. -->
+                    <WrapPanel Margin="4,4,4,6">
+                        <TextBlock Text="搜索" VerticalAlignment="Center" />
+                        <TextBox x:Name="EndpointSearchBox" AutomationProperties.AutomationId="CloudEndpointSearch" AutomationProperties.Name="按名称、类型或前缀搜索云盘端点" Width="120" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="EndpointSearch_TextChanged" />
+                        <TextBlock Text="排序" VerticalAlignment="Center" Margin="12,0,0,0" />
+                        <ComboBox x:Name="EndpointSortBox" AutomationProperties.AutomationId="CloudEndpointSort" AutomationProperties.Name="云盘端点排序依据" Width="92" Margin="8,0,0,0" SelectionChanged="EndpointSort_Changed" />
+                        <Button x:Name="EndpointSortDirectionButton" AutomationProperties.AutomationId="CloudEndpointSortDirection" AutomationProperties.Name="切换云盘端点列表的升降序" Content="升序" Click="EndpointSortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                        <Button x:Name="CheckAllButton" AutomationProperties.AutomationId="CheckAllCloudEndpoints" AutomationProperties.Name="检查全部云盘端点的连接与容量" Content="测试全部" Click="CheckAll_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                    </WrapPanel>
+                    <ListBox Grid.Row="1" x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="云盘端点列表" BorderThickness="0" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <!-- Three lines per row: the endpoint, whether it still answers, and its quota. The
+                                     failure reason stays in the tooltip so a long error cannot stretch the list. -->
+                                <StackPanel Margin="0,3">
+                                    <TextBlock Text="{Binding Display}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource CaptionTextStyle}" ToolTip="{Binding Detail}" />
+                                    <TextBlock Text="{Binding QuotaText}" Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
             </GroupBox>
             <StackPanel Grid.Row="2" Margin="0,10,0,0">
                 <StackPanel Orientation="Horizontal">

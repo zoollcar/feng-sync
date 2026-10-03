@@ -34,7 +34,18 @@ public partial class RemoteEndpointManagerWindow : Window
         (CloudSortColumn.Modified, "修改时间")
     ];
 
+    /// <summary>The endpoint list's ordering choices. Health is first because a list ordered by it is a to-do
+    /// list, and a broken endpoint is what the user came here to find.</summary>
+    private static readonly (CloudEndpointSortColumn Column, string Label)[] EndpointSortOptions =
+    [
+        (CloudEndpointSortColumn.Health, "状态"),
+        (CloudEndpointSortColumn.Name, "名称"),
+        (CloudEndpointSortColumn.Provider, "类型")
+    ];
+
     private readonly ObservableCollection<CloudEndpointRow> _accounts = [];
+    /// <summary>Every endpoint as loaded, before the search box and the sort choice are applied.</summary>
+    private readonly List<CloudEndpointRow> _loaded = [];
     private readonly ObservableCollection<MountInfo> _mounts = [];
     private readonly ObservableCollection<CloudFileEntry> _entries = [];
     /// <summary>The last listing before filtering and ordering, so typing in the search box re-lists nothing.</summary>
@@ -61,6 +72,21 @@ public partial class RemoteEndpointManagerWindow : Window
     private int _historyIndex = -1;
     private CloudSortColumn _sortColumn = CloudSortColumn.Name;
     private bool _sortDescending;
+    private CloudEndpointSortColumn _endpointSortColumn = CloudEndpointSortColumn.Health;
+    private bool _endpointSortDescending;
+    /// <summary>
+    /// The endpoint whose contents the browser is showing. The endpoint list is re-populated whenever the
+    /// search box or the sort choice changes, and every re-population raises selection events — including a
+    /// transient one with nothing selected. Comparing against this is what keeps a keystroke from re-listing
+    /// the remote directory over the network, which is one round trip to the cloud service per key.
+    /// </summary>
+    private string? _browsedEndpoint;
+    /// <summary>
+    /// True while the endpoint list is being rebuilt. Rebuilding clears the selection and sets it again, so
+    /// the selection events raised on the way are not gestures the browser should follow; the re-arrange
+    /// decides for itself, once, when it is done.
+    /// </summary>
+    private bool _rearranging;
     private bool _busy;
     private bool _mountBusy;
 
@@ -71,6 +97,7 @@ public partial class RemoteEndpointManagerWindow : Window
         MountsList.ItemsSource = _mounts;
         FileList.ItemsSource = _entries;
         BuildSortOptions();
+        BuildEndpointSortOptions();
         // A GridView header click is routed, not bubbled as a per-column event, so it is attached here.
         FileList.AddHandler(GridViewColumnHeader.ClickEvent, new RoutedEventHandler(ColumnHeader_Click));
         _transfers.PropertyChanged += Transfers_PropertyChanged;
@@ -92,6 +119,24 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <summary>The rows currently selected in the list.</summary>
     internal IReadOnlyList<CloudFileEntry> Selection => SelectedEntries();
 
+    /// <summary>The endpoints the list loaded, before the search box and the sort choice are applied.</summary>
+    internal IReadOnlyList<CloudEndpointRow> LoadedEndpoints => [.. _loaded];
+    /// <summary>The endpoint rows the list is showing, already filtered and ordered.</summary>
+    internal IReadOnlyList<CloudEndpointRow> VisibleEndpoints => [.. _accounts];
+
+    /// <summary>
+    /// Installs the loaded rows without touching rclone, so the search and ordering rules can be driven
+    /// through the real controls rather than re-tested as pure functions. The selection is recorded as
+    /// already shown, so a later keystroke that leaves it alone does not start a listing either.
+    /// </summary>
+    internal void LoadEndpointsForTest(IEnumerable<CloudEndpointRow> rows, string? selectName = null)
+    {
+        _loaded.Clear();
+        _loaded.AddRange(rows);
+        ApplyEndpointView(selectName, browse: false);
+        _browsedEndpoint = Selected?.Name;
+    }
+
     private async Task InitializeAsync()
     {
         try { _settings = (await new SettingsStore().LoadAsync()).Settings; }
@@ -106,22 +151,78 @@ public partial class RemoteEndpointManagerWindow : Window
             StatusText.Text = "正在读取云端端点列表…";
             var previous = Selected?.Name;
             // A refresh must not throw away what a check already learned about an endpoint.
-            var known = _accounts.ToDictionary(row => row.Account.Name, row => row.Status, StringComparer.OrdinalIgnoreCase);
+            var known = _loaded.ToDictionary(row => row.Account.Name, row => row.Status, StringComparer.OrdinalIgnoreCase);
             var accounts = await CloudEndpointService.LoadEndpointAccountsAsync();
-            _accounts.Clear();
+            _loaded.Clear();
             foreach (var account in accounts)
             {
                 var row = new CloudEndpointRow(account);
                 if (known.TryGetValue(account.Name, out var status)) row.Status = status;
-                _accounts.Add(row);
+                _loaded.Add(row);
             }
-            var restore = previous is null ? 0 : Math.Max(0, _accounts.ToList().FindIndex(row => row.Account.Name == previous));
-            if (_accounts.Count > 0) EndpointList.SelectedIndex = restore;
-            StatusText.Text = _accounts.Count == 0 ? "尚无云端端点。点击“新建端点”创建一个。" : $"共 {_accounts.Count} 个云端端点。";
+            ApplyEndpointView(previous);
+            StatusText.Text = _loaded.Count == 0
+                ? "尚无云端端点。点击“新建端点”创建一个。"
+                : $"共 {_loaded.Count} 个云端端点。";
         }
         catch (Exception ex) { StatusText.Text = "无法读取云端端点：" + RcloneUiError.Describe(ex, "endpoint-manager-list"); }
         UpdateEndpointButtons();
         await RefreshMountsAsync();
+    }
+
+    /// <summary>
+    /// Rebuilds the visible rows from <see cref="_loaded"/> using the current search text and sort choice, and
+    /// keeps the selection on <paramref name="selectName"/> when it survived the filter.
+    /// </summary>
+    /// <param name="browse">
+    /// Whether the browser may follow the resulting selection. False only for a caller that installs a
+    /// selection nobody chose — the test seam, which exists to drive the list without starting rclone.
+    /// </param>
+    private void ApplyEndpointView(string? selectName = null, bool browse = true)
+    {
+        selectName ??= Selected?.Name;
+        var rows = CloudEndpointList.Arrange(_loaded, EndpointSearchBox.Text, _endpointSortColumn, _endpointSortDescending);
+        int index;
+        _rearranging = true;
+        try
+        {
+            _accounts.Clear();
+            foreach (var row in rows) _accounts.Add(row);
+            index = selectName is null ? -1 : rows.ToList().FindIndex(row => row.Account.Name == selectName);
+            // A filter that hides the selected endpoint selects the first survivor rather than clearing the
+            // list: an empty file pane with no visible cause reads as a failure.
+            if (index < 0 && rows.Count > 0) index = 0;
+            EndpointList.SelectedIndex = index;
+        }
+        finally { _rearranging = false; }
+
+        EndpointSearchBox.ToolTip = rows.Count == _loaded.Count
+            ? null
+            : $"已按“{EndpointSearchBox.Text.Trim()}”过滤，显示 {rows.Count} / {_loaded.Count} 个端点。";
+        // A filter that matches nothing empties the browser too: the list and the file pane are two views of
+        // one selection, and the previous endpoint's files beside an empty list read as a stale pane.
+        if (rows.Count == 0) { _browsedEndpoint = null; _currentPath = ""; ClearListing(); }
+        UpdateEndpointButtons();
+        UpdateMountButtons();
+        // Decided here rather than left to the selection event: re-arranging may have moved the selection to
+        // another endpoint, and the events it raised along the way were about states nobody asked for.
+        if (browse) _ = FollowSelectionAsync();
+    }
+
+    /// <summary>
+    /// Points the browser at whatever the list now has selected. Re-listing is a network round trip to the
+    /// remote service, so it happens only when the endpoint actually changed.
+    /// </summary>
+    private async Task FollowSelectionAsync()
+    {
+        if (Selected?.Name == _browsedEndpoint) return;
+        _browsedEndpoint = Selected?.Name;
+        _currentPath = Selected?.RootPath ?? "";
+        // History is per endpoint: "the directory before this one" means nothing across two accounts.
+        _history.Clear();
+        _historyIndex = -1;
+        if (Selected is not null) PushHistory(_currentPath);
+        await BrowseAsync();
     }
 
     private async Task RefreshMountsAsync()
@@ -147,14 +248,12 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async void EndpointList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _currentPath = Selected?.RootPath ?? "";
-        // History is per endpoint: "the directory before this one" means nothing across two accounts.
-        _history.Clear();
-        _historyIndex = -1;
-        if (Selected is not null) PushHistory(_currentPath);
         UpdateEndpointButtons();
         UpdateMountButtons();
-        await BrowseAsync();
+        // A re-arrange raises this event several times over, with a selection that is momentarily nothing at
+        // all. Those are not gestures, and the re-arrange follows up on its own once it is finished.
+        if (_rearranging) return;
+        await FollowSelectionAsync();
     }
 
     private void MountsList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateMountButtons();
@@ -169,6 +268,10 @@ public partial class RemoteEndpointManagerWindow : Window
         EditButton.IsEnabled = Selected is not null;
         CheckButton.IsEnabled = Selected is not null;
         RenameEndpointButton.IsEnabled = Selected is not null;
+        // Follows the rows on screen rather than everything that was loaded: the button sits beside the
+        // search box, and its status line reports how many it probed, so a filter that is not applied would
+        // make the two disagree.
+        CheckAllButton.IsEnabled = _accounts.Count > 0;
         ReconnectButton.Visibility = NeedsReconnect(Selected) ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -200,6 +303,33 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async void Refresh_Click(object sender, RoutedEventArgs e)
         => await RunBusyAsync(RefreshButton, "正在刷新…", "正在读取云端端点列表…", RefreshAsync);
+
+    /// <summary>
+    /// Fills the endpoint ordering choices. Setting <c>SelectedIndex</c> here raises
+    /// <see cref="EndpointSort_Changed"/>, which is harmless: the view is re-arranged from state that is
+    /// already consistent, and it happens before any endpoint has been loaded.
+    /// </summary>
+    private void BuildEndpointSortOptions()
+    {
+        foreach (var (_, label) in EndpointSortOptions) EndpointSortBox.Items.Add(label);
+        EndpointSortBox.SelectedIndex = 0;
+    }
+
+    private void EndpointSearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyEndpointView();
+
+    private void EndpointSort_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (EndpointSortBox.SelectedIndex < 0 || EndpointSortBox.SelectedIndex >= EndpointSortOptions.Length) return;
+        _endpointSortColumn = EndpointSortOptions[EndpointSortBox.SelectedIndex].Column;
+        ApplyEndpointView();
+    }
+
+    private void EndpointSortDirection_Click(object sender, RoutedEventArgs e)
+    {
+        _endpointSortDescending = !_endpointSortDescending;
+        EndpointSortDirectionButton.Content = _endpointSortDescending ? "降序" : "升序";
+        ApplyEndpointView();
+    }
 
     private async void New_Click(object sender, RoutedEventArgs e)
     {
@@ -292,6 +422,51 @@ public partial class RemoteEndpointManagerWindow : Window
     internal static string DescribeRename(CloudEndpointRenameResult result) => result.RewrittenProfiles == 0
         ? $"已将端点“{result.OldName}”重命名为“{result.NewName}”。"
         : $"已将端点“{result.OldName}”重命名为“{result.NewName}”，并更新了 {result.RewrittenProfiles} 个同步任务的路径。";
+
+    /// <summary>
+    /// Probes every endpoint the list is showing, bounded so a long list does not fire one request per
+    /// endpoint at once. Results land on the rows as they arrive, which is what makes the run useful on a
+    /// slow list instead of only at the end.
+    /// </summary>
+    private async void CheckAll_Click(object sender, RoutedEventArgs e)
+    {
+        // A snapshot: the search box stays live during the run, and a filter that changes mid-flight must not
+        // make the progress readout or the summary count a different set than the one that was probed.
+        var rows = _accounts.ToList();
+        if (rows.Count == 0) { StatusText.Text = DescribeCheckAll(0, 0, 0); return; }
+        await RunBusyAsync(CheckAllButton, "正在检查…", $"正在检查 {rows.Count} 个端点…", async () =>
+        {
+            foreach (var row in rows) row.Status = new CloudEndpointStatus(CloudEndpointHealth.Checking, "");
+            var done = 0;
+            var failures = await CloudEndpointStatusService.RunBoundedAsync(
+                rows, CloudEndpointStatusService.ProbeConcurrency, async row =>
+                {
+                    var status = await CloudEndpointStatusService.ProbeAsync(row.Account);
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        row.Status = status;
+                        done++;
+                        StatusText.Text = $"正在检查… 已完成 {done}/{rows.Count}";
+                    });
+                });
+            var connected = rows.Count(row => row.Health == CloudEndpointHealth.Connected);
+            StatusText.Text = DescribeCheckAll(rows.Count, connected, failures.Count);
+        });
+    }
+
+    /// <summary>
+    /// What the status line says after checking every endpoint. The three outcomes are worded apart on
+    /// purpose: "not connected" and "could not be checked at all" need different next steps, and a run where
+    /// nothing answered must not read like a success.
+    /// </summary>
+    internal static string DescribeCheckAll(int total, int connected, int failed) => (total, connected, failed) switch
+    {
+        (0, _, _) => "没有可检查的端点。",
+        (_, _, > 0) => $"检查结束：{connected}/{total} 个端点连接正常，{failed} 个未能完成检查。",
+        var (count, all, _) when all == count => $"检查结束：{count} 个端点全部连接正常。",
+        var (count, none, _) when none == 0 => $"检查结束：{count} 个端点都无法连接，请检查网络或端点参数。",
+        var (count, some, _) => $"检查结束：{some}/{count} 个端点连接正常，其余需要重新登录或无法连接。"
+    };
 
     private async void Delete_Click(object sender, RoutedEventArgs e)
     {

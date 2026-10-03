@@ -47,6 +47,48 @@ public sealed record CloudEndpointStatus(
 public static class CloudEndpointStatusService
 {
     /// <summary>
+    /// How many endpoints are probed at once by "测试全部". Bounded because every probe opens its own request
+    /// through the same loopback daemon to the same remote service: a long list would otherwise fire them all
+    /// at once and turn a status check into a burst that some backends throttle.
+    /// </summary>
+    public const int ProbeConcurrency = 3;
+
+    /// <summary>
+    /// Runs <paramref name="action"/> over every item with at most <paramref name="concurrency"/> in flight and
+    /// returns the failures instead of throwing the first one. One endpoint that cannot be reached must not
+    /// hide the state of the others — which is the whole point of checking them together. A cancelled token
+    /// stops the run and is not reported as a failure: cancelling is the caller's decision, not an endpoint's
+    /// fault, and the caller already knows it asked.
+    /// </summary>
+    public static async Task<IReadOnlyList<Exception>> RunBoundedAsync<T>(
+        IReadOnlyList<T> items,
+        int concurrency,
+        Func<T, Task> action,
+        CancellationToken ct = default)
+    {
+        var failures = new List<Exception>();
+        if (items.Count == 0) return failures;
+        using var gate = new SemaphoreSlim(Math.Max(1, concurrency));
+        var running = items.Select(async item =>
+        {
+            // Whether the slot was taken is tracked rather than assumed: a cancelled token makes the wait
+            // throw, and releasing a slot that was never acquired would corrupt the count for every other item.
+            var acquired = false;
+            try
+            {
+                await gate.WaitAsync(ct).ConfigureAwait(false);
+                acquired = true;
+                await action(item).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+            catch (Exception ex) { lock (failures) failures.Add(ex); }
+            finally { if (acquired) gate.Release(); }
+        });
+        await Task.WhenAll(running).ConfigureAwait(false);
+        return failures;
+    }
+
+    /// <summary>
     /// Whether a failure means "sign in again" rather than "the network is down". Read from rclone's own
     /// classification first, because that is parsed from the backend's error rather than guessed from
     /// wording; the keyword pass only exists for errors that reached us unclassified.
