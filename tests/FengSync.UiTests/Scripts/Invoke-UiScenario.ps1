@@ -946,16 +946,18 @@ function Capture-Element {
     [Parameter(Mandatory)][string]$category,
     [string]$context = ''
   )
-  $bounds = $element.Current.BoundingRectangle
-  if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw "Cannot capture '$name' because the UI element has no visible bounds." }
   if (-not $script:showOnScreen) {
     # A screen copy is impossible for a window parked off screen — it would capture the desktop there. The
     # geometry assertions that matter have already run against the same rectangles, so the run records that
-    # the evidence was not taken rather than pretending it was.
+    # the evidence was not taken rather than pretending it was. The bounds guard below is deliberately not
+    # applied here: with no capture to protect it would only turn a window that happened to collapse between
+    # being located and being described — a fast local sync closing its progress surface — into a failure.
     $screenshotManifest.Add([pscustomobject]@{ File = ''; Category = $category; Context = $context; CapturedUtc = [DateTimeOffset]::UtcNow; Note = "skipped: $name (desktop-free run; pass -ShowOnScreen to capture screenshots)" })
     Write-HarnessTrace "Screenshot skipped (desktop-free run): $name [$category] $context"
     return
   }
+  $bounds = $element.Current.BoundingRectangle
+  if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw "Cannot capture '$name' because the UI element has no visible bounds." }
   Activate-TestWindow
   $handle = [IntPtr]$element.Current.NativeWindowHandle
   if ($handle -ne [IntPtr]::Zero) { [void][FengSyncUiMouse]::SetForegroundWindow($handle) }
@@ -1378,10 +1380,29 @@ try {
       Click (Find-Id $edit 'SaveCloudEndpoint')
       Wait-Until { try { $null -eq (Find-AppWindow { param($window) $window.Current.AutomationId -eq 'CloudEndpointEditorWindow' }) } catch { $false } } 'Cloud endpoint editor did not close after saving an edit.' 30 | Out-Null
       Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } 'The edited endpoint stopped browsing its directory.' 30 | Out-Null
+      # Renaming has no rclone operation behind it: the section in rclone.conf is rewritten and the running
+      # daemon has to pick the change up. Browsing the renamed endpoint is what proves both halves at once —
+      # that the daemon resolved the new name, and that the obscured password survived the section copy.
+      # Creating a copy instead of moving would leave the old name behind, which the row scan below catches.
+      $renamedName = 'ui_renamed_' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+      Click (Find-Id $manager 'RenameCloudEndpoint')
+      $renamePrompt = Find-WindowLike '重命名端点' 30
+      Set-Text (Find-Id $renamePrompt 'TextPromptNameBox') $renamedName
+      Click (Find-Id $renamePrompt 'TextPromptConfirm')
+      Wait-Until { try { $null -eq (Find-AppWindow { param($window) $window.Current.Name -eq '重命名端点' }) } catch { $false } } 'The rename prompt did not close.' 30 | Out-Null
+      Wait-Until { try { (Find-NameContaining (Find-Id $manager 'CloudEndpointList') $renamedName 2).Current.Name -like "*$renamedName*" } catch { $false } } 'The endpoint list did not show the renamed endpoint.' 30 | Out-Null
+      Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } 'The renamed endpoint stopped browsing its directory.' 30 | Out-Null
+      $staleRows = @()
+      foreach ($row in (Find-Id $manager 'CloudEndpointList').FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+        if ($row.Current.Name -like "*$remoteName*") { $staleRows += $row.Current.Name }
+      }
+      if ($staleRows.Count -gt 0) { throw "The old endpoint name survived the rename: $($staleRows -join '; ')" }
+      Capture-Element $manager 'remote-file-manager-sftp-renamed.png' 'remote-file-manager' 'the SFTP endpoint after being renamed'
       Close-Window $manager
-      # Build the sftp:// URI directly so the test does not depend on the manager's browse workflow.
+      # Build the sftp:// URI directly so the test does not depend on the manager's browse workflow. It uses
+      # the renamed endpoint, so a rename that left the credentials behind fails here too.
       $upload = Join-Path $root 'ui-upload'; New-Item -ItemType Directory -Force -Path $upload | Out-Null; [IO.File]::WriteAllText((Join-Path $upload 'created-through-ui.txt'), 'endpoint-ui-proof')
-      $sftpUriCreated = "sftp://$remoteName"
+      $sftpUriCreated = "sftp://$renamedName"
       if (-not (Test-Path -LiteralPath $config)) { throw 'SFTP endpoint editor did not persist its rclone configuration.' }
       Select-Mode $main '更新到右侧'; Compare-Ui $main $upload $sftpUriCreated; Wait-Sync $main (Join-Path $share 'created-through-ui.txt'); Assert-File (Join-Path $share 'created-through-ui.txt') 'endpoint-ui-proof'
     }
