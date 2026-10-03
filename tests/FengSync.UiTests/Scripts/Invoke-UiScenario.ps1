@@ -1581,6 +1581,24 @@ try {
       if ((Get-Text (Find-Id $settings 'SettingsConcurrency')) -ne '3' -or (Get-Text (Find-Id $settings 'SettingsTimeTolerance')) -ne '7' -or (Get-Text (Find-Id $settings 'SettingsIncludeRules')) -ne '**/*.keep' -or (Get-Text (Find-Id $settings 'SettingsExcludeRules')) -ne '**/*.skip') { throw 'Applied application defaults were not persisted on re-open.' }
       if ((Get-Text (Find-Id $settings 'SettingsResumeMinimum')) -ne '2G') { throw "The resume threshold was not persisted as the size that was entered: '$(Get-Text (Find-Id $settings 'SettingsResumeMinimum'))'." }
       Capture-Element $settings 'settings-general-persisted.png' 'settings' 'persisted general settings'
+      # The cloud page's proxy field is the only place the value can be typed, so it has to survive a
+      # save/reopen like the general page's numbers do — a value that silently reverts would only ever
+      # show up later as a cloud endpoint that cannot connect.
+      Select-Ui (Find-Id $settings 'SettingsCloudNav'); Start-Sleep -Milliseconds 200
+      Set-Text (Find-Id $settings 'SettingsCloudProxy') 'proxy.invalid:8080'
+      Capture-Element $settings 'settings-cloud-proxy.png' 'settings' 'cloud page with a proxy address'
+      Click (Find-Id $settings 'SettingsApply'); Click (Find-Id $settings 'SettingsOk')
+      Wait-Until { (Find-Id $main 'Status').Current.Name -match '已应用' } 'Applying the cloud proxy was not reported.'
+      $settings = Open-SettingsCenter
+      Select-Ui (Find-Id $settings 'SettingsCloudNav'); Start-Sleep -Milliseconds 200
+      $persistedProxy = Get-Text (Find-Id $settings 'SettingsCloudProxy')
+      if ($persistedProxy -ne 'proxy.invalid:8080') { throw "The cloud proxy was not persisted on re-open: '$persistedProxy'." }
+      # Clear it again before moving on. The setting is read once, when this process's rclone daemon
+      # starts, so leaving a deliberately unreachable address behind would break every later cloud step
+      # that happens to be the first one to need the daemon.
+      Set-Text (Find-Id $settings 'SettingsCloudProxy') ''
+      Click (Find-Id $settings 'SettingsApply')
+      if ((Get-Text (Find-Id $settings 'SettingsCloudProxy')) -ne '') { throw 'Clearing the cloud proxy did not take effect.' }
       Select-Ui (Find-Id $settings 'RunHistoryNav'); Start-Sleep -Milliseconds 200; Capture-Element $settings 'settings-run-history.png' 'settings' 'run history settings page'
       Select-Ui (Find-Id $settings 'LogsNav'); Start-Sleep -Milliseconds 200; Capture-Element $settings 'settings-logs.png' 'settings' 'logs settings page'
       Select-Ui (Find-Id $settings 'SettingsGeneralNav'); Start-Sleep -Milliseconds 200
