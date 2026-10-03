@@ -2,7 +2,12 @@
 param(
     [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'sftp-service', 'cloud-transfers', 'batch-run', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume', 'r2', 'r2-volume')][string]$Scenario,
     [Parameter(Mandatory)][string]$AppPath,
-    [Parameter(Mandatory)][string]$Workspace
+    [Parameter(Mandatory)][string]$Workspace,
+    # Off by default. See the "Desktop-free input" section below: a scenario normally parks its windows
+    # outside the visible desktop and drives them through UI Automation, so running the suite never covers
+    # the user's screen, never moves their cursor and never takes their foreground window. Pass this switch
+    # to watch a scenario run in the foreground with real mouse input.
+    [switch]$ShowOnScreen
 )
 
 # Every scenario uses a new data root. On failure it is retained with its logs and
@@ -15,6 +20,7 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing, Sy
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
+public struct FengSyncPoint { public int X; public int Y; }
 public static class FengSyncUiMouse {
   [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
   [DllImport("user32.dll")] public static extern void SetCursorPos(int x, int y);
@@ -24,11 +30,17 @@ public static class FengSyncUiMouse {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
   [DllImport("user32.dll", EntryPoint="ShowWindow")] public static extern bool ShowWindowNative(IntPtr hWnd, int command);
   [DllImport("user32.dll", EntryPoint="SetWindowPos")] public static extern bool SetWindowPosNative(IntPtr hWnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+  // Desktop-free input: PostMessage delivers a gesture straight to a window's message queue, and
+  // ScreenToClient converts a UIA screen rectangle into that window's client space. Neither needs the
+  // window to be raised, and neither touches the physical cursor.
+  [DllImport("user32.dll", EntryPoint="PostMessage")] public static extern bool PostMessageNative(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool ScreenToClient(IntPtr hWnd, ref FengSyncPoint point);
   public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
   public const uint LEFTDOWN = 0x0002, LEFTUP = 0x0004, RIGHTDOWN = 0x0008, RIGHTUP = 0x0010;
   public static readonly IntPtr TOPMOST = new IntPtr(-1), NOTOPMOST = new IntPtr(-2);
-  public const uint NOMOVE = 0x0002, NOSIZE = 0x0001, SHOWWINDOW = 0x0040;
+  public const uint NOMOVE = 0x0002, NOSIZE = 0x0001, SHOWWINDOW = 0x0040, NOZORDER = 0x0004, NOACTIVATE = 0x0010;
   public const int RESTORE = 9;
+  public const uint WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205;
 }
 '@
 $AppPath = [IO.Path]::GetFullPath($AppPath); $Workspace = [IO.Path]::GetFullPath($Workspace)
@@ -51,11 +63,71 @@ $harnessLog = Join-Path $root 'harness.log'
 function Write-HarnessTrace([string]$message) {
   $line = '{0:O} | {1}' -f [DateTimeOffset]::Now, $message
   [IO.File]::AppendAllText($harnessLog, $line + [Environment]::NewLine)
-  Write-Output $message
+  # Write-Host rather than Write-Output: a trace is diagnostics, not a value. Emitting it to the pipeline
+  # let a trace written inside a function join that function's return value, which turned a returned window
+  # element into an array and made the next lookup fail with a baffling "missing element".
+  Write-Host $message
 }
 Write-HarnessTrace "Starting scenario: $Scenario"
+Write-HarnessTrace $(if ($ShowOnScreen) { 'Input mode: on screen (windows raised, real mouse input).' } else { 'Input mode: desktop-free (windows parked off screen, input delivered through UI Automation).' })
+
+# =================== Desktop-free input ===================
+# Default behaviour: a scenario must not disturb whoever is using the machine. Concretely that means
+#   1. no window is ever raised or activated, so the user's foreground window keeps focus;
+#   2. the physical cursor never moves, so no real mouse input is synthesized;
+#   3. every Feng Sync window is parked outside the visible desktop, so nothing is drawn over the user's work.
+# Input is delivered instead through UI Automation patterns, and — for the few gestures WPF only produces
+# from a real window message, such as opening a ContextMenu — through PostMessage straight to the window's
+# message queue. Both work while the window sits off screen and while it is not the active window.
+# Pass -ShowOnScreen to get the historical behaviour back: windows restored, raised, and driven with real
+# mouse input. That mode exists for watching a scenario by hand, and is never the default.
+$script:showOnScreen = [bool]$ShowOnScreen
+# Parked far outside every virtual desktop. SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE moves the window
+# without resizing it, without reordering it against other windows and without giving it focus.
+$script:offScreenOrigin = -32000
+
+function Initialize-TestWindowPlacement {
+  # Called as soon as the main window exists, before any interaction. A window parked here is still a
+  # normal, visible, fully rendered HWND: UI Automation sees it, WPF lays it out, and its BoundingRectangle
+  # stays correct — only its screen position changes. Every geometry assertion in this script compares
+  # rectangles inside the same window, so those all keep working.
+  if ($script:showOnScreen) { return }
+  if (-not $script:process -or $script:process.HasExited) { return }
+  foreach ($handle in Get-AppWindowHandles) { Park-WindowOffScreen $handle }
+}
+
+function Get-AppWindowHandles {
+  $handles = [System.Collections.Generic.List[IntPtr]]::new()
+  if (-not $script:process -or $script:process.HasExited) { return $handles }
+  $callback = {
+    param($hWnd, $lParam)
+    $procId = 0
+    [void][FengSyncUiMouse]::GetWindowThreadProcessId($hWnd, [ref]$procId)
+    if ($procId -eq $script:process.Id -and [FengSyncUiMouse]::IsWindowVisible($hWnd)) { $handles.Add($hWnd) }
+    return $true
+  }
+  [void][FengSyncUiMouse]::EnumWindows($callback, [IntPtr]::Zero)
+  return $handles
+}
+
+function Park-WindowOffScreen([IntPtr]$handle) {
+  if ($script:showOnScreen -or $handle -eq [IntPtr]::Zero) { return }
+  $flags = [FengSyncUiMouse]::NOSIZE -bor [FengSyncUiMouse]::NOZORDER -bor [FengSyncUiMouse]::NOACTIVATE
+  [void][FengSyncUiMouse]::SetWindowPosNative($handle, [IntPtr]::Zero, $script:offScreenOrigin, $script:offScreenOrigin, 0, 0, $flags)
+}
+
+# A window created after startup (a modal dialog, a message box) is parked as soon as it is seen, so the
+# user never catches a dialog flashing up in the middle of the screen.
+function Park-AllAppWindows {
+  if ($script:showOnScreen) { return }
+  foreach ($handle in Get-AppWindowHandles) { Park-WindowOffScreen $handle }
+}
 
 function Activate-TestWindow {
+  # Kept as the single "make the window ready for the next step" seam. Desktop-free mode deliberately does
+  # nothing here: the whole point is that the test never raises or focuses a window. Only -ShowOnScreen
+  # restores the restore/raise dance.
+  if (-not $script:showOnScreen) { return }
   if (-not $script:process -or $script:process.HasExited -or $script:process.MainWindowHandle -eq 0) { return }
   $handle = $script:process.MainWindowHandle
   [void][FengSyncUiMouse]::ShowWindowNative($handle, [FengSyncUiMouse]::RESTORE)
@@ -63,6 +135,174 @@ function Activate-TestWindow {
   [void][FengSyncUiMouse]::SetWindowPosNative($handle, [FengSyncUiMouse]::TOPMOST, 0, 0, 0, 0, $flags)
   [void][FengSyncUiMouse]::SetWindowPosNative($handle, [FengSyncUiMouse]::NOTOPMOST, 0, 0, 0, 0, $flags)
   [void][FengSyncUiMouse]::SetForegroundWindow($handle)
+}
+
+# The narrow fallback for the gestures WPF only routes to an *active* window — opening a ContextMenu is the
+# one that matters here. It raises the window in the Z-order and takes the foreground so the posted message
+# reaches WPF's input system, but it never moves the window: it stays parked outside the visible desktop, so
+# the user still sees nothing, and the cursor is still never touched. Only the foreground window changes,
+# and only for the length of one gesture. Callers try the purely posted gesture first and fall back to this.
+function Focus-OffScreenWindow {
+  if ($script:showOnScreen) { Activate-TestWindow; return }
+  if (-not $script:process -or $script:process.HasExited -or $script:process.MainWindowHandle -eq 0) { return }
+  $handle = $script:process.MainWindowHandle
+  $flags = [FengSyncUiMouse]::NOMOVE -bor [FengSyncUiMouse]::NOSIZE -bor [FengSyncUiMouse]::SHOWWINDOW
+  [void][FengSyncUiMouse]::SetWindowPosNative($handle, [FengSyncUiMouse]::TOPMOST, 0, 0, 0, 0, $flags)
+  [void][FengSyncUiMouse]::SetWindowPosNative($handle, [FengSyncUiMouse]::NOTOPMOST, 0, 0, 0, 0, $flags)
+  $set = [FengSyncUiMouse]::SetForegroundWindow($handle)
+  Start-Sleep -Milliseconds 150
+  Write-HarnessTrace "raised the parked window into the foreground without moving it (hwnd=0x$($handle.ToInt64().ToString('X')), accepted=$set)."
+}
+
+# --- gesture helpers ---------------------------------------------------------------------------------
+# The window that owns an element, falling back to the main window for elements WPF exposes without a
+# NativeWindowHandle of their own (most non-hwnd peers, including list items and text blocks).
+function Get-OwningWindowHandle($element) {
+  $handle = [IntPtr]$element.Current.NativeWindowHandle
+  if ($handle -ne [IntPtr]::Zero) { return $handle }
+  if ($script:process -and -not $script:process.HasExited -and $script:process.MainWindowHandle -ne 0) { return $script:process.MainWindowHandle }
+  return [IntPtr]::Zero
+}
+
+# The point inside an element that a gesture should target, in the owning window's client space. The
+# horizontal fraction is a parameter because a full-width row's centre can fall in the blank area to the
+# right of its text — the profile list is hit reliably near its left edge, and did so before this rewrite.
+function Get-ElementClientPoint($element, [double]$horizontalFraction = 0.5) {
+  $bounds = $element.Current.BoundingRectangle
+  if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw "Element has no usable bounds: $($element.Current.AutomationId)" }
+  $handle = Get-OwningWindowHandle $element
+  if ($handle -eq [IntPtr]::Zero) { throw "Element is not owned by a Feng Sync window: $($element.Current.AutomationId)" }
+  $point = [FengSyncPoint]::new()
+  $point.X = [int]($bounds.Left + $bounds.Width * $horizontalFraction)
+  $point.Y = [int]($bounds.Top + $bounds.Height / 2)
+  if (-not [FengSyncUiMouse]::ScreenToClient($handle, [ref]$point)) { throw "ScreenToClient failed for: $($element.Current.AutomationId)" }
+  return @{ Handle = $handle; X = $point.X; Y = $point.Y }
+}
+
+function Get-PackedPoint([int]$x, [int]$y) { return [IntPtr]((($y -band 0xFFFF) -shl 16) -bor ($x -band 0xFFFF)) }
+
+function Invoke-RightClickGesture($element, [double]$horizontalFraction = 0.5) {
+  if ($script:showOnScreen) {
+    $bounds = $element.Current.BoundingRectangle
+    Activate-TestWindow
+    try { $element.SetFocus() } catch { }
+    Start-Sleep -Milliseconds 100
+    [FengSyncUiMouse]::SetCursorPos([int]($bounds.Left + $bounds.Width * $horizontalFraction), [int]($bounds.Top + ($bounds.Height / 2))) | Out-Null
+    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTUP, 0, 0, 0, [UIntPtr]::Zero)
+    return
+  }
+  # WPF hit-tests a mouse message against the position of the real pointer, not against the coordinates in
+  # the message, so a posted click is discarded whenever the cursor is somewhere else — which, in a
+  # desktop-free run, it always is. The keyboard route has no such dependency, and WPF opens a ContextMenu
+  # from the context-menu key just as it does from a right-click. So that is what gets posted: the element
+  # is focused through UI Automation first, then the key is delivered to the owning window.
+  try { $element.SetFocus() } catch { }
+  Start-Sleep -Milliseconds 120
+  $handle = Get-OwningWindowHandle $element
+  if ($handle -eq [IntPtr]::Zero) { throw "Element is not owned by a Feng Sync window: $($element.Current.AutomationId)" }
+  Post-KeyToWindow $handle 0x5D 0x01000001   # VK_APPS; the extended-key bit is set because VK_APPS is an extended key
+  Write-HarnessTrace "posted context-menu key to hwnd=0x$($handle.ToInt64().ToString('X')) after focusing '$($element.Current.AutomationId)'."
+}
+
+# Posts a key press and release. lParam follows the WM_KEYDOWN layout: repeat count 1 in the low word, and
+# the caller supplies the remaining bits (scan-code/extended-key flags).
+function Post-KeyToWindow([IntPtr]$handle, [int]$virtualKey, [int]$downFlags = 1) {
+  $down = [IntPtr]($downFlags -bor 1)
+  $up = [IntPtr]($downFlags -bor 0xC0000001)
+  [void][FengSyncUiMouse]::PostMessageNative($handle, 0x0100, [IntPtr]$virtualKey, $down)   # WM_KEYDOWN
+  Start-Sleep -Milliseconds 60
+  [void][FengSyncUiMouse]::PostMessageNative($handle, 0x0101, [IntPtr]$virtualKey, $up)     # WM_KEYUP
+}
+
+# Shift+F10 is the second key Windows and WPF both treat as "open the context menu", so a window that
+# ignores the context-menu key still answers this one.
+function Post-ContextMenuKeyChord([IntPtr]$handle) {
+  $shift = [IntPtr]0x10
+  $f10 = [IntPtr]0x79
+  [void][FengSyncUiMouse]::PostMessageNative($handle, 0x0100, $shift, [IntPtr]1)
+  Start-Sleep -Milliseconds 40
+  [void][FengSyncUiMouse]::PostMessageNative($handle, 0x0100, $f10, [IntPtr]1)
+  Start-Sleep -Milliseconds 60
+  [void][FengSyncUiMouse]::PostMessageNative($handle, 0x0101, $f10, [IntPtr]0xC0000001)
+  Start-Sleep -Milliseconds 40
+  [void][FengSyncUiMouse]::PostMessageNative($handle, 0x0101, $shift, [IntPtr]0xC0000001)
+}
+
+# Answers a native modal dialog with "Yes". A MessageBox's buttons are Win32 controls, so the message its
+# own Yes button would send is the only handle this harness has on them: WM_COMMAND with IDYES (6) in the
+# low word of wParam and BN_CLICKED (0) in the high word.
+function Answer-NativeDialogYes($dialog) {
+  $handle = [IntPtr]$dialog.Current.NativeWindowHandle
+  if ($handle -eq [IntPtr]::Zero) { throw "Native dialog has no window handle: $($dialog.Current.Name)" }
+  [void][FengSyncUiMouse]::PostMessageNative($handle, 0x0111, [IntPtr]6, [IntPtr]::Zero)
+  Write-HarnessTrace "posted IDYES to native dialog '$($dialog.Current.Name)' (hwnd=0x$($handle.ToInt64().ToString('X')))."
+}
+
+function Invoke-LeftClickGesture($element) {
+  if ($script:showOnScreen) {
+    $bounds = $element.Current.BoundingRectangle
+    Activate-TestWindow
+    Start-Sleep -Milliseconds 100
+    [FengSyncUiMouse]::SetCursorPos([int]($bounds.Left + ($bounds.Width / 2)), [int]($bounds.Top + ($bounds.Height / 2))) | Out-Null
+    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+    return
+  }
+  # A UIA invoke is the desktop-free click; the message pair is only the fallback for a peer WPF exposes
+  # without InvokePattern.
+  $pattern = $null
+  if ($element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) { $pattern.Invoke(); return }
+  $target = Get-ElementClientPoint $element
+  $packed = Get-PackedPoint $target.X $target.Y
+  [void][FengSyncUiMouse]::PostMessageNative($target.Handle, 0x0201, [IntPtr]::Zero, $packed)
+  Start-Sleep -Milliseconds 60
+  [void][FengSyncUiMouse]::PostMessageNative($target.Handle, 0x0202, [IntPtr]::Zero, $packed)
+}
+
+function Send-KeysToWindow($element, [string]$keys) {
+  if ($script:showOnScreen) {
+    $element.SetFocus()
+    Start-Sleep -Milliseconds 100
+    [Windows.Forms.SendKeys]::SendWait($keys)
+    return
+  }
+  # Desktop-free mode cannot use SendKeys: it types into whatever window is foreground, which is precisely
+  # the window the test must leave alone. Posted keystrokes reach WPF's input system just as well — WPF
+  # routes them to whatever element holds keyboard focus, and that does not depend on where the pointer is,
+  # which is exactly why the keyboard works where a posted click does not. The element is focused first
+  # through UI Automation.
+  $handle = Get-OwningWindowHandle $element
+  if ($handle -eq [IntPtr]::Zero) { throw "Element is not owned by a Feng Sync window: $($element.Current.AutomationId)" }
+  try { $element.SetFocus() } catch { }
+  Start-Sleep -Milliseconds 100
+  foreach ($token in [Regex]::Matches($keys, '\{[^}]*\}|.')) {
+    $text = $token.Value
+    if (-not $text.StartsWith('{')) { Post-CharToWindow $handle $text; continue }
+    $parts = $text.Trim('{', '}').Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+    if ($parts.Count -eq 0) { continue }
+    $name = $parts[0].ToUpperInvariant()
+    $repeat = 1
+    if ($parts.Count -gt 1) { [void][int]::TryParse($parts[1], [ref]$repeat) }
+    if (-not $script:virtualKeys.ContainsKey($name)) { throw "Unsupported key in desktop-free mode: $text" }
+    for ($i = 0; $i -lt $repeat; $i++) { Post-KeyToWindow $handle $script:virtualKeys[$name] }
+  }
+}
+
+# The keys this harness actually presses, so a step already written in SendKeys syntax can be delivered as
+# posted messages instead. Add to this map rather than falling back to the foreground-dependent SendKeys.
+$script:virtualKeys = @{
+  'LEFT' = 0x25; 'UP' = 0x26; 'RIGHT' = 0x27; 'DOWN' = 0x28
+  'HOME' = 0x24; 'END' = 0x23; 'ENTER' = 0x0D; 'ESC' = 0x1B; 'TAB' = 0x09
+  'BACKSPACE' = 0x08; 'DELETE' = 0x2E; 'SPACE' = 0x20; 'APPS' = 0x5D; 'F10' = 0x79
+}
+
+# WM_CHAR carries literal text into the focused element, which is how the password fallback types.
+function Post-CharToWindow([IntPtr]$handle, [string]$text) {
+  foreach ($character in $text.ToCharArray()) {
+    [void][FengSyncUiMouse]::PostMessageNative($handle, 0x0102, [IntPtr][int]$character, [IntPtr]1)
+    Start-Sleep -Milliseconds 20
+  }
 }
 
 function Enable-RcloneWindowsProxy {
@@ -109,10 +349,11 @@ function Click($element) {
   for ($i = 0; $i -lt 50; $i++) {
     try {
       if ($element.Current.IsEnabled) {
+        # InvokePattern is the desktop-free click. A control that does not offer it cannot be clicked
+        # without the pointer, and saying so is better than a click that silently lands nowhere.
         $p = $null
-        if (-not $element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { throw "Element cannot be invoked: $($element.Current.Name)" }
-        $p.Invoke()
-        return
+        if ($element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); return }
+        throw "Element cannot be invoked: $($element.Current.Name)"
       }
     } catch {
       $msg = $_.Exception.Message
@@ -126,7 +367,7 @@ function Set-Text($element, [string]$value) { $p = $null; if (-not $element.TryG
 function Set-Password($element, [string]$value) {
   $pattern = $null
   if ($element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) { $pattern.SetValue($value); return }
-  $element.SetFocus(); [Windows.Forms.SendKeys]::SendWait($value)
+  Send-KeysToWindow $element $value
 }
 function Select-Ui($element) { $p = $null; if (-not $element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$p)) { throw "Element cannot be selected: $($element.Current.Name)" }; $p.Select() }
 function Select-UiOrAncestor($element) {
@@ -151,7 +392,23 @@ function Scroll-ToTop($element) {
     Start-Sleep -Milliseconds 180
   }
 }
+function Scroll-ToBottom($element) {
+  # The desktop-free replacement for pressing End in a scroll viewer: the same destination, reached through
+  # the ScrollPattern instead of a keystroke that would need the window to be foreground.
+  $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::IsScrollPatternAvailableProperty, $true)
+  $scrollable = $element.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+  if (-not $scrollable) { return }
+  $pattern = $null
+  if ($scrollable.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern, [ref]$pattern) -and $pattern.Current.VerticallyScrollable) {
+    $pattern.SetScrollPercent([System.Windows.Automation.ScrollPattern]::NoScroll, 100)
+    Start-Sleep -Milliseconds 180
+  }
+}
 function Drag-ElementHorizontally($element, [int]$offset) {
+  # A pointer drag cannot be reproduced without the pointer: WPF hit-tests mouse input against the position
+  # of the real cursor, so a posted press is discarded rather than routed. Only an on-screen run can drag;
+  # a desktop-free step has to reach the same state through the keyboard or a UI Automation equivalent.
+  if (-not $script:showOnScreen) { throw "Dragging '$($element.Current.AutomationId)' requires -ShowOnScreen; use the keyboard equivalent instead." }
   $box = $element.Current.BoundingRectangle
   if ($box.Width -le 0 -or $box.Height -le 0) { throw "Element cannot be dragged because it has no bounds: $($element.Current.AutomationId)" }
   Activate-TestWindow
@@ -163,6 +420,22 @@ function Drag-ElementHorizontally($element, [int]$offset) {
   [FengSyncUiMouse]::SetCursorPos($start.X + [int]($offset / 2), $start.Y); Start-Sleep -Milliseconds 180
   [FengSyncUiMouse]::SetCursorPos($start.X + $offset, $start.Y); Start-Sleep -Milliseconds 220
   [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+}
+
+# Dismisses a ContextMenu without a foreground window. The item invoke that normally precedes this already
+# closes the menu, so this is a best-effort sweep for a menu left open by a failed step; posting Escape to
+# the popup's own window is harmless when it is already gone.
+function Close-ContextMenuBestEffort {
+  if ($script:showOnScreen) { [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep -Milliseconds 120; return }
+  foreach ($id in @('ComparisonActionMenu', 'ProfileContextMenu')) {
+    $menu = try { Find-ContextMenuInApp $id } catch { $null }
+    if ($null -eq $menu) { continue }
+    $handle = [IntPtr]$menu.Current.NativeWindowHandle
+    if ($handle -eq [IntPtr]::Zero) { continue }
+    [void][FengSyncUiMouse]::PostMessageNative($handle, 0x0100, [IntPtr]0x1B, [IntPtr]::Zero)   # WM_KEYDOWN, VK_ESCAPE
+    [void][FengSyncUiMouse]::PostMessageNative($handle, 0x0101, [IntPtr]0x1B, [IntPtr]::Zero)   # WM_KEYUP, VK_ESCAPE
+    Start-Sleep -Milliseconds 120
+  }
 }
 function Get-LiveMain {
   if (-not $script:process -or $script:process.HasExited) { throw 'Feng Sync exited before the current UI step completed.' }
@@ -198,10 +471,16 @@ function Find-AppWindow([scriptblock]$predicate) {
   return $null
 }
 function Find-WindowLike([string]$titleFragment, [int]$seconds = 20) {
-  Wait-Until { try { Find-AppWindow { param($window) $window.Current.Name -like "*$titleFragment*" } } catch { $null } } "Missing Feng Sync window containing: $titleFragment" $seconds
+  $window = Wait-Until { try { Find-AppWindow { param($window) $window.Current.Name -like "*$titleFragment*" } } catch { $null } } "Missing Feng Sync window containing: $titleFragment" $seconds
+  # A modal dialog opens centred on screen; a desktop-free run moves it away the moment it is located, so
+  # the user never catches it flashing up. Parking is idempotent, so repeating it per lookup is harmless.
+  Park-AllAppWindows
+  return $window
 }
 function Find-WindowById([string]$id, [int]$seconds = 20) {
-  Wait-Until { try { Find-AppWindow { param($window) $window.Current.AutomationId -eq $id } } catch { $null } } "Missing Feng Sync window with id: $id" $seconds
+  $window = Wait-Until { try { Find-AppWindow { param($window) $window.Current.AutomationId -eq $id } } catch { $null } } "Missing Feng Sync window with id: $id" $seconds
+  Park-AllAppWindows
+  return $window
 }
 # Open the SettingsWindow via the main sidebar's Settings button.
 # Returns the SettingsWindow automation element. The window title is "设置中心".
@@ -258,16 +537,15 @@ function Apply-Direction($main, [string]$header) {
   if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw 'Comparison action menu has no clickable bounds.' }
   $menu = $null
   for ($attempt = 1; $attempt -le 3 -and $null -eq $menu; $attempt++) {
-    [void][FengSyncUiMouse]::SetForegroundWindow($script:process.MainWindowHandle)
-    try { $actionButton.SetFocus() } catch { }
+    # The menu button carries an InvokePattern, which is the desktop-free path and needs no window state.
+    # The right-click gesture below is the fallback, and it too avoids the physical cursor by posting the
+    # message pair to the owning window.
     [System.Windows.Automation.InvokePattern]$invoke = $null
-    if ($actionButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
-      $invoke.Invoke()
+    if (-not $actionButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
+      Invoke-RightClickGesture $actionButton
     } else {
-      [FengSyncUiMouse]::SetCursorPos([int]($bounds.Left + ($bounds.Width / 2)), [int]($bounds.Top + ($bounds.Height / 2))) | Out-Null
-      Start-Sleep -Milliseconds 180
-      [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTDOWN, 0, 0, 0, [UIntPtr]::Zero)
-      [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTUP, 0, 0, 0, [UIntPtr]::Zero)
+      if ($script:showOnScreen) { Activate-TestWindow; try { $actionButton.SetFocus() } catch { } }
+      $invoke.Invoke()
     }
     $menuDeadline = [DateTime]::UtcNow.AddSeconds(2)
     while ([DateTime]::UtcNow -lt $menuDeadline -and $null -eq $menu) {
@@ -281,13 +559,13 @@ function Apply-Direction($main, [string]$header) {
       if ($null -eq $menu) { Start-Sleep -Milliseconds 150 }
     }
     if ($null -eq $menu) {
-      [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+      Close-ContextMenuBestEffort
       Start-Sleep -Milliseconds 150
     }
   }
   if ($null -eq $menu) { throw 'Row context menu did not appear after three attempts.' }
-  # Use keyboard to navigate rather than cross-process InvokePattern — the latter
-  # sometimes throws when the menu's window token is mid-transition.
+  # Invoke the MenuItem through UI Automation. The arrow-key walk below is only a fallback for a build that
+  # exposes no InvokePattern, because a ContextMenu routes arrow keys through the foreground window.
   $itemCount = 0
   try {
     $items = $menu.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::MenuItem))
@@ -295,15 +573,13 @@ function Apply-Direction($main, [string]$header) {
     $target = $null
     foreach ($it in $items) { if ($it.Current.Name -eq $header) { $target = $it; break } }
     if ($null -ne $target) {
-      # Invoke the actual MenuItem. Keyboard focus alone can move to the item
-      # without raising Click on newer WPF/UIA builds.
       Click $target
-    } else {
+    } elseif ($script:showOnScreen) {
       # Fallback: arrow-down until the desired header is current (WPF ContextMenu
       # routes arrow keys to its menu items directly).
       $found = $false
       for ($i = 0; $i -lt $itemCount -and -not $found; $i++) {
-        [Windows.Forms.SendKeys]::SendWait('{DOWN}')
+        Send-KeysToWindow $menu '{DOWN}'
         Start-Sleep -Milliseconds 60
         try {
           $children = $menu.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::MenuItem))
@@ -312,12 +588,14 @@ function Apply-Direction($main, [string]$header) {
       }
       if ($found) {
         Start-Sleep -Milliseconds 100
-        [Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        Send-KeysToWindow $menu '{ENTER}'
       } else { throw "Direction menu item '$header' was not found in the context menu." }
+    } else {
+      throw "Direction menu item '$header' was not exposed with an invocable pattern, and the keyboard fallback needs -ShowOnScreen."
     }
   } finally {
     Start-Sleep -Milliseconds 200
-    [Windows.Forms.SendKeys]::SendWait('{ESC}')
+    Close-ContextMenuBestEffort
   }
   Wait-Until { (Find-Id (Get-LiveMain) 'Status').Current.Name -match [Regex]::Escape($header) } "Direction override '$header' was not applied." 10 | Out-Null
 }
@@ -340,40 +618,67 @@ function Find-ContextMenuInApp([string]$automationId = 'ProfileContextMenu') {
   }
   return $null
 }
-function Open-ProfileContextMenu {
+function Get-ContextMenuItemNames($menu) {
+  try {
+    $items = $menu.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::MenuItem))
+    return (@($items | ForEach-Object { $_.Current.AutomationId }) -join ',')
+  } catch { return "<unreadable: $($_.Exception.Message)>" }
+}
+
+function Open-ProfileContextMenu([string]$requiredItemId = 'ProfileContextEdit') {
   $list = Find-Id (Get-LiveMain) 'ProfileList'
   $target = if ([string]::IsNullOrWhiteSpace($script:deletingProfileName)) { $list } else { Find-Name $list $script:deletingProfileName 5 }
-  $bounds = $target.Current.BoundingRectangle
-  $anchor = [System.Drawing.Point]::new([int]($bounds.Left + [Math]::Min(60, [int]($bounds.Width / 3))), [int]($bounds.Top + ($bounds.Height / 2)))
+  # The ContextMenu belongs to the ListBox and acts on the selected row, so the row has to be selected
+  # before the menu is asked for — with a real right-click the press itself does that, and the keyboard
+  # route has to do it explicitly.
+  if (-not [string]::IsNullOrWhiteSpace($script:deletingProfileName)) { Select-UiOrAncestor $target }
+  # The menu is only usable once it actually contains the item the caller is about to invoke; a popup that
+  # has been raised but not populated would otherwise be returned and then time out looking for its items.
+  $itemCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $requiredItemId)
   for ($attempt = 1; $attempt -le 3; $attempt++) {
-    try { $target.SetFocus() } catch { }
-    [void][FengSyncUiMouse]::SetForegroundWindow($script:process.MainWindowHandle)
-    [System.Windows.Forms.Cursor]::Position = $anchor
-    Start-Sleep -Milliseconds 100
-    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTDOWN, 0, 0, 0, [UIntPtr]::Zero)
-    [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::RIGHTUP, 0, 0, 0, [UIntPtr]::Zero)
-    $menu = try { Wait-Until { Find-ContextMenuInApp } "Profile context menu attempt $attempt did not appear." 2 } catch { $null }
+    # Three routes, cheapest first: the context-menu key, the Shift+F10 chord, then the same key again with
+    # the window raised in the Z-order. None of them moves the pointer or unparks the window.
+    switch ($attempt) {
+      1 { Invoke-RightClickGesture $target }
+      2 { Focus-OffScreenWindow; Post-ContextMenuKeyChord (Get-OwningWindowHandle $target) }
+      default { Focus-OffScreenWindow; Invoke-RightClickGesture $target }
+    }
+    $menu = $null
+    $deadline = [DateTime]::UtcNow.AddSeconds(3)
+    while ([DateTime]::UtcNow -lt $deadline -and $null -eq $menu) {
+      try {
+        $candidate = Find-ContextMenuInApp
+        if ($candidate -and $candidate.FindFirst([System.Windows.Automation.TreeScope]::Subtree, $itemCondition)) { $menu = $candidate }
+      } catch { $menu = $null }
+      if ($null -eq $menu) { Start-Sleep -Milliseconds 150 }
+    }
     if ($menu) { return $menu }
+    $open = try { Find-ContextMenuInApp } catch { $null }
+    Write-HarnessTrace "profile context menu attempt $attempt did not expose '$requiredItemId'; menu present=$($null -ne $open); items=$(if ($open) { Get-ContextMenuItemNames $open } else { '<none>' })"
+    Close-ContextMenuBestEffort
   }
-  throw 'Profile context menu did not appear after three attempts.'
+  throw "Profile context menu did not expose '$requiredItemId' after three attempts."
 }
 function Edit-Profile-ThroughContextMenu {
-  $menu = Open-ProfileContextMenu
+  $menu = Open-ProfileContextMenu 'ProfileContextEdit'
   Click (Find-Id $menu 'ProfileContextEdit')
 }
 function Delete-Profile-ThroughContextMenu {
-  $menu = Open-ProfileContextMenu
+  $menu = Open-ProfileContextMenu 'ProfileContextDelete'
   Click (Find-Id $menu 'ProfileContextDelete')
   # The DeleteProfile_Click handler pops a YesNo MessageBox; closing the window
   # (Escape / X) would answer No, which leaves the profile in the list. Walk the
   # dialog tree to find the Yes button by name and invoke it directly through UIA.
   $removeDialog = Wait-Until { try { Find-AppWindow { param($window) $window.Current.Name -like '*移除配置*' } } catch { $null } } 'Remove profile dialog did not appear' 30
+  Park-WindowOffScreen ([IntPtr]$removeDialog.Current.NativeWindowHandle)
   $yes = Wait-Until { try { Find-Name $removeDialog '是' 1 } catch { try { Find-Name $removeDialog 'Yes' 1 } catch { $null } } } 'Yes button did not appear on the remove dialog.' 5
-  $yesBounds = $yes.Current.BoundingRectangle
-  if ($yesBounds.Width -le 0 -or $yesBounds.Height -le 0) { throw 'Yes button has no clickable bounds.' }
-  [FengSyncUiMouse]::SetCursorPos([int]($yesBounds.Left + $yesBounds.Width / 2), [int]($yesBounds.Top + $yesBounds.Height / 2))
-  [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
-  [FengSyncUiMouse]::mouse_event([FengSyncUiMouse]::LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+  # A MessageBox is a native dialog, so its Yes button exposes no InvokePattern and — unlike the WPF windows
+  # this harness drives — cannot be activated through one. It does answer the WM_COMMAND its own button
+  # would send, which needs neither the pointer nor the foreground window.
+  $invokable = $null
+  if ($yes.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokable)) { $invokable.Invoke() }
+  elseif ($script:showOnScreen) { Invoke-LeftClickGesture $yes }
+  else { Answer-NativeDialogYes $removeDialog }
   Wait-Until {
     $liveMain = Get-LiveMain
     try {
@@ -389,9 +694,10 @@ function Delete-Profile-ThroughContextMenu {
 function Set-ProfileConcurrency($main, [int]$value) {
   Click (Find-Id $main 'EditCurrentProfileButton')
   $editor = Find-WindowById 'ProfileEditorWindow'
-  $sections = Find-Id $editor 'ProfileSections'
-  $sections.SetFocus()
-  [Windows.Forms.SendKeys]::SendWait('{END}')
+  Park-WindowOffScreen ([IntPtr]$editor.Current.NativeWindowHandle)
+  # Bring the concurrency field into view by scrolling, not by pressing End: the keyboard route needs a
+  # foreground window, and a scroll is the same state change through UI Automation.
+  Scroll-ToBottom (Find-Id $editor 'ProfileSections')
   Start-Sleep -Milliseconds 200
   $useDefault = Find-Id $editor 'ProfileUseDefaultConcurrency'
   if ((Get-ToggleState $useDefault) -eq [System.Windows.Automation.ToggleState]::On) { Toggle-Ui $useDefault }
@@ -449,6 +755,8 @@ function Wait-MainReadyAfterSync([int]$seconds) {
     Start-Sleep -Milliseconds 150
   } while ([DateTime]::UtcNow -lt $deadline)
   if (-not $mainReady) { throw 'The main window did not become interactive after synchronization.' }
+  # A finished sync can restore or activate the shell; put it back off screen before the next step.
+  Park-AllAppWindows
   $status = Assert-NoUiFailure 'Synchronization'
   Write-HarnessTrace "Application operation boundary reached. UI status: $status"
 }
@@ -456,6 +764,7 @@ $approvedConfirmations = [Collections.Generic.HashSet[string]]::new()
 function Approve-ConfirmationIfPresent {
   $confirm = try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'SyncConfirmationWindow' } } catch { $null }
   if ($confirm) {
+    Park-WindowOffScreen ([IntPtr]$confirm.Current.NativeWindowHandle)
     $id = [string]::Join('-', $confirm.GetRuntimeId())
     if ($approvedConfirmations.Add($id)) {
       Capture-Element $confirm ("sync-{0:D2}-confirmation.png" -f $script:syncScreenshotCount) 'sync-confirmation' $script:activeSyncLabel
@@ -486,6 +795,7 @@ function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds
       if (-not $script:activeSyncProgressCaptured) {
         $progress = try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'ProgressWindow' } } catch { $null }
         if ($progress) {
+          Park-WindowOffScreen ([IntPtr]$progress.Current.NativeWindowHandle)
           try {
             $bytesCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ProgressBytesText')
             $speedCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ProgressSpeedText')
@@ -609,6 +919,9 @@ function Start-App {
     if ($profileList) { return $candidate }
     return $null
   } 'Main window shell did not become ready'
+  # As early as possible: a desktop-free run moves the shell out of the visible desktop before any step can
+  # raise it, so the user never sees the window at all.
+  Initialize-TestWindowPlacement
   return @($p, $main)
 }
 function Stop-App {
@@ -635,6 +948,14 @@ function Capture-Element {
   )
   $bounds = $element.Current.BoundingRectangle
   if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw "Cannot capture '$name' because the UI element has no visible bounds." }
+  if (-not $script:showOnScreen) {
+    # A screen copy is impossible for a window parked off screen — it would capture the desktop there. The
+    # geometry assertions that matter have already run against the same rectangles, so the run records that
+    # the evidence was not taken rather than pretending it was.
+    $screenshotManifest.Add([pscustomobject]@{ File = ''; Category = $category; Context = $context; CapturedUtc = [DateTimeOffset]::UtcNow; Note = "skipped: $name (desktop-free run; pass -ShowOnScreen to capture screenshots)" })
+    Write-HarnessTrace "Screenshot skipped (desktop-free run): $name [$category] $context"
+    return
+  }
   Activate-TestWindow
   $handle = [IntPtr]$element.Current.NativeWindowHandle
   if ($handle -ne [IntPtr]::Zero) { [void][FengSyncUiMouse]::SetForegroundWindow($handle) }
@@ -836,10 +1157,15 @@ try {
       if ($status -notmatch '比较完成') { throw "Comparison did not complete: $status" }
       Capture-Window $process '02-shell.png' 'comparison' 'mixed upload and download comparison'
       $action = Find-Id $main 'ComparisonActionButton'
+      # HelpText is what WPF exposes for a ToolTip, and UI Automation reads it without the pointer ever
+      # being over the control — so the assertion holds in both modes.
       if ($action.Current.HelpText -notmatch '复制新项目到') { throw "Comparison action did not expose its hover explanation: $($action.Current.HelpText)" }
-      $actionBounds = $action.Current.BoundingRectangle
-      [Windows.Forms.Cursor]::Position = [Drawing.Point]::new([int]($actionBounds.Left + ($actionBounds.Width / 2)), [int]($actionBounds.Top + ($actionBounds.Height / 2)))
-      Start-Sleep -Milliseconds 1600
+      if ($script:showOnScreen) {
+        # Only a real hover makes WPF open the tooltip, so the screenshot of it needs the on-screen mode.
+        $actionBounds = $action.Current.BoundingRectangle
+        [Windows.Forms.Cursor]::Position = [Drawing.Point]::new([int]($actionBounds.Left + ($actionBounds.Width / 2)), [int]($actionBounds.Top + ($actionBounds.Height / 2)))
+        Start-Sleep -Milliseconds 1600
+      }
       Capture-Window $process '03-shell-tooltip.png' 'comparison-detail' 'comparison action tooltip'
 
       Click (Find-Id $main 'UploadFilterButton')
@@ -847,9 +1173,10 @@ try {
       Click (Find-Id $main 'ChangeSummaryTotal')
       Wait-Until { $items = (Find-Id $main 'Comparison').FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)); $items.Count -eq 2 } 'Total summary button did not restore all comparison rows.' | Out-Null
       $screenshot = Join-Path $artifacts '02-shell.png'
-      if (-not (Test-Path -LiteralPath $screenshot) -or (Get-Item -LiteralPath $screenshot).Length -le 0) { throw 'Shell screenshot was not saved.' }
+      # A desktop-free run records the screenshot as skipped, so only an on-screen run has a file to check.
+      if ($script:showOnScreen -and (-not (Test-Path -LiteralPath $screenshot) -or (Get-Item -LiteralPath $screenshot).Length -le 0)) { throw 'Shell screenshot was not saved.' }
       if ($main.Current.BoundingRectangle.Width -le 0 -or $main.Current.BoundingRectangle.Height -le 0) { throw 'Main window is not visible after shell rendering.' }
-      Write-HarnessTrace ("Shell rendering verified for mode: {0}; screenshot: {1}" -f $(if ($Scenario -eq 'ui-shell-software') { 'software' } else { 'native-default' }), $screenshot)
+      Write-HarnessTrace ("Shell rendering verified for mode: {0}; screenshot: {1}" -f $(if ($Scenario -eq 'ui-shell-software') { 'software' } else { 'native-default' }), $(if ($script:showOnScreen) { $screenshot } else { 'skipped (desktop-free run)' }))
     }
     'ui-visual-matrix' {
       $sizes = @(
@@ -877,14 +1204,18 @@ try {
       $profiles = Find-Id $main 'ProfileList'; $beforeWidth = $profiles.Current.BoundingRectangle.Width
       # Shrink instead of grow: a restored/default sidebar may already be at its
       # 320 px maximum, making a positive drag a legitimate no-op.
-      $splitter = Find-Id $main 'SidebarSplitter'; Drag-ElementHorizontally $splitter -60
-      # GridSplitter also supports keyboard resizing for accessibility. It is more
-      # deterministic than injected pointer capture on virtual desktops.
-      try {
-        Activate-TestWindow
-        $splitter.SetFocus(); Start-Sleep -Milliseconds 100
-        [Windows.Forms.SendKeys]::SendWait('{LEFT 5}')
-      } catch { }
+      $splitter = Find-Id $main 'SidebarSplitter'
+      if ($script:showOnScreen) {
+        Drag-ElementHorizontally $splitter -60
+        # GridSplitter also supports keyboard resizing for accessibility.
+        try { Activate-TestWindow; $splitter.SetFocus(); Start-Sleep -Milliseconds 100; Send-KeysToWindow $splitter '{LEFT 5}' } catch { }
+      } else {
+        # A posted drag cannot move a GridSplitter: WPF hit-tests mouse input against the real pointer, which
+        # a desktop-free run never places over the window. The arrow keys the splitter also accepts are
+        # delivered as posted keystrokes instead — six presses at the app's 12 px step is the same 72 px the
+        # drag asked for.
+        Send-KeysToWindow $splitter '{LEFT 6}'
+      }
       try { Wait-Until { (Find-Id (Get-LiveMain) 'ProfileList').Current.BoundingRectangle.Width -lt ($beforeWidth - 25) } 'Sidebar width did not change after dragging the splitter.' 15 | Out-Null }
       catch { $actual = (Find-Id (Get-LiveMain) 'ProfileList').Current.BoundingRectangle.Width; throw "Sidebar width did not change after dragging the splitter. before=$beforeWidth after=$actual splitter=$($splitter.Current.BoundingRectangle.Width)" }
       $changedWidth = (Find-Id (Get-LiveMain) 'ProfileList').Current.BoundingRectangle.Width

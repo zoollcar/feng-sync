@@ -1,7 +1,11 @@
 [CmdletBinding()]
 param(
   [ValidateSet('Debug', 'Release')][string]$Configuration = 'Debug',
-  [ValidateSet('Core', 'UiOffline', 'Online')][string]$Level = 'UiOffline'
+  [ValidateSet('Core', 'UiOffline', 'Online')][string]$Level = 'UiOffline',
+  # Off by default: the WPF acceptance scenarios run with their windows parked outside the visible
+  # desktop and drive the UI through UI Automation, so a test run never covers the user's screen and
+  # never moves their mouse. Pass this switch to watch the scenarios run in the foreground instead.
+  [switch]$ShowOnScreen
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,8 +80,14 @@ try {
   if ($filter) { $arguments += @('--filter', $filter) }
   $uiName = if ($Level -eq 'UiOffline') { 'WPF UI acceptance tests (online services excluded)' } else { 'WPF UI acceptance tests (including online services)' }
   if ($Level -eq 'Online') { $env:FENGSYNC_TEST_ONLINE_SERVICES = '1' }
+  # The test host reads this to decide whether the scenario windows may be raised on screen.
+  if ($ShowOnScreen) { $env:FENGSYNC_UI_SHOW_ON_SCREEN = '1' }
+  Write-Host ("UI scenarios will run {0}." -f $(if ($ShowOnScreen) { 'on screen, with real mouse input' } else { 'desktop-free: windows parked off screen, input delivered through UI Automation' })) -ForegroundColor DarkGray
   try { Invoke-Stage $uiName { & dotnet @arguments } }
-  finally { Remove-Item Env:FENGSYNC_TEST_ONLINE_SERVICES -ErrorAction SilentlyContinue }
+  finally {
+    Remove-Item Env:FENGSYNC_TEST_ONLINE_SERVICES -ErrorAction SilentlyContinue
+    Remove-Item Env:FENGSYNC_UI_SHOW_ON_SCREEN -ErrorAction SilentlyContinue
+  }
 }
 catch {
   Write-Error $_

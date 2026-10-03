@@ -12,6 +12,13 @@ public sealed class UiAcceptanceTests
     private readonly ITestOutputHelper _output;
     public UiAcceptanceTests(ITestOutputHelper output) => _output = output;
     private static bool OnlineServicesEnabled => string.Equals(Environment.GetEnvironmentVariable("FENGSYNC_TEST_ONLINE_SERVICES"), "1", StringComparison.Ordinal);
+    /// <summary>
+    /// Off by default. A scenario normally parks its windows outside the visible desktop and delivers
+    /// input through UI Automation, so running the suite never covers the user's screen, never moves
+    /// their cursor and never steals their foreground window. Set <c>FENGSYNC_UI_SHOW_ON_SCREEN=1</c>
+    /// (or pass <c>-ShowOnScreen</c> to <c>scripts/Test-All.ps1</c>) to watch a scenario run instead.
+    /// </summary>
+    private static bool ShowOnScreen => string.Equals(Environment.GetEnvironmentVariable("FENGSYNC_UI_SHOW_ON_SCREEN"), "1", StringComparison.Ordinal);
     [Fact]
     [Trait("Category", "UI")]
     public Task Local_folders_support_two_way_sync_and_manual_direction_override() => RunAsync("local");
@@ -146,6 +153,7 @@ public sealed class UiAcceptanceTests
         start.ArgumentList.Add("-Scenario"); start.ArgumentList.Add(scenario);
         start.ArgumentList.Add("-AppPath"); start.ArgumentList.Add(app);
         start.ArgumentList.Add("-Workspace"); start.ArgumentList.Add(root);
+        if (ShowOnScreen) start.ArgumentList.Add("-ShowOnScreen");
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Unable to start PowerShell UI test host.");
         var timer = Stopwatch.StartNew();
         var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();

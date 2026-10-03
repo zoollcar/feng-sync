@@ -113,6 +113,18 @@ pwsh -File .\scripts\Test-All.ps1 -Level Online
 
 也可以单独运行 `dotnet test .\tests\FengSync.Tests` 或 `dotnet test .\tests\FengSync.UiTests`。线上服务 UI 用 `FENGSYNC_TEST_ONLINE_SERVICES=1` 启用；`-Level Online` 会自动设置并在结束后清除该环境变量。
 
+UI 测试默认**不占用你的桌面和鼠标**：每个窗口都被移到可见桌面之外，测试不会把窗口提到前台，也不会移动鼠标——所有交互都通过 UI Automation 模式或直接投递的窗口消息完成（少数只有真实输入才能触发的操作改用等价的键盘或 UI Automation 路径）。因此默认运行期间你可以照常使用电脑。想看测试实际跑起来，加 `-ShowOnScreen`：
+
+```powershell
+# 默认：窗口在屏幕外，不抢鼠标，不抢前台
+pwsh -File .\scripts\Test-All.ps1 -Level UiOffline
+
+# 需要观察时：窗口正常显示在前台，使用真实鼠标输入
+pwsh -File .\scripts\Test-All.ps1 -Level UiOffline -ShowOnScreen
+```
+
+屏幕截图只在 `-ShowOnScreen` 下产生；默认运行会在清单里记录“已跳过（无桌面运行）”。
+
 ## 项目结构
 
 ```text
