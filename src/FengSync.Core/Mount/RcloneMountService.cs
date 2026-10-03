@@ -85,48 +85,35 @@ public sealed class RcloneMountService
         return target;
     }
 
-    public async Task<Guid> MountAsync(MountTarget target, CancellationToken ct = default)
+    public async Task MountAsync(MountTarget target, CancellationToken ct = default)
     {
         await ValidateAsync(target, ct).ConfigureAwait(false);
         var mountTypes = await _rc.CallAsync("mount/types", new { }, ct).ConfigureAwait(false);
         var mountType = SelectMountImplementation(mountTypes)
             ?? throw new InvalidOperationException("当前 rclone 运行时没有可用的 mount 实现。");
-        var sessionId = Guid.NewGuid();
-        var cacheDirectory = MountOptions.CacheDirectoryFor(sessionId);
-        Directory.CreateDirectory(cacheDirectory);
-        JsonElement response;
-        try
+        // No _config here: the VFS cache root belongs to the daemon (see RcloneDaemon.BuildArguments), and a
+        // per-call CacheDir override is silently ignored by rclone.
+        var response = await _rc.CallAsync("mount/mount", new
         {
-            response = await _rc.CallAsync("mount/mount", new
-            {
-                fs = target.RemoteName + ":" + target.RootPath.Trim('/'),
-                mountPoint = target.MountPoint,
-                mountType,
-                mountOpt = new { },
-                vfsOpt = MountOptions.CreateVfsOptions(),
-                _config = MountOptions.CreateLocalConfiguration(cacheDirectory)
-            }, ct).ConfigureAwait(false);
-        }
-        catch
-        {
-            TryDeleteCache(cacheDirectory);
-            throw;
-        }
+            fs = target.RemoteName + ":" + target.RootPath.Trim('/'),
+            mountPoint = target.MountPoint,
+            mountType,
+            mountOpt = new { },
+            vfsOpt = MountOptions.CreateVfsOptions()
+        }, ct).ConfigureAwait(false);
 
         var actualPoint = response.TryGetProperty("mountPoint", out var pointValue)
             ? pointValue.GetString() ?? target.MountPoint
             : target.MountPoint;
         actualPoint = NormalizeMountPoint(actualPoint);
-        _managed[actualPoint] = new(target.RemoteName, target.Provider, sessionId, DateTimeOffset.UtcNow);
+        _managed[actualPoint] = new(target.RemoteName, target.Provider, DateTimeOffset.UtcNow);
         if (!await WaitForManagedMountAsync(actualPoint, shouldExist: true, ct).ConfigureAwait(false))
         {
             _managed.Remove(actualPoint);
             try { await _rc.CallAsync("mount/unmount", new { mountPoint = actualPoint }, CancellationToken.None).ConfigureAwait(false); }
             catch { /* preserve the original structured failure */ }
-            TryDeleteCache(cacheDirectory);
             throw new InvalidOperationException($"rclone 已接受挂载请求，但挂载点“{actualPoint}”未在预期时间内就绪。");
         }
-        return sessionId;
     }
 
     public async Task<MountStopResult> UnmountAsync(MountInfo info, CancellationToken ct = default)
@@ -139,8 +126,9 @@ public sealed class RcloneMountService
             await _rc.CallAsync("mount/unmount", new { mountPoint = info.MountPoint }, ct).ConfigureAwait(false);
             if (!await WaitForManagedMountAsync(info.MountPoint, shouldExist: false, ct).ConfigureAwait(false))
                 return new([new MountStopFailure(info.MountPoint, -1, "rclone 已接受取消请求，但挂载点仍然存在。")]);
-            if (_managed.Remove(NormalizeMountPoint(info.MountPoint), out var metadata))
-                TryDeleteCache(MountOptions.CacheDirectoryFor(metadata.SessionId));
+            // The VFS cache is daemon-wide, so unmounting one mount must not clear it; a later mount of the
+            // same remote would otherwise re-download everything.
+            _managed.Remove(NormalizeMountPoint(info.MountPoint));
             return new([]);
         }
         catch (Exception ex)
@@ -167,8 +155,7 @@ public sealed class RcloneMountService
                     failures.Add(new MountStopFailure(point, -1, "rclone 已接受取消请求，但挂载点仍然存在。"));
                     continue;
                 }
-                if (_managed.Remove(point, out var metadata))
-                    TryDeleteCache(MountOptions.CacheDirectoryFor(metadata.SessionId));
+                _managed.Remove(point);
             }
             catch (Exception ex)
             {
@@ -274,12 +261,6 @@ public sealed class RcloneMountService
         catch { return false; }
     }
 
-    private static void TryDeleteCache(string path)
-    {
-        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); }
-        catch { /* cache cleanup is best effort */ }
-    }
-
     private static string DescribeFailure(Exception exception, string context)
     {
         if (exception is not RcloneException rclone) return exception.Message;
@@ -287,6 +268,6 @@ public sealed class RcloneMountService
         return $"{rclone.Failure.UserMessage} {rclone.Failure.SuggestedAction}（诊断 ID：{rclone.Failure.CorrelationId}）";
     }
 
-    private sealed record ManagedMountMetadata(string RemoteName, string Provider, Guid SessionId, DateTimeOffset StartedUtc);
+    private sealed record ManagedMountMetadata(string RemoteName, string Provider, DateTimeOffset StartedUtc);
     private sealed record RcMount(string MountPoint, string Fs);
 }

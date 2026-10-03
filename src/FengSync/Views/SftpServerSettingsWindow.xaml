@@ -85,7 +85,6 @@
             </StackPanel>
             <TextBlock x:Name="FingerprintText"
                        AutomationProperties.AutomationId="SftpHostFingerprint"
-                       AutomationProperties.Name="SFTP 主机指纹"
                        TextWrapping="Wrap"
                        Style="{StaticResource CaptionTextStyle}"
                        Margin="0,12,0,0" />

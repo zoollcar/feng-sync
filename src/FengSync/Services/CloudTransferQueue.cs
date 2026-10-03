@@ -45,6 +45,7 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
     private long _completedBytes;
     private double _bytesPerSecond;
     private string? _error;
+    private string? _errorDetail;
     private int _attempt;
 
     public CloudTransferTask(CloudTransferDirection direction, string remoteUri, string remotePath, string localPath, long totalBytes)
@@ -85,6 +86,18 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
         get => _error;
         internal set { if (!Set(ref _error, value)) return; Raise(nameof(StatusText)); }
     }
+
+    /// <summary>
+    /// The full diagnostic behind <see cref="Error"/>. The one-line message is what the row shows; this is what
+    /// "copy details" hands to the user, and it survives a restart so a failure found later is still diagnosable.
+    /// </summary>
+    public string? ErrorDetail
+    {
+        get => _errorDetail;
+        internal set { if (!Set(ref _errorDetail, value)) return; Raise(nameof(HasErrorDetail)); }
+    }
+
+    public bool HasErrorDetail => !string.IsNullOrWhiteSpace(_errorDetail);
 
     /// <summary>Which attempt is in flight, counting from 1, so a retry is visible instead of silent.</summary>
     public int Attempt
@@ -326,7 +339,8 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             {
                 Id = record.Id,
                 State = record.State == CloudTransferState.Paused ? CloudTransferState.Paused : CloudTransferState.Cancelled,
-                Error = record.Error
+                Error = record.Error,
+                ErrorDetail = record.ErrorDetail
             };
             Track(restored);
             Tasks.Add(restored);
@@ -432,6 +446,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     {
         task.State = CloudTransferState.Pending;
         task.Error = null;
+        task.ErrorDetail = null;
         _pauseRequests.Remove(task.Id);
         lock (_batchGate) _batchIds.Add(task.Id);
         _ = RunAsync(task);
@@ -469,6 +484,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             task.CompletedBytes = 0;
             task.BytesPerSecond = 0;
             task.Error = null;
+        task.ErrorDetail = null;
             task.Attempt = 0;
             Persist(task);
             await AcquireSlotAsync(ct);
@@ -529,6 +545,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
                 catch (Exception ex) when (attempt < MaxRetries && IsRetryable(ex))
                 {
                     task.Error = RcloneUiError.Describe(ex, "cloud-transfer");
+                    task.ErrorDetail = RcloneUiError.DescribeDetail(ex, "cloud-transfer");
                     await Task.Delay(RetryDelay(attempt), ct);
                 }
                 catch (Exception ex)
@@ -536,6 +553,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
                     task.State = CloudTransferState.Failed;
                     task.BytesPerSecond = 0;
                     task.Error = RcloneUiError.Describe(ex, "cloud-transfer");
+                    task.ErrorDetail = RcloneUiError.DescribeDetail(ex, "cloud-transfer");
                     Persist(task);
                     break;
                 }
@@ -555,6 +573,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             task.State = CloudTransferState.Failed;
             task.BytesPerSecond = 0;
             task.Error = RcloneUiError.Describe(ex, "cloud-transfer");
+            task.ErrorDetail = RcloneUiError.DescribeDetail(ex, "cloud-transfer");
             Persist(task);
         }
         finally
@@ -592,6 +611,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         task.CompletedBytes = 0;
         task.BytesPerSecond = 0;
         task.Error = null;
+        task.ErrorDetail = null;
         if (target is null || target is LocalEndpoint) return;
         try { await EndpointTransfer.DiscardStagingAsync(target, stagingPath); }
         catch { /* a missing staging object is the state a retry wants anyway */ }
@@ -698,7 +718,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
 
     private void Persist(CloudTransferTask task)
     {
-        var record = new CloudTransferRecord(task.Id, task.Direction, task.RemoteUri, task.RemotePath, task.LocalPath, task.TotalBytes, task.State, task.Error);
+        var record = new CloudTransferRecord(task.Id, task.Direction, task.RemoteUri, task.RemotePath, task.LocalPath, task.TotalBytes, task.State, task.Error, task.ErrorDetail);
         _ = SaveIgnoringFailureAsync(record);
     }
 
@@ -732,7 +752,9 @@ public sealed record CloudTransferRecord(
     string LocalPath,
     long TotalBytes,
     CloudTransferState State,
-    string? Error);
+    string? Error,
+    // Optional so journals written before the field existed still deserialize.
+    string? ErrorDetail = null);
 
 /// <summary>
 /// Journal for cloud transfers. It mirrors <see cref="TaskJournalStore"/>'s contract — one JSON file per

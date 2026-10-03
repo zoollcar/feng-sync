@@ -1,4 +1,6 @@
+# Assistant tool state: local memory, plans and skills. Machine-specific and never shared.
 .claude
+.workbuddy-ai/
 
 # Build output and local IDE state
 [Bb]in/

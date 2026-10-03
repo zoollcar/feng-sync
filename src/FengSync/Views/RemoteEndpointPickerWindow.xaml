@@ -24,12 +24,12 @@
                     <Button x:Name="BrowseRemoteButton" DockPanel.Dock="Right" AutomationProperties.AutomationId="PickerBrowseCloudRemote" AutomationProperties.Name="浏览远程路径" Content="浏览…" Click="BrowseRemote_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
                     <TextBox x:Name="RemotePathBox" AutomationProperties.AutomationId="PickerRemotePath" AutomationProperties.Name="远程路径" AutomationProperties.LabeledBy="{Binding ElementName=PickerRemotePathLabel}" TextChanged="RemotePathBox_TextChanged" />
                 </DockPanel>
-                <TextBlock x:Name="ResolvedUriText" AutomationProperties.AutomationId="PickerResolvedUri" AutomationProperties.Name="解析后的远程地址" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,4" />
+                <TextBlock x:Name="ResolvedUriText" AutomationProperties.AutomationId="PickerResolvedUri" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,4" />
             </StackPanel>
         </GroupBox>
 
         <DockPanel Grid.Row="2" Margin="0,14,0,0">
-            <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="PickerStatus" AutomationProperties.Name="添加云端端点状态" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="PickerStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" VerticalAlignment="Center" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                 <Button x:Name="AddButton" AutomationProperties.AutomationId="PickerAddButton" AutomationProperties.Name="添加所选云端端点" Content="添加" IsDefault="True" Click="Add_Click" IsEnabled="False" Style="{StaticResource PrimaryButtonStyle}" />
                 <Button AutomationProperties.Name="取消添加云端端点" Content="取消" IsCancel="True" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />

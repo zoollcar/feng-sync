@@ -77,12 +77,18 @@ public partial class MountPickerDialog : Window
         if (_mode == MountPickerMode.DriveLetter)
         {
             DriveHint.Visibility = Visibility.Visible;
-            if (DriveLetterList.SelectedItem is MountPointInspector.DriveLetterOption option)
+            if (DriveLetterList.SelectedItem is not MountPointInspector.DriveLetterOption option)
             {
-                if (option.IsAvailable) { StatusText.Text = $"将挂载到盘符 {option.Letter}。"; OkButton.IsEnabled = true; }
-                else { StatusText.Text = $"盘符 {option.Letter} 已被占用，请选择其他盘符。"; OkButton.IsEnabled = false; }
+                StatusText.Text = "请选择一个盘符。";
+                OkButton.IsEnabled = false;
+                return;
             }
-            else { StatusText.Text = "请选择一个盘符。"; OkButton.IsEnabled = false; }
+            // Deliberately the same rule the directory branch uses, rather than reading IsAvailable alone:
+            // a letter already claimed by an existing mount has to be refused while the user is choosing,
+            // not after they press OK.
+            var validation = MountPointInspector.Validate(option.Letter, MountTargetKind.DriveLetter, _occupiedMountPoints);
+            StatusText.Text = validation.IsValid ? $"将挂载到盘符 {option.Letter}。" : validation.Error!;
+            OkButton.IsEnabled = validation.IsValid;
         }
         else
         {
@@ -99,7 +105,9 @@ public partial class MountPickerDialog : Window
     {
         if (_mode == MountPickerMode.DriveLetter)
         {
-            if (DriveLetterList.SelectedItem is not MountPointInspector.DriveLetterOption option || !option.IsAvailable) return;
+            if (DriveLetterList.SelectedItem is not MountPointInspector.DriveLetterOption option) return;
+            var validation = MountPointInspector.Validate(option.Letter, MountTargetKind.DriveLetter, _occupiedMountPoints);
+            if (!validation.IsValid) { StatusText.Text = validation.Error; return; }
             SelectedTarget = new MountTarget(_remoteName, _provider, option.Letter, MountTargetKind.DriveLetter, _rootPath);
         }
         else

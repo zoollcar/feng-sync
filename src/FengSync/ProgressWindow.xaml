@@ -63,7 +63,7 @@
                            Margin="0,8,0,0"
                            TextTrimming="CharacterEllipsis"
                            Style="{StaticResource CaptionTextStyle}"
-                           AutomationProperties.Name="当前正在处理的文件" />
+                           AutomationProperties.AutomationId="ProgressCurrentFile" />
             </StackPanel>
 
             <Grid Grid.Row="2" Margin="0,20,0,0">

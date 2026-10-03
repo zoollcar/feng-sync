@@ -55,7 +55,7 @@
                         <Button x:Name="MountSelectedEndpointButton" AutomationProperties.Name="挂载所选云盘端点" Content="挂载选中端点…" Click="MountSelectedEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
                         <Button x:Name="UnmountMountButton" AutomationProperties.Name="取消所选挂载" Content="取消挂载" Click="UnmountMount_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
                     </StackPanel>
-                    <TextBlock x:Name="MountStatus" AutomationProperties.Name="挂载状态" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                    <TextBlock x:Name="MountStatus" AutomationProperties.AutomationId="CloudMountStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
                 </StackPanel>
             </GroupBox>
         </Grid>
@@ -128,9 +128,9 @@
             </Border>
 
             <StackPanel Grid.Row="6" Margin="0,8,0,0">
-                <TextBlock x:Name="PathText" AutomationProperties.AutomationId="CloudCurrentPath" AutomationProperties.Name="当前远程路径" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                <TextBlock x:Name="PathText" AutomationProperties.AutomationId="CloudCurrentPath" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
                 <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" AutomationProperties.Name="文件传输进度" Margin="0,6,0,0" />
-                <TextBlock x:Name="StatusText" AutomationProperties.Name="文件传输状态" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,5,0,0" />
+                <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="CloudFileStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,5,0,0" />
             </StackPanel>
         </Grid>
     </Grid>

@@ -425,6 +425,74 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
     }
 
     [Fact]
+    public async Task A_restored_failure_keeps_its_full_diagnostic_not_just_the_one_line_message()
+    {
+        var root = NewDirectory();
+        _roots.Add(root);
+        var detail = string.Join(Environment.NewLine, "上下文：cloud-transfer", "操作：operations/copyfile", "诊断 ID：abc123");
+        {
+            var journal = new CloudTransferJournalStore(root);
+            await journal.SaveAsync(new CloudTransferRecord(Guid.NewGuid(), CloudTransferDirection.Download,
+                "s3://archive", "docs/big.bin", @"C:\tmp\big.bin", 4096, CloudTransferState.Failed, "网络中断", detail));
+
+            var queue = new CloudTransferQueue(journal);
+            Assert.Equal(1, await queue.LoadResumableAsync());
+
+            // The short message is what the row shows; the detail is what a bug report needs, and a failure
+            // noticed after a restart must still be diagnosable.
+            var restored = Assert.Single(queue.Tasks);
+            Assert.Equal("网络中断", restored.Error);
+            Assert.Equal(detail, restored.ErrorDetail);
+            Assert.True(restored.HasErrorDetail);
+        }
+    }
+
+    [Fact]
+    public async Task A_journal_written_before_the_detail_field_existed_still_loads()
+    {
+        var root = NewDirectory();
+        _roots.Add(root);
+        {
+            var journal = new CloudTransferJournalStore(root);
+            // Shape of a journal file produced by the previous schema: no errorDetail property at all.
+            var id = Guid.NewGuid();
+            await File.WriteAllTextAsync(Path.Combine(root, id + ".json"),
+                $$"""{"Id":"{{id}}","Direction":1,"RemoteUri":"s3://archive","RemotePath":"docs/a.bin","LocalPath":"C:\\tmp\\a.bin","TotalBytes":10,"State":5,"Error":"failed"}""");
+
+            var queue = new CloudTransferQueue(journal);
+            Assert.Equal(1, await queue.LoadResumableAsync());
+
+            var restored = Assert.Single(queue.Tasks);
+            Assert.Equal("failed", restored.Error);
+            Assert.Null(restored.ErrorDetail);
+            Assert.False(restored.HasErrorDetail);
+        }
+    }
+
+    [Fact]
+    public void The_copyable_diagnostic_carries_what_a_log_search_needs()
+    {
+        var failure = new RcloneFailure(RcloneFailureCategory.Authentication, false, "operations/list", 401, null,
+            "授权已过期", "请重新登录", "invalid_grant", """{"remote":"root"}""", "diag-77");
+        var text = RcloneUiError.DescribeDetail(new RcloneException(failure), "cloud-transfer");
+
+        // Without the correlation id and the operation the log line cannot be found again.
+        Assert.Contains("diag-77", text);
+        Assert.Contains("operations/list", text);
+        Assert.Contains("Authentication", text);
+        Assert.Contains("cloud-transfer", text);
+        Assert.Contains("401", text);
+    }
+
+    [Fact]
+    public void The_copyable_diagnostic_never_echoes_a_credential()
+    {
+        var text = RcloneUiError.DescribeDetail(new InvalidOperationException("connect failed for password=hunter2"));
+
+        Assert.DoesNotContain("hunter2", text);
+    }
+
+    [Fact]
     public async Task Restoring_the_same_journal_twice_does_not_duplicate_a_row()
     {
         var root = NewDirectory();

@@ -430,11 +430,8 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
             }
             var size = x.TryGetProperty("Size", out var s) ? s.GetInt64() : 0;
             var mod = x.TryGetProperty("ModTime", out var m) && DateTimeOffset.TryParse(m.GetString(), out var parsed) ? parsed : DateTimeOffset.MinValue;
-            string? hash = null;
-            if (x.TryGetProperty("Hashes", out var hashes))
-                foreach (var candidate in new[] { "md5", "sha1", "sha256" }) if (hashes.TryGetProperty(candidate, out var h)) { hash = h.GetString(); break; }
             SyncRunMetricsHub.Current.AddEntriesEnumerated(1);
-            yield return new(path, EntryKind.File, new(size, mod, hash));
+            yield return new(path, EntryKind.File, new(size, mod, ReadPreferredHash(x)));
         }
     }
     public async Task CopyToAsync(string relativePath, IEndpoint target, string temporaryPath, CancellationToken cancellationToken = default)
@@ -509,6 +506,19 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
             : path;
     }
 
+    /// <summary>
+    /// Picks the preferred checksum out of an RC list entry's <c>Hashes</c> object. Both the scan and the
+    /// single-entry stat must agree on the preference order, otherwise a file's fingerprint would change
+    /// depending on which one looked at it.
+    /// </summary>
+    private static string? ReadPreferredHash(JsonElement entry)
+    {
+        if (!entry.TryGetProperty("Hashes", out var hashes)) return null;
+        foreach (var candidate in new[] { "md5", "sha1", "sha256" })
+            if (hashes.TryGetProperty(candidate, out var hash)) return hash.GetString();
+        return null;
+    }
+
     public async Task<EntrySnapshot?> StatAsync(string relativePath, CancellationToken cancellationToken = default)
     {
         SyncRunMetricsHub.Current.IncrementStatCall();
@@ -527,7 +537,7 @@ public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profil
                     if (directory) return new(relativePath, EntryKind.Directory, null);
                     var size = x.TryGetProperty("Size", out var s) ? s.GetInt64() : 0;
                     var mod = x.TryGetProperty("ModTime", out var m) && DateTimeOffset.TryParse(m.GetString(), out var parsed) ? parsed : DateTimeOffset.MinValue;
-                    return new(relativePath, EntryKind.File, new(size, mod, null));
+                    return new(relativePath, EntryKind.File, new(size, mod, ReadPreferredHash(x)));
                 }
             }
             return null;

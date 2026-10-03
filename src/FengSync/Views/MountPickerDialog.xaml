@@ -63,7 +63,6 @@
         <DockPanel Grid.Row="2" Margin="0,14,0,0">
             <TextBlock x:Name="StatusText"
                        AutomationProperties.AutomationId="MountPickerStatus"
-                       AutomationProperties.Name="挂载位置状态"
                        Style="{StaticResource CaptionTextStyle}"
                        TextWrapping="Wrap"
                        VerticalAlignment="Center" />

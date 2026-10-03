@@ -32,4 +32,43 @@ public static class RcloneUiError
                 return RcloneFailureClassifier.RedactText(exception.Message);
         }
     }
+
+    /// <summary>
+    /// The copyable diagnostic behind <see cref="Describe"/>. It is kept separate because the short message is
+    /// what a status column shows, while this is what a user pastes into a bug report: it carries the operation,
+    /// category and correlation id that make the matching log line findable. Every field is already sanitized by
+    /// the classifier, so nothing here can leak a credential.
+    /// </summary>
+    public static string DescribeDetail(Exception exception, string? context = null)
+    {
+        var heading = $"上下文：{context ?? "未指定"}";
+        switch (exception)
+        {
+            case RcloneException rclone:
+                return string.Join(Environment.NewLine,
+                    heading,
+                    $"异常类型：{rclone.GetType().Name}",
+                    $"操作：{rclone.Failure.Operation}",
+                    $"类别：{rclone.Failure.Category}（可重试：{(rclone.Failure.Retryable ? "是" : "否")}）",
+                    $"HTTP 状态：{Describe(rclone.Failure.HttpStatus)}　RC 状态：{Describe(rclone.Failure.RcStatus)}",
+                    $"诊断 ID：{rclone.Failure.CorrelationId}",
+                    $"技术信息：{rclone.Failure.TechnicalMessage}",
+                    $"请求参数：{rclone.Failure.SanitizedInput}");
+            case SftpServerOperationException sftp:
+                return string.Join(Environment.NewLine,
+                    heading,
+                    $"异常类型：{sftp.GetType().Name}",
+                    $"操作：{sftp.Operation}",
+                    $"技术代码：{sftp.TechnicalCode}",
+                    $"诊断 ID：{sftp.CorrelationId}",
+                    $"信息：{sftp.Message}");
+            default:
+                return string.Join(Environment.NewLine,
+                    heading,
+                    $"异常类型：{exception.GetType().Name}",
+                    $"信息：{RcloneFailureClassifier.RedactText(exception.Message)}");
+        }
+    }
+
+    private static string Describe(int? value) => value?.ToString() ?? "无";
 }

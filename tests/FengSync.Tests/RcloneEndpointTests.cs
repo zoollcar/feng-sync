@@ -25,6 +25,43 @@ public sealed class RcloneEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Single_entry_stat_reports_the_same_fingerprint_as_the_scan()
+    {
+        // The stat and the scan read the same RC listing, so a file must not appear to have a checksum
+        // when scanned and no checksum when stat'ed: the planner compares the two.
+        _handler.ListJson = "{\"list\":[{\"Path\":\"folder/a.txt\",\"Name\":\"a.txt\",\"IsDir\":false,\"Size\":4,\"ModTime\":\"2026-01-01T00:00:00Z\",\"Hashes\":{\"md5\":\"ABCD\"}}]}";
+        var endpoint = Remote(EndpointType.Sftp);
+
+        var stat = await endpoint.StatAsync("folder/a.txt");
+        var scanned = Assert.Single(await endpoint.ScanAsync(), x => x.Path == "folder/a.txt");
+
+        Assert.Equal("ABCD", stat!.Fingerprint!.Hash);
+        Assert.Equal(scanned.Fingerprint!.Hash, stat.Fingerprint.Hash);
+    }
+
+    [Fact]
+    public async Task Single_entry_stat_prefers_md5_then_sha1_then_sha256()
+    {
+        _handler.ListJson = "{\"list\":[{\"Path\":\"root/a.txt\",\"Name\":\"a.txt\",\"IsDir\":false,\"Size\":4,\"Hashes\":{\"sha256\":\"S256\",\"sha1\":\"S1\",\"md5\":\"M5\"}}]}";
+
+        var stat = await Remote(EndpointType.Sftp).StatAsync("a.txt");
+
+        Assert.Equal("M5", stat!.Fingerprint!.Hash);
+    }
+
+    [Fact]
+    public async Task Single_entry_stat_reports_no_checksum_when_the_backend_has_none()
+    {
+        // SFTP without an on-the-fly hash and S3 without ETag-style hashes both land here; a fabricated
+        // checksum would make the planner treat two different files as identical.
+        _handler.ListJson = "{\"list\":[{\"Path\":\"root/a.txt\",\"Name\":\"a.txt\",\"IsDir\":false,\"Size\":4}]}";
+
+        var stat = await Remote(EndpointType.Sftp).StatAsync("a.txt");
+
+        Assert.Null(stat!.Fingerprint!.Hash);
+    }
+
+    [Fact]
     public async Task Remote_scan_normalizes_a_listing_that_includes_its_configured_root()
     {
         _handler.ListJson = "{\"list\":[{\"Path\":\"root/from-drive.txt\",\"IsDir\":false,\"Size\":5,\"ModTime\":\"2026-01-01T00:00:00Z\"}]}";

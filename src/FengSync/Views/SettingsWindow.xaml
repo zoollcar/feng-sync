@@ -50,7 +50,7 @@
       <ColumnDefinition Width="*"/>
       <ColumnDefinition Width="Auto"/>
      </Grid.ColumnDefinitions>
-     <TextBlock x:Name="DirtyLabel" AutomationProperties.AutomationId="SettingsDirtyLabel" AutomationProperties.Name="设置更改状态" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center"/>
+     <TextBlock x:Name="DirtyLabel" AutomationProperties.AutomationId="SettingsDirtyLabel" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center"/>
      <StackPanel Grid.Column="1" Orientation="Horizontal">
       <Button Content="恢复本页默认值" AutomationProperties.AutomationId="SettingsResetPage" AutomationProperties.Name="恢复当前设置页的默认值" Click="ResetPage_Click" Style="{StaticResource TertiaryButtonStyle}" Margin="0,0,16,0"/>
       <Button Content="取消" AutomationProperties.AutomationId="SettingsCancel" AutomationProperties.Name="取消设置更改" IsCancel="True" Style="{StaticResource TertiaryButtonStyle}" Margin="0,0,8,0"/>

@@ -30,18 +30,32 @@ public sealed class RcloneDaemon : IAsyncDisposable
     public RcloneProxyConfiguration ProxyConfiguration { get; }
     public RcloneRcClient Client => new(_http, BaseUri, _user, _password);
 
+    /// <summary>
+    /// The private daemon's argument list. Built as a pure function so the cache directory can be asserted:
+    /// rclone resolves its cache root once at process start, which means a per-call override on
+    /// <c>mount/mount</c> is silently ignored and this flag is the only way to keep the VFS cache in app data.
+    /// </summary>
+    public static IReadOnlyList<string> BuildArguments(string configPath, int port, string cacheDirectory) =>
+    [
+        "rcd",
+        "--use-json-log",
+        "--rc-addr", $"127.0.0.1:{port}",
+        "--config", configPath,
+        "--cache-dir", cacheDirectory,
+        // Serve objects over the RC port as well as control them. This is the only byte-offset read
+        // rclone exposes (GET with a Range header -> 206), which is what lets an interrupted download
+        // continue instead of restarting. It is safe here because the port is loopback-only and every
+        // request carries the per-run credentials; rclone refuses to serve without them.
+        "--rc-serve"
+    ];
+
     public static async Task<RcloneDaemon> StartAsync(string executable, string configPath, CancellationToken ct = default,
         IRcloneLogSink? logSink = null, RcloneProxyOptions? proxyOptions = null)
     {
         var port = ReservePort(); var user = "fengsync-" + Guid.NewGuid().ToString("N"); var password = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
         var proxyConfiguration = RcloneEnvironment.Prepare(start, proxyOptions);
-        start.ArgumentList.Add("rcd"); start.ArgumentList.Add("--use-json-log"); start.ArgumentList.Add("--rc-addr"); start.ArgumentList.Add($"127.0.0.1:{port}"); start.ArgumentList.Add("--config"); start.ArgumentList.Add(configPath);
-        // Serve objects over the RC port as well as control them. This is the only byte-offset read
-        // rclone exposes (GET with a Range header -> 206), which is what lets an interrupted download
-        // continue instead of restarting. It is safe here because the port is loopback-only and every
-        // request carries the per-run credentials below; rclone refuses to serve without them.
-        start.ArgumentList.Add("--rc-serve");
+        foreach (var argument in BuildArguments(configPath, port, AppDataPaths.MountCache)) start.ArgumentList.Add(argument);
         start.Environment["RCLONE_RC_USER"] = user; start.Environment["RCLONE_RC_PASS"] = password;
         var process = Process.Start(start) ?? throw new InvalidOperationException("无法启动 rclone。");
         // Cloud backends may need a token refresh and an initial page walk.  Keep this bounded, but do not race a healthy Drive request.
