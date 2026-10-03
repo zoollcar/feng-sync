@@ -595,6 +595,47 @@ public sealed class UiFeatureBehaviorTests
         return row;
     }
 
+    [Fact]
+    public void An_import_draft_prefills_the_service_the_name_and_the_root()
+    {
+        RunSta(() =>
+        {
+            EnsureApplicationResources();
+            var draft = new CloudEndpointDraft(EndpointType.Sftp, "nas", "SFTP", "", "team/docs",
+                "工作", ["客户"], ["host", "user"]);
+
+            var window = new CloudEndpointEditorWindow(draft);
+
+            // The non-secret values are on screen and the name stays editable — an import may have renamed the
+            // endpoint to avoid a collision — while the form is already past the service step.
+            Assert.Equal("nas", window.NameInput?.Text);
+            Assert.Equal("team/docs", window.RootInput?.Text);
+            Assert.False(window.NameInput?.IsReadOnly ?? true);
+            Assert.Equal(Visibility.Visible, window.SaveButton.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.NextButton.Visibility);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public void An_import_draft_for_s3_prefills_the_bucket_and_prefix()
+    {
+        RunSta(() =>
+        {
+            EnsureApplicationResources();
+            var draft = new CloudEndpointDraft(EndpointType.S3, "docs", "Cloudflare", "bucket", "prefix",
+                null, null, ["provider"]);
+
+            var window = new CloudEndpointEditorWindow(draft);
+
+            Assert.Equal("docs", window.S3NameBox.Text);
+            Assert.Equal("Cloudflare", window.S3ProviderBox.Text);
+            Assert.Equal("bucket", window.S3BucketBox.Text);
+            Assert.Equal("prefix", window.S3SubdirectoryBox.Text);
+            window.Close();
+        });
+    }
+
     /// <summary>The endpoint names the list is showing, in the order it is showing them.</summary>
     private static IReadOnlyList<string> VisibleNames(RemoteEndpointManagerWindow window) =>
         [.. window.VisibleEndpoints.Select(row => row.Account.Name)];
