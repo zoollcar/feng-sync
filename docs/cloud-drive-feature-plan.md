@@ -22,6 +22,10 @@
 > 上表是写这份文档时的评估基准，刻意保留原样。此后已落地的部分：
 > 「端点类型」已由 `CloudProviderCatalog`（描述符）与 `EndpointSchemes`（scheme/backend 映射）取代，
 > 现有 Google Drive、OneDrive、Dropbox、Box、WebDAV、SFTP、S3 七种，`CloudEndpointService.ProviderKind` 已删除。
+> **A3 端点重命名**已实现（`CloudEndpointRename` + `RcloneConfigFile`）：实现时实证发现「create → 迁移 → delete」
+> 走不通 —— 对 OAuth 后端 `config/create` 会重新跑授权状态机，所以改为直接改写 rclone.conf 的段（值逐字节不变），
+> 运行中的 `rclone rcd` 会在下一次调用就读到改动，改写后用 `config/get` / `config/listremotes` 回读验证。
+> 同时把 `profiles.json` 里 `scheme://<旧名>/...` 的引用一并迁移，并在有活跃挂载时直接阻断。
 
 一个关键结论先说在前面：**`IEndpoint` 里已经具备增删改的能力，只是云盘 UI 一个都没接。**
 

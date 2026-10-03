@@ -114,6 +114,36 @@ public static class EndpointSchemes
         return SchemeFor(type) + "://" + remoteName + (trimmed.Length == 0 ? "" : "/" + trimmed);
     }
 
+    /// <summary>
+    /// The remote name a cloud URI addresses, or <see langword="null"/> when the value is a local path or
+    /// carries no name. Used by rename to decide which profiles point at the endpoint being renamed.
+    /// </summary>
+    public static string? RemoteNameOf(string? value)
+    {
+        var text = value ?? "";
+        var separator = text.IndexOf("://", StringComparison.Ordinal);
+        if (separator <= 0 || SchemeOf(text) is null) return null;
+        var rest = text[(separator + 3)..];
+        var slash = rest.IndexOf('/');
+        var name = slash < 0 ? rest : rest[..slash];
+        return name.Length == 0 ? null : name;
+    }
+
+    /// <summary>
+    /// Repoints a cloud URI at a different remote, keeping its scheme and path. A value that does not
+    /// address <paramref name="oldName"/> — a local path, another endpoint, a URI with no name — comes back
+    /// untouched. The name comparison is ordinal on purpose: renaming <c>docs</c> must never rewrite
+    /// <c>docs2</c>, and a local Windows path must never be mistaken for one.
+    /// </summary>
+    public static string RenameRemote(string? value, string oldName, string newName)
+    {
+        var text = value ?? "";
+        if (RemoteNameOf(text) is not { } current) return text;
+        if (!current.Equals(oldName, StringComparison.Ordinal)) return text;
+        var separator = text.IndexOf("://", StringComparison.Ordinal);
+        return text[..separator] + "://" + newName + text[(separator + 3 + current.Length)..];
+    }
+
     private static (string Scheme, string RcloneType, EndpointType Type) Lookup(EndpointType type)
     {
         foreach (var entry in Map)

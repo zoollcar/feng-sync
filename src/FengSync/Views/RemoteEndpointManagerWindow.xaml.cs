@@ -168,6 +168,7 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         EditButton.IsEnabled = Selected is not null;
         CheckButton.IsEnabled = Selected is not null;
+        RenameEndpointButton.IsEnabled = Selected is not null;
         ReconnectButton.Visibility = NeedsReconnect(Selected) ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -260,6 +261,37 @@ public partial class RemoteEndpointManagerWindow : Window
             StatusText.Text = DescribeStatus(row);
         });
     }
+
+    /// <summary>
+    /// Renames an endpoint. The prompt validates against a snapshot taken before it opens, so a colliding
+    /// name is refused inline rather than after a rename attempt has already touched rclone.conf.
+    /// </summary>
+    private async void RenameEndpoint_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择要重命名的端点。"; return; }
+        await RunBusyAsync(RenameEndpointButton, "正在重命名…", "正在读取挂载状态…", async () =>
+        {
+            // Scanned fresh rather than reused from the list: a mount that appeared since the last refresh
+            // would be stranded by the rename, and the check is the only thing standing in the way.
+            var mounted = (await _mountService.ScanAsync()).Select(mount => mount.RemoteName).ToList();
+            var context = await CloudEndpointRename.InspectAsync(mounted);
+            var requested = TextPrompt.Ask(this, "重命名端点",
+                $"端点“{account.Name}”的新名称（只能包含字母、数字、下划线或连字符）：",
+                account.Name,
+                text => CloudEndpointRename.Validate(text, account.Name, context));
+            if (requested is null) return;
+            var result = await CloudEndpointRename.RenameAsync(account.Name, requested, mounted);
+            await RefreshAsync();
+            var index = _accounts.ToList().FindIndex(row => row.Account.Name == result.NewName);
+            if (index >= 0) EndpointList.SelectedIndex = index;
+            StatusText.Text = DescribeRename(result);
+        });
+    }
+
+    /// <summary>What the status line says after a rename, kept separate so the wording is testable.</summary>
+    internal static string DescribeRename(CloudEndpointRenameResult result) => result.RewrittenProfiles == 0
+        ? $"已将端点“{result.OldName}”重命名为“{result.NewName}”。"
+        : $"已将端点“{result.OldName}”重命名为“{result.NewName}”，并更新了 {result.RewrittenProfiles} 个同步任务的路径。";
 
     private async void Delete_Click(object sender, RoutedEventArgs e)
     {

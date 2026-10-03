@@ -44,6 +44,7 @@
                          interactive browser authorization, so for SFTP/S3 the button would lead nowhere. -->
                     <Button x:Name="ReconnectButton" AutomationProperties.Name="重新登录所选云盘端点" Content="重新登录" Click="Reconnect_Click" Visibility="Collapsed" Style="{StaticResource SecondaryButtonStyle}" />
                     <Button x:Name="CheckButton" AutomationProperties.AutomationId="CheckCloudEndpoint" AutomationProperties.Name="检查所选云盘端点的连接与容量" Content="检查连接" Click="Check_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="RenameEndpointButton" AutomationProperties.AutomationId="RenameCloudEndpoint" AutomationProperties.Name="重命名所选云盘端点" Content="重命名" Click="RenameEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
                     <Button x:Name="DeleteButton" AutomationProperties.Name="删除所选云盘端点" Content="删除" Click="Delete_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
                 </StackPanel>
             </StackPanel>

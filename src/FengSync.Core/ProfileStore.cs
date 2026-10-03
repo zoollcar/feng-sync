@@ -7,6 +7,10 @@ public sealed class ProfileStore
 {
     private readonly string _path;
     public ProfileStore(string? path = null) => _path = path ?? Path.Combine(AppDataPaths.Root, "profiles.json");
+
+    /// <summary>Where the store persists. Exposed so a change that spans several files can back it up first.</summary>
+    public string FilePath => _path;
+
     public async Task<IReadOnlyList<SyncProfile>> LoadAsync(CancellationToken ct = default)
     {
         if (!File.Exists(_path)) return [];

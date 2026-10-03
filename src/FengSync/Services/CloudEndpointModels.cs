@@ -111,6 +111,9 @@ public sealed class CloudEndpointMetadataStore(string? path = null)
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private readonly string _path = path ?? Path.Combine(AppDataPaths.Root, "cloud-endpoints.json");
 
+    /// <summary>Where the store persists. Exposed so a change that spans several files can back it up first.</summary>
+    public string FilePath => _path;
+
     public async Task<IReadOnlyDictionary<string, CloudEndpointMetadata>> LoadAsync(CancellationToken ct = default)
     {
         await Gate.WaitAsync(ct);
@@ -137,6 +140,24 @@ public sealed class CloudEndpointMetadataStore(string? path = null)
         {
             var values = new Dictionary<string, CloudEndpointMetadata>(await ReadUnsafeAsync(ct), StringComparer.OrdinalIgnoreCase);
             if (values.Remove(remoteName)) await WriteUnsafeAsync(values.Values, ct);
+        }
+        finally { Gate.Release(); }
+    }
+
+    /// <summary>
+    /// Drops one entry and writes another in a single atomic write. A rename has to move the record rather
+    /// than delete and re-add it: two separate writes would leave the endpoint with no metadata at all if
+    /// the process died between them, and the metadata is what remembers an enforced prefix.
+    /// </summary>
+    public async Task RenameAsync(string remoteName, CloudEndpointMetadata? replacement, CancellationToken ct = default)
+    {
+        await Gate.WaitAsync(ct);
+        try
+        {
+            var values = new Dictionary<string, CloudEndpointMetadata>(await ReadUnsafeAsync(ct), StringComparer.OrdinalIgnoreCase);
+            values.Remove(remoteName);
+            if (replacement is not null) values[replacement.RemoteName] = replacement;
+            await WriteUnsafeAsync(values.Values, ct);
         }
         finally { Gate.Release(); }
     }
