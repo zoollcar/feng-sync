@@ -7,12 +7,31 @@ using System.Text.Json;
 using FengSync.Core;
 using FengSync.Core.Configuration;
 using FengSync.Core.Execution;
+using FengSync.Core.Rclone.Diagnostics;
 
 namespace FengSync.Services;
 
 public enum CloudTransferDirection { Upload, Download }
 
-public enum CloudTransferState { Pending, Running, Completed, Cancelled, Failed }
+/// <summary>
+/// <see cref="Paused"/> is deliberately distinct from <see cref="Cancelled"/>: both stop a transfer, but a
+/// cancelled one is the user's queue of things to continue later, while a paused one is parked on purpose
+/// and is expected to be let go again.
+/// </summary>
+public enum CloudTransferState { Pending, Running, Paused, Completed, Cancelled, Failed }
+
+/// <summary>
+/// The outcome of one batch of transfers — everything the user started together, reported once the queue
+/// has drained. Counts rather than the tasks themselves, because a host only needs to phrase a sentence.
+/// </summary>
+public sealed record CloudTransferBatch(int Total, int Completed, int Failed, int Stopped)
+{
+    /// <summary>
+    /// Whether the batch stopped without finishing everything. A batch that was cancelled or paused on
+    /// purpose is <see cref="Stopped"/> rather than <see cref="Failed"/>: the user knows why it stopped.
+    /// </summary>
+    public bool HasFailures => Failed > 0;
+}
 
 /// <summary>
 /// One user-visible upload or download of a single file. The unit is deliberately a file, matching
@@ -26,6 +45,7 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
     private long _completedBytes;
     private double _bytesPerSecond;
     private string? _error;
+    private int _attempt;
 
     public CloudTransferTask(CloudTransferDirection direction, string remoteUri, string remotePath, string localPath, long totalBytes)
     {
@@ -48,7 +68,7 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
     public CloudTransferState State
     {
         get => _state;
-        internal set { if (!Set(ref _state, value)) return; Raise(nameof(State)); Raise(nameof(IsFinished)); Raise(nameof(CanCancel)); Raise(nameof(IsResumable)); Raise(nameof(StatusText)); }
+        internal set { if (!Set(ref _state, value)) return; Raise(nameof(IsFinished)); Raise(nameof(CanCancel)); Raise(nameof(CanPause)); Raise(nameof(IsResumable)); Raise(nameof(RestartText)); Raise(nameof(StatusText)); }
     }
     public long CompletedBytes
     {
@@ -66,10 +86,26 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
         internal set { if (!Set(ref _error, value)) return; Raise(nameof(StatusText)); }
     }
 
+    /// <summary>Which attempt is in flight, counting from 1, so a retry is visible instead of silent.</summary>
+    public int Attempt
+    {
+        get => _attempt;
+        internal set { if (!Set(ref _attempt, value)) return; Raise(nameof(StatusText)); }
+    }
+
     public double Percentage => TotalBytes <= 0 ? 0 : Math.Min(100, _completedBytes * 100d / TotalBytes);
+    /// <summary>A paused transfer is not finished: the user still has to decide what happens to it.</summary>
     public bool IsFinished => State is CloudTransferState.Completed or CloudTransferState.Cancelled or CloudTransferState.Failed;
     public bool CanCancel => State is CloudTransferState.Pending or CloudTransferState.Running;
-    public bool IsResumable => State is CloudTransferState.Cancelled or CloudTransferState.Failed;
+    public bool CanPause => State is CloudTransferState.Pending or CloudTransferState.Running;
+    /// <summary>Whether a stopped transfer can be started again — paused, cancelled, or failed alike.</summary>
+    public bool IsResumable => State is CloudTransferState.Paused or CloudTransferState.Cancelled or CloudTransferState.Failed;
+
+    /// <summary>
+    /// Label for the row's restart action. A paused transfer is continued and one that stopped on its own is
+    /// retried: the operation is the same, but the two words are what the user is actually choosing between.
+    /// </summary>
+    public string RestartText => State == CloudTransferState.Paused ? "继续" : "重试";
     public string DirectionText => Direction == CloudTransferDirection.Upload ? "上传" : "下载";
     public string FileName => Direction == CloudTransferDirection.Upload ? Path.GetFileName(LocalPath) : NameOf(RemotePath);
     public string Display => $"{DirectionText} · {FileName}";
@@ -78,13 +114,20 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
     public string StatusText => State switch
     {
         CloudTransferState.Pending => "等待中",
-        CloudTransferState.Running => string.IsNullOrEmpty(SizeText)
-            ? $"{Percentage:N1}%"
-            : $"{Percentage:N1}%  ·  {SizeText}" + (_bytesPerSecond > 0 ? $"  ·  {Megabytes(_bytesPerSecond):N1} MB/s" : ""),
+        CloudTransferState.Running => RunText(),
+        CloudTransferState.Paused => "已暂停",
         CloudTransferState.Completed => $"已完成  ·  {Megabytes(TotalBytes):N1} MB",
         CloudTransferState.Cancelled => Direction == CloudTransferDirection.Download ? "已取消，可继续下载" : "已取消，可重新上传",
         _ => "失败：" + (_error ?? "未知错误")
     };
+
+    private string RunText()
+    {
+        var progress = string.IsNullOrEmpty(SizeText)
+            ? $"{Percentage:N1}%"
+            : $"{Percentage:N1}%  ·  {SizeText}" + (_bytesPerSecond > 0 ? $"  ·  {Megabytes(_bytesPerSecond):N1} MB/s" : "");
+        return _attempt > 1 ? $"第 {_attempt} 次尝试  ·  {progress}" : progress;
+    }
 
     internal static string NameOf(string path) => path.Trim('/').Split('/').Last();
     private static double Megabytes(double bytes) => bytes / 1024d / 1024d;
@@ -99,18 +142,34 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
 }
 
 /// <summary>
-/// Serialises cloud uploads/downloads: bounded concurrency, per-task progress and cancellation, and a
-/// journal so cancelled or failed transfers survive an application restart and can be continued.
+/// Serialises cloud uploads/downloads: bounded concurrency, per-task progress, cancellation and pausing,
+/// automatic retries, and a journal so cancelled or failed transfers survive an application restart and can
+/// be continued.
 /// </summary>
 public sealed class CloudTransferQueue : INotifyPropertyChanged
 {
-    /// <summary>Mirrors the sync executor's default copy concurrency so a folder drop cannot fan out.</summary>
-    public const int MaxConcurrentTransfers = 2;
+    /// <summary>Matches the historical fixed limit, so an unconfigured queue behaves as it always did.</summary>
+    public const int DefaultConcurrency = 2;
+    public const int MinimumConcurrency = 1;
+    public const int MaximumConcurrency = 16;
 
     private readonly CloudTransferJournalStore _journal;
-    private readonly SemaphoreSlim _slots = new(MaxConcurrentTransfers, MaxConcurrentTransfers);
+    /// <summary>
+    /// A hand-rolled gate rather than a <see cref="SemaphoreSlim"/>, because the concurrency limit is
+    /// user-adjustable at runtime and a semaphore's capacity cannot be changed after construction.
+    /// </summary>
+    private readonly object _gate = new();
+    private readonly Queue<TaskCompletionSource<bool>> _waiters = new();
+    /// <summary>Ids of the transfers the current batch covers, so a drained queue can report the batch.</summary>
+    private readonly object _batchGate = new();
+    private readonly HashSet<Guid> _batchIds = [];
     private readonly Dictionary<Guid, CancellationTokenSource> _cancellations = [];
     private readonly Dictionary<Guid, TaskCompletionSource<bool>> _completions = [];
+    /// <summary>Tasks the user asked to park. Read when a cancellation turns out to be a pause.</summary>
+    private readonly HashSet<Guid> _pauseRequests = [];
+    private int _running;
+    private int _concurrency = DefaultConcurrency;
+    private int _maxRetries = 2;
     private int _activeCount;
 
     public CloudTransferQueue(CloudTransferJournalStore? journal = null) => _journal = journal ?? new CloudTransferJournalStore();
@@ -122,6 +181,46 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     /// load still behaves like a default installation.
     /// </summary>
     public long ResumeMinimumBytes { get; set; } = new ApplicationSettings().DefaultResumeMinimumBytes;
+
+    /// <summary>
+    /// How many transfers may run at once. Lowering it never disturbs the transfers already in flight —
+    /// they finish, and the surplus slots simply are not handed out again.
+    /// </summary>
+    public int Concurrency
+    {
+        get => _concurrency;
+        set
+        {
+            var next = Math.Clamp(value, MinimumConcurrency, MaximumConcurrency);
+            lock (_gate)
+            {
+                if (next == _concurrency) return;
+                _concurrency = next;
+                // Raising the limit has to wake waiters itself; nothing else will until a slot is released.
+                PumpWaiters();
+            }
+            Raise(nameof(Concurrency));
+        }
+    }
+
+    /// <summary>Automatic retries per transfer before it is reported as failed. 0 disables retrying.</summary>
+    public int MaxRetries
+    {
+        get => _maxRetries;
+        set
+        {
+            var next = Math.Clamp(value, 0, 10);
+            if (next == _maxRetries) return;
+            _maxRetries = next;
+            Raise(nameof(MaxRetries));
+        }
+    }
+
+    /// <summary>
+    /// How long to wait before attempt <c>attempt + 1</c>. A settable function rather than a constant so a
+    /// test can drive the retry path without waiting out a real backoff.
+    /// </summary>
+    public Func<int, TimeSpan> RetryDelay { get; set; } = attempt => TimeSpan.FromSeconds(Math.Min(30, 1 << attempt));
 
     public ObservableCollection<CloudTransferTask> Tasks { get; } = [];
 
@@ -137,18 +236,29 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     /// </summary>
     public bool HasCompletedTasks => Tasks.Any(task => task.State == CloudTransferState.Completed);
     public bool HasResumableTasks => Tasks.Any(task => task.IsResumable);
+    public bool HasPausedTasks => Tasks.Any(task => task.State == CloudTransferState.Paused);
     public bool HasTasks => Tasks.Count > 0;
+
+    /// <summary>
+    /// Raised once when a batch of transfers has drained — every transfer that was running has stopped and
+    /// nothing is left waiting for a slot. A host uses it to report the outcome without watching every task.
+    /// Not raised when the queue was only ever idle, and not when a transfer is restarted, so a single user
+    /// action produces a single notification.
+    /// </summary>
+    public event EventHandler<CloudTransferBatch>? BatchCompleted;
 
     /// <summary>
     /// Average progress of the tasks that have not finished, so a manager-window progress bar can show
     /// aggregate activity without subscribing to every task. 100 once the queue drained successfully.
+    /// Paused tasks count as outstanding: their bytes are not done, and reporting 100% for a queue that is
+    /// merely parked would be a lie the user acts on.
     /// </summary>
     public double OverallPercentage
     {
         get
         {
             if (Tasks.Count == 0) return 0;
-            var outstanding = Tasks.Where(task => task.State is CloudTransferState.Pending or CloudTransferState.Running).ToList();
+            var outstanding = Tasks.Where(task => task.State is CloudTransferState.Pending or CloudTransferState.Running or CloudTransferState.Paused).ToList();
             if (outstanding.Count > 0) return outstanding.Average(task => task.Percentage);
             return Tasks.Any(task => task.State == CloudTransferState.Completed) ? 100 : 0;
         }
@@ -162,10 +272,14 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             var running = Tasks.Count(task => task.State == CloudTransferState.Running);
             var pending = Tasks.Count(task => task.State == CloudTransferState.Pending);
             var done = Tasks.Count(task => task.State == CloudTransferState.Completed);
-            var resumable = Tasks.Count(task => task.IsResumable);
+            var paused = Tasks.Count(task => task.State == CloudTransferState.Paused);
+            // Paused tasks are resumable but are reported on their own line, so they are excluded here to
+            // avoid counting the same task twice in one sentence.
+            var resumable = Tasks.Count(task => task.IsResumable && task.State != CloudTransferState.Paused);
             var parts = new List<string>();
             if (running > 0) parts.Add($"进行中 {running}");
             if (pending > 0) parts.Add($"等待 {pending}");
+            if (paused > 0) parts.Add($"已暂停 {paused}");
             if (done > 0) parts.Add($"已完成 {done}");
             if (resumable > 0) parts.Add($"可续传 {resumable}");
             return string.Join(" · ", parts);
@@ -177,7 +291,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         var task = new CloudTransferTask(direction, remoteUri, remotePath, localPath, totalBytes);
         Track(task);
         Tasks.Add(task);
-        Raise(nameof(HasTasks)); Raise(nameof(HasCompletedTasks)); Raise(nameof(SummaryText)); Raise(nameof(OverallPercentage));
+        RaiseSummary();
         _ = RunAsync(task);
         return task;
     }
@@ -192,17 +306,14 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         task.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(CloudTransferTask.Percentage)) Raise(nameof(OverallPercentage));
-            else if (args.PropertyName == nameof(CloudTransferTask.State))
-            {
-                Raise(nameof(HasCompletedTasks)); Raise(nameof(HasResumableTasks));
-                Raise(nameof(SummaryText)); Raise(nameof(OverallPercentage));
-            }
+            else if (args.PropertyName == nameof(CloudTransferTask.State)) RaiseSummary();
         };
     }
 
     /// <summary>
     /// Lists the tasks a previous session left unfinished without starting them, so the user decides
-    /// when to resume. They surface as cancelled entries, which is what they factually are.
+    /// when to resume. They surface as cancelled entries, which is what they factually are — except a task
+    /// that was explicitly paused, which comes back paused so the user's intent survives the restart.
     /// </summary>
     public async Task<int> LoadResumableAsync(CancellationToken ct = default)
     {
@@ -214,36 +325,77 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             var restored = new CloudTransferTask(record.Direction, record.RemoteUri, record.RemotePath, record.LocalPath, record.TotalBytes)
             {
                 Id = record.Id,
-                State = CloudTransferState.Cancelled,
+                State = record.State == CloudTransferState.Paused ? CloudTransferState.Paused : CloudTransferState.Cancelled,
                 Error = record.Error
             };
             Track(restored);
             Tasks.Add(restored);
             loaded++;
         }
-        if (loaded > 0) { Raise(nameof(HasTasks)); Raise(nameof(HasResumableTasks)); Raise(nameof(SummaryText)); Raise(nameof(OverallPercentage)); }
+        if (loaded > 0) RaiseSummary();
         return loaded;
     }
 
-    /// <summary>Starts every cancelled or failed task currently listed.</summary>
+    /// <summary>
+    /// Starts every stopped transfer currently listed — paused, cancelled or failed. Named for the action
+    /// the transfer window has always offered; a paused transfer is simply the newest way to be stopped.
+    /// </summary>
     public int ResumeFinished()
     {
         var resumed = 0;
         foreach (var task in Tasks.Where(task => task.IsResumable).ToList())
         {
-            task.State = CloudTransferState.Pending;
-            task.Error = null;
+            // A paused transfer may still be unwinding its cancellation; restarting it now would run the
+            // same task twice and hand its slot to a transfer that is already gone.
+            if (_cancellations.ContainsKey(task.Id)) continue;
+            Start(task);
             resumed++;
-            _ = RunAsync(task);
         }
-        if (resumed > 0) Raise(nameof(SummaryText));
+        if (resumed > 0) RaiseSummary();
         return resumed;
+    }
+
+    /// <summary>Restarts one stopped transfer. Named for the row action, which reads "重试".</summary>
+    public void Retry(CloudTransferTask task)
+    {
+        if (!task.IsResumable || _cancellations.ContainsKey(task.Id)) return;
+        Start(task);
+        RaiseSummary();
+    }
+
+    /// <summary>
+    /// Parks a transfer. A pending one is parked immediately; a running one is stopped at its next
+    /// cancellation point, which is why its state only changes once the transfer actually stops. Whatever
+    /// staging bytes exist are deliberately kept — that is what makes continuing pick up where it left off.
+    /// </summary>
+    public void Pause(CloudTransferTask task)
+    {
+        if (!task.CanPause) return;
+        _pauseRequests.Add(task.Id);
+        if (_cancellations.TryGetValue(task.Id, out var cancellation)) cancellation.Cancel();
+        else { task.State = CloudTransferState.Paused; Persist(task); }
+        RaiseSummary();
+    }
+
+    /// <summary>Lets a parked transfer go again, from wherever it stopped.</summary>
+    public void Resume(CloudTransferTask task)
+    {
+        if (!task.IsResumable || _cancellations.ContainsKey(task.Id)) return;
+        Start(task);
+        RaiseSummary();
+    }
+
+    public int PauseAll()
+    {
+        var paused = 0;
+        foreach (var task in Tasks.Where(task => task.CanPause).ToList()) { Pause(task); paused++; }
+        return paused;
     }
 
     public void Cancel(CloudTransferTask task)
     {
         if (_cancellations.TryGetValue(task.Id, out var cancellation)) cancellation.Cancel();
-        else if (task.State == CloudTransferState.Pending) { task.State = CloudTransferState.Cancelled; Persist(task); }
+        else if (task.State is CloudTransferState.Pending or CloudTransferState.Paused) { task.State = CloudTransferState.Cancelled; Persist(task); }
     }
 
     public void CancelAll()
@@ -258,7 +410,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             Tasks.Remove(task);
             _ = _journal.RemoveAsync(task.Id);
         }
-        Raise(nameof(HasTasks)); Raise(nameof(HasCompletedTasks)); Raise(nameof(SummaryText)); Raise(nameof(OverallPercentage));
+        RaiseSummary();
     }
 
     /// <summary>Completes when the task leaves the queue's active set. Used by drag-out downloads.</summary>
@@ -275,6 +427,28 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             return completion.Task;
         }
     }
+
+    private void Start(CloudTransferTask task)
+    {
+        task.State = CloudTransferState.Pending;
+        task.Error = null;
+        _pauseRequests.Remove(task.Id);
+        lock (_batchGate) _batchIds.Add(task.Id);
+        _ = RunAsync(task);
+    }
+
+    /// <summary>
+    /// Whether a failure is worth retrying. A missing local source, an unusable local directory, or a
+    /// rejected credential cannot be fixed by waiting, so retrying those would only delay the error the
+    /// user needs to see — and for an expired login it would delay it three times over.
+    /// </summary>
+    internal static bool IsRetryable(Exception exception) => exception switch
+    {
+        FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException => false,
+        RcloneException { Failure.Category: RcloneFailureCategory.Authentication or RcloneFailureCategory.Permission
+            or RcloneFailureCategory.Configuration or RcloneFailureCategory.NotFound } => false,
+        _ => true
+    };
 
     private async Task RunAsync(CloudTransferTask task)
     {
@@ -295,8 +469,9 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             task.CompletedBytes = 0;
             task.BytesPerSecond = 0;
             task.Error = null;
+            task.Attempt = 0;
             Persist(task);
-            await _slots.WaitAsync(ct);
+            await AcquireSlotAsync(ct);
             slotAcquired = true;
             ActiveCount++;
             task.State = CloudTransferState.Running;
@@ -319,32 +494,59 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
                 target = new LocalEndpoint(localDirectory);
             }
 
-            var lastBytes = 0L;
-            var lastStamp = Stopwatch.GetTimestamp();
-            var progress = new Progress<TransferProgress>(update =>
+            for (var attempt = 0; ; attempt++)
             {
-                task.CompletedBytes = update.BytesCompleted;
-                if (update.TotalBytes > 0) task.TotalBytes = update.TotalBytes;
-                var elapsed = Stopwatch.GetElapsedTime(lastStamp).TotalSeconds;
-                if (elapsed < 0.25) return;
-                task.BytesPerSecond = Math.Max(0, (update.BytesCompleted - lastBytes) / elapsed);
-                lastBytes = update.BytesCompleted;
-                lastStamp = Stopwatch.GetTimestamp();
-            });
+                task.Attempt = attempt + 1;
+                try
+                {
+                    if (attempt > 0) await PrepareRetryAsync(task, target, stagingPath);
 
-            // Passing no resume candidates lets TransferResume search a local target itself.
-            var temporary = await EndpointTransfer.CopyToStagingAsync(source, target, stagingPath, null, task.Id,
-                task.TotalBytes, ActiveCount, progress, EnsureParentAsync(target, destination), ResumeMinimumBytes, ct);
-            task.CompletedBytes = task.TotalBytes;
-            await EndpointTransfer.PublishAsync(target, temporary, destination, overwrite: true, ct);
-            committed = true;
-            task.State = CloudTransferState.Completed;
-            task.BytesPerSecond = 0;
-            await _journal.RemoveAsync(task.Id);
+                    var lastBytes = 0L;
+                    var lastStamp = Stopwatch.GetTimestamp();
+                    var progress = new Progress<TransferProgress>(update =>
+                    {
+                        task.CompletedBytes = update.BytesCompleted;
+                        if (update.TotalBytes > 0) task.TotalBytes = update.TotalBytes;
+                        var elapsed = Stopwatch.GetElapsedTime(lastStamp).TotalSeconds;
+                        if (elapsed < 0.25) return;
+                        task.BytesPerSecond = Math.Max(0, (update.BytesCompleted - lastBytes) / elapsed);
+                        lastBytes = update.BytesCompleted;
+                        lastStamp = Stopwatch.GetTimestamp();
+                    });
+
+                    // Passing no resume candidates lets TransferResume search a local target itself.
+                    var temporary = await EndpointTransfer.CopyToStagingAsync(source, target, stagingPath, null, task.Id,
+                        task.TotalBytes, ActiveCount, progress, EnsureParentAsync(target, destination), ResumeMinimumBytes, ct);
+                    task.CompletedBytes = task.TotalBytes;
+                    await EndpointTransfer.PublishAsync(target, temporary, destination, overwrite: true, ct);
+                    committed = true;
+                    task.State = CloudTransferState.Completed;
+                    task.BytesPerSecond = 0;
+                    await _journal.RemoveAsync(task.Id);
+                    break;
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) when (attempt < MaxRetries && IsRetryable(ex))
+                {
+                    task.Error = RcloneUiError.Describe(ex, "cloud-transfer");
+                    await Task.Delay(RetryDelay(attempt), ct);
+                }
+                catch (Exception ex)
+                {
+                    task.State = CloudTransferState.Failed;
+                    task.BytesPerSecond = 0;
+                    task.Error = RcloneUiError.Describe(ex, "cloud-transfer");
+                    Persist(task);
+                    break;
+                }
+            }
         }
         catch (OperationCanceledException)
         {
-            task.State = CloudTransferState.Cancelled;
+            // Pausing and cancelling are both a cancellation; which one this was is recorded before the
+            // cancel was issued, because the two leave the user with different next steps.
+            var paused = _pauseRequests.Remove(task.Id);
+            task.State = paused ? CloudTransferState.Paused : CloudTransferState.Cancelled;
             task.BytesPerSecond = 0;
             Persist(task);
         }
@@ -367,15 +569,117 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             if (slotAcquired)
             {
                 ActiveCount = Math.Max(0, ActiveCount - 1);
-                _slots.Release();
+                ReleaseSlot();
             }
             _cancellations.Remove(task.Id);
+            _pauseRequests.Remove(task.Id);
             cancellation.Dispose();
-            Raise(nameof(HasCompletedTasks)); Raise(nameof(SummaryText));
+            RaiseSummary();
             lock (_completions)
             {
                 if (_completions.Remove(task.Id, out var completion)) completion.TrySetResult(task.State == CloudTransferState.Completed);
             }
+        }
+    }
+
+    /// <summary>
+    /// Clears the way for another attempt. An upload's staging object cannot be appended to — rclone has no
+    /// offset write — so a retry starts that file over and the partial object has to go first. A download's
+    /// local staging file is deliberately kept: continuing it is the whole point of the resume machinery.
+    /// </summary>
+    private static async Task PrepareRetryAsync(CloudTransferTask task, IEndpoint? target, string stagingPath)
+    {
+        task.CompletedBytes = 0;
+        task.BytesPerSecond = 0;
+        task.Error = null;
+        if (target is null || target is LocalEndpoint) return;
+        try { await EndpointTransfer.DiscardStagingAsync(target, stagingPath); }
+        catch { /* a missing staging object is the state a retry wants anyway */ }
+    }
+
+    /// <summary>
+    /// Takes one transfer slot, waiting for one when the queue is already at its concurrency limit. The wait
+    /// is cancellable, and a cancelled wait gives its ticket up in a way the pump understands — otherwise the
+    /// pump would hand a slot to a waiter that had already given up, and the queue would slowly starve.
+    /// </summary>
+    private async Task AcquireSlotAsync(CancellationToken ct)
+    {
+        TaskCompletionSource<bool> waiter;
+        lock (_gate)
+        {
+            if (_running < _concurrency) { _running++; return; }
+            waiter = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _waiters.Enqueue(waiter);
+        }
+        try
+        {
+            await waiter.Task.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            var drained = false;
+            lock (_gate)
+            {
+                // Marking the ticket cancelled makes the pump skip it. If the pump granted it first, hand the
+                // slot straight back; either way exactly one of the two paths owns the slot. This transfer
+                // never reached ActiveCount, so its slot has to be returned — and a drain detected — here
+                // rather than in the run loop's finally block.
+                if (!waiter.TrySetCanceled(ct))
+                {
+                    _running = Math.Max(0, _running - 1);
+                    PumpWaiters();
+                    drained = _running == 0 && _waiters.Count == 0;
+                }
+            }
+            if (drained) RaiseBatchCompleted();
+            throw;
+        }
+    }
+
+    private void ReleaseSlot()
+    {
+        bool drained;
+        lock (_gate)
+        {
+            _running = Math.Max(0, _running - 1);
+            PumpWaiters();
+            // The queue is drained when no transfer holds a slot and none is waiting for one. Checked under
+            // the gate so a transfer that was handed a slot a moment ago cannot be mistaken for a finished batch.
+            drained = _running == 0 && _waiters.Count == 0;
+        }
+        if (drained) RaiseBatchCompleted();
+    }
+
+    /// <summary>
+    /// Reports the batch that just drained. Reads the tasks on the calling thread, which is a worker thread
+    /// for the normal path, so subscribers that touch UI must marshal — the same contract as
+    /// <see cref="PropertyChanged"/> on this type.
+    /// </summary>
+    private void RaiseBatchCompleted()
+    {
+        Guid[] ids;
+        lock (_batchGate)
+        {
+            ids = [.. _batchIds];
+            _batchIds.Clear();
+        }
+        if (ids.Length == 0) return;
+        var batch = Tasks.Where(task => ids.Contains(task.Id)).ToList();
+        if (batch.Count == 0) return;
+        BatchCompleted?.Invoke(this, new CloudTransferBatch(
+            batch.Count,
+            batch.Count(task => task.State == CloudTransferState.Completed),
+            batch.Count(task => task.State == CloudTransferState.Failed),
+            batch.Count(task => task.State is CloudTransferState.Cancelled or CloudTransferState.Paused)));
+    }
+
+    /// <summary>Hands slots to waiting transfers. Must be called while holding <see cref="_gate"/>.</summary>
+    private void PumpWaiters()
+    {
+        while (_waiters.Count > 0 && _running < _concurrency)
+        {
+            var waiter = _waiters.Dequeue();
+            if (waiter.TrySetResult(true)) _running++;
         }
     }
 
@@ -403,6 +707,16 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     {
         try { await _journal.SaveAsync(record); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    private void RaiseSummary()
+    {
+        Raise(nameof(HasTasks));
+        Raise(nameof(HasCompletedTasks));
+        Raise(nameof(HasResumableTasks));
+        Raise(nameof(HasPausedTasks));
+        Raise(nameof(SummaryText));
+        Raise(nameof(OverallPercentage));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

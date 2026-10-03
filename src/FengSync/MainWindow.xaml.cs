@@ -43,6 +43,10 @@ public partial class MainWindow : Window
     private bool _syncInProgress;
     private bool _compareInProgress;
     private bool _closing;
+    /// <summary>Created lazily with the shared queue, so a window built before settings load still works.</summary>
+    private CloudCompletionNotifier? _cloudNotifier;
+    /// <summary>Guards the one-shot restore of unfinished transfers from the previous session.</summary>
+    private bool _cloudTransfersRestored;
     private ChangeSummary _lastSummary = ChangeSummary.Empty;
     private ICollectionView? _rowsView;
     // The single source of truth for endpoint header and title text — bound items must agree here.
@@ -456,7 +460,7 @@ public partial class MainWindow : Window
         {
             var loaded = await new SettingsStore().LoadAsync();
             _settings = loaded.Settings;
-            AppServices.TryCurrent?.CloudTransfers.ResumeMinimumBytes = _settings.DefaultResumeMinimumBytes;
+            ApplyCloudTransferSettings(_settings);
             SidebarColumn.Width = new GridLength(ClampSidebarWidth(_settings.MainWindowSidebarWidth));
             UpdateSettingsText();
             UpdateEndpointHeaders();
@@ -467,6 +471,7 @@ public partial class MainWindow : Window
                     : "选择左右端点后点击“比较”。";
         }
         catch (Exception ex) { _settings = new(); Status.Text = "无法加载程序设置：" + ex.Message; }
+        await RestoreCloudTransfersAsync(_settings);
         await LoadProfilesAsync();
         if (App.CurrentApp.UpdatedFromVersion is { Length: > 0 } from && App.CurrentApp.UpdateTaskDirectory is { Length: > 0 } task)
         {
@@ -714,9 +719,59 @@ public partial class MainWindow : Window
         settings = settings with { MainWindowSidebarWidth = ClampSidebarWidth(SidebarColumn.ActualWidth) };
         await new SettingsStore().SaveAsync(settings);
         _settings = settings;
-        AppServices.TryCurrent?.CloudTransfers.ResumeMinimumBytes = settings.DefaultResumeMinimumBytes;
+        ApplyCloudTransferSettings(settings);
         UpdateSettingsText();
         Status.Text = "程序设置已应用。";
+        await RestoreCloudTransfersAsync(settings);
+    }
+
+    /// <summary>
+    /// Pushes the cloud-transfer settings onto the process-wide queue. Called both when settings first load
+    /// and when the dialog applies a new snapshot, so the two paths cannot drift apart.
+    /// </summary>
+    private void ApplyCloudTransferSettings(ApplicationSettings settings)
+    {
+        if (AppServices.TryCurrent?.CloudTransfers is not { } queue) return;
+        queue.ResumeMinimumBytes = settings.DefaultResumeMinimumBytes;
+        queue.Concurrency = settings.CloudMaxConcurrentTransfers;
+        queue.MaxRetries = settings.CloudRetryCount;
+        if (_cloudNotifier is null)
+        {
+            _cloudNotifier = new CloudCompletionNotifier(queue);
+            _cloudNotifier.Notified += CloudNotifier_Notified;
+            Closed += (_, _) => { _cloudNotifier.Notified -= CloudNotifier_Notified; _cloudNotifier.Dispose(); };
+        }
+        _cloudNotifier.Enabled = settings.CloudNotifyOnCompletion;
+    }
+
+    /// <summary>
+    /// Lists whatever a previous session left unfinished so 断点续传 is one click away. It deliberately does
+    /// not start anything: launching the application must not begin network transfers the user never asked
+    /// for. Runs once, and only when the setting is on — the transfer window can always load the list itself.
+    /// </summary>
+    private async Task RestoreCloudTransfersAsync(ApplicationSettings settings)
+    {
+        if (_cloudTransfersRestored) return;
+        if (!settings.CloudResumeOnStartup) return;
+        if (AppServices.TryCurrent?.CloudTransfers is not { } queue) return;
+        _cloudTransfersRestored = true;
+        if (queue.HasTasks) return;
+        try
+        {
+            var restored = await queue.LoadResumableAsync();
+            if (restored > 0) Status.Text = $"已恢复 {restored} 项上次未完成的云盘传输，可在“工具 → 云盘管理 → 查看传输”中继续。";
+        }
+        catch (Exception ex) { System.Diagnostics.Trace.TraceWarning("Unable to restore cloud transfers: " + ex.Message); }
+    }
+
+    /// <summary>
+    /// Reports a drained cloud transfer batch in the status bar. The queue raises this on a worker thread,
+    /// and the status bar belongs to the dispatcher.
+    /// </summary>
+    private void CloudNotifier_Notified(object? sender, string message)
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(() => CloudNotifier_Notified(sender, message)); return; }
+        Status.Text = message;
     }
 
     private Task ShowSftpServerSettingsAsync()

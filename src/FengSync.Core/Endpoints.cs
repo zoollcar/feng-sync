@@ -123,7 +123,27 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     public async Task<IReadOnlyList<RcloneDirectoryEntry>> ListDirectoryAsync(string fs, string remote, CancellationToken ct = default)
     {
         var response = await CallAsync("operations/list", new { fs, remote, opt = new { recurse = false } }, ct);
-        if (!response.TryGetProperty("list", out var list)) return [];
+        return ParseDirectoryEntries(response);
+    }
+
+    /// <summary>
+    /// Lists every object at or below <paramref name="remote"/>, for a recursive search. The payload is the
+    /// whole subtree, so callers must filter it themselves rather than assuming it is small.
+    /// </summary>
+    public async Task<IReadOnlyList<RcloneDirectoryEntry>> ListRecursiveAsync(string fs, string remote, CancellationToken ct = default)
+    {
+        var response = await CallAsync("operations/list", new { fs, remote, opt = new { recurse = true } }, ct);
+        return ParseDirectoryEntries(response);
+    }
+
+    /// <summary>
+    /// Reads the <c>list</c> array of an <c>operations/list</c> reply. The <c>Path</c> rclone reports may or
+    /// may not carry the browsed prefix depending on the backend, so callers that need an absolute path must
+    /// normalize it rather than trusting this value's shape.
+    /// </summary>
+    private static IReadOnlyList<RcloneDirectoryEntry> ParseDirectoryEntries(JsonElement response)
+    {
+        if (!response.TryGetProperty("list", out var list) || list.ValueKind != JsonValueKind.Array) return [];
         return list.EnumerateArray().Select(item =>
         {
             var path = item.TryGetProperty("Path", out var pathValue) ? pathValue.GetString() ?? "" : "";
@@ -133,6 +153,7 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
             return new RcloneDirectoryEntry(path.Trim('/'), directory, size, modified);
         }).Where(x => !string.IsNullOrWhiteSpace(x.Path)).ToList();
     }
+
     public async Task<JsonElement> CallAsync(string operation, object payload, CancellationToken ct = default)
     {
         SyncRunMetricsHub.Current.IncrementRcRequest();
@@ -258,6 +279,39 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     public Task MakeDirectoryAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/mkdir", new { fs, remote }, ct);
     public Task RemoveDirectoryAsync(string fs, string remote, CancellationToken ct = default) => CallAsync("operations/rmdir", new { fs, remote }, ct);
 
+    /// <summary>
+    /// Removes a directory <em>and everything under it</em>. Deliberately separate from
+    /// <see cref="RemoveDirectoryAsync"/>: the sync engine must never purge, because its confirmed plan
+    /// enumerates every descendant explicitly and a purge would silently take filtered or deselected
+    /// children with it. An interactive file browser has no such plan — "delete this folder" means the
+    /// folder — and on S3, which has no directories at all, purging the key prefix is the only operation
+    /// that can express it.
+    /// </summary>
+    public Task PurgeAsync(string fs, string remote, CancellationToken ct = default) =>
+        RunJobAsync("operations/purge", new { fs, remote, _async = true }, ct);
+
+    /// <summary>
+    /// Space reported by the backend for <paramref name="fs"/>, through rclone's <c>operations/about</c>.
+    /// Returns <see langword="null"/> when the backend reports no numbers at all, which is the normal
+    /// answer for SFTP and for S3 buckets whose credentials cannot read the account quota — the caller must
+    /// treat that as "unknown", never as "0 of 0".
+    /// </summary>
+    public async Task<RcloneAbout?> AboutAsync(string fs, CancellationToken ct = default)
+    {
+        var response = await CallAsync("operations/about", new { fs }, ct);
+        if (response.ValueKind != JsonValueKind.Object) return null;
+        var total = ReadOptionalLong(response, "total");
+        var used = ReadOptionalLong(response, "used");
+        var free = ReadOptionalLong(response, "free");
+        if (total is null && used is null && free is null) return null;
+        return new RcloneAbout(total, used, free);
+    }
+
+    private static long? ReadOptionalLong(JsonElement source, string name) =>
+        source.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var parsed) && parsed >= 0
+            ? parsed
+            : null;
+
     public async Task<JsonElement> RunJobAsync(string operation, object payload, CancellationToken ct = default)
     {
         var started = await CallAsync(operation, payload, ct).ConfigureAwait(false);
@@ -312,6 +366,12 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
 
 public sealed record RcloneTransferStats(long BytesTransferred, long TotalBytes, double BytesPerSecond);
 public sealed record RcloneDirectoryEntry(string Path, bool IsDirectory, long Size, DateTimeOffset? ModifiedUtc);
+
+/// <summary>
+/// Space reported by a backend through <c>operations/about</c>. Every field is optional because backends
+/// answer with different subsets — Google Drive reports all three, S3 usually reports nothing.
+/// </summary>
+public sealed record RcloneAbout(long? Total, long? Used, long? Free);
 
 /// <summary>A byte-range read of one remote object; <paramref name="Length"/> is the object's full size.</summary>
 public sealed record RcloneRangeContent(Stream Content, long Length, DateTimeOffset? ModifiedUtc) : IDisposable

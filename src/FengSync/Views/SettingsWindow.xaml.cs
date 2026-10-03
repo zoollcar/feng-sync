@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using FengSync.Core;
 using FengSync.Core.Configuration;
+using Microsoft.Win32;
 
 namespace FengSync.Views;
 
@@ -15,12 +16,19 @@ namespace FengSync.Views;
 /// </summary>
 public partial class SettingsWindow : Window
 {
+    /// <summary>The pages whose controls are editable and therefore take part in Apply/OK.</summary>
+    private static readonly string[] EditablePages = ["常规", "云盘"];
+
     private readonly Func<ApplicationSettings, Task> _apply;
     private readonly Func<Task> _configureSftp;
     private readonly Func<Task<int>> _cleanupTemporaryFiles;
     private readonly SyncProfile? _currentProfile;
     private ApplicationSettings _initial;
     private bool _applying;
+    /// <summary>Which page is on screen, so "restore defaults" rebuilds the page the user is looking at.</summary>
+    private string _page = "常规";
+    /// <summary>Held so the folder picker can write into it without walking the visual tree.</summary>
+    private TextBox? _downloadDirectoryBox;
 
     public SettingsWindow(
         ApplicationSettings initial,
@@ -51,13 +59,16 @@ public partial class SettingsWindow : Window
 
     private void NavigateTo(string page)
     {
+        _page = page;
         ContentHost.Children.Clear();
-        var editable = page == "常规";
+        _downloadDirectoryBox = null;
+        var editable = EditablePages.Contains(page, StringComparer.Ordinal);
         ApplyButton.Visibility = editable ? Visibility.Visible : Visibility.Collapsed;
         OkButton.Visibility = editable ? Visibility.Visible : Visibility.Collapsed;
         switch (page)
         {
             case "常规": BuildGeneralPage(); break;
+            case "云盘": BuildCloudPage(); break;
             case "运行历史":
                 if (_currentProfile is null)
                     BuildActionPage("运行历史", "打开当前 Profile 的运行历史窗口。", null,
@@ -154,6 +165,88 @@ public partial class SettingsWindow : Window
 
         ContentHost.Children.Add(sp);
     }
+
+    /// <summary>
+    /// The cloud manager's own settings. Kept apart from the general page on purpose: these govern an
+    /// interactive upload/download queue the user watches, while the general page's concurrency and resume
+    /// threshold govern a scheduled Profile run, and tuning one must not silently retune the other.
+    /// </summary>
+    private void BuildCloudPage()
+    {
+        var sp = new StackPanel { Margin = new Thickness(0) };
+        var caption = (Style)Application.Current.Resources["CaptionTextStyle"];
+        var section = (Style)Application.Current.Resources["SectionTitleTextStyle"];
+
+        sp.Children.Add(NewHeader("云盘", section));
+        sp.Children.Add(new TextBlock
+        {
+            Text = "以下设置只影响云盘管理里的上传与下载，不改变 Profile 的同步任务。",
+            Style = caption,
+            TextWrapping = TextWrapping.Wrap
+        });
+        sp.Children.Add(NewLabeledRow("同时传输数", NewTextBox("SettingsCloudConcurrency", _initial.CloudMaxConcurrentTransfers.ToString()), caption));
+        sp.Children.Add(NewLabeledRow("失败自动重试次数", NewTextBox("SettingsCloudRetry", _initial.CloudRetryCount.ToString()), caption));
+        sp.Children.Add(new TextBlock
+        {
+            Text = "同时传输数可在传输窗口里临时调整，这里设置的是每次启动时的默认值。"
+                 + "重试次数填 0 表示失败后直接报告；无论填几，都能在传输窗口里手动重试。",
+            Style = caption,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+
+        sp.Children.Add(NewHeader("下载", section));
+        var folder = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        folder.Children.Add(new TextBlock { Text = "默认下载目录", Style = caption, Margin = new Thickness(0, 0, 0, 6) });
+        var dock = new DockPanel();
+        var browse = NewButton("SettingsCloudDownloadBrowse", "浏览…", SecondaryStyle(), 90);
+        browse.Click += BrowseDownloadDirectory_Click;
+        DockPanel.SetDock(browse, Dock.Right);
+        dock.Children.Add(browse);
+        _downloadDirectoryBox = NewTextBox("SettingsCloudDownloadDirectory", _initial.CloudDownloadDirectory ?? "");
+        dock.Children.Add(_downloadDirectoryBox);
+        folder.Children.Add(dock);
+        folder.Children.Add(new TextBlock
+        {
+            Text = "留空表示每次下载都询问保存位置。设置了目录后，同名文件仍会在覆盖前确认。",
+            Style = caption,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+        sp.Children.Add(folder);
+
+        sp.Children.Add(NewHeader("上传", section));
+        var conflict = NewComboBox("SettingsCloudConflict", 220, ConflictIndex(_initial.CloudUploadConflict),
+            new[] { "每次询问", "直接覆盖", "跳过同名文件" });
+        sp.Children.Add(NewLabeledRow("目标目录已有同名文件时", conflict, caption));
+
+        sp.Children.Add(NewHeader("行为", section));
+        sp.Children.Add(NewCheckbox("SettingsCloudNotify", "云盘传输完成时显示通知", _initial.CloudNotifyOnCompletion));
+        sp.Children.Add(NewCheckbox("SettingsCloudResumeOnStartup", "启动时恢复上次未完成的云盘传输", _initial.CloudResumeOnStartup));
+
+        ContentHost.Children.Add(sp);
+    }
+
+    private void BrowseDownloadDirectory_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog { Title = "选择默认下载目录" };
+        if (dialog.ShowDialog(this) != true) return;
+        if (_downloadDirectoryBox is not null) _downloadDirectoryBox.Text = dialog.FolderName;
+    }
+
+    internal static int ConflictIndex(CloudUploadConflictPolicy policy) => policy switch
+    {
+        CloudUploadConflictPolicy.Overwrite => 1,
+        CloudUploadConflictPolicy.Skip => 2,
+        _ => 0
+    };
+
+    internal static CloudUploadConflictPolicy ConflictPolicy(int index) => index switch
+    {
+        1 => CloudUploadConflictPolicy.Overwrite,
+        2 => CloudUploadConflictPolicy.Skip,
+        _ => CloudUploadConflictPolicy.Ask
+    };
 
     private void BuildActionPage(string title, string description, Action? onLaunch, string? emptyMessage = null)
     {
@@ -273,6 +366,8 @@ public partial class SettingsWindow : Window
                     "SettingsStartWithWindows" => value with { StartWithWindows = cb.IsChecked == true },
                     "SettingsVerifyCopies" => value with { DefaultVerifyCopies = cb.IsChecked == true },
                     "SettingsNotifyOnCompletion" => value with { NotifyOnCompletion = cb.IsChecked == true },
+                    "SettingsCloudNotify" => value with { CloudNotifyOnCompletion = cb.IsChecked == true },
+                    "SettingsCloudResumeOnStartup" => value with { CloudResumeOnStartup = cb.IsChecked == true },
                     _ => value
                 };
         }
@@ -288,6 +383,7 @@ public partial class SettingsWindow : Window
                             ? new VersioningPolicy(FengSync.Core.VersioningMode.TimestampedArchive, value.DefaultVersioning.ArchiveDirectory, value.DefaultVersioning.KeepDays)
                             : new VersioningPolicy(FengSync.Core.VersioningMode.None, value.DefaultVersioning.ArchiveDirectory, value.DefaultVersioning.KeepDays)
                     },
+                    "SettingsCloudConflict" => value with { CloudUploadConflict = ConflictPolicy(co.SelectedIndex) },
                     _ => value
                 };
         var errors = ConfigurationValidator.Validate(value);
@@ -309,6 +405,9 @@ public partial class SettingsWindow : Window
                 "SettingsKeepDays" => int.TryParse(text, out var k) ? value with { DefaultVersioning = value.DefaultVersioning with { KeepDays = k } } : value,
                 "SettingsLogRetention" => int.TryParse(text, out var l) ? value with { LogRetentionDays = l } : value,
                 "SettingsNetworkRetry" => int.TryParse(text, out var n) ? value with { NetworkRetryCount = n } : value,
+                "SettingsCloudConcurrency" => int.TryParse(text, out var cloudCopies) ? value with { CloudMaxConcurrentTransfers = cloudCopies } : value,
+                "SettingsCloudRetry" => int.TryParse(text, out var cloudRetries) ? value with { CloudRetryCount = cloudRetries } : value,
+                "SettingsCloudDownloadDirectory" => value with { CloudDownloadDirectory = text.Trim() },
                 "SettingsIncludeRules" => value with { DefaultFilter = value.DefaultFilter with { Include = Lines(text) } },
                 "SettingsExcludeRules" => value with { DefaultFilter = value.DefaultFilter with { Exclude = Lines(text) } },
                 "SettingsArchiveDirectory" => value with { DefaultVersioning = value.DefaultVersioning with { ArchiveDirectory = text } },
@@ -344,6 +443,7 @@ public partial class SettingsWindow : Window
     private void ResetPage_Click(object sender, RoutedEventArgs e)
     {
         _initial = new ApplicationSettings();
-        NavigateTo("常规");
+        // Rebuild the page the user is on: resetting a page must not navigate them away from it.
+        NavigateTo(_page);
     }
 }

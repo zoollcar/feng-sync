@@ -24,6 +24,7 @@
       </Style>
      </ListBox.ItemContainerStyle>
      <ListBoxItem AutomationProperties.AutomationId="SettingsGeneralNav" AutomationProperties.Name="常规设置" Content="常规"/>
+     <ListBoxItem AutomationProperties.AutomationId="SettingsCloudNav" AutomationProperties.Name="云盘设置" Content="云盘"/>
      <ListBoxItem AutomationProperties.AutomationId="RunHistoryNav" AutomationProperties.Name="运行历史" Content="运行历史"/>
      <ListBoxItem AutomationProperties.AutomationId="LogsNav" AutomationProperties.Name="查看日志" Content="查看日志"/>
     </ListBox>

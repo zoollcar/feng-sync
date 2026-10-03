@@ -3,15 +3,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:fluent="clr-namespace:FluentIcons.Wpf;assembly=FluentIcons.Wpf"
         Title="云盘管理"
-        Width="1200"
-        Height="760"
-        MinWidth="900"
-        MinHeight="600"
+        Width="1280"
+        Height="820"
+        MinWidth="1000"
+        MinHeight="640"
         WindowStartupLocation="CenterOwner"
         AutomationProperties.AutomationId="RemoteEndpointManagerWindow"
         AutomationProperties.Name="云盘端点与文件管理">
     <Grid Margin="18">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="330" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="340" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
         <Grid Grid.Column="0">
             <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
             <StackPanel>
@@ -19,7 +19,19 @@
                 <TextBlock Text="管理云盘端点与挂载，并浏览和传输文件。" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
             </StackPanel>
             <GroupBox Grid.Row="1" Header="云盘端点" Margin="0,12,0,0">
-                <ListBox x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="云盘端点列表" BorderThickness="0" DisplayMemberPath="Display" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged" />
+                <ListBox x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="云盘端点列表" BorderThickness="0" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <!-- Three lines per row: the endpoint, whether it still answers, and its quota. The
+                                 failure reason stays in the tooltip so a long error cannot stretch the list. -->
+                            <StackPanel Margin="0,3">
+                                <TextBlock Text="{Binding Display}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding StatusText}" Style="{StaticResource CaptionTextStyle}" ToolTip="{Binding Detail}" />
+                                <TextBlock Text="{Binding QuotaText}" Style="{StaticResource CaptionTextStyle}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </GroupBox>
             <StackPanel Grid.Row="2" Margin="0,10,0,0">
                 <StackPanel Orientation="Horizontal">
@@ -31,6 +43,7 @@
                     <!-- Collapsed unless the selected endpoint is Google Drive: only that backend needs an
                          interactive browser authorization, so for SFTP/S3 the button would lead nowhere. -->
                     <Button x:Name="ReconnectButton" AutomationProperties.Name="重新登录所选云盘端点" Content="重新登录" Click="Reconnect_Click" Visibility="Collapsed" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="CheckButton" AutomationProperties.AutomationId="CheckCloudEndpoint" AutomationProperties.Name="检查所选云盘端点的连接与容量" Content="检查连接" Click="Check_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
                     <Button x:Name="DeleteButton" AutomationProperties.Name="删除所选云盘端点" Content="删除" Click="Delete_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
                 </StackPanel>
             </StackPanel>
@@ -48,32 +61,75 @@
         </Grid>
 
         <Grid Grid.Column="2" AllowDrop="True" DragOver="FileBrowser_DragOver" DragLeave="FileBrowser_DragLeave" Drop="FileBrowser_Drop">
-            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <TextBlock Text="文件浏览器" Style="{StaticResource DisplayTitleTextStyle}" />
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,8">
-                <Button x:Name="BackButton" AutomationProperties.Name="返回上一级目录" Content="返回上一级" Click="Back_Click" Style="{StaticResource TertiaryButtonStyle}" />
+
+            <ItemsControl x:Name="Breadcrumbs" Grid.Row="1" AutomationProperties.AutomationId="CloudBreadcrumbs" AutomationProperties.Name="当前路径导航" Margin="0,10,0,0">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Content="{Binding Name}" Tag="{Binding Path}" Click="Breadcrumb_Click" Margin="0,0,4,4" Style="{StaticResource TertiaryButtonStyle}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <DockPanel Grid.Row="2" Margin="0,6,0,0">
+                <Button DockPanel.Dock="Right" Content="转到" Click="Go_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" AutomationProperties.AutomationId="CloudAddressGo" AutomationProperties.Name="转到输入的路径" />
+                <TextBox x:Name="AddressBox" AutomationProperties.AutomationId="CloudAddressBar" AutomationProperties.Name="远程路径地址栏" KeyDown="AddressBox_KeyDown" Padding="8,6,8,6" />
+            </DockPanel>
+
+            <WrapPanel Grid.Row="3" Margin="0,10,0,0">
+                <Button x:Name="BackButton" AutomationProperties.Name="返回上一级目录" Content="上一级" Click="Back_Click" Style="{StaticResource TertiaryButtonStyle}" />
+                <Button x:Name="HistoryBackButton" AutomationProperties.AutomationId="CloudHistoryBack" AutomationProperties.Name="后退到上一个访问过的目录" Content="后退" Click="HistoryBack_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <Button x:Name="HistoryForwardButton" AutomationProperties.AutomationId="CloudHistoryForward" AutomationProperties.Name="前进到下一个访问过的目录" Content="前进" Click="HistoryForward_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                 <Button AutomationProperties.Name="刷新当前目录" Content="刷新" Click="BrowseRefresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <TextBlock x:Name="PathText" AutomationProperties.Name="当前远程路径" VerticalAlignment="Center" Margin="14,0,0,0" Style="{StaticResource BodyStrongTextStyle}" />
-                <Button AutomationProperties.Name="上传文件到当前目录" Content="上传文件" Click="UploadFiles_Click" Margin="20,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
+                <Button x:Name="NewFolderButton" AutomationProperties.AutomationId="CloudNewFolder" AutomationProperties.Name="在当前目录新建文件夹" Content="新建文件夹" Click="NewFolder_Click" Margin="20,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="RenameButton" AutomationProperties.AutomationId="CloudRename" AutomationProperties.Name="重命名所选项目" Content="重命名" Click="Rename_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="DeleteEntryButton" AutomationProperties.AutomationId="CloudDeleteEntries" AutomationProperties.Name="删除所选项目" Content="删除" Click="DeleteEntries_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+                <Button x:Name="DownloadButton" AutomationProperties.AutomationId="CloudDownload" AutomationProperties.Name="下载所选文件" Content="下载" Click="DownloadSelected_Click" Margin="20,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button AutomationProperties.Name="上传文件到当前目录" Content="上传文件" Click="UploadFiles_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
                 <Button AutomationProperties.Name="上传文件夹到当前目录" Content="上传文件夹" Click="UploadFolder_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
                 <Button AutomationProperties.AutomationId="OpenCloudTransfers" AutomationProperties.Name="打开云盘传输窗口" Content="查看传输" Click="OpenTransfers_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-            </StackPanel>
-            <ListView x:Name="FileList" Grid.Row="2" AutomationProperties.Name="当前目录中的文件" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening" PreviewMouseLeftButtonDown="FileList_PreviewMouseLeftButtonDown" PreviewMouseMove="FileList_PreviewMouseMove">
+            </WrapPanel>
+
+            <WrapPanel Grid.Row="4" Margin="0,10,0,8">
+                <TextBlock Text="搜索" VerticalAlignment="Center" />
+                <TextBox x:Name="SearchBox" AutomationProperties.AutomationId="CloudSearch" AutomationProperties.Name="按名称或路径搜索" Width="200" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown" />
+                <CheckBox x:Name="SearchRecursiveBox" AutomationProperties.AutomationId="CloudSearchRecursive" AutomationProperties.Name="搜索包含子目录" Content="包含子目录" Margin="12,0,0,0" VerticalAlignment="Center" />
+                <Button AutomationProperties.AutomationId="CloudSearchRun" AutomationProperties.Name="在整个端点内搜索" Content="搜索" Click="Search_Click" Margin="12,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button AutomationProperties.AutomationId="CloudSearchClear" AutomationProperties.Name="清除搜索条件" Content="清除" Click="SearchClear_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <TextBlock Text="排序" VerticalAlignment="Center" Margin="20,0,0,0" />
+                <ComboBox x:Name="SortBox" AutomationProperties.AutomationId="CloudSortColumn" AutomationProperties.Name="排序依据" Width="110" Margin="8,0,0,0" SelectionChanged="Sort_Changed" />
+                <Button x:Name="SortDirectionButton" AutomationProperties.AutomationId="CloudSortDirection" AutomationProperties.Name="切换升序或降序" Content="升序" Click="SortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <TextBlock x:Name="ViewSummary" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Margin="20,0,0,0" />
+            </WrapPanel>
+
+            <ListView x:Name="FileList" Grid.Row="5" SelectionMode="Extended" SelectionChanged="FileList_SelectionChanged" AutomationProperties.Name="当前目录中的文件" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening" PreviewMouseLeftButtonDown="FileList_PreviewMouseLeftButtonDown" PreviewMouseMove="FileList_PreviewMouseMove">
                 <ListView.View><GridView>
-                    <GridViewColumn Header="名称" Width="310"><GridViewColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="{Binding Icon}" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource LibraryIconStyle}" /><TextBlock Text="{Binding Name}" VerticalAlignment="Center" /></StackPanel></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
-                    <GridViewColumn Header="类型" Width="90" DisplayMemberBinding="{Binding Type}" />
+                    <GridViewColumn Header="名称" Width="320"><GridViewColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="{Binding Icon}" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource LibraryIconStyle}" /><TextBlock Text="{Binding NameDisplay}" VerticalAlignment="Center" /></StackPanel></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
+                    <GridViewColumn Header="类型" Width="80" DisplayMemberBinding="{Binding Type}" />
                     <GridViewColumn Header="大小" Width="100" DisplayMemberBinding="{Binding SizeDisplay}" />
                     <GridViewColumn Header="修改时间" Width="150" DisplayMemberBinding="{Binding ModifiedDisplay}" />
                 </GridView></ListView.View>
             </ListView>
-            <Border x:Name="DropHint" Grid.Row="2" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="{StaticResource RadiusMedium}" Background="{DynamicResource AccentBrush}" Opacity="0.94" Margin="2">
+            <Border x:Name="DropHint" Grid.Row="5" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="{StaticResource RadiusMedium}" Background="{DynamicResource AccentBrush}" Opacity="0.94" Margin="2">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                     <TextBlock Text="松开鼠标即可上传" Foreground="White" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
                     <TextBlock x:Name="DropHintText" Foreground="White" FontSize="13" Margin="0,8,0,0" HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center" />
                 </StackPanel>
             </Border>
-            <StackPanel Grid.Row="3" Margin="0,8,0,0">
-                <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" AutomationProperties.Name="文件传输进度" />
+
+            <StackPanel Grid.Row="6" Margin="0,8,0,0">
+                <TextBlock x:Name="PathText" AutomationProperties.AutomationId="CloudCurrentPath" AutomationProperties.Name="当前远程路径" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" AutomationProperties.Name="文件传输进度" Margin="0,6,0,0" />
                 <TextBlock x:Name="StatusText" AutomationProperties.Name="文件传输状态" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,5,0,0" />
             </StackPanel>
         </Grid>

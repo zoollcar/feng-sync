@@ -27,4 +27,53 @@ public sealed record ApplicationSettings
     public string? SkippedUpdateVersion { get; init; }
     /// <summary>Persisted main-window Profile workspace width in device-independent pixels.</summary>
     public double MainWindowSidebarWidth { get; init; } = 260;
+
+    /// <summary>
+    /// How many cloud uploads/downloads the cloud manager runs at once. Deliberately separate from
+    /// <see cref="DefaultMaxConcurrentCopies"/>: a sync run is one planned batch over a profile, while the
+    /// cloud manager is an interactive queue the user watches and reorders by hand, so tuning one must not
+    /// silently retune the other.
+    /// </summary>
+    public int CloudMaxConcurrentTransfers { get; init; } = 2;
+
+    /// <summary>
+    /// Automatic retries for a cloud transfer before it is reported as failed. 0 means a failure is
+    /// reported immediately and only the user's own 断点续传 restarts it.
+    /// </summary>
+    public int CloudRetryCount { get; init; } = 2;
+
+    /// <summary>
+    /// Where the file browser downloads to when the user accepts the default location. Empty means the
+    /// user is asked for a path on every download.
+    /// </summary>
+    public string? CloudDownloadDirectory { get; init; }
+
+    /// <summary>What an upload does when the destination directory already holds the same file name.</summary>
+    public CloudUploadConflictPolicy CloudUploadConflict { get; init; } = CloudUploadConflictPolicy.Ask;
+
+    /// <summary>
+    /// Notifies when a cloud transfer batch drains. Separate from <see cref="NotifyOnCompletion"/> because
+    /// that one fires for a scheduled sync run, which the user may never be watching.
+    /// </summary>
+    public bool CloudNotifyOnCompletion { get; init; } = true;
+
+    /// <summary>
+    /// Re-lists unfinished cloud transfers when a shell starts. Off means the transfer window loads them on
+    /// first open instead, which is what a user who never uses the cloud manager wants.
+    /// </summary>
+    public bool CloudResumeOnStartup { get; init; } = true;
+}
+
+/// <summary>
+/// What an upload does when the destination already holds a file with the same name. The upload path
+/// predates this setting and asked once per batch; the policy makes the answer reusable.
+/// </summary>
+public enum CloudUploadConflictPolicy
+{
+    /// <summary>Ask once per batch, which is the historical behaviour.</summary>
+    Ask,
+    /// <summary>Replace the existing file without asking.</summary>
+    Overwrite,
+    /// <summary>Leave the existing file alone and upload only the names that are free.</summary>
+    Skip
 }
