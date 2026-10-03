@@ -1,3 +1,4 @@
+using FengSync.Core.Configuration;
 using FengSync.Core.Mount;
 using FengSync.Core.Rclone.Lifecycle;
 using FengSync.Core.SftpServer;
@@ -15,6 +16,9 @@ public partial class App : System.Windows.Application, IAppServiceHost
 
     public App()
     {
+        // The daemon is created on first use, which is always after this runs, so the proxy setting is
+        // read from disk exactly once per process — at the moment rclone can still be told about it.
+        _rcloneLifecycle.ProxyOptionsProvider = RcloneProxySettings.LoadAsync;
         _sftpService = new SftpServerHostedService(_rcloneLifecycle);
         _mountService = new RcloneMountService(_rcloneLifecycle);
         // Installed here, not in OnStartup: StartupUri windows are created after the constructor, and

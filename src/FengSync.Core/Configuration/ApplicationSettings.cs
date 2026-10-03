@@ -62,6 +62,18 @@ public sealed record ApplicationSettings
     /// first open instead, which is what a user who never uses the cloud manager wants.
     /// </summary>
     public bool CloudResumeOnStartup { get; init; } = true;
+
+    /// <summary>
+    /// Fixed proxy for the rclone processes this application starts, for example <c>proxy.corp:8080</c> or
+    /// <c>socks5://127.0.0.1:1080</c>. Empty inherits the environment variables and then the Windows
+    /// Internet Settings.
+    /// </summary>
+    /// <remarks>
+    /// Named after rclone rather than after the cloud page it is edited on: there is one daemon per
+    /// process and its proxy is fixed at process start, so this governs every rclone operation — cloud
+    /// browsing, mounts, the SFTP service and profile sync runs alike. It never touches the system proxy.
+    /// </remarks>
+    public string? RcloneProxy { get; init; }
 }
 
 /// <summary>

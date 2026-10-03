@@ -195,6 +195,19 @@ public partial class SettingsWindow : Window
             Margin = new Thickness(0, 4, 0, 0)
         });
 
+        sp.Children.Add(NewHeader("网络代理", section));
+        sp.Children.Add(NewLabeledRow("代理服务器", NewTextBox("SettingsCloudProxy", _initial.RcloneProxy ?? ""), caption));
+        sp.Children.Add(new TextBlock
+        {
+            Text = "留空表示自动：先用环境变量里的 HTTP_PROXY/HTTPS_PROXY，再用 Windows 的 Internet 选项。"
+                 + "填写 host:port（如 proxy.corp:8080）或带协议的完整地址（如 http://proxy.corp:8080、socks5://127.0.0.1:1080）。"
+                 + "只影响本程序自己启动的 rclone 进程——云盘浏览、挂载、SFTP 服务与同步任务都会走它，"
+                 + "不会修改系统或其他程序的代理设置。代理在 rclone 启动时确定，改动需重启程序后才生效。",
+            Style = caption,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+
         sp.Children.Add(NewHeader("下载", section));
         var folder = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         folder.Children.Add(new TextBlock { Text = "默认下载目录", Style = caption, Margin = new Thickness(0, 0, 0, 6) });
@@ -408,6 +421,7 @@ public partial class SettingsWindow : Window
                 "SettingsCloudConcurrency" => int.TryParse(text, out var cloudCopies) ? value with { CloudMaxConcurrentTransfers = cloudCopies } : value,
                 "SettingsCloudRetry" => int.TryParse(text, out var cloudRetries) ? value with { CloudRetryCount = cloudRetries } : value,
                 "SettingsCloudDownloadDirectory" => value with { CloudDownloadDirectory = text.Trim() },
+                "SettingsCloudProxy" => value with { RcloneProxy = text.Trim() },
                 "SettingsIncludeRules" => value with { DefaultFilter = value.DefaultFilter with { Include = Lines(text) } },
                 "SettingsExcludeRules" => value with { DefaultFilter = value.DefaultFilter with { Exclude = Lines(text) } },
                 "SettingsArchiveDirectory" => value with { DefaultVersioning = value.DefaultVersioning with { ArchiveDirectory = text } },

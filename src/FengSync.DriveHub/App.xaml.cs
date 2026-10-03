@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
+using FengSync.Core.Configuration;
 using FengSync.Core.Mount;
 using FengSync.Core.Rclone.Lifecycle;
 using FengSync.Services;
@@ -22,6 +23,9 @@ public partial class DriveHubApp : Application, IAppServiceHost
 
     public DriveHubApp()
     {
+        // DriveHub owns its own daemon, so it needs its own proxy hook: the main shell's App never runs
+        // in this process, and without this the standalone entry would silently ignore the setting.
+        _rcloneLifecycle.ProxyOptionsProvider = RcloneProxySettings.LoadAsync;
         _mountService = new RcloneMountService(_rcloneLifecycle);
         // Before OnStartup: the window reads AppServices.Current while its own constructor runs.
         AppServices.Install(this);

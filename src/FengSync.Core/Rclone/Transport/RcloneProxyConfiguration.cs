@@ -70,8 +70,20 @@ public static class RcloneProxyResolver
     }
 
     private static RcloneProxyConfiguration Build(RcloneProxySource source, string? http, string? https,
-        string? all, string? no, string? pac = null) => new(source, Normalize(http), Normalize(https),
-            Normalize(all), MergeNoProxy(no), pac);
+        string? all, string? no, string? pac = null)
+    {
+        http = Normalize(http);
+        https = Normalize(https);
+        all = Normalize(all);
+        // rclone's HTTP client only consults HTTP_PROXY/HTTPS_PROXY: it never reads ALL_PROXY. Verified
+        // against the bundled rclone by pointing each variable at a dead port — the ALL_PROXY run still
+        // reached the target, while HTTP_PROXY/HTTPS_PROXY runs failed with "proxyconnect tcp". Without
+        // this fallback a proxy that only ever arrives as all_proxy (Windows' "socks=", or a shell that
+        // exports nothing else) would be handed to the child and then silently ignored.
+        http ??= all;
+        https ??= all;
+        return new(source, http, https, all, MergeNoProxy(no), pac);
+    }
 
     private static RcloneProxyOptions ParseWinInet(string value)
     {
