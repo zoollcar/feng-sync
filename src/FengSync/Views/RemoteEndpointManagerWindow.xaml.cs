@@ -182,17 +182,16 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         selectName ??= Selected?.Name;
         var rows = CloudEndpointList.Arrange(_loaded, EndpointSearchBox.Text, _endpointSortColumn, _endpointSortDescending);
-        int index;
         _rearranging = true;
         try
         {
             _accounts.Clear();
             foreach (var row in rows) _accounts.Add(row);
-            index = selectName is null ? -1 : rows.ToList().FindIndex(row => row.Account.Name == selectName);
-            // A filter that hides the selected endpoint selects the first survivor rather than clearing the
-            // list: an empty file pane with no visible cause reads as a failure.
-            if (index < 0 && rows.Count > 0) index = 0;
-            EndpointList.SelectedIndex = index;
+            // By item rather than by index, so the selection cannot drift when the order changes.
+            // The first survivor is selected when the preferred name is gone — including when there was no
+            // preferred name at all: an empty file pane with no visible cause reads as a failure.
+            EndpointList.SelectedItem = (selectName is null ? null : rows.FirstOrDefault(row => row.Account.Name == selectName))
+                ?? rows.FirstOrDefault();
         }
         finally { _rearranging = false; }
 
@@ -268,6 +267,7 @@ public partial class RemoteEndpointManagerWindow : Window
         EditButton.IsEnabled = Selected is not null;
         CheckButton.IsEnabled = Selected is not null;
         RenameEndpointButton.IsEnabled = Selected is not null;
+        OrganizeEndpointButton.IsEnabled = Selected is not null;
         // Follows the rows on screen rather than everything that was loaded: the button sits beside the
         // search box, and its status line reports how many it probed, so a filter that is not applied would
         // make the two disagree.
@@ -338,8 +338,7 @@ public partial class RemoteEndpointManagerWindow : Window
             var editor = new CloudEndpointEditorWindow { Owner = this };
             if (editor.ShowDialog() != true || editor.SavedRemoteName is null) return;
             await RefreshAsync();
-            var index = _accounts.ToList().FindIndex(row => row.Account.Name == editor.SavedRemoteName);
-            if (index >= 0) EndpointList.SelectedIndex = index;
+            SelectEndpoint(editor.SavedRemoteName);
             StatusText.Text = $"已创建端点：{editor.SavedRemoteName}。";
         });
     }
@@ -355,8 +354,7 @@ public partial class RemoteEndpointManagerWindow : Window
             var editor = new CloudEndpointEditorWindow(target) { Owner = this };
             if (editor.ShowDialog() != true || editor.SavedRemoteName is null) return;
             await RefreshAsync();
-            var index = _accounts.ToList().FindIndex(row => row.Account.Name == editor.SavedRemoteName);
-            if (index >= 0) EndpointList.SelectedIndex = index;
+            SelectEndpoint(editor.SavedRemoteName);
             StatusText.Text = $"已更新端点：{editor.SavedRemoteName}。";
         });
     }
@@ -412,10 +410,45 @@ public partial class RemoteEndpointManagerWindow : Window
             if (requested is null) return;
             var result = await CloudEndpointRename.RenameAsync(account.Name, requested, mounted);
             await RefreshAsync();
-            var index = _accounts.ToList().FindIndex(row => row.Account.Name == result.NewName);
-            if (index >= 0) EndpointList.SelectedIndex = index;
+            SelectEndpoint(result.NewName);
             StatusText.Text = DescribeRename(result);
         });
+    }
+
+    /// <summary>
+    /// Files the selected endpoint under a group and gives it tags. Both live in this application's metadata
+    /// file, so the row is updated in place rather than reloaded: a reload would throw away the connection
+    /// status and quota a check had already paid for.
+    /// </summary>
+    private async void OrganizeEndpoint_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择要设置分组与标签的端点。"; return; }
+        var row = _accounts.FirstOrDefault(candidate => candidate.Account.Name == account.Name);
+        if (row is null) return;
+        await RunBusyAsync(OrganizeEndpointButton, "正在保存…", "正在保存分组与标签…", async () =>
+        {
+            var dialog = new CloudEndpointOrganizationWindow(account.Name, account.Metadata?.Group,
+                account.Metadata?.Tags, _loaded.Select(other => other.Group).Where(group => group.Length > 0)) { Owner = this };
+            if (dialog.ShowDialog() != true) return;
+
+            var store = new CloudEndpointMetadataStore();
+            var metadata = CloudEndpointOrganization.Merge(await store.FindAsync(account.Name), account, dialog.Group, dialog.Tags);
+            await store.UpsertAsync(metadata);
+            row.AdoptMetadata(metadata);
+            // Re-arranged because the group decides where the row belongs; without it the list would keep
+            // showing the endpoint under its previous heading.
+            ApplyEndpointView(account.Name, browse: false);
+            StatusText.Text = CloudEndpointOrganization.Describe(account.Name, metadata.Group, metadata.Tags);
+        });
+    }
+
+    /// <summary>
+    /// Points the list at one endpoint by name. By item rather than by index, because grouping makes the
+    /// selector's own items the group headings.
+    /// </summary>
+    private void SelectEndpoint(string name)
+    {
+        if (_accounts.FirstOrDefault(row => row.Account.Name == name) is { } row) EndpointList.SelectedItem = row;
     }
 
     /// <summary>What the status line says after a rename, kept separate so the wording is testable.</summary>

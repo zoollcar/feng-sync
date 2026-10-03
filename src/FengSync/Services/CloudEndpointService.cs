@@ -283,6 +283,10 @@ public static class CloudEndpointService
         if (existing.Contains(backing, StringComparer.OrdinalIgnoreCase) && !replace)
             throw new InvalidOperationException($"内部名称“{backing}”已被占用，请修改显示名称。");
 
+        // Read before the write below replaces the record: the group and tags are the user's own filing and
+        // this path has no opinion about them, so it must carry them across rather than drop them.
+        var previous = await Metadata.FindAsync(remoteName, ct);
+
         var prefix = CloudEndpointMetadata.NormalizeRoot(values.Bucket, values.Subdirectory);
         var configPath = BundledRclone.ConfigPath;
         // This path writes rclone.conf directly instead of going through CreateRemoteAsync, so it has to
@@ -300,7 +304,9 @@ public static class CloudEndpointService
 
             await CreateStaticRemoteAsync(ConfigurationApi, backing, "s3", DisplayName(EndpointType.S3), S3Parameters(values), ct);
             await CreateStaticRemoteAsync(ConfigurationApi, remoteName, "alias", "别名", AliasParameters(backing, prefix), ct);
-            await Metadata.UpsertAsync(new(remoteName, "alias", values.Provider, values.Bucket.Trim(), values.Subdirectory.Trim().Trim('/'), backing), ct);
+            await Metadata.UpsertAsync(CloudEndpointOrganization.Preserve(previous,
+                new(remoteName, "alias", values.Provider, values.Bucket.Trim(),
+                    values.Subdirectory.Trim().Trim('/'), backing)), ct);
         }
         catch
         {
@@ -311,8 +317,18 @@ public static class CloudEndpointService
         finally { if (File.Exists(backup)) File.Delete(backup); }
     }
 
-    public static Task SaveMetadataAsync(string remoteName, EndpointType kind, string rootPath, CancellationToken ct = default) =>
-        Metadata.UpsertAsync(new(remoteName, RcloneType(kind), DisplayName(kind), rootPath.Trim().Trim('/'), ""), ct);
+    /// <summary>
+    /// Records the metadata behind a non-S3 endpoint after a create or an edit. The existing record is read
+    /// first and everything this path does not own is carried across — otherwise changing an endpoint's root
+    /// directory would quietly erase the group and tags the user filed it under.
+    /// </summary>
+    public static async Task SaveMetadataAsync(string remoteName, EndpointType kind, string rootPath, CancellationToken ct = default)
+    {
+        var store = Metadata;
+        var existing = await store.FindAsync(remoteName, ct);
+        await store.UpsertAsync(CloudEndpointOrganization.Preserve(existing,
+            new(remoteName, RcloneType(kind), DisplayName(kind), rootPath.Trim().Trim('/'), "")), ct);
+    }
 
     /// <summary>rclone configuration parameters for an S3 endpoint. Visible to tests via InternalsVisibleTo.</summary>
     internal static Dictionary<string, string> S3Parameters(S3EndpointValues values) => new()

@@ -174,14 +174,64 @@ public static class CloudEndpointStatusService
 public sealed class CloudEndpointRow(CloudEndpointAccount account) : INotifyPropertyChanged
 {
     private CloudEndpointStatus _status = CloudEndpointStatus.Unknown;
+    private CloudEndpointAccount _account = account;
+    private bool _isGroupStart;
 
-    public CloudEndpointAccount Account { get; } = account;
+    public CloudEndpointAccount Account
+    {
+        get => _account;
+        private set
+        {
+            _account = value;
+            Raise(nameof(Account));
+            Raise(nameof(Display));
+            Raise(nameof(Group));
+            Raise(nameof(GroupLabel));
+            Raise(nameof(IsUngrouped));
+            Raise(nameof(TagText));
+        }
+    }
+
     public string Display => Account.Display;
     public string StatusText => Status.HealthText;
     public string QuotaText => Status.QuotaText;
     /// <summary>The failure reason, shown as a tooltip rather than in the row, which stays one line tall.</summary>
     public string Detail => Status.Detail;
     public CloudEndpointHealth Health => Status.Health;
+
+    /// <summary>The heading this row is filed under; empty when the endpoint is ungrouped.</summary>
+    public string Group => CloudEndpointOrganization.NormalizeGroup(Account.Metadata?.Group) ?? "";
+    /// <summary>What the list's group header shows. Never empty, so every row has a heading.</summary>
+    public string GroupLabel => CloudEndpointOrganization.GroupLabel(Account.Metadata?.Group);
+    /// <summary>Ungrouped rows sort after the named groups rather than before them.</summary>
+    public bool IsUngrouped => Group.Length == 0;
+    /// <summary>The labels, as the row shows them; empty when the endpoint has none.</summary>
+    public string TagText => CloudEndpointOrganization.FormatTags(Account.Metadata?.Tags);
+
+    /// <summary>
+    /// True for the first row of each group, which is the row the list renders the heading above. The heading
+    /// belongs to the row rather than to a WPF group because grouping through the view turns the selector's
+    /// own items into the group objects, and the entire file browser hangs off the selected endpoint.
+    /// </summary>
+    public bool IsGroupStart => _isGroupStart;
+    /// <summary>The heading to render above this row, or empty for a row that continues its group.</summary>
+    public string GroupHeading => _isGroupStart ? GroupLabel : "";
+
+    /// <summary>Called by the list while arranging, so the rows are already in group order.</summary>
+    internal void MarkGroupStart(bool value)
+    {
+        if (_isGroupStart == value) return;
+        _isGroupStart = value;
+        Raise(nameof(IsGroupStart));
+        Raise(nameof(GroupHeading));
+    }
+
+    /// <summary>
+    /// Takes on metadata edited elsewhere — a group or tag change — while keeping the probed status, which a
+    /// reload would have to ask the cloud service for again. The list is re-arranged by the caller, because
+    /// the row's new group decides where it belongs.
+    /// </summary>
+    public void AdoptMetadata(CloudEndpointMetadata? metadata) => Account = Account with { Metadata = metadata };
 
     public CloudEndpointStatus Status
     {

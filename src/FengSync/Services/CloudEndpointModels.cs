@@ -50,7 +50,14 @@ public sealed class S3EndpointDraft
 /// Name of the hidden backing <c>s3</c> remote when this endpoint enforces its prefix through an rclone
 /// <c>alias</c>. <see langword="null"/> for every endpoint that keeps its prefix only in metadata.
 /// </param>
-public sealed record CloudEndpointMetadata(string RemoteName, string Type, string Provider, string Bucket, string Subdirectory, string? AliasOf = null)
+/// <param name="Group">
+/// The heading this endpoint is filed under in the manager's list. Empty means ungrouped. Organisation is
+/// this application's own concept — rclone has nowhere to store it — so it lives here and never in
+/// <c>rclone.conf</c>.
+/// </param>
+/// <param name="Tags">Free-form labels, matched by the endpoint search.</param>
+public sealed record CloudEndpointMetadata(string RemoteName, string Type, string Provider, string Bucket, string Subdirectory,
+    string? AliasOf = null, string? Group = null, IReadOnlyList<string>? Tags = null)
 {
     /// <summary>The bucket/prefix the user configured, as shown in the UI.</summary>
     [JsonIgnore] public string Prefix => NormalizeRoot(Bucket, Subdirectory);
@@ -158,6 +165,21 @@ public sealed class CloudEndpointMetadataStore(string? path = null)
             values.Remove(remoteName);
             if (replacement is not null) values[replacement.RemoteName] = replacement;
             await WriteUnsafeAsync(values.Values, ct);
+        }
+        finally { Gate.Release(); }
+    }
+
+    /// <summary>
+    /// The stored metadata for one endpoint, or null. Callers that rewrite a record need the current one
+    /// first: the fields they do not own (an enforced prefix, the group) would otherwise be dropped.
+    /// </summary>
+    public async Task<CloudEndpointMetadata?> FindAsync(string remoteName, CancellationToken ct = default)
+    {
+        await Gate.WaitAsync(ct);
+        try
+        {
+            var values = await ReadUnsafeAsync(ct);
+            return values.TryGetValue(remoteName, out var existing) ? existing : null;
         }
         finally { Gate.Release(); }
     }
