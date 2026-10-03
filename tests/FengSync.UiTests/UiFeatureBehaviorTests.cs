@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Data;
 using FengSync.Core;
 using FengSync.Core.Mount;
 using FengSync.Core.Rclone.Configuration;
@@ -350,6 +351,94 @@ public sealed class UiFeatureBehaviorTests
     }
 
     [Fact]
+    public void The_endpoint_list_files_rows_under_group_headings()
+    {
+        RunSta(() =>
+        {
+            EnsureApplicationResources();
+            var previous = AppServices.TryCurrent;
+            AppServices.Install(new HeadlessShell());
+            try
+            {
+                var window = new RemoteEndpointManagerWindow();
+                window.LoadEndpointsForTest(
+                [
+                    EndpointRow("nas", "sftp", "SFTP", "team/docs", CloudEndpointHealth.Connected, "beta"),
+                    EndpointRow("archive", "s3", "Cloudflare", "team/files", CloudEndpointHealth.Unknown),
+                    EndpointRow("work", "drive", "Google Drive", "team/work", CloudEndpointHealth.NeedsLogin, "beta"),
+                    EndpointRow("home", "sftp", "SFTP", "", CloudEndpointHealth.Connected, "alpha")
+                ]);
+
+                var view = CollectionViewSource.GetDefaultView(window.EndpointList.ItemsSource);
+                // The list is deliberately not grouped through the view: the heading is part of the row, so
+                // the selector's items stay the rows. Grouping would turn them into the group objects and
+                // break the selection the whole file browser hangs off.
+                Assert.Empty(view.GroupDescriptions);
+
+                // Rows arrive group-first, health-ascending inside each group, ungrouped last, and only the
+                // first row of each group carries the heading.
+                Assert.Equal(["home", "work", "nas", "archive"], VisibleNames(window));
+                Assert.Equal(["alpha", "beta", "", "未分组"], window.VisibleEndpoints.Select(row => row.GroupHeading));
+
+                // The list always has a selection, so the file pane is never empty without a visible cause.
+                Assert.Equal("home", SelectedName(window));
+                Assert.Equal("OrganizeCloudEndpoint", AutomationProperties.GetAutomationId(window.OrganizeEndpointButton));
+                Assert.True(window.OrganizeEndpointButton.IsEnabled);
+                // Installing the rows is not a gesture, so nothing has asked the remote service for anything.
+                AssertNoDirectoryListing(window);
+
+                // Filtering selects a real endpoint rather than a heading, and clearing the filter leaves the
+                // selection where it was: a keystroke must never move the browser off the endpoint it shows.
+                window.EndpointSearchBox.Text = "work";
+                Assert.Equal("work", SelectedName(window));
+                window.EndpointSearchBox.Text = "";
+                Assert.Equal("work", SelectedName(window));
+
+                // A filter that hides the selected endpoint falls back to the first survivor rather than
+                // clearing the list.
+                window.EndpointSearchBox.Text = "archive";
+                Assert.Equal("archive", SelectedName(window));
+                window.EndpointSearchBox.Text = "";
+                window.Close();
+            }
+            finally { AppServices.Install(previous); }
+        });
+    }
+
+    [Fact]
+    public void The_endpoint_list_keeps_the_grouped_order_when_the_sort_is_reversed()
+    {
+        RunSta(() =>
+        {
+            EnsureApplicationResources();
+            var previous = AppServices.TryCurrent;
+            AppServices.Install(new HeadlessShell());
+            try
+            {
+                var window = new RemoteEndpointManagerWindow();
+                window.LoadEndpointsForTest(
+                [
+                    EndpointRow("nas", "sftp", "SFTP", "team/docs", CloudEndpointHealth.Connected, "beta"),
+                    EndpointRow("archive", "s3", "Cloudflare", "team/files", CloudEndpointHealth.Unknown, "alpha"),
+                    EndpointRow("loose", "sftp", "SFTP", "", CloudEndpointHealth.Connected)
+                ]);
+
+                // Reversing the sort reverses the rows inside each heading, not the headings themselves:
+                // reversing the group order too would put 未分组 at the top and read as a different list.
+                window.EndpointSortBox.SelectedIndex = 1;
+                Click(window.EndpointSortDirectionButton);
+                Assert.Equal("降序", window.EndpointSortDirectionButton.Content);
+
+                Assert.Equal(["archive", "nas", "loose"], VisibleNames(window));
+                Assert.Equal(["alpha", "beta", "未分组"], window.VisibleEndpoints.Select(row => row.GroupHeading));
+                AssertNoDirectoryListing(window);
+                window.Close();
+            }
+            finally { AppServices.Install(previous); }
+        });
+    }
+
+    [Fact]
     public void An_edit_form_keeps_the_stored_sftp_password_unless_one_is_typed()
     {
         const string stored = "obscured-value-read-from-rclone";
@@ -495,10 +584,12 @@ public sealed class UiFeatureBehaviorTests
     }
 
     /// <summary>One row of the endpoint list, in the state the list's ordering rules read.</summary>
-    private static CloudEndpointRow EndpointRow(string name, string type, string provider, string prefix, CloudEndpointHealth health)
+    private static CloudEndpointRow EndpointRow(string name, string type, string provider, string prefix,
+        CloudEndpointHealth health, string? group = null, IReadOnlyList<string>? tags = null)
     {
         var parts = prefix.Split('/', 2);
-        var metadata = new CloudEndpointMetadata(name, type, provider, parts[0], parts.Length > 1 ? parts[1] : "");
+        var metadata = new CloudEndpointMetadata(name, type, provider, parts[0], parts.Length > 1 ? parts[1] : "",
+            null, group, tags);
         var row = new CloudEndpointRow(new CloudEndpointAccount(new RcloneAccount(name, type), metadata));
         row.Status = new CloudEndpointStatus(health, "");
         return row;

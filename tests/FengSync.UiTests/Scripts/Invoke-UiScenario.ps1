@@ -1433,6 +1433,27 @@ try {
       Wait-Until { try { (Find-NameContaining (Find-Id $manager 'CloudEndpointList') '已连接' 2).Current.Name -like '*已连接*' } catch { $false } } '“测试全部” did not report the reachable endpoint as connected.' 90 | Out-Null
       Wait-Until { try { $null -ne (Find-NameContaining $manager '检查结束' 2) } catch { $false } } 'The status line did not report the result of checking every endpoint.' 90 | Out-Null
       Assert-NoUiFailure 'check-every-endpoint' | Out-Null
+      # Grouping and tagging live in this application's own metadata file, so the only proof that the dialog
+      # writes them is to reopen it and read the boxes back. The heading and the tag search are what make the
+      # two fields worth setting, so both are checked through the list rather than through the store.
+      Click (Find-Id $manager 'OrganizeCloudEndpoint')
+      $organize = Find-WindowById 'CloudEndpointOrganizationWindow'
+      Set-Text (Find-Id $organize 'EndpointGroupBox') 'ui-group'
+      Set-Text (Find-Id $organize 'EndpointTagsBox') 'ui-tag, second-tag'
+      Capture-Element $organize 'remote-endpoint-organization.png' 'remote-file-manager' 'grouping and tagging the endpoint'
+      Click (Find-Id $organize 'EndpointOrganizationOk')
+      Wait-Until { try { $null -eq (Find-AppWindow { param($window) $window.Current.AutomationId -eq 'CloudEndpointOrganizationWindow' }) } catch { $false } } 'The grouping dialog did not close after saving.' 30 | Out-Null
+      Wait-Until { try { $null -ne (Find-NameContaining (Find-Id $manager 'CloudEndpointList') 'ui-group' 2) } catch { $false } } 'The endpoint list did not show the group heading.' 30 | Out-Null
+      Set-Text (Find-Id $manager 'CloudEndpointSearch') 'second-tag'
+      Wait-Until { try { $null -ne (Find-NameContaining (Find-Id $manager 'CloudEndpointList') $renamedName 2) } catch { $false } } 'Searching by tag did not find the tagged endpoint.' 30 | Out-Null
+      Set-Text (Find-Id $manager 'CloudEndpointSearch') ''
+      Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } 'Clearing the tag search did not restore the browser.' 30 | Out-Null
+      Click (Find-Id $manager 'OrganizeCloudEndpoint')
+      $organize = Find-WindowById 'CloudEndpointOrganizationWindow'
+      if ((Get-Text (Find-Id $organize 'EndpointGroupBox')) -ne 'ui-group') { throw "The endpoint's group was not persisted: '$(Get-Text (Find-Id $organize 'EndpointGroupBox'))'." }
+      if ((Get-Text (Find-Id $organize 'EndpointTagsBox')) -ne 'ui-tag、second-tag') { throw "The endpoint's tags were not persisted: '$(Get-Text (Find-Id $organize 'EndpointTagsBox'))'." }
+      Close-Window $organize
+      Assert-NoUiFailure 'organize-endpoint' | Out-Null
       Close-Window $manager
       # Build the sftp:// URI directly so the test does not depend on the manager's browse workflow. It uses
       # the renamed endpoint, so a rename that left the credentials behind fails here too.

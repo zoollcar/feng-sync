@@ -84,6 +84,20 @@ public sealed class CloudEndpointListTests
         Assert.True(CloudEndpointList.Matches(account, "sftp"));
     }
 
+    [Fact]
+    public void The_group_and_the_tags_are_searchable()
+    {
+        // Filing an endpoint under a group, or tagging it, is only worth doing if the search box finds it by
+        // that word — otherwise the labels are decoration.
+        var account = Account("nas", "sftp", "SFTP", "team/docs", group: "工作", tags: ["客户", "归档"]);
+
+        Assert.True(CloudEndpointList.Matches(account, "工作"));
+        Assert.True(CloudEndpointList.Matches(account, "客户"));
+        // The group and a tag are different fields, so a two-word query still narrows rather than widening.
+        Assert.True(CloudEndpointList.Matches(account, "工作 归档"));
+        Assert.False(CloudEndpointList.Matches(account, "私人"));
+    }
+
     // ---- ordering -------------------------------------------------------------------------------------
 
     [Fact]
@@ -161,6 +175,97 @@ public sealed class CloudEndpointListTests
         Assert.Empty(CloudEndpointList.Arrange([], null, CloudEndpointSortColumn.Name, true));
     }
 
+    // ---- grouping -------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Rows_arrive_grouped_so_each_heading_is_rendered_once()
+    {
+        // The list renders the heading above the first row of each group and nothing else, so the rows have to
+        // arrive contiguous per group; a group whose rows were scattered would render the same heading several
+        // times. The group is therefore the primary sort key even though it is not a column the user picks.
+        List<CloudEndpointRow> rows =
+        [
+            Row("nas", "sftp", "SFTP", "team/docs", CloudEndpointHealth.Connected, "beta"),
+            Row("archive", "s3", "Cloudflare", "team/files", CloudEndpointHealth.Unknown),
+            Row("work", "drive", "Google Drive", "team/work", CloudEndpointHealth.NeedsLogin, "beta"),
+            Row("home", "sftp", "SFTP", "", CloudEndpointHealth.Connected, "alpha")
+        ];
+
+        var arranged = CloudEndpointList.Arrange(rows, null, CloudEndpointSortColumn.Name, descending: false);
+
+        Assert.Equal(["home", "nas", "work", "archive"], arranged.Select(row => row.Account.Name));
+        // One heading per group, carried by the row that starts it; every other row carries none. Ordering by
+        // name puts "nas" first inside the beta group, so "work" is the continuation.
+        Assert.Equal(["alpha", "beta", "", "未分组"], arranged.Select(row => row.GroupHeading));
+    }
+
+    [Fact]
+    public void A_row_carries_the_heading_of_the_group_it_starts_in_every_order()
+    {
+        List<CloudEndpointRow> rows =
+        [
+            Row("nas", "sftp", "SFTP", "", CloudEndpointHealth.Connected, "beta"),
+            Row("home", "sftp", "SFTP", "", CloudEndpointHealth.Connected, "alpha"),
+            Row("loose", "sftp", "SFTP", "", CloudEndpointHealth.Connected)
+        ];
+
+        foreach (var column in Enum.GetValues<CloudEndpointSortColumn>())
+            foreach (var descending in new[] { false, true })
+                Assert.Equal(["alpha", "beta", "未分组"],
+                    CloudEndpointList.Arrange(rows, null, column, descending).Select(row => row.GroupHeading));
+    }
+
+    [Fact]
+    public void A_filter_that_removes_a_groups_first_row_promotes_the_next_one()
+    {
+        // The heading belongs to whichever row now starts the group, not to a fixed row: filtering must not
+        // leave a group with no heading at all.
+        List<CloudEndpointRow> rows =
+        [
+            Row("nas", "sftp", "SFTP", "", CloudEndpointHealth.Connected, "beta"),
+            Row("work", "sftp", "SFTP", "", CloudEndpointHealth.Connected, "beta")
+        ];
+
+        Assert.Equal(["beta", ""], CloudEndpointList.Arrange(rows, null, CloudEndpointSortColumn.Name, false).Select(row => row.GroupHeading));
+        Assert.Equal(["beta"], CloudEndpointList.Arrange(rows, "work", CloudEndpointSortColumn.Name, false).Select(row => row.GroupHeading));
+    }
+
+    [Fact]
+    public void The_ungrouped_rows_are_collected_under_one_heading_of_their_own()
+    {
+        List<CloudEndpointRow> rows =
+        [
+            Row("loose", "sftp", "SFTP", "", CloudEndpointHealth.Connected),
+            Row("filed", "sftp", "SFTP", "", CloudEndpointHealth.Connected, "工作")
+        ];
+
+        Assert.Equal(["filed", "loose"], Names(rows, CloudEndpointSortColumn.Name, descending: false));
+    }
+
+    [Fact]
+    public void The_chosen_sort_still_decides_the_order_inside_a_group()
+    {
+        // Grouping must not become the only ordering: inside a group the column the user picked still rules.
+        List<CloudEndpointRow> rows =
+        [
+            Row("a-healthy", "sftp", "SFTP", "", CloudEndpointHealth.Connected, "工作"),
+            Row("z-broken", "sftp", "SFTP", "", CloudEndpointHealth.NeedsLogin, "工作")
+        ];
+
+        Assert.Equal(["a-healthy", "z-broken"], Names(rows, CloudEndpointSortColumn.Name, descending: false));
+        Assert.Equal(["z-broken", "a-healthy"], Names(rows, CloudEndpointSortColumn.Health, descending: false));
+    }
+
+    [Fact]
+    public void A_group_name_is_kept_exactly_as_the_user_wrote_it()
+    {
+        // The heading is the user's own label; the list must not normalise it into something else.
+        var row = Row("nas", "sftp", "SFTP", "", CloudEndpointHealth.Connected, "  工作  ");
+
+        Assert.Equal("工作", row.Group);
+        Assert.Equal("工作", row.GroupLabel);
+    }
+
     // ---- helpers --------------------------------------------------------------------------------------
 
     /// <summary>
@@ -184,18 +289,21 @@ public sealed class CloudEndpointListTests
         string? query = null) =>
         [.. CloudEndpointList.Arrange(rows, query, column, descending).Select(row => row.Account.Name)];
 
-    private static CloudEndpointRow Row(string name, string type, string provider, string prefix, CloudEndpointHealth health)
+    private static CloudEndpointRow Row(string name, string type, string provider, string prefix,
+        CloudEndpointHealth health, string? group = null, IReadOnlyList<string>? tags = null)
     {
-        var row = new CloudEndpointRow(Account(name, type, provider, prefix));
+        var row = new CloudEndpointRow(Account(name, type, provider, prefix, group, tags));
         row.Status = new CloudEndpointStatus(health, "");
         return row;
     }
 
     /// <summary>An account whose metadata carries the prefix, which is where the list reads it from.</summary>
-    private static CloudEndpointAccount Account(string name, string type, string provider, string prefix)
+    private static CloudEndpointAccount Account(string name, string type, string provider, string prefix,
+        string? group = null, IReadOnlyList<string>? tags = null)
     {
         var parts = prefix.Split('/', 2);
-        var metadata = new CloudEndpointMetadata(name, type, provider, parts[0], parts.Length > 1 ? parts[1] : "");
+        var metadata = new CloudEndpointMetadata(name, type, provider, parts[0], parts.Length > 1 ? parts[1] : "",
+            null, group, tags);
         return new CloudEndpointAccount(new RcloneAccount(name, type), metadata);
     }
 }
