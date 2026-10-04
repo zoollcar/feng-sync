@@ -15,9 +15,9 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）。**A 组全部收尾，B 组走到 B1。**见 §2。 |
-| **下一步** | **B2–B11 文件浏览器**（§5）。B1 已经把「一条剪贴板行 → `EnqueueCopy` 的五个参数」这条路打通了（`CloudPastePlanner` + `RemoteEndpointManagerWindow` 的 `SetClipboard`/`PlanPasteAsync`/`ExecutePasteAsync`），B2 起的每一项都可以照它的样板走：**纯函数定规则 + 假 RC 驱动真窗口 + 需要落点才上真 rclone**。全量门禁 2026-10-04 又跑了一次，`Failed: 0`（**Core 392 / UI 281**，UI 3m01s）；§1 里提到的 `UiFeatureBehaviorTests` 既有超时**没有复现**，不用再单独排查。 |
-| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）。**A 组全部收尾，B 组走到 B2。**见 §2。 |
+| **下一步** | **B3–B11 文件浏览器**（§5）。B1 已经把「一条剪贴板行 → `EnqueueCopy` 的五个参数」这条路打通了，B2 又把「同名冲突怎么答」抽成一个**上传与粘贴共用**的纯规则（`CloudConflictResolver`）—— 样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗的决定走接缝 + 需要落点才上真 rclone**。全量门禁 2026-10-04 再跑一次，`Failed: 0`（**Core 392 / UI 301**，UI 3m）。 |
+| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）；**接缝返回 `null` 是「用户取消」，不是「没装接缝」**——用 `??` 兜到真弹窗会在测试里打开一个无人可答的对话框，并且 `Window.Owner` 指向一个从未 `Show()` 过的窗口时直接抛（B2 撞到过一次测试宿主崩溃）。 |
 
 ---
 
@@ -32,6 +32,7 @@ pwsh -NoProfile -File .\scripts\Test-All.ps1 -Level UiOffline
 A3–A6 是分批提交的，所以接手时先自证过一次基线；B0 提交前后各跑了一次全量门禁，两次都是 `Failed: 0`
 （**Core 390 / UI 264**，UI 阶段约 **3m08s**）。§0 说的 `UiFeatureBehaviorTests` 超时在本环境**没有复现**。
 **B1 收尾时又跑了一次：`Failed: 0`，Core 392 / UI 281，UI 阶段 3m01s**（读数随批次上涨，别追死数字）。
+**B2 收尾再跑一次：`Failed: 0`，Core 392 / UI 301，UI 阶段 3m** —— B2 只动了 UI 侧的规则与窗口，Core 计数没变。
 
 - 约 **3m30s**（UI 阶段占大头）。调用工具时**超时必须给 600000ms**，否则会被掐断在半路。
 - 判定标准：日志里出现 **`Passed!  - Failed: 0` 汇总行**。只看日志尾部会误判 —— 被超时掐断时日志正好停在
@@ -47,12 +48,13 @@ A3–A6 是分批提交的，所以接手时先自证过一次基线；B0 提交
   结束前一个字都不落盘，看着像卡死。写成 `> "$TEMP/x.log" 2>&1` 再 `tail`。B1 用的过滤器
   `--filter "FullyQualifiedName~CloudBrowserPaste|FullyQualifiedName~CloudTransferWindowBehavior"`（19 条）**1 秒**跑完。
 
-### ② A7、B0、B1 已实现并提交 ✅
+### ② A7、B0、B1、B2 已实现并提交 ✅
 
 A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）。A1 的桌面场景缺口在进 B 组前补上
 （`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / `6be98b9` docs
 （本节的这条 commit 行与 §2 表末行是 `6be98b9` 之后回填的）。**B1 浏览器粘贴**照旧三层：`3c9322b` feat /
-`cd74a61` + `526a634` test / `4656a58` docs（本节的 hash 由 `4656a58` 的下一次回填补上）。**A 组 + B0 + B1 至此收尾。**
+`cd74a61` + `526a634` test / `4656a58` docs（本节的 hash 由 `4656a58` 的下一次回填补上）。
+**B2 同名冲突**照旧三层：`dedc2b5` feat / `1649dc6` test / docs 待回填。**A 组 + B0 + B1 + B2 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
 
@@ -87,6 +89,8 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `cd74a61` | B1 | `test(browser): cover the paste decisions and the calls they make` |
 | `526a634` | B1 | `test(browser): cover the cut whose source delete was refused` |
 | `4656a58` | B1 | `docs: record B1 done and the paste rules that B2 must keep`（AGENTS.md 不变式 + 本文件） |
+| `dedc2b5` | B2 | `feat(browser): keep both files when a cloud name is taken` |
+| `1649dc6` | B2 | `test(browser): cover each conflict answer and the renames they authorise` |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -260,8 +264,10 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   这条由 `A_paste_strips_each_endpoints_own_root_and_only_once` 钉住。
 - 窗口侧（`RemoteEndpointManagerWindow`）：右键菜单加 **复制 / 剪切**（作用于整个多选），工具条加 `PasteButton`
   （`AutomationId="CloudPaste"`，放在 删除 与 下载 之间）。内部接缝 `SetClipboard` / `PlanPasteAsync` /
-  `ExecutePasteAsync(plan, overwrite)` / `ClipboardItems` / `ClipboardMode` / `ShowListing`，构造函数新增
+  `ExecutePasteAsync` / `ClipboardItems` / `ClipboardMode` / `ShowListing`，构造函数新增
   `internal RemoteEndpointManagerWindow(CloudFileManagerService?, CloudTransferQueue?)` —— 两个 shell 仍走无参形式。
+  ⚠️ `PlanPasteAsync` 与 `ExecutePasteAsync` 的形状在 **B2** 改了：前者返回 `CloudPasteOffer(Plan, TakenNames)`，
+  后者的 `overwrite: bool` 换成 `placements`（见 §2 的 B2）。
 - 执行分工：**复制一律进队列**（`EnqueueCopy`，因此有进度 / 取消 / 重试 / 历史，同端点内的复制也一样）；
   **同端点的剪切走 `operations/movefile`**（`CloudFileManagerService.MoveAsync`，字节不动，和 重命名 是同一个调用），
   所以它既不留重复也不需要二次确认。
@@ -274,9 +280,9 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
      现在 `if (cutting)` 才安排删除，测试用「复制之后 `Assert.Empty(deleted)`、不发 `movefile`/`deletefile`」钉住。
   2. **复制结果被刷新吃掉** —— `BrowseAsync` 会自己占用状态行（「正在读取目录…」）并且**不还原**，
      所以先写结果再刷新时，界面最后停在一个早已结束却没转完的 spinner。现在刷新在前、写状态在后，同一次 dispatcher 操作里完成。
-- 测试：`tests/FengSync.UiTests/CloudBrowserPasteTests.cs`（14 条，**真窗口 + 假 RC**）—— 空剪贴板（按钮 off + 「剪贴板是空的」）、
+- 测试：`tests/FengSync.UiTests/CloudBrowserPasteTests.cs`（B1 落 14 条，B2 之后该文件 19 条，**真窗口 + 假 RC**）—— 空剪贴板（按钮 off + 「剪贴板是空的」）、
   复制记住来源端点、剪切的预告（「已剪切 2 项」「文件夹不会被粘贴」「无法恢复」）、文件夹永不粘贴、跨端点两侧路径各自成立、
-  自复制 skip、冲突计数、两行 = 两条 `operations/copyfile` 且 `srcFs/dstFs` 是**两个不同**端点、`overwrite=false` 只排非冲突行、
+  自复制 skip、冲突计数、两行 = 两条 `operations/copyfile` 且 `srcFs/dstFs` 是**两个不同**端点、冲突行拿到 Skip 时只排非冲突行（B1 时这是 `overwrite: bool`，B2 换成 `placements`）、
   同端点剪切只发一条 `movefile` 并清空剪贴板、跨端点剪切**复制完成后**才删源并写成「已剪切到 files」、拒绝复制时 `Failed` +
   「源文件仍然保留」且删除记录为空、**拒绝删除时报告「已复制但源未删除」并带上原因**（而不是报成功）、
   离开来源端点后粘贴仍落在目标端点的目录里。
@@ -287,6 +293,53 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   （`CloudTransferTask.ErrorDetail`，`CloudTransferCopyTests` 就是这么钉的）。
 - **桌面场景没动**：`Invoke-UiScenario.ps1` 里没有枚举云盘工具条的断言，所以新增工具条按钮不需要改场景脚本。
   日后若要断言「工具条上有哪个按钮」，改动点是 `UiAcceptanceTests.cs` + `Invoke-UiScenario.ps1` 两处（见 §7）。
+
+---
+
+### B2 —— 上传与粘贴的同名冲突：`KeepBoth` 与逐文件询问（**已提交**：`dedc2b5` feat / `1649dc6` test / docs 本行待回填）
+
+- 规则全在 `src/FengSync/Services/CloudConflictResolution.cs`：`CloudConflictChoice {Overwrite, KeepBoth, Skip}`、
+  `CloudConflictAnswer(Choice, ApplyToAll)`、`CloudConflictPlacement(Original, Destination, Choice)`、
+  `CloudConflictResolver.ChoiceFor / AskFor / Apply`。**上传和粘贴从此共用同一套答案** —— 以前上传只有一次性
+  YesNoCancel 弹窗（「全部覆盖 / 全部跳过 / 取消」），粘贴连问都没有。
+- 设置项 `CloudUploadConflictPolicy` **追加** `KeepBoth`（append-only 铁律：`Ask=0 / Overwrite=1 / Skip=2 / KeepBoth=3`，
+  设置 JSON 用默认 `JsonSerializer`，枚举按数字落盘）。`SettingsWindow` 下拉加第 4 项「保留两者（重命名）」，
+  `ConflictIndex` / `ConflictPolicy` 两边同步；越界仍回落 `Ask`（`An_unrecognised_conflict_selection_falls_back_to_asking` 没动）。
+- **`Ask` 必须映射成 `null`**：一个写着「每次询问」的设置不能被实现成默认答案，`ChoiceFor` 返回 null 就是「去问人」。
+- **`Apply` 按输入顺序每条目的地给一条 placement**（skip 也占一条并写明是 skip）。理由不是美学：上传的行是**按位置**
+  和答案配对的，而两个被拖进来的文件夹可以有**同名文件**，这一对指向**同一个远端路径** —— 按名字查表会把两条都指向
+  同一个改名结果，第二份覆盖第一份，正是 `KeepBoth` 要避免的那种丢失。
+  `Two_files_dropped_onto_one_remote_name_are_renamed_apart_rather_than_onto_each_other` 钉住它。
+- **改名只相对自己落进的目录判断空闲**：`Apply` 收 `Func<string, ICollection<string>> takenOf`（目录 → 名单），
+  每产生一个改名就把名字**加回**该集合。`CloudFileNames.KeepBothName`：`x.pdf → x (1).pdf`、
+  `archive.tar.gz → archive.tar (1).gz`（**扩展名不动**）、大小写不敏感比对、**截到 255 字符**让 backend 收得下这个名字、
+  最多试 9999 次后交出最后一个候选（不再无限数下去）。
+- 弹窗 `src/FengSync/Views/CloudConflictPrompt.cs`（代码搭的，和 `TextPrompt` 一路，样式经 `TextPrompt.Resource<T>` 取）：
+  四个选择 **取消 / 跳过 / 保留两者（存为“…”）/ 覆盖**，其中 **跳过是默认按钮**（回车不得替换文件），
+  「把这次选择应用到其余 N 个同名文件」只在 `remaining > 1` 时可选。提问是**整批一次** `AskFor` 而不是每目录一次 ——
+  否则拖一棵跨目录的树会每个目录再问一遍，而「应用到全部」的承诺覆盖的是整个 drop。
+- 窗口接缝：`PlanPasteAsync()` 现在返回 `CloudPasteOffer(Plan, TakenNames)`（**同一次目录读取**既用来判冲突、又用来给
+  改名当名单，不再 `ListAsync` 第二次）；`ExecutePasteAsync(plan, placements)` 取代 `overwrite: bool`；`AskConflict`
+  是逐文件提问的接缝，未安装时才走真弹窗。粘贴用 `Indexed(placements)` 按目的地查表（粘贴的目的地唯一），
+  上传用位置配对（见上）。
+- ⚠️ **本批抓出的两条生产/测试坑**：
+  1. **接缝的 `null` = 用户取消整批**，不能被 `??` 读成「没装接缝」：那样会打开真弹窗，而 `async void Paste_Click`
+     里的「Cannot set Owner property to a Window that has not been shown previously」把**测试宿主进程直接打崩**
+     （是 abort 不是 fail，整条 UI 套件停在半路，日志只剩 6 条读数）。
+  2. **改名必须同时改写队列用的端点相对路径**：只改完整路径的话 `dstRemote` 会回到用户想避开的那个名字。
+     现在改名落在 `CloudFileManagerService.Parent(relative)` 之下，`A_keep_both_rename_lands_in_the_directory_on_screen…`
+     断言的是 `files:` 的 `dstRemote = shared/incoming/sub/a (1).txt`（队列把端点根再拼回去，所以断言里带 `shared/`）。
+- 状态行：粘贴 `{N} 个同名文件改名为保留两者`；上传 `已加入传输队列：N 个文件。其中 M 个同名文件改名为保留两者。`。
+  取消上传报「已取消上传。」、取消粘贴报「已取消粘贴。」，全跳过分别报「已跳过全部同名文件。」/「已跳过 N 个同名项目。」。
+- 测试：`CloudFeatureBehaviorTests` 纯规则 **12 条**（`ChoiceFor` 三条 policy + `Ask` 留空；`AskFor` 的应用到全部、
+  逐条问与剩余计数、取消≠全跳过；`Apply` 的 skip 占位、只换末段、同名两条分开改名、目录各自空闲；
+  `KeepBothName` 的编号、扩展名、大小写、255 截断、9999 收敛）+ 设置项往返加 `KeepBoth → 3`；
+  `CloudBrowserPasteTests` 真窗口 **5 条**（`KeepBoth` 落在改名后的远端名、改名仍停在屏上目录里、问题看到被占的名字与
+  未决条数、应用到全部只问一次且两条各自改名、取消则一条 `copyfile` 都不发且剪贴板还在）。
+  ⚠️ 这几条要走 **`PasteButton.RaiseEvent`**（只有真按钮路径才经过 `PlaceDestinations`），需要两个冲突名时给假 RC 传
+  `ListedNames`（默认只有 `a.txt`）。
+- 旧的 `CloudDeleteSafety.OverwriteFor`（`bool?` 三态）**删掉**，连同它的测试：那是「一次问完全批」时代的形状，
+  留着就有第二个答案来源。
 
 ---
 
@@ -359,14 +412,15 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | **一个进程/AppDomain 只能有一个 `System.Windows.Application`**，而 `Application.Current` **只有创建它的那个线程看得见**；一个还活着（或正在关闭）的实例会让别的线程 `new Application()` 直接抛「Cannot create more than one…」/「The Application object is being shut down」 | B1 的窗口测试每条跑在自己的 STA 线程上，**不能**各自重建 Application。规则：**只在 `Application.Current is null` 时构造并配置它，并记住自己是否拥有它**；拥有它的那个线程负责在结束时 `Shutdown()` + `dispatcher.InvokeShutdown()` 把它释放掉，否则下一个建窗口的测试类会死在 `new Application` 上而不是自己的断言上（`CloudBrowserPasteTests` 的 `MergeApplicationThemes()` 返回 bool 就是为了这个）。`IClassFixture` 共享 Application 的写法**试过且不行**：`Dispose` 里无论 `BeginInvokeShutdown` 还是 `BeginInvoke(Shutdown)` 都 release 不掉，因为 WPF 只在其 dispatcher 关闭时销毁 Application |
 | `ShutdownMode` 默认 `OnLastWindowClose`：测试里第一次 `window.Close()` 会**连带结束整个 Application 和正在 pumping 的 dispatcher**，粘贴剩下的续传就永远不会跑；在一个**不属于本线程**的 Application 上设 `ShutdownMode` 会 `VerifyAccess` | 自己建的 Application 一律设 `OnExplicitShutdown`；别人的**只读不写**。窗口可能已被测试自己关掉，收尾 `Close()` 要容许 `InvalidOperationException` |
 | `Dispatcher.InvokeAsync` 的续传只在**它自己的线程 pumping 时**才执行；线程停在 `Thread.Join` 里 = 续传永不跑（窗口那句状态行就是续传） | 异步窗口行为必须在 STA 线程里 `Dispatcher.PushFrame(frame)` pumping，任务完成时把 `frame.Continue = false`。**并且要有 watchdog**：`System.Threading.Timer` 到点 `dispatcher.BeginInvoke(() => frame.Continue = false)`，否则一条卡住的粘贴会挂住整个 UI 套件（B1 撞到过一次 >10 分钟无输出的后台跑） |
+| **弹窗（`ShowDialog`）在进程内测试里没人能答**，而给 `Window.Owner` 赋一个**从未 `Show()` 过**的窗口会抛 `InvalidOperationException`；这异常在 `async void` 事件处理器里是**未处理异常 → 测试宿主进程崩溃**（`Test host process crashed`，整条 UI 套件被 abort，不是某条测试 fail） | 凡是要问用户的决定都走**可注入接缝**（B2 的 `AskConflict`），弹窗只做接缝外面那层壳；接缝返回 `null` 表示**用户取消**，所以判断「有没有接缝」要用 `AskConflict is { } ask`，**不能用 `??` 兜到真弹窗**（B2 就这么崩过一次测试宿主） |
 
 ---
 
 ## 5. 剩余路线图（B1 → E）
 
-> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0 与 B1 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
+> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0、B1 与 B2 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
 > **剩余项的顺序与依赖**：B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**（已落）；
-> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B2–B11（B1 已落，见 §2）。**
+> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B3–B11（B1、B2 已落，见 §2）。**
 
 ### A7. 端点导出/导入（原 A9）—— ✅ 已完成，见 §2
 
@@ -408,14 +462,16 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 > 需求盘点原本列了 21 项（B1–B21）；其中 P0 的 7 项 —— 新建文件夹、重命名、删除、多选批量、搜索、排序、
 > 面包屑 + 地址栏 —— **已在批次 1 落地**。下表是**剩余 11 项**，「现状 / 缺口」与「参考做法」两列是从原盘点文档
-> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1 已落地（见 §2）**，下表从 B2 起都是待做项。
+> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1、B2 已落地（见 §2）**，下表从 B3 起都是待做项。
 > 给 B6 的一条现成接线：`SetClipboard(Copy/Cut, 多选行)` 和 `Paste_Click` 已经是内部方法，
 > Ctrl+C / Ctrl+X / Ctrl+V 只需把键盘事件指到它们，**不要**另造一套剪贴板状态。
+> 给 B3/B9 的一条现成接缝：`PlanPasteAsync()` 已经把目标目录的**一次读取**同时用于判冲突和取名，
+> 属性/大小统计要读目录时照这个形状走，别再 `ListAsync` 第二次。
 
 | 本计划 | 原编号 | 内容 | 现状 / 缺口 | 参考做法 |
 | --- | --- | --- | --- | --- |
 | B1 | B8–B9 | 复制 / 剪切 / 粘贴 + 跨端点复制 | ✅ **已完成**（`3c9322b` + `cd74a61` + `526a634`，见 §2）。跨端点复制进队列（`EnqueueCopy`），同端点的剪切走 `operations/movefile`，文件夹一律 skip 并说明原因，源删除只在它自己的复制完成之后才发生 | 网盘标配；Air Explorer 支持云到云 |
-| B2 | B10 | 上传冲突细化 | 现在只有一次性弹窗「全部覆盖 / 全部跳过 / 取消」，缺 **`KeepBoth`（重命名保留两者）** 与**逐文件询问** | 网盘标配 |
+| B2 | B10 | 上传冲突细化 | ✅ **已完成**（`dedc2b5` + `1649dc6`，见 §2）。`KeepBoth`（`x.pdf → x (1).pdf`，相对目标目录的空闲名）与**逐文件询问 + 应用到全部**都齐了，上传与粘贴走同一个 `CloudConflictResolver`；`每次询问 / 直接覆盖 / 跳过同名文件 / 保留两者（重命名）` 四项进设置 | 网盘标配 |
 | B3 | B11 | 属性 / 详情 | 无大小统计、无权限、无校验值（`ReadPreferredHash` 已抽好） | 网盘有「详细信息」 |
 | B4 | B12 | 分享链接 | rclone `operations/publiclink` 存在，UI 未接 | 网盘核心功能之一 |
 | B5 | B13 | 回收站 | 无软删除概念；GDrive 可 `--drive-use-trash`，S3/SFTP **无回收站，只能硬删** | 网盘默认「移到回收站」，可还原 |
@@ -552,6 +608,11 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 - 页面 XAML（`src/FengSync/**/*.xaml`）**不得覆盖** `Height/MinHeight/Padding/FontSize/Background/Foreground/BorderBrush`；
   内联 hex 只能出现在 `Themes/DesignTokens.xaml`；页面禁用 `Button.Template`。
 - 动态文本 `TextBlock` 用 `AutomationId`，**不要**静态 `AutomationProperties.Name`。
+- **代码里现搭的对话框**（`TextPrompt`、`CloudConflictPrompt`）写在 `.cs` 里，页面 XAML 的扫描看不到它们，
+  所以那三条得作者自己守住，而这两处确实守着：样式一律经 `TextPrompt.Resource<T>` 从合并字典取
+  （`Primary/Secondary/Tertiary/DangerButtonStyle`、`CaptionTextStyle`，内联 hex 为零）、可操作的控件
+  （按钮、复选框、输入框）都有 `AutomationId`、**Enter 落在不改变任何东西的那颗按钮上**
+  （冲突框的 `IsDefault` 是「跳过」，destructive 确认框的 `IsDefault` 是「取消」）。
 
 ### 设置项三件套（漏一件就静默失效）
 
@@ -602,14 +663,16 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `src/FengSync.Core/Execution/EndpointTransfer.cs` | **唯一的** staging-aware 传输原语（同步引擎与云盘浏览器共用）。`CopyToStagingAsync`+`PublishAsync` 是可续传的上传/下载腿；`CopyServerSideAsync` 是两端都远端、**不 staging 不 publish** 的复制腿（B0） |
 | `src/FengSync/Services/CloudTransferQueue.cs` | 云盘传输队列（staging / resume / journal / 并发 / 重试 / **远端→远端复制 `EnqueueCopy`**）；构造参数里的可选 RC 客户端工厂是「不起 daemon 也能断言载荷」的接缝 |
 | `src/FengSync/Services/CloudFileManagerService.cs` | 文件浏览器服务层（列表/搜索/重命名/删除/**同端点移动 `MoveAsync`**/新建目录）；`RelativeToEndpoint` 是「剥的是**自己**端点的根、只剥一次」的唯一体（B1） |
-| `src/FengSync/Services/CloudBrowserClipboard.cs` | 粘贴规则的纯函数（B1）：`CloudClipboardMode` / `CloudClipboardItem`（行 + 它的来源端点）/ `CloudPasteTarget` / `CloudPastePlan` / `CloudPastePlanner.Build`。不碰 WPF 也不碰 rclone，所以落点与 skip 原因能直接测 |
+| `src/FengSync/Services/CloudBrowserClipboard.cs` | 粘贴规则的纯函数（B1）：`CloudClipboardMode` / `CloudClipboardItem`（行 + 它的来源端点）/ `CloudPasteTarget` / `CloudPastePlan` / `CloudPasteOffer(Plan, TakenNames)`（B2：目标目录**读一次**同时供判冲突与改名）/ `CloudPastePlanner.Build`。不碰 WPF 也不碰 rclone，所以落点与 skip 原因能直接测 |
+| `src/FengSync/Services/CloudConflictResolution.cs` | 同名冲突唯一的答案处（B2）：`CloudConflictChoice` / `CloudConflictAnswer(Choice, ApplyToAll)` / `CloudConflictPlacement(Original, Destination, Choice)` / `ChoiceFor`（设置 → 整批答案，`Ask` 给 null）/ `AskFor`（逐条问 + 应用到全部）/ `Apply`（**按输入顺序一条一答**，改名相对各自目录的空闲名） |
+| `src/FengSync/Views/CloudConflictPrompt.cs` | 冲突问题本身（B2）：取消 / **跳过（默认按钮）** / 保留两者（预览名）/ 覆盖 + 「应用到其余 N 个」。测试用窗口的 `AskConflict` 接缝代替它 |
 | `src/FengSync.Core/Mount/MountOptions.cs` | 挂载参数（D 组的改造对象） |
 | `src/FengSync.Core/Rclone/Transport/RcloneProxyConfiguration.cs` | 代理（A5 的现成机制） |
 | `src/FengSync/Services/AppServices.cs` | `IAppServiceHost` / `AppServices.Install`（**两个 exe 共用服务宿主**） |
 | `src/FengSync.DriveHub/` | 第二个入口 `DriveHub.exe`（独立 daemon） |
 | `tests/FengSync.Tests/ServerSideCopyTests.cs` | 真 rclone（两个 alias remote）钉住跨端点复制的**落点**：目标名精确、源不消失、重试覆盖、失败不留对象、本地端点被拒（B0） |
 | `tests/FengSync.UiTests/CloudTransferCopyTests.cs` | 假 RC 钉住复制的**载荷**：`srcFs/srcRemote/dstFs/dstRemote`+`_group`、`core/stats` 进度、取消发 `job/stop`、不许出现 movefile/deletefile/staging 名、journal 往返与旧文件兼容（B0） |
-| `tests/FengSync.UiTests/CloudBrowserPasteTests.cs` | **真窗口 + 假 RC**钉住 B1 的浏览器侧决定：剪贴板带着来源端点、两侧各自剥根、文件夹与自复制的 skip、冲突与 `overwrite=false`、同端点剪切只发 `movefile`、跨端点剪切**复制完成后**才删源（拒绝复制 → 源保留且无删除；拒绝删除 → 报告重复而不是成功）。`RunSta` 的 pumping + 单 `Application` 所有权 + watchdog 是这类**异步窗口测试**的样板（见 §4 的 WPF 表） |
+| `tests/FengSync.UiTests/CloudBrowserPasteTests.cs` | **真窗口 + 假 RC**钉住 B1 的浏览器侧决定：剪贴板带着来源端点、两侧各自剥根、文件夹与自复制的 skip、同端点剪切只发 `movefile`、跨端点剪切**复制完成后**才删源（拒绝复制 → 源保留且无删除；拒绝删除 → 报告重复而不是成功）。B2 之后**冲突不再是断言 `overwrite=false`**，而是走 `AskConflict` 这个窗口接缝（**必须置**，否则测试会弹真模态框而挂住）钉住落在改名后的远端名、改名停在屏上目录、问题看到被占的名字与剩余数量、一次回答覆盖其余、取消不排队。假 RC 的 `ListedNames`（默认恰好一个同名文件）决定「目录里已有什么」，`PlanAsync` / `Place` 是把窗口接缝接上的小工具；`RunSta` 的 pumping + 单 `Application` 所有权 + watchdog 是这类**异步窗口测试**的样板（见 §4 的 WPF 表） |
 | `tests/FengSync.Tests/` | Core 层 + 需要真 rclone 的测试（门禁里的 Core 阶段） |
 | `tests/FengSync.UiTests/` | in-process WPF 行为测试 + 桌面场景（`UiAcceptanceTests` + `Scripts/Invoke-UiScenario.ps1`） |
 | `scripts/Test-All.ps1` | 门禁入口（`-Level Core|UiOffline|Online`，`-ShowOnScreen`） |
