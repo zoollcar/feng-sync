@@ -13,6 +13,7 @@ public static class ConfigurationValidator
         if (settings.NetworkRetryCount is < 0 or > 20) errors.Add("网络重试次数必须介于 0 和 20 之间。");
         if (settings.CloudMaxConcurrentTransfers is < 1 or > 16) errors.Add("云盘同时传输数必须介于 1 和 16 之间。");
         if (settings.CloudRetryCount is < 0 or > 10) errors.Add("云盘自动重试次数必须介于 0 和 10 之间。");
+        if (!Enum.IsDefined(settings.CloudBrowserView)) errors.Add("文件视图设置无效。");
         if (!TryValidateProxy(settings.RcloneProxy, out var proxyError)) errors.Add(proxyError);
         if (double.IsNaN(settings.MainWindowSidebarWidth) || double.IsInfinity(settings.MainWindowSidebarWidth) || settings.MainWindowSidebarWidth is < 220 or > 320) errors.Add("主窗口侧栏宽度必须介于 220 和 320 之间。");
         if (!string.IsNullOrWhiteSpace(settings.SkippedUpdateVersion) && !Updates.ReleaseVersion.TryParse(settings.SkippedUpdateVersion, out _)) errors.Add("忽略的更新版本无效。");

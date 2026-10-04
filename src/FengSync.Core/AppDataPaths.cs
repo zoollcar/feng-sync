@@ -20,4 +20,12 @@ public static class AppDataPaths
     /// <c>_config</c> override on <c>mount/mount</c> is silently ignored.
     /// </summary>
     public static string MountCache => Path.Combine(Root, "mount", "cache");
+
+    /// <summary>
+    /// Where the browser keeps the small picture bytes it pulled for grid tiles. Its own directory rather than
+    /// a corner of <c>cloud-cache</c>: that one holds full copies of files the user dragged out, is keyed by
+    /// path, and is worth keeping when a tile cache is not — a tile cache is throwaway by design and has to be
+    /// deletable at any moment without touching anything the user asked to keep.
+    /// </summary>
+    public static string CloudThumbnails => Path.Combine(Root, "cloud-thumbnails");
 }

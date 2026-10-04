@@ -52,6 +52,14 @@ public sealed record ApplicationSettings
     public CloudUploadConflictPolicy CloudUploadConflict { get; init; } = CloudUploadConflictPolicy.Ask;
 
     /// <summary>
+    /// How the file browser draws the rows it has. A display preference, not a behaviour switch: the same
+    /// filtered, ordered rows are behind both, so what 全选 / 复制 / 删除 act on never depends on this.
+    /// Defaults to <see cref="CloudBrowserViewMode.List"/> because a listing costs nothing to draw, while
+    /// tiles pull picture bytes for every image row they show.
+    /// </summary>
+    public CloudBrowserViewMode CloudBrowserView { get; init; } = CloudBrowserViewMode.List;
+
+    /// <summary>
     /// Notifies when a cloud transfer batch drains. Separate from <see cref="NotifyOnCompletion"/> because
     /// that one fires for a scheduled sync run, which the user may never be watching.
     /// </summary>
@@ -94,4 +102,16 @@ public enum CloudUploadConflictPolicy
     /// either side.
     /// </summary>
     KeepBoth
+}
+
+/// <summary>
+/// How the file browser draws its rows. Persisted as a number, so the list is append-only: renumbering an
+/// existing member would silently repaint somebody's saved choice as a different view.
+/// </summary>
+public enum CloudBrowserViewMode
+{
+    /// <summary>One row per file, with 类型 / 大小 / 修改时间 columns. The default, and the only view that reads nothing.</summary>
+    List,
+    /// <summary>Square tiles that show a picture for an image row and the file icon for every other row.</summary>
+    Grid,
 }
