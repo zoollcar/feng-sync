@@ -104,9 +104,9 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 `c66bb6c` test（UI 40 条 + 1 条 Core 侧 XAML 静态栅格 + `sftp-ui` 两条 toggle 断言）/ `546e5b5` docs（AGENTS.md 三条实测规则 + 本文件），
 前面还有一条**不属于本批产品路径**的 Core 地基 `54eb6f5`（`--rc-serve` 有界读 + 9 条事实）。
 本节的这条 hash 行与 §2 表末行是那四条之后回填的。
-**B8 收藏 / 最近访问**拆成七条：`<pending>` feat（两个新服务文件，含 gate 区间全部 `ConfigureAwait(false)`）/ `<pending>` feat（窗口的两个下拉与「收藏此目录」按钮，含重命名后**先重读书签再刷新**那一行）/
-`<pending>` feat（重命名搬第四份文件）/ `<pending>` test（`CloudBrowserBookmarkTests` 32 条 + 5 个既有 harness 的数据目录隔离 + B6 那条 F2 断言改成事后读）/
-`<pending>` test（`CloudEndpointRenameTests` 那条拆成两份 + 新增的第四份恢复）/ `<pending>` test（`Invoke-UiScenario.ps1` 的收藏与重命名步骤）/ `<pending>` docs（AGENTS.md 的规则 + 本文件）。
+**B8 收藏 / 最近访问**拆成七条：`0686a4a` feat（两个新服务文件，含 gate 区间全部 `ConfigureAwait(false)`）/ `ad66e38` feat（窗口的两个下拉与「收藏此目录」按钮，含重命名后**先重读书签再刷新**那一行）/
+`73aed4e` feat（重命名搬第四份文件）/ `fad7f90` test（`CloudBrowserBookmarkTests` 32 条 + 5 个既有 harness 的数据目录隔离 + B6 那条 F2 断言改成事后读）/
+`121acf1` test（`CloudEndpointRenameTests` 那条拆成两份 + 新增的第四份恢复）/ `a749142` test（`Invoke-UiScenario.ps1` 的收藏与重命名步骤）/ `61d60a4` docs（AGENTS.md 的规则 + 本文件）。
 本节的这条 hash 行与 §2 表末行是那几条之后回填的。
 **A 组 + B0 + B1 + B2 + B3 + B4 + B5 + B6 + B7 + B8 至此收尾。**
 
@@ -165,13 +165,13 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `c59ac45` | B7 | `feat(browser): draw the same rows as tiles, and preview only what we can really render` |
 | `c66bb6c` | B7 | `test(browser): pin the tile round, the preview refusals and both drawings of one list`（UI 40 条 + 1 条 Core 侧 XAML 静态栅格 + `sftp-ui` 两条 toggle 断言） |
 | `546e5b5` | B7 | `docs: record B7 done and the view and preview rules that B8 must keep`（AGENTS.md 规则 + 本文件） |
-| `<pending>` | B8 | `feat(browser): keep the places worth going back to`（`CloudBrowserBookmarks` 纯规则 + `CloudBrowserBookmarkStore` 落盘） |
-| `<pending>` | B8 | `feat(browser): offer the remembered places as jumps and a favourite button`（两个下拉 + 一个跟随目录的按钮） |
-| `<pending>` | B8 | `feat(endpoints): move the remembered places with a renamed endpoint`（重命名一起搬第四份文件） |
-| `<pending>` | B8 | `test(browser): pin the bookmark rules, the file it writes and the jump it drives`（32 条 = 纯规则 10 + 文件 9 + 真窗口 13；另把 5 个既有窗口 harness 的 `FENGSYNC_DATA_DIR` 隔离补齐，并把 B6 那条同步读 `args.Handled` 的 F2 断言改成事后读） |
-| `<pending>` | B8 | `test(endpoints): prove the rename carries the bookmarks and unwinds all four files` |
-| `<pending>` | B8 | `test(ui): walk the favourite button, a jump and the renamed bookmark in the real shell` |
-| `<pending>` | B8 | `docs: record B8 done and the bookmark rules that B9 must keep`（AGENTS.md 规则 + 本文件） |
+| `0686a4a` | B8 | `feat(browser): keep the places worth going back to`（`CloudBrowserBookmarks` 纯规则 + `CloudBrowserBookmarkStore` 落盘） |
+| `ad66e38` | B8 | `feat(browser): offer the remembered places as jumps and a favourite button`（两个下拉 + 一个跟随目录的按钮，含重命名后先重读书签那一行） |
+| `73aed4e` | B8 | `feat(endpoints): move the remembered places with a renamed endpoint`（重命名一起搬第四份文件） |
+| `fad7f90` | B8 | `test(browser): pin the bookmark rules, the file it writes and the jump it drives`（32 条 = 纯规则 10 + 文件 9 + 真窗口 13；另把 5 个既有窗口 harness 的 `FENGSYNC_DATA_DIR` 隔离补齐，并把 B6 那条同步读 `args.Handled` 的 F2 断言改成事后读） |
+| `121acf1` | B8 | `test(endpoints): prove the rename carries the bookmarks and unwinds all four files` |
+| `a749142` | B8 | `test(ui): walk the favourite button, a jump and the renamed bookmark in the real shell` |
+| `61d60a4` | B8 | `docs: record B8 done and the bookmark rules that B9 must keep`（AGENTS.md 规则 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -661,7 +661,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   UI 从 402 起跳是本批的 40 条。这一轮**没有**撞上 B5 那条 WinFsp detach flake。
 
 
-### B8 —— 收藏 / 最近访问（**已提交**：`<pending>` ×3 feat / `<pending>` ×3 test / `<pending>` docs）
+### B8 —— 收藏 / 最近访问（**已提交**：`0686a4a` + `ad66e38` + `73aed4e` feat / `fad7f90` + `121acf1` + `a749142` test / `61d60a4` docs）
 
 - **两条承诺，两套规则，一个类**（本批的核心形状）。「收藏」是用户挑的：顺序归他，重复添加**不挪位**，
   永不为容量修剪；「最近访问」是应用写的队列：新的在前、一处一份、`RecentLimit = 20`。
@@ -1088,6 +1088,12 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
    `operations/checksum`、`operations/get`、`operations/geturl` 的**不存在**（404）。结论已进 `AGENTS.md` 与上面 §4。
    那次 curl 还顺手证实了 `operations/publiclink` **是**一个已注册方法（本地 backend 答 500
    `doesn't support public links`）—— 它的**完整**实证在第 3 条，由 B4 用 loopback S3 补上了 `{"url"}` 线形与 404 形态。
+10. **B9（文件夹大小）动手前必须证的三件事**（第 9 条那套手法：本机 `rclone rcd` + curl 带 `Content-Type: application/json`，结论进 `AGENTS.md`）：
+   ① RC **到底有没有** `operations/size` —— B3 那次把 `operations/hash`、`checksum`、`get`、`geturl` 都探成 404，
+   而那份**否定清单里没有 size**，所以它可能存在但从没被问过；② 若存在，它对慢后端的**代价与可否取消**
+   （一个十万对象的目录会让这一次点多久？取消后留不留半成品）；③ 若只能自己递归 `operations/list`，那次统计
+   **算不算一次访问** —— B8 钉住的规则是「列成功才记访问」，而统计打的正是同一批 list 调用，别让一个用户没打算去的
+   子目录顺手挤进「最近访问」把真正想去的那条顶出上限。
 
 实证的方法照 A2 的做法：直接 curl 打本机 `rclone rcd` 的 RC（记得带 `Content-Type: application/json`），
 把结论写进 `AGENTS.md` 的不变式列表，而不是留在会话里。
