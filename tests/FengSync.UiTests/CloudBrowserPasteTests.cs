@@ -285,6 +285,32 @@ public sealed class CloudBrowserPasteTests
     }
 
     [Fact]
+    public async Task A_cut_whose_delete_was_refused_reports_the_duplicate_instead_of_a_success()
+    {
+        // The copy landed and the source stayed, so the user now has the file in two places. The delete is not
+        // queued and not retried — it is this window's own call — so refusing it is the whole failure, and
+        // calling the result 已剪切 would hide the copy the user still has to find and remove.
+        await WithWindow(async (window, rclone, _) =>
+        {
+            window.SetClipboard(CloudClipboardMode.Cut, [File($"{Root}/{Existing}", 1024)]);
+            SelectEndpoint(window, "files");
+            window.ShowListing($"{Other}/incoming", []);
+            var plan = await window.PlanPasteAsync();
+            Assert.NotNull(plan);
+
+            await window.ExecutePasteAsync(plan!, overwrite: true);
+
+            await WaitUntil(() => window.StatusText.Text.Contains("已复制但源未删除", StringComparison.Ordinal),
+                "a refused source delete was reported as a finished cut");
+            Assert.Single(rclone.Copies);
+            Assert.Equal($"nas: team/{Existing}", Assert.Single(rclone.Deleted));
+            // A bare "已复制但源未删除" would still leave the user guessing; the described reason is part of
+            // the report.
+            Assert.Contains("云端拒绝了此操作", window.StatusText.Text, StringComparison.Ordinal);
+        }, new FakeRclone { RefusesDeletes = true });
+    }
+
+    [Fact]
     public async Task An_endpoint_pastes_into_the_directory_on_screen_after_leaving_its_own()
     {
         await WithWindow(async (window, rclone, _) =>
@@ -513,7 +539,8 @@ public sealed class CloudBrowserPasteTests
     /// matter. <c>operations/list</c> always reports one same-name file already in the browsed directory,
     /// because a paste's other decision — whether to overwrite — needs a conflict to exist. A successful copy
     /// answers without a job id, the way a synchronous backend reply does, so the queue settles the row as soon
-    /// as the call returns; only <see cref="RefusesCopies"/> needs the polling and job paths.
+    /// as the call returns; only <see cref="RefusesCopies"/> and <see cref="RefusesDeletes"/> need the polling
+    /// and job paths.
     /// </summary>
     private sealed class FakeRclone : HttpMessageHandler
     {
@@ -526,6 +553,9 @@ public sealed class CloudBrowserPasteTests
 
         /// <summary>When true, <c>operations/copyfile</c> is refused, the way a backend refuses a bad copy.</summary>
         public bool RefusesCopies { get; init; }
+
+        /// <summary>When true, <c>operations/deletefile</c> is refused, so a cut lands its copy and fails its delete.</summary>
+        public bool RefusesDeletes { get; init; }
 
         public IReadOnlyList<Call> Copies
         {
@@ -553,15 +583,17 @@ public sealed class CloudBrowserPasteTests
         {
             var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
             var operation = request.RequestUri!.AbsolutePath.TrimStart('/');
-            var refused = RefusesCopies && operation == "operations/copyfile";
+            var copyRefused = RefusesCopies && operation == "operations/copyfile";
+            var deleteRefused = RefusesDeletes && operation == "operations/deletefile";
+            var refused = copyRefused || deleteRefused;
             var answer = operation switch
             {
                 "operations/list" => $$"""
                     {"list":[{"Path":"{{Existing}}","Name":"{{Existing}}","IsDir":false,"Size":1}]}
                     """,
-                "operations/copyfile" => refused ? """{"error":"sftp: 拒绝了这个复制"}""" : Record(_copies, body),
+                "operations/copyfile" => copyRefused ? """{"error":"sftp: 拒绝了这个复制"}""" : Record(_copies, body),
                 "operations/movefile" => Record(_moves, body),
-                "operations/deletefile" => Delete(body),
+                "operations/deletefile" => Delete(body, deleteRefused),
                 _ => "{}"
             };
             lock (_gate)
@@ -575,12 +607,13 @@ public sealed class CloudBrowserPasteTests
             };
         }
 
-        private string Delete(string body)
+        /// <summary>Records the delete even when it is refused: a refused delete was still attempted.</summary>
+        private string Delete(string body, bool refused)
         {
             using var document = JsonDocument.Parse(body);
             var root = document.RootElement;
             lock (_gate) _deleted.Add($@"{Read(root, "fs")} {Read(root, "remote")}");
-            return "{}";
+            return refused ? """{"error":"sftp: 拒绝了这个删除"}""" : "{}";
         }
 
         private static string Record(List<Call> into, string body)
