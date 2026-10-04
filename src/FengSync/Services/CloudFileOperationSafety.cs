@@ -1,3 +1,4 @@
+using System.IO;
 using FengSync.Core;
 using FengSync.Core.Configuration;
 
@@ -34,6 +35,31 @@ public static class CloudFileNames
     /// </summary>
     public static string RenameTarget(string path, string newName) =>
         CloudFileManagerService.Join(CloudFileManagerService.Parent(path), newName);
+
+    /// <summary>
+    /// A name beside <paramref name="name"/> rather than on top of it: <c>report.pdf</c> becomes
+    /// <c>report (1).pdf</c>, then <c>(2)</c>, until the name is free. Compared case-insensitively because
+    /// most backends are, and cut back to <see cref="MaxLength"/> because a rename that produced a name the
+    /// backend rejects would fail the upload the user chose 保留两者 to avoid losing.
+    /// </summary>
+    public static string KeepBothName(string name, IEnumerable<string> taken)
+    {
+        var stem = Path.GetFileNameWithoutExtension(name);
+        var extension = Path.GetExtension(name);
+        for (var attempt = 1; attempt <= MaximumRenameAttempts; attempt++)
+        {
+            var suffix = $" ({attempt})";
+            var room = Math.Max(0, MaxLength - extension.Length - suffix.Length);
+            var candidate = (stem.Length > room ? stem[..room] : stem) + suffix + extension;
+            if (!taken.Contains(candidate, StringComparer.OrdinalIgnoreCase)) return candidate;
+        }
+        // A directory that already holds "name (1)" through "name (9999)" is not a case the rename can
+        // solve by counting further; the last candidate is returned so the caller's own overwrite rules
+        // decide, rather than looping on a name that will never free up.
+        return $"{stem} ({MaximumRenameAttempts}){extension}";
+    }
+
+    private const int MaximumRenameAttempts = 9999;
 }
 
 /// <summary>What the user is about to delete, and how firmly they have to mean it.</summary>
@@ -91,16 +117,4 @@ public static class CloudDeleteSafety
 
         return new(string.Join(Environment.NewLine, lines), entries.Count > BulkThreshold, !supportsTrash);
     }
-
-    /// <summary>
-    /// The upload-conflict answer a batch runs with, so the question is asked once instead of per file.
-    /// <see cref="CloudUploadConflictPolicy.Ask"/> stays <see langword="null"/> because the caller has to
-    /// prompt for it.
-    /// </summary>
-    public static bool? OverwriteFor(CloudUploadConflictPolicy policy) => policy switch
-    {
-        CloudUploadConflictPolicy.Overwrite => true,
-        CloudUploadConflictPolicy.Skip => false,
-        _ => null
-    };
 }

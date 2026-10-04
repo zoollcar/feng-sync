@@ -1076,11 +1076,84 @@ public partial class RemoteEndpointManagerWindow : Window
     /// screen, because a same-name collision is the one thing the user has to be asked about <em>before</em>
     /// anything is queued.
     /// </summary>
-    internal async Task<CloudPastePlan?> PlanPasteAsync()
+    internal async Task<CloudPasteOffer?> PlanPasteAsync()
     {
         if (Selected is not { } account || _clipboard.Count == 0) return null;
-        try { return CloudPastePlanner.Build([.. _clipboard], account, _currentPath, await _files.ListAsync(account.Name, _currentPath)); }
+        try
+        {
+            var listing = await _files.ListAsync(account.Name, _currentPath);
+            return new CloudPasteOffer(CloudPastePlanner.Build([.. _clipboard], account, _currentPath, listing),
+                listing.Select(entry => entry.Name).ToArray());
+        }
         catch (Exception ex) { ReportFailure("无法读取目标目录", ex, "cloud-paste-conflict"); return null; }
+    }
+
+    /// <summary>
+    /// The conflict question, behind a seam so a test can hand in answers instead of waiting on a modal
+    /// dialog: a test cannot answer a window, and a batch whose decisions are only reachable through one would
+    /// go untested — which is how a paste starts replacing a file nobody agreed to replace. The default is the
+    /// real prompt.
+    /// </summary>
+    internal Func<string, int, IReadOnlyCollection<string>, CloudConflictAnswer?>? AskConflict { get; set; }
+
+    /// <summary>
+    /// Where a batch of destinations actually goes. <paramref name="conflicts"/> is the subset of
+    /// <paramref name="destinations"/> whose name is already taken, and <paramref name="takenOf"/> reports the
+    /// names one directory holds — per directory rather than one shared set, because a 保留两者 name is only free
+    /// relative to the directory it lands in. A cancelled batch returns <see langword="null"/> so the caller
+    /// queues nothing rather than guessing what the user meant; otherwise the result is one placement per
+    /// destination, in the order given, and a destination answered 跳过 says so rather than going missing.
+    /// </summary>
+    private IReadOnlyList<CloudConflictPlacement>? PlaceDestinations(
+        IReadOnlyList<string> destinations,
+        IReadOnlyList<string> conflicts,
+        Func<string, ICollection<string>> takenOf)
+    {
+        var choices = ResolveConflicts(conflicts, path => takenOf(CloudTransferQueue.ParentOf(path)));
+        return choices is null
+            ? null
+            : CloudConflictResolver.Apply(destinations, takenOf,
+                path => choices.TryGetValue(path, out var choice) ? choice : CloudConflictChoice.Overwrite);
+    }
+
+    /// <summary>
+    /// Indexes the placements a paste can act on by the destination the plan proposed; a destination answered
+    /// 跳过 gets no entry, which is how "what goes" is read here. An upload does not use this — its rows pair
+    /// with the placements by position, and two files dropped onto one remote name share a key, so indexing
+    /// them would send both to the last one's renamed destination.
+    /// </summary>
+    private static IReadOnlyDictionary<string, CloudConflictPlacement> Indexed(IReadOnlyList<CloudConflictPlacement> placements)
+    {
+        var byDestination = new Dictionary<string, CloudConflictPlacement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var placement in placements)
+            if (placement.Choice != CloudConflictChoice.Skip) byDestination[placement.Original] = placement;
+        return byDestination;
+    }
+
+    /// <summary>
+    /// The answer for every conflicted name in a batch. A saved policy answers for all of them without asking;
+    /// otherwise each name is asked one at a time and an answer can be applied to the ones still waiting —
+    /// which is why the question is one call over the whole batch, not one per directory: 应用到全部 has to mean
+    /// the rest of the drop, not the rest of one directory. A cancellation returns <see langword="null"/>,
+    /// distinct from the empty dictionary that means "there was nothing to ask".
+    /// </summary>
+    private IReadOnlyDictionary<string, CloudConflictChoice>? ResolveConflicts(
+        IReadOnlyList<string> conflicts,
+        Func<string, IEnumerable<string>> takenOf)
+    {
+        if (conflicts.Count == 0) return new Dictionary<string, CloudConflictChoice>(StringComparer.OrdinalIgnoreCase);
+        if (CloudConflictResolver.ChoiceFor(_settings.CloudUploadConflict) is { } batch)
+            return conflicts.ToDictionary(path => path, _ => batch, StringComparer.OrdinalIgnoreCase);
+        return CloudConflictResolver.AskFor(conflicts, (path, remaining) =>
+        {
+            var taken = takenOf(path).ToArray();
+            // The seam's null <em>is</em> the user's cancellation, so it must not be read as "no seam
+            // installed": a coalescing call would open the real dialog from a test that has nobody to answer it,
+            // and WPF refuses to own a window that was never shown.
+            return AskConflict is { } ask
+                ? ask(path, remaining, taken)
+                : CloudConflictPrompt.Ask(this, path, remaining, taken);
+        });
     }
 
     /// <summary>
@@ -1088,12 +1161,30 @@ public partial class RemoteEndpointManagerWindow : Window
     /// directories of one endpoint — so it gets the same progress, cancellation, retry and history as an
     /// upload, instead of a second copy path that has none of them. A cut inside one endpoint is the exception:
     /// rclone answers that with <c>operations/movefile</c> and no bytes move, and it is the same call 重命名
-    /// already uses. Returns the number of items the paste acted on.
+    /// already uses. <paramref name="placements"/> is the conflict answer, addressed by the destination the
+    /// plan proposed: a target missing from it was skipped, and one whose destination changed was kept beside
+    /// the file that was already there. Returns the number of items the paste acted on.
     /// </summary>
-    internal async Task<int> ExecutePasteAsync(CloudPastePlan plan, bool overwrite)
+    internal async Task<int> ExecutePasteAsync(CloudPastePlan plan, IReadOnlyDictionary<string, CloudConflictPlacement> placements)
     {
         if (Selected is not { } account) return 0;
-        var targets = overwrite ? plan.Targets : [.. plan.Targets.Where(target => !target.OverwritesExisting)];
+        var targets = new List<(CloudPasteTarget Target, string Path, string RelativePath)>();
+        var renamed = 0;
+        foreach (var target in plan.Targets)
+        {
+            if (!placements.TryGetValue(target.DestinationPath, out var placement)) continue;
+            var relative = target.DestinationRelativePath;
+            if (placement.Destination != target.DestinationPath)
+            {
+                // Only the last segment changes, so the renamed file stays in the directory the user was
+                // looking at — and the endpoint-relative leg has to move with it or the copy lands on the
+                // name 保留两者 was chosen to avoid.
+                renamed++;
+                relative = CloudFileManagerService.Join(CloudFileManagerService.Parent(relative),
+                    CloudTransferTask.NameOf(placement.Destination));
+            }
+            targets.Add((target, placement.Destination, relative));
+        }
         if (targets.Count == 0)
         {
             StatusText.Text = $"已跳过 {plan.Conflicts} 个同名项目。";
@@ -1103,19 +1194,19 @@ public partial class RemoteEndpointManagerWindow : Window
         var moved = 0;
         var copies = new List<(CloudTransferTask Task, CloudClipboardItem Item)>();
         var failures = new List<string>();
-        foreach (var target in targets)
+        foreach (var (target, destinationPath, destinationRelativePath) in targets)
         {
             try
             {
                 if (cutting && target.SameEndpoint)
                 {
                     // The destination directory is the one being browsed, so it exists and needs no mkdir.
-                    await _files.MoveAsync(target.Item.Source.Name, target.Item.Entry.Path, target.DestinationPath);
+                    await _files.MoveAsync(target.Item.Source.Name, target.Item.Entry.Path, destinationPath);
                     moved++;
                     continue;
                 }
                 var task = _transfers.EnqueueCopy(EndpointUri(target.Item.Source), target.SourceRelativePath,
-                    EndpointUri(account), target.DestinationRelativePath, target.Item.Entry.Size);
+                    EndpointUri(account), destinationRelativePath, target.Item.Entry.Size);
                 copies.Add((task, target.Item));
             }
             catch (Exception ex) { failures.Add($"{target.Item.Entry.Name}：{RcloneUiError.Describe(ex, "cloud-paste")}"); }
@@ -1129,6 +1220,7 @@ public partial class RemoteEndpointManagerWindow : Window
         var parts = new List<string>();
         if (moved > 0) parts.Add($"已移动 {moved} 项");
         if (copies.Count > 0) parts.Add($"已排队复制 {copies.Count} 个文件");
+        if (renamed > 0) parts.Add($"{renamed} 个同名文件改名为保留两者");
         if (failures.Count > 0) parts.Add($"{failures.Count} 项失败：{string.Join("；", failures.Take(3))}");
         if (plan.Skipped.Count > 0) parts.Add(string.Join(" ", plan.Skipped));
         StatusText.Text = string.Join("。", parts) + "。";
@@ -1183,12 +1275,14 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <summary>
     /// Confirms the delete a cut ends with, before any copy starts. Asking after the bytes moved would be
     /// asking the user to decide with their file already duplicated. Only the rows that leave the endpoint they
-    /// came from are listed: a cut inside one endpoint is a move, and a move is not something this app asks
-    /// twice about — 重命名 is the same call.
+    /// came from <em>and actually go</em> are listed: a cut inside one endpoint is a move, and a move is not
+    /// something this app asks twice about — 重命名 is the same call — while a row the user chose to skip
+    /// would otherwise be confirmed for a delete that never happens.
     /// </summary>
-    private bool ConfirmCut(CloudPastePlan plan)
+    private bool ConfirmCut(CloudPastePlan plan, IReadOnlyDictionary<string, CloudConflictPlacement> placements)
     {
-        var sources = plan.Targets.Where(target => !target.SameEndpoint).Select(target => target.Item).ToList();
+        var sources = plan.Targets.Where(target => !target.SameEndpoint && placements.ContainsKey(target.DestinationPath))
+            .Select(target => target.Item).ToList();
         if (sources.Count == 0) return true;
         var entries = sources.Select(item => item.Entry).ToList();
         // Whether the delete can be undone is the source endpoint's answer, not the destination's.
@@ -1202,19 +1296,19 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         if (_clipboard.Count == 0) { StatusText.Text = "剪贴板是空的：先选中项目，再用右键菜单的“复制”或“剪切”。"; return; }
         if (Selected is null) { StatusText.Text = "请先选择要粘贴到的云盘。"; return; }
-        var plan = await PlanPasteAsync();
-        if (plan is null) return;
+        var offer = await PlanPasteAsync();
+        if (offer is null) return;
+        var plan = offer.Plan;
         if (plan.Targets.Count == 0) { StatusText.Text = "没有可粘贴的项目。" + string.Join(" ", plan.Skipped); return; }
-        var overwrite = true;
-        if (plan.Conflicts > 0)
-        {
-            var answer = MessageBox.Show($"{plan.Conflicts} 个同名项目已存在于目标目录。\n\n是：全部覆盖；否：跳过这些项目；取消：取消本次粘贴。",
-                "目标已有同名项目", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
-            if (answer == MessageBoxResult.Cancel) { StatusText.Text = "已取消粘贴。"; return; }
-            overwrite = answer == MessageBoxResult.Yes;
-        }
-        if (_clipboardMode == CloudClipboardMode.Cut && !ConfirmCut(plan)) { StatusText.Text = "已取消粘贴。"; return; }
-        await ExecutePasteAsync(plan, overwrite);
+        var taken = new HashSet<string>(offer.TakenNames, StringComparer.OrdinalIgnoreCase);
+        var placed = PlaceDestinations([.. plan.Targets.Select(target => target.DestinationPath)],
+            [.. plan.Targets.Where(target => target.OverwritesExisting).Select(target => target.DestinationPath)],
+            _ => taken);
+        if (placed is null) { StatusText.Text = "已取消粘贴。"; return; }
+        var placements = Indexed(placed);
+        if (placements.Count == 0) { StatusText.Text = $"已跳过 {plan.Conflicts} 个同名项目。"; return; }
+        if (_clipboardMode == CloudClipboardMode.Cut && !ConfirmCut(plan, placements)) { StatusText.Text = "已取消粘贴。"; return; }
+        await ExecutePasteAsync(plan, placements);
     }
 
     /// <summary>Queues every selected file, asking for a destination only when there is no usable default.</summary>
@@ -1397,9 +1491,11 @@ public partial class RemoteEndpointManagerWindow : Window
     }
 
     /// <summary>
-    /// Queues a batch of uploads, asking once about same-name conflicts so a dropped tree cannot produce
-    /// a dialog per file. Overwriting stays an explicit user choice unless the settings say otherwise,
-    /// matching the single-file flow.
+    /// Queues a batch of uploads. A same-name conflict is answered here exactly the way a 粘贴 answers one —
+    /// the saved policy for the whole batch, or one question per name whose answer can cover the rest — so a
+    /// dropped tree and a clipboard paste cannot give different answers about the same file, and 保留两者 is
+    /// reachable from both. Each destination directory is listed once, because a dropped tree would otherwise
+    /// list a directory per file.
     /// </summary>
     private async Task EnqueueUploadsAsync(IReadOnlyList<CloudDropPlanner.UploadItem> items)
     {
@@ -1423,21 +1519,23 @@ public partial class RemoteEndpointManagerWindow : Window
             return;
         }
 
-        var conflicts = items.Where(item => listings[CloudTransferQueue.ParentOf(item.RemotePath)].Contains(CloudTransferTask.NameOf(item.RemotePath))).ToList();
-        var accepted = items;
-        if (conflicts.Count > 0)
+        var destinations = items.Select(item => item.RemotePath).ToArray();
+        var conflicts = destinations
+            .Where(path => listings[CloudTransferQueue.ParentOf(path)].Contains(CloudTransferTask.NameOf(path)))
+            .ToArray();
+        var placements = PlaceDestinations(destinations, conflicts, directory => listings[directory]);
+        if (placements is null) { StatusText.Text = "已取消上传。"; return; }
+        var accepted = new List<CloudDropPlanner.UploadItem>();
+        var renamed = 0;
+        var skipped = 0;
+        // One placement per destination, in this same order, so the rows pair with the answers by position —
+        // and must not pair by name: two dropped folders can hold one same-named file, and both of those rows
+        // aim at the same remote name, which is exactly the case that renames them apart.
+        foreach (var (item, placement) in items.Zip(placements))
         {
-            var overwrite = CloudDeleteSafety.OverwriteFor(_settings.CloudUploadConflict);
-            if (overwrite is null)
-            {
-                var answer = MessageBox.Show($"{conflicts.Count} 个同名文件已存在于目标目录。\n\n是：全部覆盖；否：全部跳过；取消：取消本次上传。", "文件已存在", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
-                if (answer == MessageBoxResult.Cancel) { StatusText.Text = "已取消上传。"; return; }
-                if (answer == MessageBoxResult.No) accepted = items.Where(item => !conflicts.Contains(item)).ToList();
-            }
-            else if (overwrite == false)
-            {
-                accepted = items.Where(item => !conflicts.Contains(item)).ToList();
-            }
+            if (placement.Choice == CloudConflictChoice.Skip) { skipped++; continue; }
+            if (placement.Destination != item.RemotePath) renamed++;
+            accepted.Add(item with { RemotePath = placement.Destination });
         }
         if (accepted.Count == 0) { StatusText.Text = "已跳过全部同名文件。"; return; }
 
@@ -1445,7 +1543,9 @@ public partial class RemoteEndpointManagerWindow : Window
         foreach (var item in accepted)
             _transfers.Enqueue(CloudTransferDirection.Upload, uri, CloudFileManagerService.RelativeToEndpoint(account, item.RemotePath), item.LocalPath, new FileInfo(item.LocalPath).Length);
 
-        StatusText.Text = $"已加入传输队列：{accepted.Count} 个文件。";
+        StatusText.Text = $"已加入传输队列：{accepted.Count} 个文件。"
+            + (renamed > 0 ? $"其中 {renamed} 个同名文件改名为保留两者。" : "")
+            + (skipped > 0 ? $"已跳过 {skipped} 个同名文件。" : "");
         ShowTransferWindow();
         await BrowseAsync();
     }

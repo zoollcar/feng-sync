@@ -230,7 +230,7 @@ public partial class SettingsWindow : Window
 
         sp.Children.Add(NewHeader("上传", section));
         var conflict = NewComboBox("SettingsCloudConflict", 220, ConflictIndex(_initial.CloudUploadConflict),
-            new[] { "每次询问", "直接覆盖", "跳过同名文件" });
+            new[] { "每次询问", "直接覆盖", "跳过同名文件", "保留两者（重命名）" });
         sp.Children.Add(NewLabeledRow("目标目录已有同名文件时", conflict, caption));
 
         sp.Children.Add(NewHeader("行为", section));
@@ -251,6 +251,7 @@ public partial class SettingsWindow : Window
     {
         CloudUploadConflictPolicy.Overwrite => 1,
         CloudUploadConflictPolicy.Skip => 2,
+        CloudUploadConflictPolicy.KeepBoth => 3,
         _ => 0
     };
 
@@ -258,6 +259,7 @@ public partial class SettingsWindow : Window
     {
         1 => CloudUploadConflictPolicy.Overwrite,
         2 => CloudUploadConflictPolicy.Skip,
+        3 => CloudUploadConflictPolicy.KeepBoth,
         _ => CloudUploadConflictPolicy.Ask
     };
 

@@ -40,6 +40,13 @@ public sealed record CloudPastePlan(IReadOnlyList<CloudPasteTarget> Targets, IRe
 }
 
 /// <summary>
+/// A paste plan together with the destination names it was planned against. The conflict answer needs the
+/// same listing the plan needed, and one paste gesture should not read the directory twice: a second listing
+/// could differ from the first, and then the plan and the decision would describe two different directories.
+/// </summary>
+public sealed record CloudPasteOffer(CloudPastePlan Plan, IReadOnlyCollection<string> TakenNames);
+
+/// <summary>
 /// The paste rules of the cloud file browser, kept free of WPF and of rclone so they can be tested directly:
 /// where a clipboard row lands, which rows cannot be pasted, and which ones would overwrite. The queue and the
 /// move call are deliberately not here — this type decides <em>what a paste means</em>, not how it runs.

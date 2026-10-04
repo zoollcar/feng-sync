@@ -82,10 +82,16 @@ public sealed record ApplicationSettings
 /// </summary>
 public enum CloudUploadConflictPolicy
 {
-    /// <summary>Ask once per batch, which is the historical behaviour.</summary>
+    /// <summary>Ask about each conflicted name, with the choice of applying one answer to the rest.</summary>
     Ask,
     /// <summary>Replace the existing file without asking.</summary>
     Overwrite,
     /// <summary>Leave the existing file alone and upload only the names that are free.</summary>
-    Skip
+    Skip,
+    /// <summary>
+    /// Keep both files: the incoming one lands beside the existing one under a free name. The answer a user
+    /// reaches for when they are not sure the two files are the same file, and the only one that never loses
+    /// either side.
+    /// </summary>
+    KeepBoth
 }

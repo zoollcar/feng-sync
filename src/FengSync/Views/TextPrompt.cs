@@ -98,6 +98,6 @@ internal static class TextPrompt
     /// Looks a shared style up without assuming a shell merged the theme dictionaries — a preview or a test
     /// process may have none, and a prompt that cannot find its styles must still be usable.
     /// </summary>
-    private static T? Resource<T>(string key) where T : class =>
+    internal static T? Resource<T>(string key) where T : class =>
         Application.Current?.TryFindResource(key) as T;
 }
