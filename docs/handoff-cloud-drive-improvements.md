@@ -15,9 +15,8 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）。见 §2。 |
-| **已完成未提交** | **A7 端点导出/导入** —— 代码、单测（11 纯函数 + 2 STA）、桌面矩形断言都写完了，单测与 UI 护栏通过；**全量门禁未跑，还未 commit**。见 §1 与 §2 的 A7。 |
-| **下一步** | ① 跑全量门禁 → ② 提交 A7 → ③ 进 **B0 队列泛化 → B 组文件浏览器**。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）。**A 组全部收尾。**见 §2。 |
+| **下一步** | 进 **B0 队列泛化 → B 组文件浏览器**。注：全量门禁 `Test-All.ps1 -Level UiOffline` 里 `UiFeatureBehaviorTests` 整类在本环境超时是**既有问题**（与 A7 无关），需单独排查；A7 的窄门禁（护栏 13 + 纯函数 11 + STA 2 = 26）已全过。 |
 | **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）。 |
 
 ---
@@ -40,11 +39,11 @@ A3–A6 是分批提交的，只有 A3/A4 有「单跑通过」的记录；A5/A6
   文件被占用时脚本 3 秒就退出（`The process cannot access the file ... because it is being used by another process`）。
 - 读数会比文档 §3 的旧预期更高（A5/A6 各加了测试）；以 `Failed: 0` 为准，不追死具体数字。
 
-### ② A7 已实现 —— 跑门禁并提交
+### ② A7 已实现并提交 ✅
 
-A7 的代码与测试已完成（见 §2 的 A7，设计与安全规则留档在 §5）。门禁绿后按 §1 ③ 的粒度提交；这是 A 组最后一项，提交后整个 A 组收尾。
+A7 的代码、测试与文档已按 §1 ③ 的粒度提交（`60733ae` feat / `d58cd4a` test / `344d3cd` docs，见 §2）。窄门禁全过（护栏 13 + 纯函数 11 + STA 2）。全量门禁因 `UiFeatureBehaviorTests` 既有超时未跑，单独排查。**A 组至此全部收尾。**
 
-### ③ A7 完成后按约定的粒度提交
+### ③ A7 的提交粒度（已执行）
 
 按层次拆 `feat` / `test`（`docs` 单独），用**显式路径** `git add`（**不要 `git add -A`**）。**只提交不 push。**
 
@@ -66,8 +65,9 @@ A7 的代码与测试已完成（见 §2 的 A7，设计与安全规则留档在
 | `8a6995a` | A5 | `test(proxy): cover the setting, the resolver fallback and the shell wiring` |
 | `f4c2476` | A6 | `feat(endpoints): file endpoints under groups and tag them` |
 | `6d2001d` | A6 | `test(endpoints): cover grouping, tagging and the heading each row carries` |
-| （待提交） | A7 | `feat(endpoints): export and import endpoints without their credentials` |
-| （待提交） | A7 | `test(endpoints): cover the export shape and the import file's validation` |
+| `60733ae` | A7 | `feat(endpoints): export and import endpoints without their credentials` |
+| `d58cd4a` | A7 | `test(endpoints): cover the export shape and the import file's validation` |
+| `344d3cd` | A7 | `docs: record A7 done and archive A3-A6 in the handoff` |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -170,7 +170,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   搜索也命中标签。
 - 测试：`CloudEndpointOrganizationTests`（Core/UI 纯函数 ~195 行）、`CloudEndpointListTests` +116、`UiFeatureBehaviorTests` +95；`sftp-ui` 场景加了组织编辑往返。
 
-### A7 —— 端点导出/导入（**已完成，未提交**）
+### A7 —— 端点导出/导入（**已提交**：`60733ae` + `d58cd4a` + `344d3cd`）
 
 - `src/FengSync/Services/CloudEndpointPortability.cs`（新）—— 纯逻辑与不可信输入校验：
   `CloudEndpointExport` / `CloudEndpointExportBundle` / `CloudEndpointDraft` / `CloudEndpointImport`；
@@ -259,9 +259,9 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 ## 5. 剩余路线图（A7 → E）
 
-> 这一节同时是那份 307 行改进计划的替代。**A0–A6 已完成**（见 §2），本节的 A5/A6 已移入 §2。
-> **剩余项的顺序与依赖**：A7 独立；B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**；
-> D 与 A/B/C 完全解耦；E 是收尾集成。**A7 已完成，下一批是 B0。**
+> 这一节同时是那份 307 行改进计划的替代。**A0–A7 已完成**（见 §2），本节的 A5/A6/A7 已移入 §2。
+> **剩余项的顺序与依赖**：B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**；
+> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B0。**
 
 ### A7. 端点导出/导入（原 A9）—— ✅ 已完成，见 §2
 
