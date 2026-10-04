@@ -80,8 +80,8 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 回收站**、由这一批顺手查实并修好的测试提交：`a11b3f5`（B4 的十条窗口测试因为没 `await` 而从未真正断言，现在有了
 `UiTestAwaitGuardTests` 守着）与 `e66d42c`（`RealWinFspMountIntegrationTests` 的 teardown 与 WinFsp 异步 detach 竞态，
 是 B5 门禁连跑三次的两处 flake 之一）。本节的这条 hash 行与 §2 表末行是 `7d013a6` 之后回填的。
-**B6 键盘快捷键**照旧三层：`f45e06b` feat / `2299460` test / `<docs-hash>` docs（本节的这条 hash 行与 §2 表末行是
-`<docs-hash>` 之后回填的）——
+**B6 键盘快捷键**照旧三层：`f45e06b` feat / `2299460` test / `1893946` docs（本节的这条 hash 行与 §2 表末行是
+`1893946` 之后回填的）。
 它没有往 Core 加东西，也没有新造一条产品路径：一张纯表把按键映射成命令，命令一律调按钮本来就在调的那个方法。
 **A 组 + B0 + B1 + B2 + B3 + B4 + B5 + B6 至此收尾。**
 
@@ -134,7 +134,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `7d013a6` | B5 | `docs: record B5 done and the trash facts that B6 must keep`（AGENTS.md 规则 + 本文件） |
 | `f45e06b` | B6 | `feat(browser): give the file browser a keyboard that only routes` |
 | `2299460` | B6 | `test(browser): pin the keystroke table, its typing gate and the pane it belongs to` |
-| `<docs-hash>` | B6 | `docs: record B6 done and the keystroke rules that B7 must keep`（AGENTS.md 规则 + 本文件） |
+| `1893946` | B6 | `docs: record B6 done and the keystroke rules that B7 must keep`（AGENTS.md 规则 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -523,7 +523,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   B5 没动它，`RenameAsync` 的文档注释里如实写着，留给后续批次按 §5 的形状补（它同样需要「先问列表再决定」）。
 - 门禁：`Failed: 0`，**Core 415 / UI 383**（UI 3m8s），数字的来龙去脉与两处 flake 的处置都在 §1①。
 
-### B6 —— 键盘快捷键（**已提交**：`f45e06b` feat / `2299460` test / `<docs-hash>` docs）
+### B6 —— 键盘快捷键（**已提交**：`f45e06b` feat / `2299460` test / `1893946` docs）
 
 - **键盘只做路由，不做规则**：`CloudBrowserShortcuts.Resolve(key, ctrl, shift, typing)` 是一张**纯表**，一个按键
   只映射到一个命令（F5→刷新、Del→移到回收站、Shift+Del / Ctrl+Del→删除、F2→重命名、Ctrl+A/X/C/V→全选/剪切/
