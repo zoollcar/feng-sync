@@ -54,7 +54,8 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 （`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / `6be98b9` docs
 （本节的这条 commit 行与 §2 表末行是 `6be98b9` 之后回填的）。**B1 浏览器粘贴**照旧三层：`3c9322b` feat /
 `cd74a61` + `526a634` test / `4656a58` docs（本节的 hash 由 `4656a58` 的下一次回填补上）。
-**B2 同名冲突**照旧三层：`dedc2b5` feat / `1649dc6` test / docs 待回填。**A 组 + B0 + B1 + B2 至此收尾。**
+**B2 同名冲突**照旧三层：`dedc2b5` feat / `1649dc6` test / `0349467` docs（本节的这条 hash 行与 §2 表末行是
+`0349467` 之后回填的）。**A 组 + B0 + B1 + B2 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
 
@@ -91,6 +92,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `4656a58` | B1 | `docs: record B1 done and the paste rules that B2 must keep`（AGENTS.md 不变式 + 本文件） |
 | `dedc2b5` | B2 | `feat(browser): keep both files when a cloud name is taken` |
 | `1649dc6` | B2 | `test(browser): cover each conflict answer and the renames they authorise` |
+| `0349467` | B2 | `docs: record B2 done and the conflict answers that B3 must keep`（AGENTS.md 不变式 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -296,7 +298,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 ---
 
-### B2 —— 上传与粘贴的同名冲突：`KeepBoth` 与逐文件询问（**已提交**：`dedc2b5` feat / `1649dc6` test / docs 本行待回填）
+### B2 —— 上传与粘贴的同名冲突：`KeepBoth` 与逐文件询问（**已提交**：`dedc2b5` feat / `1649dc6` test / `0349467` docs）
 
 - 规则全在 `src/FengSync/Services/CloudConflictResolution.cs`：`CloudConflictChoice {Overwrite, KeepBoth, Skip}`、
   `CloudConflictAnswer(Choice, ApplyToAll)`、`CloudConflictPlacement(Original, Destination, Choice)`、
