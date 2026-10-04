@@ -92,10 +92,9 @@ public sealed class CloudBrowserPasteTests
             window.SetClipboard(CloudClipboardMode.Copy, [Folder($"{Root}/docs")]);
             window.ShowListing("team/incoming", []);
 
-            var plan = await window.PlanPasteAsync();
+            var plan = await PlanAsync(window);
 
-            Assert.NotNull(plan);
-            Assert.Empty(plan!.Targets);
+            Assert.Empty(plan.Targets);
             Assert.Contains("文件夹", string.Join(" ", plan.Skipped), StringComparison.Ordinal);
         });
     }
@@ -111,10 +110,9 @@ public sealed class CloudBrowserPasteTests
             SelectEndpoint(window, "files");
             window.ShowListing($"{Other}/incoming", []);
 
-            var plan = await window.PlanPasteAsync();
+            var plan = await PlanAsync(window);
 
-            Assert.NotNull(plan);
-            var target = Assert.Single(plan!.Targets);
+            var target = Assert.Single(plan.Targets);
             // Each side is stripped against its own endpoint's root: the source stays inside team/, the
             // destination inside shared/, and neither carries the other's prefix.
             Assert.Equal("shared/incoming/report.pdf", target.DestinationPath);
@@ -132,10 +130,9 @@ public sealed class CloudBrowserPasteTests
             window.SetClipboard(CloudClipboardMode.Copy, [File($"{Root}/{Existing}", 1024)]);
             window.ShowListing(Root, []);
 
-            var plan = await window.PlanPasteAsync();
+            var plan = await PlanAsync(window);
 
-            Assert.NotNull(plan);
-            Assert.Empty(plan!.Targets);
+            Assert.Empty(plan.Targets);
             Assert.Contains("已经在目标目录里", string.Join(" ", plan.Skipped), StringComparison.Ordinal);
         });
     }
@@ -149,10 +146,9 @@ public sealed class CloudBrowserPasteTests
             SelectEndpoint(window, "files");
             window.ShowListing($"{Other}/incoming", []);
 
-            var plan = await window.PlanPasteAsync();
+            var plan = await PlanAsync(window);
 
-            Assert.NotNull(plan);
-            var target = Assert.Single(plan!.Targets);
+            var target = Assert.Single(plan.Targets);
             // The destination's own listing holds "a.txt", so pasting that name is the case the user has to
             // choose about before anything is queued.
             Assert.True(target.OverwritesExisting);
@@ -168,10 +164,9 @@ public sealed class CloudBrowserPasteTests
             window.SetClipboard(CloudClipboardMode.Copy, [File($"{Root}/b.txt", 1024), File($"{Root}/c.txt", 2048)]);
             SelectEndpoint(window, "files");
             window.ShowListing($"{Other}/incoming", []);
-            var plan = await window.PlanPasteAsync();
-            Assert.NotNull(plan);
+            var plan = await PlanAsync(window);
 
-            Assert.Equal(2, await window.ExecutePasteAsync(plan!, overwrite: true));
+            Assert.Equal(2, await window.ExecutePasteAsync(plan, Place(plan)));
 
             // Each copy runs on the queue's own worker, so the two rows arrive in no particular order.
             await WaitUntil(() => rclone.Copies.Count == 2, "the browser queued two copies");
@@ -198,10 +193,10 @@ public sealed class CloudBrowserPasteTests
             window.SetClipboard(CloudClipboardMode.Copy, [File($"{Root}/{Existing}", 1024), File($"{Root}/new.txt", 1024)]);
             SelectEndpoint(window, "files");
             window.ShowListing($"{Other}/incoming", []);
-            var plan = await window.PlanPasteAsync();
-            Assert.NotNull(plan);
+            var plan = await PlanAsync(window);
 
-            Assert.Equal(1, await window.ExecutePasteAsync(plan!, overwrite: false));
+            Assert.Equal(1, await window.ExecutePasteAsync(plan,
+                Place(plan, CloudConflictChoice.Skip)));
 
             await WaitUntil(() => rclone.Copies.Count == 1, "the browser queued one copy");
             // "a.txt" is the name already present, so the row that moved is the one that was not.
@@ -216,10 +211,9 @@ public sealed class CloudBrowserPasteTests
         {
             window.SetClipboard(CloudClipboardMode.Cut, [File($"{Root}/{Existing}", 1024)]);
             window.ShowListing("team/incoming", []);
-            var plan = await window.PlanPasteAsync();
-            Assert.NotNull(plan);
+            var plan = await PlanAsync(window);
 
-            Assert.Equal(1, await window.ExecutePasteAsync(plan!, overwrite: true));
+            Assert.Equal(1, await window.ExecutePasteAsync(plan, Place(plan)));
 
             // Inside one endpoint rclone answers a move without carrying the bytes, so there is no copy to
             // wait for and no source delete to schedule.
@@ -243,10 +237,9 @@ public sealed class CloudBrowserPasteTests
             // than a move: rclone cannot move an object between two backends.
             SelectEndpoint(window, "files");
             window.ShowListing($"{Other}/incoming", []);
-            var plan = await window.PlanPasteAsync();
-            Assert.NotNull(plan);
+            var plan = await PlanAsync(window);
 
-            Assert.Equal(1, await window.ExecutePasteAsync(plan!, overwrite: true));
+            Assert.Equal(1, await window.ExecutePasteAsync(plan, Place(plan)));
 
             // The delete rides on the copy's completion, so it is a later call rather than an earlier one.
             await WaitUntil(() => rclone.Deleted.Count == 1, "the cut deleted its source");
@@ -270,10 +263,9 @@ public sealed class CloudBrowserPasteTests
             window.SetClipboard(CloudClipboardMode.Cut, [File($"{Root}/{Existing}", 1024)]);
             SelectEndpoint(window, "files");
             window.ShowListing("team/incoming", []);
-            var plan = await window.PlanPasteAsync();
-            Assert.NotNull(plan);
+            var plan = await PlanAsync(window);
 
-            await window.ExecutePasteAsync(plan!, overwrite: true);
+            await window.ExecutePasteAsync(plan, Place(plan));
 
             var task = Assert.Single(transfers.Tasks);
             await WaitUntil(() => task.IsFinished, "the refused copy never settled");
@@ -295,10 +287,9 @@ public sealed class CloudBrowserPasteTests
             window.SetClipboard(CloudClipboardMode.Cut, [File($"{Root}/{Existing}", 1024)]);
             SelectEndpoint(window, "files");
             window.ShowListing($"{Other}/incoming", []);
-            var plan = await window.PlanPasteAsync();
-            Assert.NotNull(plan);
+            var plan = await PlanAsync(window);
 
-            await window.ExecutePasteAsync(plan!, overwrite: true);
+            await window.ExecutePasteAsync(plan, Place(plan));
 
             await WaitUntil(() => window.StatusText.Text.Contains("已复制但源未删除", StringComparison.Ordinal),
                 "a refused source delete was reported as a finished cut");
@@ -320,7 +311,8 @@ public sealed class CloudBrowserPasteTests
             SelectEndpoint(window, "files");
             window.ShowListing($"{Other}/archive", []);
 
-            await window.ExecutePasteAsync((await window.PlanPasteAsync())!, overwrite: true);
+            var plan = await PlanAsync(window);
+            await window.ExecutePasteAsync(plan, Place(plan));
 
             await WaitUntil(() => rclone.Copies.Count == 1, "the browser queued a copy");
             var copy = Assert.Single(rclone.Copies);
@@ -330,7 +322,158 @@ public sealed class CloudBrowserPasteTests
         });
     }
 
+    // ------------------------------------------------------------------ conflicts
+
+    [Fact]
+    public async Task A_paste_answered_keep_both_lands_beside_the_file_that_was_already_there()
+    {
+        // The rename is the answer that keeps both files, so both halves have to travel: the remote copy is
+        // queued under the new name, and the status says a rename happened rather than reporting a plain paste.
+        await WithWindow(async (window, rclone, _) =>
+        {
+            window.AskConflict = (_, _, _) => new CloudConflictAnswer(CloudConflictChoice.KeepBoth, ApplyToAll: false);
+            window.SetClipboard(CloudClipboardMode.Copy, [File($"{Root}/{Existing}", 1024)]);
+            SelectEndpoint(window, "files");
+            window.ShowListing($"{Other}/incoming", []);
+
+            window.PasteButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            await WaitUntil(() => rclone.Copies.Count == 1, "the answered paste queued its copy");
+            Assert.Equal("shared/incoming/a (1).txt", Assert.Single(rclone.Copies).TargetRemote);
+            Assert.Contains("改名为保留两者", window.StatusText.Text, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public async Task A_keep_both_rename_lands_in_the_directory_on_screen_rather_than_where_the_name_was_free()
+    {
+        // The rename may only change the last segment. A second free name elsewhere in the endpoint would be a
+        // different destination than the one the user was looking at, and the whole point of 保留两者 is that the
+        // file appears beside the one it conflicted with.
+        await WithWindow(async (window, rclone, _) =>
+        {
+            window.AskConflict = (_, _, _) => new CloudConflictAnswer(CloudConflictChoice.KeepBoth, ApplyToAll: false);
+            window.SetClipboard(CloudClipboardMode.Copy, [File($"{Root}/{Existing}", 1024)]);
+            // The endpoint being browsed has "shared" as its own root, so the queue's own path is the shorter
+            // one and the copy's remote target is composed from it.
+            SelectEndpoint(window, "files");
+            window.ShowListing($"{Other}/incoming/sub", []);
+
+            window.PasteButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            await WaitUntil(() => rclone.Copies.Count == 1, "the renamed paste queued its copy");
+            Assert.Equal("shared/incoming/sub/a (1).txt", Assert.Single(rclone.Copies).TargetRemote);
+        });
+    }
+
+    [Fact]
+    public async Task The_conflict_question_is_shown_the_name_that_is_taken_and_what_is_still_undecided()
+    {
+        await WithWindow(async (window, _, _) =>
+        {
+            var asked = new List<(string Path, int Remaining, string[] Taken)>();
+            window.AskConflict = (path, remaining, taken) =>
+            {
+                asked.Add((path, remaining, [.. taken]));
+                return new CloudConflictAnswer(CloudConflictChoice.Overwrite, ApplyToAll: false);
+            };
+            window.SetClipboard(CloudClipboardMode.Copy, [File($"{Root}/{Existing}", 1024)]);
+            SelectEndpoint(window, "files");
+            window.ShowListing($"{Other}/incoming", []);
+
+            window.PasteButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            var question = Assert.Single(asked);
+            Assert.Equal($"shared/incoming/{Existing}", question.Path);
+            Assert.Equal(1, question.Remaining);
+            Assert.Contains(Existing, question.Taken, StringComparer.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public async Task A_conflict_answer_applied_to_the_rest_asks_once_and_renames_each_row_apart()
+    {
+        // One question for the whole batch is the promise 应用到全部 makes; the two renames it authorises must
+        // still be distinct, because a second file that took the first one's free name would replace it — the
+        // loss keeping both exists to prevent.
+        await WithWindow(async (window, rclone, _) =>
+        {
+            var asked = 0;
+            window.AskConflict = (_, _, _) =>
+            {
+                asked++;
+                return new CloudConflictAnswer(CloudConflictChoice.KeepBoth, ApplyToAll: true);
+            };
+            window.SetClipboard(CloudClipboardMode.Copy, [File($"{Root}/{Existing}", 1024), File($"{Root}/b.txt", 1024)]);
+            SelectEndpoint(window, "files");
+            window.ShowListing($"{Other}/incoming", []);
+
+            window.PasteButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            await WaitUntil(() => rclone.Copies.Count == 2, "the answered batch queued both copies");
+            Assert.Equal(1, asked);
+            Assert.Equal(["shared/incoming/a (1).txt", "shared/incoming/b (1).txt"],
+                rclone.Copies.Select(copy => copy.TargetRemote).Order(StringComparer.Ordinal));
+        }, new FakeRclone { ListedNames = [Existing, "b.txt"] });
+    }
+
+    [Fact]
+    public async Task A_cancelled_conflict_question_queues_nothing_and_leaves_the_clipboard_alone()
+    {
+        // Cancelling one question cancels the whole paste: a batch half-queued would leave files in the
+        // destination that no answer covered, and a clipboard emptied by a paste that never ran.
+        await WithWindow(async (window, rclone, _) =>
+        {
+            window.AskConflict = (_, _, _) => null;
+            window.SetClipboard(CloudClipboardMode.Copy, [File($"{Root}/{Existing}", 1024)]);
+            SelectEndpoint(window, "files");
+            window.ShowListing($"{Other}/incoming", []);
+
+            window.PasteButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            await WaitUntil(() => window.StatusText.Text.Contains("已取消粘贴", StringComparison.Ordinal),
+                "a cancelled paste reported nothing");
+            Assert.False(rclone.Sent("operations/copyfile"));
+            Assert.NotEmpty(window.ClipboardItems);
+        });
+    }
+
     // ------------------------------------------------------------------ harness
+
+    /// <summary>
+    /// The plan a paste would run, read the way the 粘贴 button reads it: the destination directory is listed
+    /// first, and the names it holds come back with the plan as the offer the conflict question needs.
+    /// </summary>
+    private static async Task<CloudPastePlan> PlanAsync(RemoteEndpointManagerWindow window)
+    {
+        var offer = await window.PlanPasteAsync();
+        Assert.NotNull(offer);
+        return offer!.Plan;
+    }
+
+    /// <summary>
+    /// The conflict answers a test hands the window in place of the question: every conflicted destination is
+    /// answered <paramref name="conflict"/> and every other row is taken as proposed. The taken names are the
+    /// ones the stand-in reports, so a 保留两者 answer renames against the same listing the window read.
+    /// </summary>
+    private static IReadOnlyDictionary<string, CloudConflictPlacement> Place(CloudPastePlan plan,
+        CloudConflictChoice conflict = CloudConflictChoice.Overwrite)
+    {
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Existing };
+        var placements = CloudConflictResolver.Apply(
+            [.. plan.Targets.Select(target => target.DestinationPath)],
+            _ => taken,
+            path => plan.Targets.Any(target => SamePath(target.DestinationPath, path) && target.OverwritesExisting)
+                ? conflict
+                : CloudConflictChoice.Overwrite);
+        var byDestination = new Dictionary<string, CloudConflictPlacement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var placement in placements)
+            if (placement.Choice != CloudConflictChoice.Skip) byDestination[placement.Original] = placement;
+        return byDestination;
+    }
+
+    private static bool SamePath(string left, string right) =>
+        string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
     private static CloudFileEntry File(string path, long size) =>
         new(path.Split('/').Last(), path, false, size, new DateTimeOffset(2026, 3, 1, 8, 0, 0, TimeSpan.Zero));
@@ -536,8 +679,9 @@ public sealed class CloudBrowserPasteTests
 
     /// <summary>
     /// A stand-in for rclone's RC endpoint, answering the calls a paste makes and recording the three that
-    /// matter. <c>operations/list</c> always reports one same-name file already in the browsed directory,
-    /// because a paste's other decision — whether to overwrite — needs a conflict to exist. A successful copy
+    /// matter. <c>operations/list</c> reports <see cref="ListedNames"/> for whichever directory the browser
+    /// reads, because a paste's other decision — what to do about a name already there — needs a conflict to
+    /// exist. A successful copy
     /// answers without a job id, the way a synchronous backend reply does, so the queue settles the row as soon
     /// as the call returns; only <see cref="RefusesCopies"/> and <see cref="RefusesDeletes"/> need the polling
     /// and job paths.
@@ -556,6 +700,13 @@ public sealed class CloudBrowserPasteTests
 
         /// <summary>When true, <c>operations/deletefile</c> is refused, so a cut lands its copy and fails its delete.</summary>
         public bool RefusesDeletes { get; init; }
+
+        /// <summary>
+        /// The files <c>operations/list</c> reports for whichever directory the browser reads. The default is
+        /// the one name every paste test needs a conflict with; a batch that must produce two answers needs two
+        /// names present, and only a stand-in that can say so makes that case testable.
+        /// </summary>
+        public IReadOnlyList<string> ListedNames { get; init; } = [Existing];
 
         public IReadOnlyList<Call> Copies
         {
@@ -588,9 +739,7 @@ public sealed class CloudBrowserPasteTests
             var refused = copyRefused || deleteRefused;
             var answer = operation switch
             {
-                "operations/list" => $$"""
-                    {"list":[{"Path":"{{Existing}}","Name":"{{Existing}}","IsDir":false,"Size":1}]}
-                    """,
+                "operations/list" => Listed(ListedNames),
                 "operations/copyfile" => copyRefused ? """{"error":"sftp: 拒绝了这个复制"}""" : Record(_copies, body),
                 "operations/movefile" => Record(_moves, body),
                 "operations/deletefile" => Delete(body, deleteRefused),
@@ -606,6 +755,13 @@ public sealed class CloudBrowserPasteTests
                 Content = new StringContent(answer, Encoding.UTF8, refused ? "text/plain" : "application/json")
             };
         }
+
+        /// <summary>
+        /// Reports the names a directory holds. Every entry is a file, because a paste asks about names it could
+        /// actually land on; a folder in the listing would be a question the planner already answers by skipping.
+        /// </summary>
+        private static string Listed(IReadOnlyList<string> names) =>
+            $$"""{"list":[{{string.Join(",", names.Select(name => $$"""{"Path":"{{name}}","Name":"{{name}}","IsDir":false,"Size":1}"""))}}]}""";
 
         /// <summary>Records the delete even when it is refused: a refused delete was still attempted.</summary>
         private string Delete(string body, bool refused)

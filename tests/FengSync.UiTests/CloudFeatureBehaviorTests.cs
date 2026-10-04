@@ -182,6 +182,46 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
         Assert.Equal("report.txt", CloudFileNames.RenameTarget("old.txt", "report.txt"));
     }
 
+    [Fact]
+    public void Keeping_both_names_the_incoming_file_beside_the_existing_one()
+    {
+        Assert.Equal("report (1).pdf", CloudFileNames.KeepBothName("report.pdf", []));
+        Assert.Equal("report (2).pdf", CloudFileNames.KeepBothName("report.pdf", ["report.pdf", "report (1).pdf"]));
+        // The suffix goes between the stem and the extension: a file whose extension moved would no longer be
+        // the kind of file the user uploaded.
+        Assert.Equal("archive.tar (1).gz", CloudFileNames.KeepBothName("archive.tar.gz", []));
+    }
+
+    [Fact]
+    public void A_name_taken_in_any_case_is_not_offered_back_as_a_free_one()
+    {
+        // Most backends are case-insensitive, so an existing "A (1).TXT" means "a (1).txt" is not free.
+        Assert.Equal("a (2).txt", CloudFileNames.KeepBothName("a.txt", ["A (1).TXT"]));
+    }
+
+    [Fact]
+    public void A_rename_never_produces_a_name_longer_than_the_backend_accepts()
+    {
+        var longStem = new string('a', CloudFileNames.MaxLength);
+
+        var renamed = CloudFileNames.KeepBothName($"{longStem}.txt", [$"{longStem}.txt"]);
+
+        // A rename that produced a name the backend rejects would fail the very upload the user chose
+        // 保留两者 to complete, so the suffix costs stem, not the limit.
+        Assert.Equal(CloudFileNames.MaxLength, renamed.Length);
+        Assert.EndsWith(" (1).txt", renamed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Counting_up_to_a_free_name_stops_rather_than_running_forever()
+    {
+        // Every candidate from (1) to (9999) is already taken, so no further counting frees a name; the last
+        // one is returned and the batch's own answer decides, instead of looping on a name that never comes.
+        var taken = Enumerable.Range(1, 9999).Select(index => $"x ({index}).txt").ToArray();
+
+        Assert.Equal("x (9999).txt", CloudFileNames.KeepBothName("x.txt", taken));
+    }
+
     // ---------------------------------------------------------------- delete safety
 
     [Fact]
@@ -229,12 +269,128 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
         Assert.Contains("以及另外 3 项", CloudDeleteSafety.Describe(aboveThreshold, supportsTrash: false).Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void The_upload_conflict_policy_leaves_the_question_open_only_when_it_says_ask()
+    // ---------------------------------------------------------------- conflict answers
+
+    [Theory]
+    [InlineData(CloudUploadConflictPolicy.Overwrite, CloudConflictChoice.Overwrite)]
+    [InlineData(CloudUploadConflictPolicy.Skip, CloudConflictChoice.Skip)]
+    [InlineData(CloudUploadConflictPolicy.KeepBoth, CloudConflictChoice.KeepBoth)]
+    public void A_saved_policy_answers_the_conflict_for_the_whole_batch(CloudUploadConflictPolicy policy, CloudConflictChoice choice)
     {
-        Assert.Null(CloudDeleteSafety.OverwriteFor(CloudUploadConflictPolicy.Ask));
-        Assert.True(CloudDeleteSafety.OverwriteFor(CloudUploadConflictPolicy.Overwrite));
-        Assert.False(CloudDeleteSafety.OverwriteFor(CloudUploadConflictPolicy.Skip));
+        Assert.Equal(choice, CloudConflictResolver.ChoiceFor(policy));
+    }
+
+    [Fact]
+    public void The_ask_policy_hands_the_question_to_the_user_rather_than_answering_it_with_overwrite()
+    {
+        // A setting that reads 每次询问 must not be implemented as a default answer. Null is the only thing
+        // that tells the caller to ask; anything else would replace a file nobody agreed to replace.
+        Assert.Null(CloudConflictResolver.ChoiceFor(CloudUploadConflictPolicy.Ask));
+    }
+
+    [Fact]
+    public void Asking_about_a_batch_stops_once_an_answer_covers_the_rest()
+    {
+        var asked = new List<string>();
+        var choices = CloudConflictResolver.AskFor(["dir/a.txt", "dir/b.txt", "dir/c.txt"], (path, _) =>
+        {
+            asked.Add(path);
+            return path == "dir/a.txt"
+                ? new CloudConflictAnswer(CloudConflictChoice.KeepBoth, ApplyToAll: true)
+                : new CloudConflictAnswer(CloudConflictChoice.Overwrite, ApplyToAll: false);
+        });
+
+        // One question answered 应用到全部 decides the whole batch, which is the promise that keeps a dropped
+        // tree from asking once per file.
+        Assert.Equal(["dir/a.txt"], asked);
+        Assert.Equal(CloudConflictChoice.KeepBoth, choices!["dir/b.txt"]);
+        Assert.Equal(CloudConflictChoice.KeepBoth, choices["dir/c.txt"]);
+    }
+
+    [Fact]
+    public void An_answer_that_is_not_applied_leaves_the_other_names_to_be_asked_and_counts_them()
+    {
+        var remaining = new List<int>();
+        var choices = CloudConflictResolver.AskFor(["dir/a.txt", "dir/b.txt"], (path, left) =>
+        {
+            remaining.Add(left);
+            return new CloudConflictAnswer(path == "dir/a.txt" ? CloudConflictChoice.Skip : CloudConflictChoice.Overwrite,
+                ApplyToAll: false);
+        });
+
+        // The count is what makes the offer honest: it names the files still undecided, including this one.
+        Assert.Equal([2, 1], remaining);
+        Assert.Equal(CloudConflictChoice.Skip, choices!["dir/a.txt"]);
+        Assert.Equal(CloudConflictChoice.Overwrite, choices["dir/b.txt"]);
+    }
+
+    [Fact]
+    public void Cancelling_the_question_is_not_the_same_as_answering_skip_for_everything()
+    {
+        var choices = CloudConflictResolver.AskFor(["dir/a.txt", "dir/b.txt"],
+            (path, _) => path == "dir/a.txt"
+                ? null
+                : new CloudConflictAnswer(CloudConflictChoice.Overwrite, ApplyToAll: false));
+
+        // A null result is the only signal a caller has that nothing may be queued. An empty dictionary would
+        // read as "every name was decided" and the batch would start with the rows nobody answered for.
+        Assert.Null(choices);
+    }
+
+    [Fact]
+    public void A_skipped_conflict_keeps_its_row_in_the_answer_so_the_batch_stays_aligned()
+    {
+        var placements = CloudConflictResolver.Apply(["dir/a.txt", "dir/b.txt"],
+            _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            path => path == "dir/a.txt" ? CloudConflictChoice.Skip : CloudConflictChoice.Overwrite);
+
+        // One placement per destination, in the order given: a caller pairs its own rows with the answers by
+        // position, so an omitted skip would shift every later file onto the wrong answer.
+        Assert.Equal(2, placements.Count);
+        Assert.Equal(("dir/a.txt", "dir/a.txt", CloudConflictChoice.Skip),
+            (placements[0].Original, placements[0].Destination, placements[0].Choice));
+        Assert.Equal(CloudConflictChoice.Overwrite, placements[1].Choice);
+    }
+
+    [Fact]
+    public void A_keep_both_rename_replaces_only_the_name_and_never_the_directory()
+    {
+        var placements = CloudConflictResolver.Apply(["shared/incoming/a.txt"],
+            _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "a.txt" },
+            _ => CloudConflictChoice.KeepBoth);
+
+        var placement = Assert.Single(placements);
+        Assert.Equal("shared/incoming/a (1).txt", placement.Destination);
+    }
+
+    [Fact]
+    public void Two_files_dropped_onto_one_remote_name_are_renamed_apart_rather_than_onto_each_other()
+    {
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "a.txt" };
+
+        var placements = CloudConflictResolver.Apply(["dir/a.txt", "dir/a.txt"], _ => taken,
+            _ => CloudConflictChoice.KeepBoth);
+
+        // Two dropped folders can each hold a file of the same name, and that pair addresses one remote path.
+        // Looking the answer up by name would hand both rows the same rename, and the second copy would
+        // replace the first; pairing by position, with a name this batch already used counted as taken, is
+        // what keeps both files.
+        Assert.Equal(["dir/a (1).txt", "dir/a (2).txt"], placements.Select(placement => placement.Destination));
+    }
+
+    [Fact]
+    public void A_rename_is_only_free_relative_to_the_directory_it_lands_in()
+    {
+        var names = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["docs"] = ["a.txt", "a (1).txt"],
+            ["img"] = ["a.txt"]
+        };
+
+        var placements = CloudConflictResolver.Apply(["docs/a.txt", "img/a.txt"], directory => names[directory],
+            _ => CloudConflictChoice.KeepBoth);
+
+        Assert.Equal(["docs/a (2).txt", "img/a (1).txt"], placements.Select(placement => placement.Destination));
     }
 
     // ---------------------------------------------------------------- endpoint health
@@ -609,6 +765,7 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
     [InlineData(CloudUploadConflictPolicy.Ask, 0)]
     [InlineData(CloudUploadConflictPolicy.Overwrite, 1)]
     [InlineData(CloudUploadConflictPolicy.Skip, 2)]
+    [InlineData(CloudUploadConflictPolicy.KeepBoth, 3)]
     public void The_conflict_picker_round_trips_its_selection(CloudUploadConflictPolicy policy, int index)
     {
         Assert.Equal(index, SettingsWindow.ConflictIndex(policy));
