@@ -1422,6 +1422,22 @@ try {
       Click (Find-Id $manager 'CloudViewToggle')
       Wait-Until { try { $row = Find-Name $manager 'remote-proof.txt' 2; $rect = $row.Current.BoundingRectangle
         ($row.Current.Name -eq 'remote-proof.txt') -and ($rect.Width -gt 0) -and ($rect.Height -gt 0) } catch { $false } } '列表视图没有把这一行重新画出来。' 30 | Out-Null
+      # 收藏 / 最近访问 是浏览器写进应用数据的一份名单，而工具行是 WrapPanel：三个新控件里只要有一个在换行后
+      # 被裁掉，用户就永远看不到它，这在进程内测试里看不出来。按钮在 XAML 里刻意没有静态无障碍名，所以 UIA 读到
+      # 的「收藏此目录」就是它此刻的状态——点一下之后必须是「取消收藏」，屏幕阅读器拿到的是同一句话。
+      $favoriteBox = Find-Id $manager 'CloudFavoriteJumps'
+      $recentBox = Find-Id $manager 'CloudRecentJumps'
+      foreach ($id in @('CloudFavoriteJumps', 'CloudRecentJumps', 'CloudFavoriteToggle')) { Assert-RectangleInside (Find-Id $manager $id) $manager "browser toolbar/$id" }
+      Find-Name $manager '收藏此目录' 10 | Out-Null
+      Click (Find-Id $manager 'CloudFavoriteToggle')
+      Wait-Until { try { $null -ne (Find-Name $manager '取消收藏' 2) } catch { $false } } '点下「收藏此目录」之后按钮没有改口说「取消收藏」。' 15 | Out-Null
+      # 最近访问里那一行是真实外壳列目录时记下来的：只有跑起来的外壳能证明记这次访问确实接在读目录之后，
+      # 而不是只有单测里那条规则。选它=让浏览器跟着端点列表的选中项走一遍，所以文件面板必须还是这个端点。
+      $recentExpand = $null
+      if (-not $recentBox.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$recentExpand)) { throw 'The recent-places picker has no expand pattern.' }
+      $recentExpand.Expand(); Start-Sleep -Milliseconds 200
+      Select-Ui (Find-NameContaining $recentBox $remoteName 5); Start-Sleep -Milliseconds 300
+      Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } '从最近访问里选了一项之后，文件面板没有回到这个端点的内容。' 30 | Out-Null
       # Editing an existing endpoint has to round-trip the password rclone keeps obscured: a rewrite that
       # obscured it a second time would corrupt it, and nothing about the save would report an error — the
       # endpoint would simply stop authenticating. Re-browsing after the save is what catches that.
@@ -1452,6 +1468,21 @@ try {
       }
       if ($staleRows.Count -gt 0) { throw "The old endpoint name survived the rename: $($staleRows -join '; ')" }
       Capture-Element $manager 'remote-file-manager-sftp-renamed.png' 'remote-file-manager' 'the SFTP endpoint after being renamed'
+      # 收藏跟着端点一起改名。书签是指向端点名字的指针，留在旧名字上就等于指向一个 rclone 已经没有的段，
+      # 而跳转列表会把这种行藏起来——用户只会看见自己的收藏空了，没有人说明为什么。旧名字必须一行都不剩，
+      # 新名字必须还能跳过去，并且按钮仍然认得这是收藏（改的是名字，不是把这一项变成未收藏）。
+      $favoriteExpand = $null
+      if (-not $favoriteBox.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$favoriteExpand)) { throw 'The favourite-places picker has no expand pattern.' }
+      $favoriteExpand.Expand(); Start-Sleep -Milliseconds 200
+      $rememberedRow = Find-NameContaining $favoriteBox $renamedName 5
+      $staleBookmarks = @()
+      foreach ($row in $favoriteBox.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+        if ($row.Current.Name -like "*$remoteName*") { $staleBookmarks += $row.Current.Name }
+      }
+      if ($staleBookmarks.Count -gt 0) { throw "The rename left a bookmark on the old endpoint name: $($staleBookmarks -join '; ')" }
+      Select-Ui $rememberedRow; Start-Sleep -Milliseconds 300
+      Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } '改名之后从收藏跳转，文件面板没有回到新端点的内容。' 30 | Out-Null
+      Wait-Until { try { $null -ne (Find-Name $manager '取消收藏' 2) } catch { $false } } '改名之后收藏按钮不再认得这个目录是收藏。' 15 | Out-Null
       # The endpoint list's toolbar sits in a 340 px column, so every control in it has to survive the wrap
       # rather than being clipped away.
       foreach ($id in @('CloudEndpointSearch', 'CloudEndpointSort', 'CloudEndpointSortDirection', 'CheckAllCloudEndpoints', 'ExportCloudEndpoints', 'ImportCloudEndpoints')) { Assert-RectangleInside (Find-Id $manager $id) $manager "endpoint list/$id" }
