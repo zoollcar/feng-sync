@@ -15,9 +15,9 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）、**B3**（属性 / 详情：`operations/stat` + 按需校验值）。**A 组全部收尾，B 组走到 B3。**见 §2。 |
-| **下一步** | **B4–B11 文件浏览器**（§5）。B1 打通了「一条剪贴板行 → `EnqueueCopy` 的五个参数」，B2 把「同名冲突怎么答」抽成上传与粘贴共用的纯规则，B3 又加了一条**读单个对象**的路（`StatAsync` → `CloudItemDetails` 定行 → 代码搭的面板）—— 样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗的决定走接缝 + 需要落点才上真 rclone**。⚠️ **B4、B5、B11 动手前先按 §6 实证**（B4 的 `operations/publiclink` 与 B5 的 `use_trash` 已经探到方法存在／需要 alias 侧证据，别当成已验证）。全量门禁 2026-10-04 再跑一次，`Failed: 0`（**Core 399 / UI 331**，UI 3m）。 |
-| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；**`operations/stat` 里「校验值」只有把名字列进 `opt.hashTypes` 才会给**，而 `opt.hashes`（位域）与 `opt.HashTypes`（大小写）都被**静默忽略或报错** —— 拼错读起来就跟「这个后端没有校验值」一模一样；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）；**接缝返回 `null` 是「用户取消」，不是「没装接缝」**——用 `??` 兜到真弹窗会在测试里打开一个无人可答的对话框，并且 `Window.Owner` 指向一个从未 `Show()` 过的窗口时直接抛（B2 撞到过一次测试宿主崩溃）。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）、**B3**（属性 / 详情：`operations/stat` + 按需校验值）、**B4**（分享链接：`operations/publiclink` + 先确认再生成）。**A 组全部收尾，B 组走到 B4。**见 §2。 |
+| **下一步** | **B5–B11 文件浏览器**（§5）。B1 打通了「一条剪贴板行 → `EnqueueCopy` 的五个参数」，B2 把「同名冲突怎么答」抽成上传与粘贴共用的纯规则，B3 又加了一条**读单个对象**的路（`StatAsync` → `CloudItemDetails` 定行 → 代码搭的面板），B4 加了**第一个会对外发出权限的动作**（确认走 `ConfirmShare`、剪贴板走 `CopyLink`，都是接缝）。样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗／对外副作用的决定走接缝 + 需要落点或答案形状才上真 rclone**。⚠️ **B5、B11 动手前先按 §6 实证**（B5 的 `use_trash` 仍要 alias 侧证据，别当成已验证）。全量门禁 2026-10-04 再跑一次，`Failed: 0`（**Core 403 / UI 354**，UI 3m10s）。 |
+| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；**`operations/stat` 里「校验值」只有把名字列进 `opt.hashTypes` 才会给**，而 `opt.hashes`（位域）与 `opt.HashTypes`（大小写）都被**静默忽略或报错** —— 拼错读起来就跟「这个后端没有校验值」一模一样；**`operations/publiclink` 里多写的字段同样被静默忽略**，而它那句「不支持公开链接」的 500 会被共用分类器读成**临时连接中断**（先读文字再看 category）；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）；**接缝返回 `null` 是「用户取消」，不是「没装接缝」**——用 `??` 兜到真弹窗会在测试里打开一个无人可答的对话框，并且 `Window.Owner` 指向一个从未 `Show()` 过的窗口时直接抛（B2 撞到过一次测试宿主崩溃）。 |
 
 ---
 
@@ -35,6 +35,9 @@ A3–A6 是分批提交的，所以接手时先自证过一次基线；B0 提交
 **B2 收尾再跑一次：`Failed: 0`，Core 392 / UI 301，UI 阶段 3m** —— B2 只动了 UI 侧的规则与窗口，Core 计数没变。
 **B3 收尾再跑：`Failed: 0`，Core 399 / UI 331，UI 阶段 3m07s** —— B3 第一次往 **Core** 侧加真 rclone 测试
 （`RcloneStatFactTests` 7 条，所以 Core 从 392 起跳），UI 侧加的是纯规则 12 条 + 真窗口 12 条。
+**B4 收尾再跑：`Failed: 0`，Core 403 / UI 354，UI 阶段 3m10s** —— B4 往 Core 加 4 条真 rclone
+（`RclonePublicLinkFactTests`：整个类在自己的 `IAsyncLifetime` 里起一个 loopback `rclone serve s3` + 一个 `rcd --rc-serve`，
+四条都跑在这套之上），UI 加纯规则 13 条 + 真窗口 10 条。
 差值不必精确对上（上一行的 301 是 B2 收尾时的读数），以 `Failed: 0` 为准。
 
 - 约 **3m30s**（UI 阶段占大头）。调用工具时**超时必须给 600000ms**，否则会被掐断在半路。
@@ -51,7 +54,7 @@ A3–A6 是分批提交的，所以接手时先自证过一次基线；B0 提交
   结束前一个字都不落盘，看着像卡死。写成 `> "$TEMP/x.log" 2>&1` 再 `tail`。B1 用的过滤器
   `--filter "FullyQualifiedName~CloudBrowserPaste|FullyQualifiedName~CloudTransferWindowBehavior"`（19 条）**1 秒**跑完。
 
-### ② A7、B0、B1、B2、B3 已实现并提交 ✅
+### ② A7、B0、B1、B2、B3、B4 已实现并提交 ✅
 
 A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）。A1 的桌面场景缺口在进 B 组前补上
 （`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / `6be98b9` docs
@@ -59,8 +62,8 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 `cd74a61` + `526a634` test / `4656a58` docs（本节的 hash 由 `4656a58` 的下一次回填补上）。
 **B2 同名冲突**照旧三层：`dedc2b5` feat / `1649dc6` test / `0349467` docs（本节的这条 hash 行与 §2 表末行是
 `0349467` 之后回填的）。**B3 属性/详情**照旧三层：`844b93b` feat / `7370af0` test / `ef211a3` docs（本节的这条 hash 行与 §2 表末行是
-`ef211a3` 之后回填的）。
-**A 组 + B0 + B1 + B2 + B3 至此收尾。**
+`ef211a3` 之后回填的）。**B4 分享链接**照旧三层：`3d1d532` feat / `1b4b7ed` test / docs 待回填。
+**A 组 + B0 + B1 + B2 + B3 + B4 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
 
@@ -101,6 +104,8 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `844b93b` | B3 | `feat(browser): read one object's details instead of trusting the listing row` |
 | `7370af0` | B3 | `test(browser): pin the properties panel and the stat facts it rests on` |
 | `ef211a3` | B3 | `docs: record B3 done and the stat facts that B4 must keep`（AGENTS.md 不变式 + 本文件） |
+| `3d1d532` | B4 | `feat(browser): hand out a cloud link only after saying what it grants` |
+| `1b4b7ed` | B4 | `test(browser): pin the link shape against a real S3 server` |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -353,7 +358,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 ---
 
-### B3 —— 属性 / 详情（**已提交**：`844b93b` feat / `7370af0` test / docs 待回填）
+### B3 —— 属性 / 详情（**已提交**：`844b93b` feat / `7370af0` test / `ef211a3` docs）
 
 - **改读对象，不再读屏上那行**。列表是一次快照：它可能还写着 backend 已经删掉的文件，也永远不带 MIME 类型。
   新腿 `RcloneRcClient.StatAsync(fs, remote, hashTypes)` → `RcloneStatEntry` → `CloudFileManagerService.StatAsync`
@@ -403,6 +408,50 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   钉住 `{"item":null}`、MimeType 恒在、`hashTypes` 是名字数组、`bogus` 被当场拒、目录被问也不给校验值）。
 - 面板在进程内**不打开**（`ShowDialog` 没人能答；owner 从未 `Show()` 过会抛，见 §4 的 WPF 表），所以两条接缝都得是 internal。
   确认过没有桌面场景断言行菜单，因此新增的 属性 项不会挂 `Invoke-UiScenario.ps1`。
+
+### B4 —— 分享链接（**已提交**：`3d1d532` feat / `1b4b7ed` test / docs 待回填）
+
+- **这是第一个把访问权交给「别人」的动作**：链接一旦生成，任何拿到它的人都能读那个文件，不需要登录用户的账号；
+  而它能活多久、能不能撤回，**都是 backend 的决定，本应用一句都不能承诺**。所以形状必须是「先用用户的话说清楚，
+  答是才动手」：确认走 `ConfirmShare` 接缝（默认真 `TextPrompt.Confirm(..., danger: true)`，Enter 落「取消」），
+  而那句话本身归 `CloudShareLinks.ConfirmationFor` 定 —— 弹窗不许自己措辞。
+- **只挂在单文件行菜单上**（`复制分享链接…`，在 下载…/打开 之后、分隔线与 重命名… 之前）：**文件夹没有、多选没有**。
+  这不是保守：实测对 S3 **前缀**调 `operations/publiclink` 答 404 `object not found`（一个前缀不是一个可分享对象），
+  所以文件夹在**本地**就答 `NotAFile`，不去把 backend 的错误话冒充成产品语义；而「假设它能分享」会一次交出整棵子树。
+- 路：`RcloneRcClient.PublicLinkAsync(fs, remote)`（`src/FengSync.Core/Endpoints.cs`，只认应答里的 `url` 字符串，
+  缺了返回 `null`）→ `CloudFileManagerService.PublicLinkAsync` → 窗口 `ShareLinkAsync(entry)`（分支与后果）
+  → `ShareAsync` 把结果写进 `StatusText`。纯规则在 `src/FengSync/Services/CloudShareLink.cs`。
+- `CloudShareLinkOutcome` **七态各有自己一句不重叠的话**（`Copied / CopiedNotStored / Declined / Unsupported /
+  Missing / NotAFile / Failed`，`Every_outcome_gets_a_sentence_of_its_own` 钉的是「七句互不相同」）。
+  **`CopiedNotStored` 必须存在**：链接已经在云端生成了，只是剪贴板没收下（`Clipboard.SetText` 会被别的进程占住），
+  这句话让用户自己复制；说成「没有取到分享链接」是**谎报** —— 用户会去重问一次云端已经答过的请求，
+  而把一条已经存在的链接当成没有，比把一条不存在的链接当成有，更容易让人以为什么都没泄漏。
+- ⚠️ **两条 rclone 的静默坑**：
+  1. **载荷里多写的字段被静默忽略**。`expire` / `unlink` 这类字段发出去不会报错，但 S3 **忽略 `unlink`**，
+     `expire` 超上限时被 clamp（rclone 自己的 NOTICE：`Public Link: Reducing expiry to 1w …`）。
+     所以这一次发的**就是 `fs` + `remote` 两个字段**，一个都不多 —— 「参数传了」和「参数起了作用」是两件事，
+     后者要 per-backend 实证，而本应用没有那份矩阵。
+  2. **「不支持公开链接」那句 500 会被共用的 `RcloneFailureClassifier` 读成 `Temporary`**（`httpStatus >= 500` 那一档）。
+     于是 `CloudShareLinks.FromFailure` 必须**先读文字**（`IsUnsupported`）**再看 category**，否则一个本地/alias 端点
+     会被报成「连接暂时中断，检查网络后重试」，用户重试三次然后怀疑自己的网络。这条坑有专门的测试，它同时断言
+     `Category == Temporary` **和** `FromFailure → Unsupported` —— 别把它「顺手改成按 category 分发」。
+- 剪贴板走 `CopyLink` 接缝：这是仓库里**第一次**碰系统剪贴板，而 UI 套件是**桌面无关**的，测试不许把用户的复制缓冲区换掉。
+  所以 `CloudBrowserShareTests` 断言的是接缝**收到了什么字符串**（`Assert.Equal([Link], copied)`），不是剪贴板本身。
+- **实证手法（`RclonePublicLinkFactTests` 4 条，全离线、不碰任何真云、不用任何凭据）**：用 bundled 二进制
+  **自己起一个 loopback S3** —— `rclone serve s3 <dir> --addr 127.0.0.1:<port> --auth-key AK,SK`
+  （**不是** `--access-key-id`；bucket 就是子目录），再起一个 `rclone rcd --rc-serve` 并写一个 `s3` 段指回它
+  （`env_auth=false` / `endpoint` / `force_path_style` / `region us-east-1`），于是 `{"url": …}` 那个线形是
+  **rclone 亲手答的**，不是测试自己编的（断言它是绝对 http Uri、路径含 `bucket/note.txt`）。四条钉的是：
+  local/alias 的 500 措辞含 `support public links`、s3 的 `{"url"}`、目录 404、已消失对象 404（`Category == NotFound`）。
+  而 `expire` 被 clamp、`unlink` 被 S3 忽略、`fsinfo {fs}` 的 `Features.PublicLink`（local `false` / s3 `true`）
+  是**同一套 loopback 上手工 curl 探到的**，**没进测试**：它们约束的是**措辞**（不许承诺有效期/撤回），不是代码路径，
+  钉一条断言反而会把「我们不发这些字段」误写成义务。`fsinfo` **故意没用**：为一个开关多花一次往返，
+  而「backend 拒了」这条话术本来就得能处理。
+- 测试：**13 条纯规则**（9 `[Fact]` + 1 四条用例的 `[Theory]`，`CloudFeatureBehaviorTests` 的
+  `---- share link (分享链接)` 区）+ **10 条真窗口**（`CloudBrowserShareTests`：菜单给的与不给的条件、
+  载荷 `Fs == "nas:"` 与 `Remote == "team/a.txt"`、**用户没答应之前一次 RC 都不发**（`Assert.Empty(standIn.Shares)`）、
+  逐态措辞、剪贴板抛异常时的 `CopiedNotStored`、状态行同时说「已复制到剪贴板」和「无需登录」）+ **4 条真 rclone**。
+- 确认过的现状：行菜单**没有**桌面场景断言（上面 B3 的最后一条已经查过一遍），所以多出来的 `复制分享链接…` 不会挂 `Invoke-UiScenario.ps1`。
 
 ---
 
@@ -465,6 +514,11 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | **校验值不在 `opt` 里点名就不给**：`opt.hashTypes` 要的是**名字数组** `["md5"]`；位域 `opt.hashes` **被静默忽略**；`opt.HashTypes`（大写）报 `ListJSONOpt.hashTypes of type []string`；未知名字报 `unknown hash type "bogus"`；`hashTypes: []` 合法；**目录永远不带 `Hashes`** | 三种拼错的后果里有两种是**静默**的，读起来跟「这个后端没有校验值」一模一样 —— 所以 `CloudItemDetails.HashPreference` 是唯一被发出去的名单，而「没算过」和「此后端未提供」必须是两行不同的话（`RcloneStatFactTests` 用 `bogus` 把这条路钉死） |
 | 256 MiB 本地对象实测：不问校验值 **154 ms**、问 md5 **487 ms**、问 md5+sha1+sha256 **856 ms** | 每个被点名的类型大约再走一遍对象 → 校验值读取**只能由用户显式触发**，打开属性不得问 |
 | `operations/hash`、`operations/checksum`、`operations/get`、`operations/geturl` 在 v1.75.0 **不存在**（404 `couldn't find method`）。**但 `operations/hashsum` 存在**：载荷是 `{"fs","remote","hashType"}`（**单个**类型字符串），答 `{"hashType":"md5","hashsum":["<hex>␣␣a.txt"]}`（sum-file 那种「哈希 + 两个空格 + 路径」的行），未知类型 500 `unknown hash type "bogus"`，`download:true` 被接受 | B3 选 `stat + opt.hashTypes` 而不是它：一次调用能同时拿回大小/时间/MIME **和三个校验值**，而 hashsum 要**每个类型各一次往返**才凑齐同一条链 —— 不是「没有别的路」，是这条路更贵。B4 若要做「复制哈希」再回来读这行格式 |
+| `operations/publiclink {fs, remote}` **存在**，支持的 backend 答 `{"url": "<link>"}`（用 bundled 二进制 `rclone serve s3` 起 loopback S3 实测，`RclonePublicLinkFactTests`） | B4 的地基：链接是 backend 给的**不透明字符串**，本应用只负责复制，不许解析、不许改写、不许由它推断有效期 |
+| **`operations/publiclink` 的多写字段被静默忽略**：`expire:"1h"` **会**生效（签名里 `X-Amz-Expires=3600`），超过上限时 rclone 打 NOTICE `Public Link: Reducing expiry to 1w as off is greater than the max time allowed` 并**clamp 到 604800**；`unlink:true` 被 **S3 忽略** | 不能因为「发了参数」就以为「参数生效」：有效期/撤回**不能进措辞**。B4 因此只发 `fs` + `remote` |
+| **目录（S3 前缀）**调 `operations/publiclink` 答 404 `object not found`；**已消失的对象**同样 404；**没有这功能的 backend**（local / alias）答 HTTP 500 `"Local file system at //?/C:/… doesn't support public links"` | 文件夹在**本地**就拒（`NotAFile`），不去转译 backend 的话；而那句 500 会被 `RcloneFailureClassifier` 读成 `Temporary`（`httpStatus >= 500`），**必须先读文字再看 category** |
+| `operations/fsinfo {fs}` **存在**，答里带 `Features`，其中 `PublicLink` 是布尔（local `false`、s3 `true`） | **故意没用**：为一个开关多花一次往返不值得，而且「backend 拒了」这条话术本来就必须能处理。要按功能隐藏菜单项时再回来读它 |
+| 手工探测 RC **没有 `/rc/` 前缀**：`RcloneDaemon.BaseUri` 是 `http://127.0.0.1:<port>/`，`CallAsync` 按 `new Uri(baseUri, operation)` 打 | 上一次探测把每个方法都写成 `/rc/<method>`，于是**连 `operations/stat` 都 404**，一度误判成「方法不存在」。`core/commands`、`rc/commands`、`core/help`、`options/info` 在 v1.75.0 确实**不存在**，`--rc-enable-mgmt-apis` 是**未知 flag**（daemon 退出码 2），所以方法名单只能靠逐个试 |
 
 ### WPF / 测试
 
@@ -481,14 +535,15 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | `ShutdownMode` 默认 `OnLastWindowClose`：测试里第一次 `window.Close()` 会**连带结束整个 Application 和正在 pumping 的 dispatcher**，粘贴剩下的续传就永远不会跑；在一个**不属于本线程**的 Application 上设 `ShutdownMode` 会 `VerifyAccess` | 自己建的 Application 一律设 `OnExplicitShutdown`；别人的**只读不写**。窗口可能已被测试自己关掉，收尾 `Close()` 要容许 `InvalidOperationException` |
 | `Dispatcher.InvokeAsync` 的续传只在**它自己的线程 pumping 时**才执行；线程停在 `Thread.Join` 里 = 续传永不跑（窗口那句状态行就是续传） | 异步窗口行为必须在 STA 线程里 `Dispatcher.PushFrame(frame)` pumping，任务完成时把 `frame.Continue = false`。**并且要有 watchdog**：`System.Threading.Timer` 到点 `dispatcher.BeginInvoke(() => frame.Continue = false)`，否则一条卡住的粘贴会挂住整个 UI 套件（B1 撞到过一次 >10 分钟无输出的后台跑） |
 | **弹窗（`ShowDialog`）在进程内测试里没人能答**，而给 `Window.Owner` 赋一个**从未 `Show()` 过**的窗口会抛 `InvalidOperationException`；这异常在 `async void` 事件处理器里是**未处理异常 → 测试宿主进程崩溃**（`Test host process crashed`，整条 UI 套件被 abort，不是某条测试 fail） | 凡是要问用户的决定都走**可注入接缝**（B2 的 `AskConflict`），弹窗只做接缝外面那层壳；接缝返回 `null` 表示**用户取消**，所以判断「有没有接缝」要用 `AskConflict is { } ask`，**不能用 `??` 兜到真弹窗**（B2 就这么崩过一次测试宿主） |
+| **`Clipboard.SetText` 是进程级、机器级的状态**，需要 STA，而且会被别的进程占住而抛异常 | B4 的剪贴板写入走 `CopyLink` 接缝：桌面无关的套件**不许换掉用户的复制缓冲区**，而「云端给了链接、剪贴板没收下」必须是一句**独立的话**（`CopiedNotStored`），不是「没有取到分享链接」 |
 
 ---
 
 ## 5. 剩余路线图（B1 → E）
 
-> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0、B1 与 B2 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
+> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0、B1、B2、B3 与 B4 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
 > **剩余项的顺序与依赖**：B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**（已落）；
-> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B3–B11（B1、B2 已落，见 §2）。**
+> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B5–B11（B1、B2、B3、B4 已落，见 §2）。**
 
 ### A7. 端点导出/导入（原 A9）—— ✅ 已完成，见 §2
 
@@ -530,18 +585,22 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 > 需求盘点原本列了 21 项（B1–B21）；其中 P0 的 7 项 —— 新建文件夹、重命名、删除、多选批量、搜索、排序、
 > 面包屑 + 地址栏 —— **已在批次 1 落地**。下表是**剩余 11 项**，「现状 / 缺口」与「参考做法」两列是从原盘点文档
-> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1、B2、B3 已落地（见 §2）**，下表从 B4 起都是待做项。
+> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1、B2、B3、B4 已落地（见 §2）**，下表从 B5 起都是待做项。
 > 给 B6 的一条现成接线：`SetClipboard(Copy/Cut, 多选行)` 和 `Paste_Click` 已经是内部方法，
 > Ctrl+C / Ctrl+X / Ctrl+V 只需把键盘事件指到它们，**不要**另造一套剪贴板状态。
 > 给 B9 的一条现成接缝（B3 的属性就是照这个形状读的）：`PlanPasteAsync()` 已经把目标目录的**一次读取**
 > 同时用于判冲突和取名，递归统计大小也要读目录时照这个形状走，别再 `ListAsync` 第二次。
+> 给 B5 的一条现成接线：删除**已经**有 `ConfirmAndDeleteAsync`（含批量阈值 10 的二次确认与 `CloudDeleteSafety`），
+> 软删除要改的是「问的那句话」和**删完之后的说法**，**不要**另造第二套删除门槛。
+> 给 C7 的一条现成接缝：B4 已把 `PublicLinkAsync` 与「链接是 backend 给的不透明字符串」这条钉好，队列行菜单的
+> 「复制链接」直接复用 `CopyLink` 那个接缝，别在 C 组再摸一次系统剪贴板。
 
 | 本计划 | 原编号 | 内容 | 现状 / 缺口 | 参考做法 |
 | --- | --- | --- | --- | --- |
 | B1 | B8–B9 | 复制 / 剪切 / 粘贴 + 跨端点复制 | ✅ **已完成**（`3c9322b` + `cd74a61` + `526a634`，见 §2）。跨端点复制进队列（`EnqueueCopy`），同端点的剪切走 `operations/movefile`，文件夹一律 skip 并说明原因，源删除只在它自己的复制完成之后才发生 | 网盘标配；Air Explorer 支持云到云 |
 | B2 | B10 | 上传冲突细化 | ✅ **已完成**（`dedc2b5` + `1649dc6`，见 §2）。`KeepBoth`（`x.pdf → x (1).pdf`，相对目标目录的空闲名）与**逐文件询问 + 应用到全部**都齐了，上传与粘贴走同一个 `CloudConflictResolver`；`每次询问 / 直接覆盖 / 跳过同名文件 / 保留两者（重命名）` 四项进设置 | 网盘标配 |
 | B3 | B11 | 属性 / 详情 | ✅ **已完成**（`844b93b` + `7370af0`，见 §2）。单对象 `operations/stat` 给大小/时间/MIME/校验值，列表快照只兜底；不存在的对象说「云端已没有这个文件」而不是编一套值；校验值**只在用户按「计算校验值」时**才读（一次点名约多走一遍对象）；文件夹大小仍是 `未统计`（留给 B9） | 网盘有「详细信息」 |
-| B4 | B12 | 分享链接 | rclone `operations/publiclink` 存在，UI 未接 | 网盘核心功能之一 |
+| B4 | B12 | 分享链接 | ✅ **已完成**（`3d1d532` + `1b4b7ed`，见 §2）。单文件行菜单 `复制分享链接…` → 先确认（说清「任何拿到链接的人无需登录即可读取」）→ `operations/publiclink {fs, remote}` → 复制到剪贴板。文件夹与多选一律本地拒绝（实测前缀答 404）；措辞不承诺有效期也不承诺撤回（backend 决定）；「云端已生成、剪贴板没收下」是独立一态 | 网盘核心功能之一 |
 | B5 | B13 | 回收站 | 无软删除概念；GDrive 可 `--drive-use-trash`，S3/SFTP **无回收站，只能硬删** | 网盘默认「移到回收站」，可还原 |
 | B6 | B14 | 键盘快捷键 | F5 / Del / F2 / Ctrl+A / Ctrl+C / Ctrl+V 全无 | 通用 |
 | B7 | B16–B17 | 网格视图 / 缩略图 / 内置预览 | 只有列表；图片、文本、PDF 都要先下载再用外部程序打开 | 网盘有列表/网格切换与在线预览 |
@@ -637,7 +696,18 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 2. ✅ **已实证（A5，2026-10-03）**：RC **没有**全局 proxy 透传；rclone 的 HTTP 客户端**只读 `HTTP_PROXY`/`HTTPS_PROXY`，
    **不读 `ALL_PROXY`**（死端口法验证：`ALL_PROXY` 那轮仍到达目标，`HTTP_PROXY`/`HTTPS_PROXY` 那轮 `proxyconnect tcp` 失败）。
    代理只能靠**子进程环境变量**传；`RcloneProxyResolver` 已把只有 `all_proxy` 的值镜像进 http/https。实现见 §2 的 A5。
-3. `operations/publiclink` 对各 Provider 的支持矩阵与失败形态（**B4**）。
+3. ✅ **已实证（B4，2026-10-04，bundled 二进制自起 loopback `rclone serve s3` + `RclonePublicLinkFactTests` 4 条）**：
+   `operations/publiclink {fs, remote}` **存在**，支持的 backend 答 `{"url": "<link>"}`；**没有这功能的 backend**
+   （local / alias）答 HTTP 500 `"… doesn't support public links"`；**目录（S3 前缀）与已消失的对象都答 404
+   `object not found`**。多写的字段**静默忽略**（这几条是同一套 loopback 上**手工 curl** 探的，没进测试）：`expire:"1h"` 生效（签名里 `X-Amz-Expires=3600`），超上限时被 clamp 到
+   604800（rclone NOTICE `Public Link: Reducing expiry to 1w …`），`unlink:true` 被 S3 **忽略**。
+   `operations/fsinfo {fs}` 的 `Features.PublicLink` 能回答「这个 backend 有没有这功能」（local `false` / s3 `true`），
+   但 B4 **故意不用**——为一个开关多花一次往返，而失败话术本来就得处理。
+   ⚠️ 那条 500 会被共用的 `RcloneFailureClassifier` 读成 `Temporary`，所以**先读文字再看 category**。
+   **各 Provider 的支持矩阵仍未测**（只测了 s3 与 local/alias）：这不是缺口而是设计——B4 不预判，直接问、按答话分类，
+   所以接一个新 backend 不需要补矩阵。结论已进 `AGENTS.md` 与上面 §4 的 rclone 表。
+   手法备忘：`rclone serve s3 <dir> --addr 127.0.0.1:<port> --auth-key AK,SK`（**不是** `--access-key-id`，bucket 就是子目录），
+   RC 路径**没有** `/rc/` 前缀（上次把每个方法都写成 `/rc/<method>`，于是**连 `operations/stat` 都 404**，一度误判成方法不存在）。
 4. rclone `mountPoint` 是否接受 UNC 路径（**D6**）。
 5. rclone 是否暴露版本列表（**B11**）。
 6. `core/bwlimit` 的作用域是全局还是 per-fs（**C1**）。
@@ -663,8 +733,8 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
    目录被点名也不带 `Hashes`。256 MiB 本地对象计时：不问 0.15 s / 问 md5 0.49 s / 问三个 0.86 s。
    顺带钉了 `operations/hashsum` 的**形状**（单个 `hashType`，答 `"<hex>␣␣path"` 行）与 `operations/hash`、
    `operations/checksum`、`operations/get`、`operations/geturl` 的**不存在**（404）。结论已进 `AGENTS.md` 与上面 §4。
-   ⚠️ 那次 curl 还顺手证实了 B4 的一半：`operations/publiclink` **是**一个已注册方法（本地 backend 答
-   500 `doesn't support public links`），但**各 Provider 的支持矩阵仍未测** —— §6 第 3 条照旧算待做。
+   那次 curl 还顺手证实了 `operations/publiclink` **是**一个已注册方法（本地 backend 答 500
+   `doesn't support public links`）—— 它的**完整**实证在第 3 条，由 B4 用 loopback S3 补上了 `{"url"}` 线形与 404 形态。
 
 实证的方法照 A2 的做法：直接 curl 打本机 `rclone rcd` 的 RC（记得带 `Content-Type: application/json`），
 把结论写进 `AGENTS.md` 的不变式列表，而不是留在会话里。
@@ -691,6 +761,7 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
   （`Primary/Secondary/Tertiary/DangerButtonStyle`、`CaptionTextStyle`，内联 hex 为零）、可操作的控件
   （按钮、复选框、输入框）都有 `AutomationId`、**Enter 落在不改变任何东西的那颗按钮上**
   （冲突框的 `IsDefault` 是「跳过」，destructive 确认框的 `IsDefault` 是「取消」）。
+  B4 没有新增代码搭弹窗：分享确认复用 `TextPrompt.Confirm(..., danger: true)`，所以 Enter 已经落在「取消」上。
 
 ### 设置项三件套（漏一件就静默失效）
 
@@ -712,6 +783,9 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
   **当作进度参数**传给 `EndpointTransfer.CopyToStagingAsync` 的，所以调并发会影响续传判定；
   并发数从 `const` 改为可配时还要保证 `SemaphoreSlim` 重建不破坏在途任务。
 - **凭据只留在 `rclone.conf`**：任何导出/持久化都不得写入 secret/token。
+- **会对外交出访问权的动作**（B4 的分享链接是唯一一个）：云端被问**之前**先用用户的话说明白「谁从此能读什么」，
+  措辞**不得承诺**本应用保证不了的东西（有效期、能否撤回 —— 那是 backend 的决定）；系统级状态（剪贴板）一律走接缝，
+  「事情办了但没落地」必须是**独立一态**，不许复用「没办成」那句话。
 - **`EndpointType` 枚举值只能追加**（`BaselineTransaction` 与 `TransferResumeStateStore` 持久化 `Type.ToString()`）。
 - 新增 UI 场景要动**两处**：`tests/FengSync.UiTests/UiAcceptanceTests.cs` + `Scripts/Invoke-UiScenario.ps1`
   （`ValidateSet` 参数 + `switch` 分支）。
@@ -736,16 +810,18 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `src/FengSync.Core/Rclone/Lifecycle/RcloneLifecycleHost.cs` | `ProxyOptionsProvider`：启动锁内、子进程创建前只读一次代理（批次 A5） |
 | `src/FengSync/Services/CloudEndpointStatusService.cs` | 端点体检：`ProbeAsync` / `Classify` / `RunBoundedAsync` / `FormatBytes` |
 | `src/FengSync/Services/CloudEndpointService.cs` | 端点 CRUD 与 URI 构造的门面（转发到 catalog + schemes） |
-| `src/FengSync/Views/RemoteEndpointManagerWindow.xaml(.cs)` | **三合一**窗口：端点管理 + 挂载管理 + 文件浏览器 |
+| `src/FengSync/Views/RemoteEndpointManagerWindow.xaml(.cs)` | **三合一**窗口：端点管理 + 挂载管理 + 文件浏览器。凡是「要问用户」或「碰系统状态」的决定都在这里以 internal 接缝露出：`AskConflict`（B2）、`DetailsAsync` / `BuildRowMenu`（B3）、`ConfirmShare` / `CopyLink` / `ShareLinkAsync` / `ShareAsync`（B4） |
 | `src/FengSync/Views/CloudEndpointEditorWindow.xaml(.cs)` | 新建/编辑端点表单（按 descriptor 生成，非 S3 部分无手写面板） |
 | `src/FengSync.Core/Execution/EndpointTransfer.cs` | **唯一的** staging-aware 传输原语（同步引擎与云盘浏览器共用）。`CopyToStagingAsync`+`PublishAsync` 是可续传的上传/下载腿；`CopyServerSideAsync` 是两端都远端、**不 staging 不 publish** 的复制腿（B0） |
 | `src/FengSync/Services/CloudTransferQueue.cs` | 云盘传输队列（staging / resume / journal / 并发 / 重试 / **远端→远端复制 `EnqueueCopy`**）；构造参数里的可选 RC 客户端工厂是「不起 daemon 也能断言载荷」的接缝 |
-| `src/FengSync/Services/CloudFileManagerService.cs` | 文件浏览器服务层（列表/搜索/重命名/删除/**同端点移动 `MoveAsync`**/新建目录/**单对象 `StatAsync` → `CloudItemStat`**）；`RelativeToEndpoint` 是「剥的是**自己**端点的根、只剥一次」的唯一体（B1）；`SizeDisplay` 到这一步才格式化成 `CloudItemDetails.HumanSize`，列与属性面板因此同一套单位（B3） |
+| `src/FengSync.Core/Endpoints.cs` | `RcloneRcClient`（RC 调用的唯一出口，路径**没有** `/rc/` 前缀）：B3 加的 `StatAsync(fs, remote, hashTypes)` 与 B4 加的 `PublicLinkAsync(fs, remote)`（只认应答里的 `url`，缺了给 `null` 而不是编一个空链接） |
+| `src/FengSync/Services/CloudFileManagerService.cs` | 文件浏览器服务层（列表/搜索/重命名/删除/**同端点移动 `MoveAsync`**/新建目录/**单对象 `StatAsync` → `CloudItemStat`**/**`PublicLinkAsync`**）；`RelativeToEndpoint` 是「剥的是**自己**端点的根、只剥一次」的唯一体（B1）；`SizeDisplay` 到这一步才格式化成 `CloudItemDetails.HumanSize`，列与属性面板因此同一套单位（B3） |
 | `src/FengSync/Services/CloudBrowserClipboard.cs` | 粘贴规则的纯函数（B1）：`CloudClipboardMode` / `CloudClipboardItem`（行 + 它的来源端点）/ `CloudPasteTarget` / `CloudPastePlan` / `CloudPasteOffer(Plan, TakenNames)`（B2：目标目录**读一次**同时供判冲突与改名）/ `CloudPastePlanner.Build`。不碰 WPF 也不碰 rclone，所以落点与 skip 原因能直接测 |
 | `src/FengSync/Services/CloudConflictResolution.cs` | 同名冲突唯一的答案处（B2）：`CloudConflictChoice` / `CloudConflictAnswer(Choice, ApplyToAll)` / `CloudConflictPlacement(Original, Destination, Choice)` / `ChoiceFor`（设置 → 整批答案，`Ask` 给 null）/ `AskFor`（逐条问 + 应用到全部）/ `Apply`（**按输入顺序一条一答**，改名相对各自目录的空闲名） |
 | `src/FengSync/Views/CloudConflictPrompt.cs` | 冲突问题本身（B2）：取消 / **跳过（默认按钮）** / 保留两者（预览名）/ 覆盖 + 「应用到其余 N 个」。测试用窗口的 `AskConflict` 接缝代替它 |
 | `src/FengSync/Services/CloudItemDetails.cs` | 属性/详情的**规则**（B3）：`CloudDetailRow` / `CloudDetailsPanel(Rows, CanComputeHash)` / `CloudItemStat`（`Missing` 是「云端已没有」这个值，不是异常）/ `For` / `ForSelection` / `OffersHash` / `HumanSize` / `HashPreference`（md5 → sha1 → sha256，与同步引擎同一条链）。措辞、缺项怎么说、文件夹大小不许谎报都在这一层，所以不开窗也能测 |
 | `src/FengSync/Views/CloudDetailsPrompt.cs` | 属性面板本身（B3，代码搭，同 `TextPrompt` 一路）：只画 `CloudItemDetails` 决定的行，「计算校验值」按钮只在答案还可能改变时出现。它 `ShowDialog`，所以窗口测试走 `DetailsAsync` 接缝而不是真开它 |
+| `src/FengSync/Services/CloudShareLink.cs` | 分享链接的**规则**（B4）：`CloudShareLinkOutcome` 七态 / `CloudShareLinkResult(Outcome, Url, Detail)` / `OffersLink`（只有文件）/ `ConfirmationFor`（那句话本体）/ `Explain`（一态一句、七句互不相同）/ `FromAnswer`（没有链接就是失败，不是空成功）/ `FromFailure`（**先读文字再看 category**）/ `IsUnsupported`。窗口的接缝是 `ConfirmShare`、`CopyLink`、`ShareLinkAsync`、`ShareAsync` |
 | `src/FengSync.Core/Mount/MountOptions.cs` | 挂载参数（D 组的改造对象） |
 | `src/FengSync.Core/Rclone/Transport/RcloneProxyConfiguration.cs` | 代理（A5 的现成机制） |
 | `src/FengSync/Services/AppServices.cs` | `IAppServiceHost` / `AppServices.Install`（**两个 exe 共用服务宿主**） |
@@ -754,6 +830,8 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `tests/FengSync.UiTests/CloudTransferCopyTests.cs` | 假 RC 钉住复制的**载荷**：`srcFs/srcRemote/dstFs/dstRemote`+`_group`、`core/stats` 进度、取消发 `job/stop`、不许出现 movefile/deletefile/staging 名、journal 往返与旧文件兼容（B0） |
 | `tests/FengSync.Tests/RcloneStatFactTests.cs` | 真 rclone v1.75.0（alias remote + 真 daemon）钉住 B3 的全部前提：`operations/stat` 的存在与 `{"item": null}` 线形、`MimeType`（目录 `inode/directory`）、**不问就没有校验值**、点名 `md5` 后答案等于本地算的 MD5、目录被点名也不给、`["bogus"]` 报 `unknown hash type`。这里钉的是「rclone 到底怎么答」，窗口的假 RC 只钉「我们到底怎么问」 |
 | `tests/FengSync.UiTests/CloudBrowserDetailsTests.cs` | 真窗口 + 假 RC 钉住 B3 的浏览器侧决定：读的是 stat 而不是列表快照、打开面板**一个校验值都不点**（假 RC 只在被点名时返回哈希，所以「没问」是可断言的）、按钮才点名那三种、此后端没有校验值时问了也还说没有、只有后端知道的那一种类型也要显示、对象已消失时不报大小也不给按钮、被拒绝时仍显示列表并说谁拒的、文件夹永不获得按钮、所在端点与 rclone 地址、单行叫「属性」多行叫「属性（N 项）」、只读项排在行菜单最后且隔一条分隔线、空选择不该有行菜单。窗口接缝是 `DetailsAsync(entry, withHash)` 与 `BuildRowMenu()`；`FakeRclone` 用字段列表拼 JSON 并过一遍 `JsonDocument.Parse`，免得畸形应答被读成「后端拒绝」 |
+| `tests/FengSync.Tests/RclonePublicLinkFactTests.cs` | 真 rclone v1.75.0 钉住 B4 的全部前提，**且不碰任何真云、不用任何凭据**：用 bundled 二进制起一个 loopback `rclone serve s3`（`--auth-key AK,SK`，bucket 是子目录）+ 一个指回它的 `s3` 段，于是 `{"url"}` 线形是 rclone 亲手答的（断言它是绝对 http Uri、路径含 `bucket/note.txt`）；local/alias 的 500 措辞含 `support public links`；目录 404、已消失对象 404（`Category == NotFound`）。端口用 `TcpListener` 现占现放，收尾杀进程树并删临时目录 |
+| `tests/FengSync.UiTests/CloudBrowserShareTests.cs` | 真窗口 + 假 RC 钉住 B4 的浏览器侧决定：`复制分享链接…` 只在一个文件上出现（文件夹与多选没有）、载荷是 `Fs == "nas:"` 与 `Remote == "team/a.txt"`（假 RC 只记下这两个字段）、**用户没答应之前一次 RC 都不发**（`Assert.Empty(standIn.Shares)`）、复制到剪贴板的是应答里那个字符串本身、后端拒了什么都不复制且把那句 500 说成「不支持」、对象已消失说「请刷新目录」、应答没有链接时不复制、文件夹本地就答（不问后端）、状态行同时说「已复制到剪贴板」和「无需登录」、剪贴板抛异常时说的是「云端已经生成链接」而不是「没有取到」。接缝是 `ConfirmShare` / `CopyLink` / `ShareLinkAsync` / `ShareAsync` |
 | `tests/FengSync.UiTests/CloudBrowserPasteTests.cs` | **真窗口 + 假 RC**钉住 B1 的浏览器侧决定：剪贴板带着来源端点、两侧各自剥根、文件夹与自复制的 skip、同端点剪切只发 `movefile`、跨端点剪切**复制完成后**才删源（拒绝复制 → 源保留且无删除；拒绝删除 → 报告重复而不是成功）。B2 之后**冲突不再是断言 `overwrite=false`**，而是走 `AskConflict` 这个窗口接缝（**必须置**，否则测试会弹真模态框而挂住）钉住落在改名后的远端名、改名停在屏上目录、问题看到被占的名字与剩余数量、一次回答覆盖其余、取消不排队。假 RC 的 `ListedNames`（默认恰好一个同名文件）决定「目录里已有什么」，`PlanAsync` / `Place` 是把窗口接缝接上的小工具；`RunSta` 的 pumping + 单 `Application` 所有权 + watchdog 是这类**异步窗口测试**的样板（见 §4 的 WPF 表） |
 | `tests/FengSync.Tests/` | Core 层 + 需要真 rclone 的测试（门禁里的 Core 阶段） |
 | `tests/FengSync.UiTests/` | in-process WPF 行为测试 + 桌面场景（`UiAcceptanceTests` + `Scripts/Invoke-UiScenario.ps1`） |
