@@ -550,6 +550,126 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
         Assert.Equal("/shared", DetailValue(rows, "端点根目录"));
     }
 
+    // ---------------------------------------------------------------- share link (分享链接)
+
+    [Fact]
+    public void Only_a_file_earns_the_share_command()
+    {
+        // Measured against the bundled v1.75.0 with a real S3 server: a prefix answers 404 "object not found",
+        // so a folder has no link to be given — and a link over a folder would grant a subtree nobody selected.
+        Assert.True(CloudShareLinks.OffersLink(FileEntry("a.txt", 1024)));
+        Assert.False(CloudShareLinks.OffersLink(FolderEntry("docs")));
+    }
+
+    [Fact]
+    public void The_question_before_the_link_names_what_the_link_grants()
+    {
+        var text = CloudShareLinks.ConfirmationFor(FileEntry("report.pdf", 1024));
+
+        // rclone's own default is the least-restricted link it can make, so the user has to be told this is an
+        // account-free read grant before anything exists, not after the URL is in their clipboard.
+        Assert.Contains("report.pdf", text, StringComparison.Ordinal);
+        Assert.Contains("无需登录", text, StringComparison.Ordinal);
+        Assert.Contains("由云端决定", text, StringComparison.Ordinal);
+        Assert.EndsWith("确定生成？", text, StringComparison.Ordinal);
+        Assert.Equal("生成分享链接", CloudShareLinks.ConfirmationTitle);
+    }
+
+    [Fact]
+    public void A_link_that_came_back_is_the_one_that_gets_stored()
+    {
+        var result = CloudShareLinks.FromAnswer("https://example.test/a.txt?sign=1");
+
+        Assert.Equal(CloudShareLinkOutcome.Copied, result.Outcome);
+        Assert.Equal("https://example.test/a.txt?sign=1", result.Url);
+    }
+
+    [Fact]
+    public void An_answer_without_a_link_is_a_failure_rather_than_an_empty_success()
+    {
+        // A 200 with no usable url would otherwise be reported as "已复制", and the user would paste nothing.
+        foreach (var answer in new string?[] { null, "", "   " })
+            Assert.Equal(CloudShareLinkOutcome.Failed, CloudShareLinks.FromAnswer(answer).Outcome);
+
+        Assert.Contains("云端没有返回链接内容", CloudShareLinks.Explain(CloudShareLinks.FromAnswer(null)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_backend_without_links_is_called_unsupported_rather_than_temporarily_broken()
+    {
+        // The exact wording this test uses is what v1.75.0 answers over a local backend, and the shared
+        // classifier reads that HTTP 500 as a temporary connection problem — a retryable-sounding sentence for
+        // something that will never succeed here. The share rules have to look at the words first.
+        var failure = RcloneFailureClassifier.FromRc("operations/publiclink", 500,
+            "{\"error\":\"Local file system at //?/C:/files doesn't support public links\",\"input\":{},\"path\":\"operations/publiclink\",\"status\":500}");
+        Assert.Equal(RcloneFailureCategory.Temporary, failure.Category);
+
+        var result = CloudShareLinks.FromFailure(new RcloneException(failure));
+
+        Assert.Equal(CloudShareLinkOutcome.Unsupported, result.Outcome);
+        Assert.Contains("此端点不支持分享链接", CloudShareLinks.Explain(result), StringComparison.Ordinal);
+        Assert.Contains("没有生成任何东西", CloudShareLinks.Explain(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_gone_object_is_reported_as_missing_rather_than_as_a_network_failure()
+    {
+        var failure = RcloneFailureClassifier.FromRc("operations/publiclink", 404,
+            "{\"error\":\"object not found\",\"input\":{},\"path\":\"operations/publiclink\",\"status\":404}");
+
+        var result = CloudShareLinks.FromFailure(new RcloneException(failure));
+
+        Assert.Equal(CloudShareLinkOutcome.Missing, result.Outcome);
+        Assert.Contains("请刷新目录", CloudShareLinks.Explain(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_failure_that_is_not_about_links_keeps_its_diagnosis()
+    {
+        var result = CloudShareLinks.FromFailure(Rclone(RcloneFailureCategory.Permission));
+
+        Assert.Equal(CloudShareLinkOutcome.Failed, result.Outcome);
+        // The generic sentence alone would leave the user with nothing to quote; the diagnosis id has to travel.
+        Assert.Contains("没有取到分享链接", CloudShareLinks.Explain(result), StringComparison.Ordinal);
+        Assert.Contains("rclone failed: Permission", CloudShareLinks.Explain(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_link_the_clipboard_refused_is_still_reported_as_a_link()
+    {
+        var text = CloudShareLinks.Explain(new CloudShareLinkResult(CloudShareLinkOutcome.CopiedNotStored,
+            "https://example.test/a.txt", "clipboard busy"));
+
+        // Saying "没有取到分享链接" here would send the user to ask the cloud again for something it already gave.
+        Assert.Contains("云端已经生成链接", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("没有取到分享链接", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Local file system at C:/files doesn't support public links", true)]
+    [InlineData("Sftp remote doesn't support public links", true)]
+    [InlineData("Google drive does not support public links", true)]
+    [InlineData("object not found", false)]
+    public void The_refusal_rclone_words_is_recognised_in_either_spelling(string message, bool expected) =>
+        Assert.Equal(expected, CloudShareLinks.IsUnsupported(message));
+
+    [Fact]
+    public void Every_outcome_gets_a_sentence_of_its_own()
+    {
+        var sentences = new[]
+        {
+            CloudShareLinkOutcome.Copied, CloudShareLinkOutcome.CopiedNotStored, CloudShareLinkOutcome.Declined,
+            CloudShareLinkOutcome.Unsupported, CloudShareLinkOutcome.Missing, CloudShareLinkOutcome.NotAFile,
+            CloudShareLinkOutcome.Failed,
+        }.Select(outcome => CloudShareLinks.Explain(new CloudShareLinkResult(outcome, "url"))).ToList();
+
+        Assert.Equal(sentences.Count, sentences.Distinct().Count());
+        Assert.All(sentences, sentence => Assert.False(string.IsNullOrWhiteSpace(sentence)));
+        Assert.Contains("已复制到剪贴板", sentences[0], StringComparison.Ordinal);
+        Assert.Contains("已取消", sentences[2], StringComparison.Ordinal);
+        Assert.Contains("文件夹", sentences[5], StringComparison.Ordinal);
+    }
+
     // ---------------------------------------------------------------- endpoint health
 
     [Fact]
