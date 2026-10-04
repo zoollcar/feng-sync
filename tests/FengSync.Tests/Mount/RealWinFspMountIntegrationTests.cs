@@ -50,7 +50,30 @@ public sealed class RealWinFspMountIntegrationTests
             }
             process?.Dispose();
             await WaitUntilAsync(() => !Directory.Exists(mount) || !File.Exists(Path.Combine(mount, "proof.txt")), TimeSpan.FromSeconds(10));
-            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            await DeleteDespiteDetachRaceAsync(root);
+        }
+    }
+
+    /// <summary>
+    /// Removes the temporary tree, tolerating the window in which WinFsp still holds the mount directory after its
+    /// process has been killed. Detaching is asynchronous, so the first delete can throw
+    /// <see cref="UnauthorizedAccessException"/> on a directory that is about to become free. A mount that never
+    /// releases is exactly what this test should report, so the last failure is rethrown rather than swallowed.
+    /// </summary>
+    private static async Task DeleteDespiteDetachRaceAsync(string root)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (true)
+        {
+            try
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+                return;
+            }
+            catch (UnauthorizedAccessException) when (DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(250);
+            }
         }
     }
 
