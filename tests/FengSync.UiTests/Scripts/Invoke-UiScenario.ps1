@@ -1341,21 +1341,62 @@ try {
       Click (Find-Name $manager '新建云盘端点')
       $editor = Wait-Until { try { Find-AppWindow { param($window) $window.Current.Name -like '*新建云端*' } } catch { $null } } 'Cloud editor did not appear' 30
       $service = Find-Id $editor 'CloudServiceType'; $expand = $null
-      foreach ($serviceName in @('Google Drive', 'S3 Bucket', 'SFTP')) {
-        $service.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null; $expand.Expand(); Start-Sleep -Milliseconds 200; Select-Ui (Find-Name $service $serviceName 5); Start-Sleep -Milliseconds 200
+      # Every Provider's form is generated from its CloudProviderDescriptor row, so each one is walked here:
+      # select it, open its connection step, and require every AutomationId the descriptor names to be a
+      # laid-out control. Selecting a service and only screenshotting step 1 would prove nothing — a provider
+      # whose ids were never registered, or a panel that kept the previous provider's inputs, is invisible to
+      # the user until a field cannot be reached. This is the counter-example for "adding a Provider is one
+      # row here plus its fields": the row is only finished once the scenario can drive its form.
+      # S3 is first because its bespoke panel needs the provider metadata to load.
+      $service.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null
+      $expand.Expand(); Start-Sleep -Milliseconds 200; Select-Ui (Find-Name $service 'S3 Bucket' 20); Start-Sleep -Milliseconds 200
+      try { $expand.Collapse() } catch { }
+      $providerBox = Find-Id $editor 'S3Provider'; $providerExpand = $null
+      $providerBox.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$providerExpand) | Out-Null; $providerExpand.Expand()
+      $cloudflare = Wait-Until { try { Find-Name $providerBox 'Cloudflare' 3 } catch { $null } } 'S3 Provider metadata did not load Cloudflare.' 30
+      Select-Ui $cloudflare
+      Click (Find-Id $editor 'NextCloudEndpoint'); Start-Sleep -Milliseconds 200
+      foreach ($id in @('S3DisplayName', 'S3AccessKeyId', 'S3SecretAccessKey', 'S3Endpoint', 'S3Region', 'S3Bucket', 'S3Subdirectory', 'TestCloudEndpoint', 'SaveCloudEndpoint')) { Assert-RectangleInside (Find-Id $editor $id) $editor "S3 editor/$id" }
+      Capture-Element $editor 'remote-editor-s3-connection.png' 'remote-endpoint-editor' 'S3 connection fields'
+      Click (Find-Id $editor 'BackCloudEndpoint'); Start-Sleep -Milliseconds 200
+
+      $providerForms = @(
+        [pscustomobject]@{ Service = 'Google Drive'; Name = 'GDriveRemoteName'; Root = 'GDriveRemoteRoot'; Fields = @('OAuthClientId', 'OAuthClientSecret') },
+        [pscustomobject]@{ Service = 'OneDrive'; Name = 'OneDriveRemoteName'; Root = 'OneDriveRemoteRoot'; Fields = @('OAuthClientId', 'OAuthClientSecret') },
+        [pscustomobject]@{ Service = 'Dropbox'; Name = 'DropboxRemoteName'; Root = 'DropboxRemoteRoot'; Fields = @('OAuthClientId', 'OAuthClientSecret') },
+        [pscustomobject]@{ Service = 'Box'; Name = 'BoxRemoteName'; Root = 'BoxRemoteRoot'; Fields = @('OAuthClientId', 'OAuthClientSecret') },
+        [pscustomobject]@{ Service = 'WebDAV'; Name = 'WebDavRemoteName'; Root = 'WebDavRemoteRoot'; Fields = @('WebDavUrl', 'WebDavVendor', 'WebDavUser', 'WebDavPassword') },
+        [pscustomobject]@{ Service = 'SFTP'; Name = 'SftpRemoteName'; Root = 'SftpRemoteRoot'; Fields = @('SftpRemoteHost', 'SftpRemotePort', 'SftpRemoteUser', 'SftpRemotePassword', 'SftpRemoteKeyFile') }
+      )
+      $allFormIds = @()
+      foreach ($form in $providerForms) { $allFormIds += @($form.Name, $form.Root) + $form.Fields }
+      $allFormIds = @($allFormIds | Select-Object -Unique)
+      foreach ($form in $providerForms) {
+        $service.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expand) | Out-Null; $expand.Expand(); Start-Sleep -Milliseconds 200; Select-Ui (Find-Name $service $form.Service 5); Start-Sleep -Milliseconds 200
         try { $expand.Collapse() } catch { }
+        Click (Find-Id $editor 'NextCloudEndpoint'); Start-Sleep -Milliseconds 300
         Scroll-ToTop $editor
-        Capture-Element $editor ("remote-editor-{0}.png" -f ($serviceName.ToLowerInvariant().Replace(' ', '-'))) 'remote-endpoint-editor' "$serviceName settings"
-        if ($serviceName -eq 'S3 Bucket') {
-          $providerBox = Find-Id $editor 'S3Provider'; $providerExpand = $null
-          $providerBox.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$providerExpand) | Out-Null; $providerExpand.Expand()
-          $cloudflare = Wait-Until { try { Find-Name $providerBox 'Cloudflare' 3 } catch { $null } } 'S3 Provider metadata did not load Cloudflare.' 30
-          Select-Ui $cloudflare
-          Click (Find-Id $editor 'NextCloudEndpoint'); Start-Sleep -Milliseconds 200
-          foreach ($id in @('S3DisplayName', 'S3AccessKeyId', 'S3SecretAccessKey', 'S3Endpoint', 'S3Region', 'S3Bucket', 'S3Subdirectory', 'TestCloudEndpoint', 'SaveCloudEndpoint')) { Assert-RectangleInside (Find-Id $editor $id) $editor "S3 editor/$id" }
-          Capture-Element $editor 'remote-editor-s3-connection.png' 'remote-endpoint-editor' 'S3 connection fields'
-          Click (Find-Id $editor 'BackCloudEndpoint'); Start-Sleep -Milliseconds 200
+        $formIds = @($form.Name, $form.Root) + $form.Fields
+        foreach ($id in $formIds) {
+          $field = Find-Id $editor $id
+          $rect = $field.Current.BoundingRectangle
+          if ($rect.Width -le 0 -or $rect.Height -le 0) { throw "$($form.Service) form rendered $id with no size." }
         }
+        # The top and bottom anchors of the generated stack are the two that must be reachable without
+        # scrolling; everything the descriptor lists sits between them.
+        Assert-RectangleInside (Find-Id $editor $form.Name) $editor "$($form.Service) display name"
+        Assert-RectangleInside (Find-Id $editor $form.Root) $editor "$($form.Service) root directory"
+        # A field belonging to another Provider must not be on this form. The rclone parameters the editor
+        # writes come from whatever inputs it reads, so a leftover field would put another backend's key on
+        # this remote. AutomationId is matched exactly, so the shared OAuth boxes are only foreign to WebDAV
+        # and SFTP — and the per-provider name and root boxes are foreign everywhere.
+        foreach ($id in ($allFormIds | Where-Object { $formIds -notcontains $_ })) {
+          $foreign = $null
+          try { $foreign = $editor.FindFirst([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)) } catch { }
+          if ($foreign) { throw "$($form.Service) form shows a field belonging to another Provider: $id" }
+        }
+        Capture-Element $editor ("remote-editor-{0}.png" -f ($form.Service.ToLowerInvariant().Replace(' ', '-'))) 'remote-endpoint-editor' "$($form.Service) settings"
+        Click (Find-Id $editor 'BackCloudEndpoint'); Start-Sleep -Milliseconds 200
       }
       Click (Find-Id $editor 'NextCloudEndpoint'); Start-Sleep -Milliseconds 200
       Set-Text (Find-Id $editor 'SftpRemoteName') $remoteName; Set-Text (Find-Id $editor 'SftpRemoteHost') '127.0.0.1'; Set-Text (Find-Id $editor 'SftpRemotePort') "$port"; Set-Text (Find-Id $editor 'SftpRemoteUser') 'ui'; Set-Text (Find-Id $editor 'SftpRemoteRoot') ''
