@@ -53,6 +53,26 @@ public sealed class CloudFileManagerService
     }
 
     /// <summary>
+    /// Every entry at or below <paramref name="path"/>, directories included, in the same remote-root-relative
+    /// shape <see cref="ListAsync"/> uses. One recursive call reads the whole subtree — measured in
+    /// <c>RcloneRecursiveListFactTests</c> — which is what makes a folder drag affordable: it needs the tree, not
+    /// a walk per directory. A directory the cloud no longer has is an exception here, never an empty listing, so
+    /// a caller can tell "gone" from "empty".
+    /// </summary>
+    public async Task<IReadOnlyList<CloudFileEntry>> ListTreeAsync(string remote, string path, CancellationToken ct = default)
+    {
+        var client = await _client(ct);
+        var directory = path.Trim('/');
+        var entries = await client.ListRecursiveAsync(FileSystem(remote), directory, ct);
+        return entries
+            // The browsed directory itself is not one of the entries it returns; an empty path would name the
+            // cache root rather than a file inside the folder being mirrored.
+            .Select(x => Entry(x, directory))
+            .Where(x => x.Path.Length > 0)
+            .ToList();
+    }
+
+    /// <summary>
     /// Creates one directory. rclone backends without real directories (S3) accept this as a marker and
     /// simply report an empty listing, which is why the browser never depends on the folder appearing.
     /// </summary>

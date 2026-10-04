@@ -2229,11 +2229,23 @@ public partial class RemoteEndpointManagerWindow : Window
     private void OpenTransfers_Click(object sender, RoutedEventArgs e) => ShowTransferWindow();
 
     /// <summary>
+    /// Test seam: stands in for raising the queue's own window. Finding it means reading
+    /// <see cref="Application.Current"/>, and in an in-process test that singleton may belong to another test's
+    /// thread, so a drag test that reached for it would be checking WPF's threading rules rather than the drag.
+    /// </summary>
+    internal Action? SurfaceTransfers { get; set; }
+
+    /// <summary>
     /// Reuses the single transfer window rather than owning a new one: an owned window is closed by WPF
     /// when its owner closes, which would hide progress and cancellation while transfers keep running.
     /// </summary>
     private void ShowTransferWindow()
     {
+        if (SurfaceTransfers is { } surface)
+        {
+            surface();
+            return;
+        }
         var existing = Application.Current?.Windows.OfType<CloudTransferWindow>().FirstOrDefault();
         if (existing is null)
         {
@@ -2381,12 +2393,18 @@ public partial class RemoteEndpointManagerWindow : Window
         await BeginDragOutAsync(entry);
     }
 
+    /// <summary>
+    /// The drag gesture's own entry point, reachable without a pointer. WPF hit-tests a drag against the real
+    /// cursor, so no in-process test can make one; this is how the decisions a drag makes are still tested.
+    /// </summary>
+    internal Task DragOutAsync(CloudFileEntry entry) => BeginDragOutAsync(entry);
+
     private async Task BeginDragOutAsync(CloudFileEntry entry)
     {
         if (Selected is not CloudEndpointAccount account) return;
         if (entry.IsDirectory)
         {
-            StatusText.Text = "暂不支持直接拖出整个文件夹，请先进入文件夹再拖出其中的文件。";
+            await BeginFolderDragOutAsync(account, entry);
             return;
         }
 
@@ -2402,18 +2420,135 @@ public partial class RemoteEndpointManagerWindow : Window
             // Explorer copies the file at drop time, so the bytes must exist first. A small file often
             // finishes inside the same gesture, which lets the drop land in the target folder for real;
             // a large one falls through to the reveal path instead of stalling the drag.
-            await Task.WhenAny(_transfers.WaitForAsync(task), Task.Delay(DragHydrationTimeout));
+            await Task.WhenAny(_transfers.WaitForAsync(task), Task.Delay(DragBudget));
         }
 
-        if (CloudDragCache.IsUsable(local, entry.Size) && Mouse.LeftButton == MouseButtonState.Pressed)
+        if (CloudDragCache.IsUsable(local, entry.Size) && HandOffToExplorer([local], entry.Name))
         {
-            StatusText.Text = "正在拖出：" + entry.Name;
-            DragDrop.DoDragDrop(FileList, new DataObject(DataFormats.FileDrop, new[] { local }), DragDropEffects.Copy);
             StatusText.Text = "已拖出：" + entry.Name;
             return;
         }
 
         if (task is not null) RevealWhenReady(task, local);
+    }
+
+    /// <summary>
+    /// Drag a whole folder out. Explorer copies whatever is on disk at drop time and reports success either way,
+    /// so a folder may only be handed over once its local mirror is genuinely complete — a half-downloaded tree
+    /// would be dropped as if it were the one on screen. A folder that still needs bytes keeps downloading in the
+    /// queue and is revealed when it is whole, which is the same escape hatch a large single file already gets.
+    /// </summary>
+    private async Task BeginFolderDragOutAsync(CloudEndpointAccount account, CloudFileEntry folder)
+    {
+        CloudFolderDrag.Plan plan;
+        try
+        {
+            StatusText.Text = "正在准备拖出文件夹…";
+            plan = CloudFolderDrag.Build(account, folder, await _files.ListTreeAsync(account.Name, folder.Path));
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "无法读取这个文件夹的内容：" + RcloneUiError.Describe(ex, "cloud-folder-drag");
+            return;
+        }
+
+        if (plan.IsRefused)
+        {
+            StatusText.Text = $"无法拖出“{folder.Name}”：" + plan.Refusal;
+            return;
+        }
+
+        CloudFolderDrag.CreateDirectories(plan);
+        var pending = plan.Files
+            .Where(x => !CloudFolderDrag.IsReady(x))
+            .Select(x => _transfers.Enqueue(CloudTransferDirection.Download, EndpointUri(account), x.RemotePath, x.LocalPath, x.Size))
+            .ToArray();
+        if (pending.Length > 0)
+        {
+            ShowTransferWindow();
+            StatusText.Text = $"正在下载“{folder.Name}”的 {pending.Length} 个文件…";
+            // One budget for the whole tree, the same one a single file gets: a small folder is often already
+            // inside the gesture, and a big one is not — which is a decision to reveal, not to stall the drag.
+            await Task.WhenAny(Task.WhenAll(pending.Select(_transfers.WaitForAsync)), Task.Delay(DragBudget));
+        }
+
+        if (CloudFolderDrag.IsMirrorReady(plan))
+        {
+            if (HandOffToExplorer([plan.FolderLocalPath], folder.Name))
+            {
+                // What went to Explorer is named by its content, because a folder that arrived empty and a folder
+                // whose 300 files landed look identical on disk until someone opens them.
+                StatusText.Text = $"已拖出整个文件夹：{CloudFolderDrag.Describe(plan)}";
+                return;
+            }
+            // The mirror is whole but the drag cannot start: the gesture is already over, so the honest answer is
+            // that everything is ready for the next one rather than a drop that never happened.
+            StatusText.Text = $"“{folder.Name}”已经全部下载好了，再拖一次即可。";
+            return;
+        }
+
+        if (pending.Length > 0) RevealFolderWhenReady(plan, pending, folder.Name);
+    }
+
+    /// <summary>
+    /// How long one drag gesture waits for the bytes it started. A small file or folder often finishes inside
+    /// the gesture, which lets the drop land in the target folder for real; a big one falls through to the
+    /// reveal path instead of stalling the drag. Settable so a test can drive both sides of that decision
+    /// without waiting out a real timer.
+    /// </summary>
+    internal TimeSpan DragBudget { get; set; } = DragHydrationTimeout;
+
+    /// <summary>
+    /// Test seam: the local paths a finished gesture would have handed Explorer. Starting the modal drag loop
+    /// needs a real pointer, so an in-process test reads this instead of watching a drop it cannot make.
+    /// </summary>
+    internal Action<IReadOnlyList<string>>? DragOutHandoff { get; set; }
+
+    /// <summary>
+    /// Hands the named paths to Explorer, or reports that it would have. WPF hit-tests the mouse against the real
+    /// pointer, so a gesture that already ended — and a test that never had one — cannot start the drag loop;
+    /// that is exactly the case that falls through to revealing instead of pretending a drop happened.
+    /// </summary>
+    private bool HandOffToExplorer(IReadOnlyList<string> paths, string name)
+    {
+        // A drag that cannot start must not claim it did: the status line stays as it was and the caller falls
+        // through to the reveal path instead.
+        if (DragOutHandoff is null && Mouse.LeftButton != MouseButtonState.Pressed) return false;
+        StatusText.Text = "正在拖出：" + name;
+        if (DragOutHandoff is { } handoff)
+        {
+            handoff(paths);
+            return true;
+        }
+        DragDrop.DoDragDrop(FileList, new DataObject(DataFormats.FileDrop, paths.ToArray()), DragDropEffects.Copy);
+        return true;
+    }
+
+    /// <summary>
+    /// The folder version of the reveal: the queue finishes the tree, then the folder itself is put in front of
+    /// the user so their second drag lands in the folder they chose. A reveal that fired on a partial mirror would
+    /// send them to a folder that is still filling in.
+    /// </summary>
+    private void RevealFolderWhenReady(CloudFolderDrag.Plan plan, CloudTransferTask[] pending, string name)
+    {
+        _ = RevealAsync();
+
+        async Task RevealAsync()
+        {
+            var settled = await Task.WhenAll(pending.Select(_transfers.WaitForAsync));
+            var failed = settled.Count(x => !x);
+            if (failed > 0)
+            {
+                await Dispatcher.InvokeAsync(() => StatusText.Text = $"“{name}”有 {failed} 个文件没能下载，没有拖出整个文件夹。");
+                return;
+            }
+            if (!await Task.Run(() => CloudFolderDrag.IsMirrorReady(plan))) return;
+            await Dispatcher.InvokeAsync(() =>
+            {
+                StatusText.Text = $"文件夹“{name}”已下载完成，把它拖到目标位置即可。";
+                RevealInExplorer(plan.FolderLocalPath);
+            });
+        }
     }
 
     /// <summary>
@@ -2435,8 +2570,21 @@ public partial class RemoteEndpointManagerWindow : Window
         }
     }
 
-    private static void RevealInExplorer(string path)
+    /// <summary>
+    /// Where a finished download is put in front of the user. A drag that could not finish inside its gesture
+    /// leaves the user with nothing until this runs, so the rule it carries — reveal a whole mirror, never a
+    /// partial one — is worth a test; and starting Explorer is a machine-level effect an in-process test must
+    /// not cause, which is why this goes through a seam rather than being called directly.
+    /// </summary>
+    internal Action<string>? Reveal { get; set; }
+
+    private void RevealInExplorer(string path)
     {
+        if (Reveal is { } reveal)
+        {
+            reveal(path);
+            return;
+        }
         try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true }); }
         catch (Exception ex) { System.Diagnostics.Trace.TraceWarning("Unable to reveal a downloaded cloud file: " + ex); }
     }
