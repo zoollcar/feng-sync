@@ -1470,11 +1470,18 @@ try {
       Click (Find-Name $rowMenu '属性' 10)
       $details = Find-WindowLike '属性 · proof-dir' 30
       # 未统计 是这张面板在有人按下去之前唯一被允许的大小：SFTP 给目录字段填的数（这里是 0）一旦被当成大小印出来，
-      # 用户读到的是“这个文件夹是空的”。
-      if ((Get-CloudDetailsValue $details '大小') -ne '未统计') { throw "还没统计时 大小 那一行不是 未统计：'$(Get-CloudDetailsValue $details '大小')'。" }
+      # 用户读到的是“这个文件夹是空的”。第一行要等：窗口出现和它的行进入 UIA 树之间有一次 layout，
+      # FindAll 在那一刻返回空集合（实测红过一次），所以照本脚本其余步骤的写法重试而不是直接读。
+      $sizeRow = Wait-Until { try { Get-CloudDetailsValue $details '大小' } catch { $null } } '属性 面板没有出现 大小 那一行。' 15
+      if ($sizeRow -ne '未统计') { throw "还没统计时 大小 那一行不是 未统计：'$sizeRow'。" }
       if ((Find-Id $details 'CloudDetailsHint').Current.Name -notmatch '遍历整个子目录树') { throw '统计按钮没有说清它要花多久、能不能收回。' }
       Click (Find-Id $details 'CloudDetailsAction')
-      Wait-Until { (Get-CloudDetailsValue $details '大小') -eq '3.0 KB（3,072 字节）· 2 个对象' } '统计大小 之后 大小 那一行没有变成子树里的真实字节数。' 90 | Out-Null
+      # 关闭 must stay clickable while the walk runs. Nothing can recall this request from the cloud (measured:
+      # job/stop answers {} and the recursion continues), so leaving the panel is the user's only way out, and the
+      # hint above promises exactly that. Read straight after the click, without waiting: a correct panel is
+      # enabled at every moment here, while a handler that dims 关闭 for the duration is caught by this one read.
+      if (-not (Find-Id $details 'CloudDetailsClose').Current.IsEnabled) { throw '统计进行中，关闭 被按灭了 —— 面板把用户锁在一次收不回的读取里。' }
+      Wait-Until { try { (Get-CloudDetailsValue $details '大小') -eq '3.0 KB（3,072 字节）· 2 个对象' } catch { $false } } '统计大小 之后 大小 那一行没有变成子树里的真实字节数。' 90 | Out-Null
       # 数完之后这一格不再提供同一个按钮：面板已经拿到了它要的数，再点一次只是把同一遍遍历再花一次。
       Wait-Until { try { $null -eq (Find-Id $details 'CloudDetailsAction' 1) } catch { $true } } '统计完成之后面板还在提供同一次遍历。' 15 | Out-Null
       Capture-Element $details 'cloud-details-folder-size.png' 'remote-file-manager' 'the 属性 panel after counting a folder over real SFTP'
