@@ -528,6 +528,23 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         _ => true
     };
 
+    /// <summary>
+    /// The endpoint a download reads from. A download stages under the file's own name — the shared staging
+    /// path is a bare name, not the remote-relative path — so the source has to be addressed the same way,
+    /// by rooting its endpoint at the file's directory. Addressing that bare name against the endpoint root
+    /// instead asks rclone for a same-named object one or more directories up: measured at the wire, a task
+    /// whose path was <c>docs/a.txt</c> read <c>[nas:/]/team/a.txt</c> from an endpoint rooted at <c>team</c>,
+    /// which is a different object and, when it exists, silently the wrong file. An upload needs no such
+    /// adjustment: its source is already the local file's own directory, and its destination carries the
+    /// whole remote path. A local URI is returned untouched, since it has no root to compose against.
+    /// </summary>
+    internal static string DownloadSourceUri(CloudTransferTask task)
+    {
+        if (!EndpointFactory.IsRemote(task.RemoteUri)) return task.RemoteUri;
+        var separator = task.RemotePath.LastIndexOf('/');
+        return separator < 0 ? task.RemoteUri : task.RemoteUri.TrimEnd('/') + "/" + task.RemotePath[..separator];
+    }
+
     private async Task RunAsync(CloudTransferTask task)
     {
         var cancellation = new CancellationTokenSource();
@@ -586,7 +603,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
                 }
                 else
                 {
-                    source = EndpointFactory.CreateWithClient(task.RemoteUri, client);
+                    source = EndpointFactory.CreateWithClient(DownloadSourceUri(task), client);
                     target = new LocalEndpoint(localDirectory);
                 }
             }
