@@ -343,6 +343,81 @@ public sealed class CloudBrowserDetailsTests
         await WithWindow((window, _) => Assert.Null(window.BuildRowMenu()));
     }
 
+    [Fact]
+    public async Task The_row_menu_offers_the_history_lookup_for_one_file_and_carries_the_reason()
+    {
+        await WithWindow((window, _) =>
+        {
+            Select(window, $"{Root}/a.txt");
+            var item = window.BuildRowMenu()!.Items.OfType<MenuItem>()
+                .Single(entry => entry.Header?.ToString() == CloudVersionHistory.MenuLabel);
+
+            // The reason rides on the tooltip, so it can be read before the click: the item itself only promises
+            // the trip, and a command named for a feature it cannot deliver would be the lie this design avoids.
+            Assert.Contains("rclone", item.ToolTip?.ToString() ?? "", StringComparison.Ordinal);
+
+            // A folder is not offered it, and neither is a batch — the same rule that keeps 复制分享链接 to one
+            // file, because a history belongs to an object rather than to a selection.
+            Select(window, $"{Root}/incoming");
+            Assert.DoesNotContain(CloudVersionHistory.MenuLabel, Headers(window.BuildRowMenu()!));
+            Select(window, $"{Root}/a.txt", $"{Root}/b.txt");
+            Assert.DoesNotContain(CloudVersionHistory.MenuLabel, Headers(window.BuildRowMenu()!));
+        });
+    }
+
+    [Fact]
+    public async Task The_history_lookup_opens_the_provider_console_and_says_why_the_app_cannot()
+    {
+        await WithWindow((window, _) =>
+        {
+            var opened = new List<string>();
+            window.OpenExternal = opened.Add;
+            Select(window, $"{Root}/a.txt");
+
+            window.OpenVersionHistory(File($"{Root}/a.txt", 1024));
+
+            // One URL, the provider's own console — the cloud is never asked, because it has nothing to answer
+            // with. That absence is the whole reason this command exists in this shape.
+            Assert.Equal(["https://drive.google.com/"], opened);
+            Assert.Contains("已在浏览器里打开 Google Drive 网页端", window.StatusText.Text, StringComparison.Ordinal);
+            Assert.Contains("rclone", window.StatusText.Text, StringComparison.Ordinal);
+        }, select: "drive");
+    }
+
+    [Fact]
+    public async Task An_endpoint_with_no_console_opens_nothing_and_says_so()
+    {
+        await WithWindow((window, _) =>
+        {
+            var opened = new List<string>();
+            window.OpenExternal = opened.Add;
+            Select(window, $"{Root}/a.txt");
+
+            window.OpenVersionHistory(File($"{Root}/a.txt", 1024));
+
+            // Nothing opens, and the line has to carry the reason: with no link there is nothing else for the
+            // user to look at, so "nothing happened" would read as a broken command rather than a limitation.
+            Assert.Empty(opened);
+            Assert.Contains("没有可打开的网页端", window.StatusText.Text, StringComparison.Ordinal);
+            Assert.Contains("rclone", window.StatusText.Text, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public async Task A_folder_is_told_it_has_no_history_instead_of_being_sent_to_a_console()
+    {
+        await WithWindow((window, _) =>
+        {
+            var opened = new List<string>();
+            window.OpenExternal = opened.Add;
+
+            window.OpenVersionHistory(Folder($"{Root}/incoming"));
+
+            Assert.Empty(opened);
+            Assert.Contains("文件夹没有历史版本", window.StatusText.Text, StringComparison.Ordinal);
+        });
+    }
+
     // ------------------------------------------------------------------ harness
 
     private static string Value(IReadOnlyList<CloudDetailRow> rows, string label) =>
@@ -368,6 +443,10 @@ public sealed class CloudBrowserDetailsTests
     private static readonly CloudEndpointRow[] Rows =
     [
         new(new CloudEndpointAccount(new RcloneAccount("nas", "sftp"), new CloudEndpointMetadata("nas", "sftp", "SFTP", Root, ""))),
+        // A provider with exactly one web console, rooted at the same place so the same listing serves both:
+        // the history lookup is decided by the endpoint's type, and this is the case that has somewhere to send
+        // the user — which is the only observable difference between the two rows.
+        new(new CloudEndpointAccount(new RcloneAccount("drive", "drive"), new CloudEndpointMetadata("drive", "drive", "Google Drive", Root, ""))),
     ];
 
     /// <summary>
@@ -377,7 +456,7 @@ public sealed class CloudBrowserDetailsTests
     /// directly because a details read starts from rows that are already on screen.
     /// </summary>
     private static Task WithWindow(Func<RemoteEndpointManagerWindow, FakeRclone, Task> test,
-        FakeRclone? rclone = null) => RunSta(async () =>
+        FakeRclone? rclone = null, string select = "nas") => RunSta(async () =>
     {
         var journalRoot = NewDirectory();
         var previous = AppServices.TryCurrent;
@@ -396,7 +475,7 @@ public sealed class CloudBrowserDetailsTests
         try
         {
             window = new RemoteEndpointManagerWindow(new CloudFileManagerService(_ => Task.FromResult(client)), queue);
-            window.LoadEndpointsForTest(Rows, selectName: "nas");
+            window.LoadEndpointsForTest(Rows, selectName: select);
             window.ShowListing(Root, [File($"{Root}/a.txt", 1024), File($"{Root}/b.txt", 2048), Folder($"{Root}/incoming")]);
             await test(window, standIn);
         }
@@ -411,12 +490,12 @@ public sealed class CloudBrowserDetailsTests
     });
 
     /// <summary>The synchronous cases, which still run on the window's own dispatcher thread.</summary>
-    private static Task WithWindow(Action<RemoteEndpointManagerWindow, FakeRclone> test) =>
+    private static Task WithWindow(Action<RemoteEndpointManagerWindow, FakeRclone> test, string select = "nas") =>
         WithWindow((window, standIn) =>
         {
             test(window, standIn);
             return Task.CompletedTask;
-        });
+        }, select: select);
 
     /// <summary>Just enough of a shell to build the window; nothing here owns a daemon or a journal.</summary>
     private sealed class StubShell : IAppServiceHost
