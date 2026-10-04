@@ -167,7 +167,18 @@
             </WrapPanel>
 
             <WrapPanel Grid.Row="4" Margin="0,10,0,8">
-                <TextBlock Text="搜索" VerticalAlignment="Center" />
+                <!-- 收藏 and 最近访问 are two jump lists rather than a menu: the shell has no menu bar, and a named
+                     control is one a keyboard, a screen reader and the desktop scenario can all reach. Picking a row
+                     names a destination rather than a filter, so the window acts on the choice and clears it — which
+                     is also what lets the same place be jumped to twice in a row.
+                     The toggle deliberately carries no static AutomationProperties.Name: its content changes with the
+                     state it reports (收藏此目录 / 取消收藏), and a static name would replace that state as the
+                     accessible name, exactly as it does for a live TextBlock. -->
+                <TextBlock Text="跳转" VerticalAlignment="Center" />
+                <ComboBox x:Name="FavoriteJumpBox" AutomationProperties.AutomationId="CloudFavoriteJumps" AutomationProperties.Name="跳到收藏的目录" Width="220" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
+                <ComboBox x:Name="RecentJumpBox" AutomationProperties.AutomationId="CloudRecentJumps" AutomationProperties.Name="跳到最近访问的目录" Width="220" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
+                <Button x:Name="FavoriteToggleButton" AutomationProperties.AutomationId="CloudFavoriteToggle" Content="收藏此目录" Click="FavoriteToggle_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <TextBlock Text="搜索" VerticalAlignment="Center" Margin="20,0,0,0" />
                 <TextBox x:Name="SearchBox" AutomationProperties.AutomationId="CloudSearch" AutomationProperties.Name="按名称或路径搜索" Width="200" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown" />
                 <CheckBox x:Name="SearchRecursiveBox" AutomationProperties.AutomationId="CloudSearchRecursive" AutomationProperties.Name="搜索包含子目录" Content="包含子目录" Margin="12,0,0,0" VerticalAlignment="Center" />
                 <Button AutomationProperties.AutomationId="CloudSearchRun" AutomationProperties.Name="在整个端点内搜索" Content="搜索" Click="Search_Click" Margin="12,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />

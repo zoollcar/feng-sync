@@ -92,6 +92,21 @@ public partial class RemoteEndpointManagerWindow : Window
     /// search deliberately included.
     /// </summary>
     private bool _listingIsSearchResult;
+    /// <summary>
+    /// The places the browser remembers, as the file holds them — including a favourite whose endpoint the list
+    /// cannot offer right now, which is hidden from the jump lists rather than deleted.
+    /// </summary>
+    private readonly CloudBrowserBookmarkStore _bookmarks = new();
+    private List<CloudBookmark> _favorites = [];
+    private List<CloudBookmark> _recent = [];
+    /// <summary>
+    /// Set while the window itself writes a jump list or the endpoint selection. Those writes raise selection
+    /// events, and this is what keeps the window's own bookkeeping from being read as a gesture that starts a
+    /// second listing.
+    /// </summary>
+    private bool _applyingJump;
+    /// <summary>Why the remembered places are not there, held until the startup status line can carry it.</summary>
+    private string? _bookmarkNotice;
     private int _historyIndex = -1;
     private CloudSortColumn _sortColumn = CloudSortColumn.Name;
     private bool _sortDescending;
@@ -168,6 +183,23 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <summary>The endpoint rows the list is showing, already filtered and ordered.</summary>
     internal IReadOnlyList<CloudEndpointRow> VisibleEndpoints => [.. _accounts];
 
+    /// <summary>The places remembered as favourites, in the order the user put them in, stale endpoint included.</summary>
+    internal IReadOnlyList<CloudBookmark> FavoritePlaces => [.. _favorites];
+    internal IReadOnlyList<CloudBookmark> RecentPlaces => [.. _recent];
+    /// <summary>The rows the two jump lists offer right now.</summary>
+    internal IReadOnlyList<CloudJumpItem> FavoriteJumps => FavoriteJumpBox.ItemsSource as IReadOnlyList<CloudJumpItem> ?? [];
+    internal IReadOnlyList<CloudJumpItem> RecentJumps => RecentJumpBox.ItemsSource as IReadOnlyList<CloudJumpItem> ?? [];
+    /// <summary>What the favourite button says, which is the state it reports rather than a label it was given.</summary>
+    internal string FavoriteToggleLabel => FavoriteToggleButton.Content as string ?? "";
+    /// <summary>Where the remembered places are persisted, so a test can read the file it wrote.</summary>
+    internal CloudBrowserBookmarkStore Bookmarks => _bookmarks;
+    /// <summary>
+    /// The sentence the window owes the status line when the remembered places could not be read. It is held
+    /// rather than shown straight away because the endpoint refresh that follows overwrites the status line, and
+    /// a lost file has to be said after the count that would otherwise bury it.
+    /// </summary>
+    internal string? BookmarkNotice => _bookmarkNotice;
+
     /// <summary>
     /// Installs the loaded rows without touching rclone, so the search and ordering rules can be driven
     /// through the real controls rather than re-tested as pure functions. The selection is recorded as
@@ -189,7 +221,32 @@ public partial class RemoteEndpointManagerWindow : Window
         // chose, rather than being drawn as a list and then re-drawn as tiles.
         _browserView = Enum.IsDefined(_settings.CloudBrowserView) ? _settings.CloudBrowserView : CloudBrowserViewMode.List;
         ApplyBrowserView();
+        await LoadBookmarksAsync();
         await RefreshAsync();
+        // Said last, because a window that opened on an empty 收藏 for a reason the user cannot see has to say so
+        // over the endpoint count: the count is what any listing repeats, the lost file is not.
+        if (_bookmarkNotice is { } notice) StatusText.Text = notice;
+    }
+
+    /// <summary>
+    /// Reads the remembered places into the window's two lists and rebuilds the jump lists. Split out from
+    /// <see cref="InitializeAsync"/> because a window that is never shown — every in-process case — does not reach
+    /// the <c>Loaded</c> handler, and a test that drives 收藏 has to start from the same file the shell does.
+    /// </summary>
+    internal async Task LoadBookmarksAsync()
+    {
+        _bookmarkNotice = null;
+        try
+        {
+            var loaded = await _bookmarks.LoadAsync();
+            _favorites = [.. loaded.Favorites];
+            _recent = [.. loaded.Recent];
+            if (loaded.RecoveredFromCorruption)
+                _bookmarkNotice = $"收藏文件读不出来，已备份为 {Path.GetFileName(loaded.BackupPath)}，"
+                    + "收藏与最近访问从空列表开始。";
+        }
+        catch (Exception ex) { _bookmarkNotice = "无法读取收藏与最近访问：" + RcloneUiError.Describe(ex, "cloud-bookmarks-load"); }
+        RefreshBookmarkLists();
     }
 
     private async Task RefreshAsync()
@@ -249,6 +306,9 @@ public partial class RemoteEndpointManagerWindow : Window
         // A filter that matches nothing empties the browser too: the list and the file pane are two views of
         // one selection, and the previous endpoint's files beside an empty list read as a stale pane.
         if (rows.Count == 0) { _browsedEndpoint = null; _currentPath = ""; ClearListing(); }
+        // The jump lists offer places by endpoint, so they are rebuilt whenever the endpoint list is: a bookmark
+        // whose endpoint the search box just hid has to leave the list, and come back when it does.
+        RefreshBookmarkLists();
         UpdateEndpointButtons();
         UpdateMountButtons();
         // Decided here rather than left to the selection event: re-arranging may have moved the selection to
@@ -262,14 +322,26 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     private async Task FollowSelectionAsync()
     {
-        if (Selected?.Name == _browsedEndpoint) return;
-        _browsedEndpoint = Selected?.Name;
-        _currentPath = Selected?.RootPath ?? "";
+        if (!SwitchEndpoint(Selected)) return;
+        await BrowseAsync();
+    }
+
+    /// <summary>
+    /// Adopts the endpoint the caller names and says whether that was a change: its root becomes the current
+    /// directory and the per-endpoint history starts again. It lists nothing, which is what lets a jump that
+    /// already knows the directory it wants adopt the endpoint and ask for that one directory rather than paying
+    /// for the root first.
+    /// </summary>
+    private bool SwitchEndpoint(CloudEndpointAccount? account)
+    {
+        if (account?.Name == _browsedEndpoint) return false;
+        _browsedEndpoint = account?.Name;
+        _currentPath = account?.RootPath ?? "";
         // History is per endpoint: "the directory before this one" means nothing across two accounts.
         _history.Clear();
         _historyIndex = -1;
-        if (Selected is not null) PushHistory(_currentPath);
-        await BrowseAsync();
+        if (account is not null) PushHistory(_currentPath);
+        return true;
     }
 
     private async Task RefreshMountsAsync()
@@ -299,7 +371,7 @@ public partial class RemoteEndpointManagerWindow : Window
         UpdateMountButtons();
         // A re-arrange raises this event several times over, with a selection that is momentarily nothing at
         // all. Those are not gestures, and the re-arrange follows up on its own once it is finished.
-        if (_rearranging) return;
+        if (_rearranging || _applyingJump) return;
         await FollowSelectionAsync();
     }
 
@@ -457,6 +529,10 @@ public partial class RemoteEndpointManagerWindow : Window
                 text => CloudEndpointRename.Validate(text, account.Name, context));
             if (requested is null) return;
             var result = await CloudEndpointRename.RenameAsync(account.Name, requested, mounted);
+            // Re-read before anything can write. The rename moved the remembered places on disk, but the lists in
+            // memory still name a remote rclone no longer has, and the refresh below starts a listing that records
+            // a visit — a visit written from the stale lists would quietly undo the migration the rename just made.
+            await LoadBookmarksAsync();
             await RefreshAsync();
             SelectEndpoint(result.NewName);
             StatusText.Text = DescribeRename(result);
@@ -733,6 +809,9 @@ public partial class RemoteEndpointManagerWindow : Window
             var items = await _files.ListAsync(account.Name, _currentPath);
             BackButton.IsEnabled = !_currentPath.Equals(account.RootPath, StringComparison.OrdinalIgnoreCase);
             ShowListing(_currentPath, items);
+            // Only a listing that arrived is a visit. A directory that failed to read is remembered by the error
+            // in the status line, not as somewhere the user can jump back to.
+            await RecordVisitAsync(account.Name, _currentPath);
         }
         catch (Exception ex) { StatusText.Text = "无法读取目录：" + RcloneUiError.Describe(ex, "cloud-file-list"); }
     }
@@ -749,6 +828,7 @@ public partial class RemoteEndpointManagerWindow : Window
         BackButton.IsEnabled = false;
         UpdateHistoryButtons();
         UpdateFileButtons();
+        UpdateFavoriteToggle();
     }
 
     /// <summary>
@@ -823,6 +903,130 @@ public partial class RemoteEndpointManagerWindow : Window
     private IReadOnlyList<CloudFileEntry> SelectedEntries() => [.. FileList.SelectedItems.Cast<CloudFileEntry>()];
 
     private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateFileButtons();
+
+    // ---- 收藏与最近访问 ----
+
+    /// <summary>
+    /// Rebuilds both jump lists from what is remembered and what the endpoint list can offer, and puts the
+    /// favourite button in step with the directory on screen. Nothing here changes what is remembered: an endpoint
+    /// the search box has hidden takes its favourites out of sight and brings them back, because a place the user
+    /// chose is not lost because rclone.conf could not be read once.
+    /// </summary>
+    private void RefreshBookmarkLists()
+    {
+        // The rows on screen, not everything loaded, because that is the set <see cref="JumpToAsync"/> can select
+        // from: an endpoint the search box has hidden has no row to click, so offering its favourites would be a
+        // list of rows that refuse to jump.
+        var names = _accounts.Select(row => row.Account.Name).ToList();
+        FavoriteJumpBox.ItemsSource = CloudBrowserBookmarks.JumpItems(_favorites, names);
+        RecentJumpBox.ItemsSource = CloudBrowserBookmarks.JumpItems(_recent, names);
+        DescribeHidden(FavoriteJumpBox, _favorites, names, "收藏");
+        DescribeHidden(RecentJumpBox, _recent, names, "最近访问");
+        UpdateFavoriteToggle();
+    }
+
+    /// <summary>
+    /// Says how many remembered places the list had to leave out. A row count that fell from six to two is
+    /// otherwise indistinguishable from a list that lost four of them for good.
+    /// </summary>
+    private static void DescribeHidden(ComboBox box, IReadOnlyList<CloudBookmark> places, IReadOnlyCollection<string> names, string what)
+    {
+        var hidden = CloudBrowserBookmarks.HiddenCount(places, names);
+        box.ToolTip = hidden == 0 ? null : $"已隐藏 {hidden} 条{what}，因为对应端点当前不在列表里。";
+    }
+
+    /// <summary>
+    /// The button says what clicking it does now. That is why it has no static accessible name in the XAML: a
+    /// fixed label would replace the state it reports, for a screen reader and for the desktop scenario alike.
+    /// </summary>
+    private void UpdateFavoriteToggle()
+    {
+        var place = CurrentPlace();
+        FavoriteToggleButton.IsEnabled = place is not null;
+        FavoriteToggleButton.Content = place is not null && CloudBrowserBookmarks.IsFavorite(_favorites, place)
+            ? "取消收藏"
+            : "收藏此目录";
+    }
+
+    /// <summary>The directory on screen as a place worth remembering, or nothing when there is nothing to remember.</summary>
+    private CloudBookmark? CurrentPlace() => Selected is { } account
+        ? CloudBrowserBookmarks.Normalize(account.Name, _currentPath)
+        : null;
+
+    private async void FavoriteToggle_Click(object sender, RoutedEventArgs e) => await ToggleFavoriteAsync();
+
+    /// <summary>Keeps or drops the directory on screen, and writes the file both lists share.</summary>
+    internal async Task ToggleFavoriteAsync()
+    {
+        if (CurrentPlace() is not { } place)
+        {
+            StatusText.Text = "请先选择一个云盘的目录。";
+            return;
+        }
+
+        _favorites = CloudBrowserBookmarks.IsFavorite(_favorites, place)
+            ? [.. CloudBrowserBookmarks.RemoveFavorite(_favorites, place)]
+            : [.. CloudBrowserBookmarks.AddFavorite(_favorites, place)];
+        RefreshBookmarkLists();
+        await SaveBookmarksAsync();
+    }
+
+    /// <summary>
+    /// Remembers a directory the browser just listed. Re-listing the place the window already shows — a 刷新, a
+    /// 后退, a search that fell back to a plain listing — is not a new visit, and without that gate each of them
+    /// would rewrite the file for the same answer.
+    /// </summary>
+    private async Task RecordVisitAsync(string remote, string path)
+    {
+        if (CloudBrowserBookmarks.Normalize(remote, path) is not { } place) return;
+        if (CloudBrowserBookmarks.IsNewestVisit(_recent, place)) return;
+        _recent = [.. CloudBrowserBookmarks.RecordVisit(_recent, place)];
+        RefreshBookmarkLists();
+        await SaveBookmarksAsync();
+    }
+
+    private async Task SaveBookmarksAsync()
+    {
+        try { await _bookmarks.SaveAsync(_favorites, _recent); }
+        catch (Exception ex) { StatusText.Text = "无法保存收藏与最近访问：" + RcloneUiError.Describe(ex, "cloud-bookmarks-save"); }
+    }
+
+    private async void BookmarkJump_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_applyingJump || sender is not ComboBox { SelectedItem: CloudJumpItem item } box) return;
+        await JumpToAsync(item);
+        // The pick named a destination, not a filter, so it is put back: leaving a row selected would read as
+        // though the browser were showing only that place, and would leave nothing to pick the second time.
+        _applyingJump = true;
+        try { box.SelectedItem = null; }
+        finally { _applyingJump = false; }
+    }
+
+    /// <summary>
+    /// Jumps to a remembered place: the endpoint first, then the directory inside it. Going through the endpoint
+    /// list's own selection is what makes the browser's rules apply — its root, its history, its address trail —
+    /// and the guard around it is why the selection event does not list anything: two listings of one endpoint
+    /// would otherwise race for the file pane, and whichever answered last would win.
+    /// </summary>
+    internal async Task<bool> JumpToAsync(CloudJumpItem item)
+    {
+        var row = _accounts.FirstOrDefault(candidate =>
+            string.Equals(candidate.Account.Name, item.Bookmark.Remote, StringComparison.OrdinalIgnoreCase));
+        if (row is null)
+        {
+            // The jump list only offers places whose endpoint this window loaded, so arriving here means it went
+            // away between the pick and this line — a refresh, or a keystroke in the search box.
+            StatusText.Text = $"端点“{item.Bookmark.Remote}”已不在列表里，无法跳转。";
+            return false;
+        }
+
+        _applyingJump = true;
+        try { EndpointList.SelectedItem = row; }
+        finally { _applyingJump = false; }
+        SwitchEndpoint(row.Account);
+        await NavigateToAsync(item.Bookmark.Path);
+        return true;
+    }
 
     // ---- 视图与缩略图 ----
 
@@ -1023,7 +1227,7 @@ public partial class RemoteEndpointManagerWindow : Window
     /// Moves to a directory and records it. <paramref name="record"/> is false when the move came from
     /// 后退 or 前进 itself, which must not push a new entry or the two would ping-pong forever.
     /// </summary>
-    private async Task NavigateToAsync(string path, bool record = true)
+    internal async Task NavigateToAsync(string path, bool record = true)
     {
         if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择云盘。"; return; }
         var target = CloudBrowse.Normalize(path, account.RootPath);
