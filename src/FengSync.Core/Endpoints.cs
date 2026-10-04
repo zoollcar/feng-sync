@@ -278,7 +278,8 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     /// </summary>
     public async Task<RcloneRangeContent?> OpenRangeAsync(string fs, string remote, long offset, CancellationToken ct = default)
     {
-        var response = await SendFileRequestAsync(HttpMethod.Get, fs, remote, offset, ct).ConfigureAwait(false);
+        var response = await SendFileRequestAsync(HttpMethod.Get, fs, remote,
+            offset > 0 ? new RangeHeaderValue(offset, null) : null, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode || (offset > 0 && response.StatusCode != HttpStatusCode.PartialContent))
         {
             response.Dispose();
@@ -293,17 +294,75 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     /// <summary>Object size and modification time, read without transferring any content.</summary>
     public async Task<RcloneFileIdentity?> ProbeAsync(string fs, string remote, CancellationToken ct = default)
     {
-        using var response = await SendFileRequestAsync(HttpMethod.Head, fs, remote, 0, ct).ConfigureAwait(false);
+        using var response = await SendFileRequestAsync(HttpMethod.Head, fs, remote, null, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode) return null;
         var length = response.Content.Headers.ContentRange?.Length ?? response.Content.Headers.ContentLength;
         return length is null ? null : new RcloneFileIdentity(length.Value, response.Content.Headers.LastModified);
     }
 
-    private async Task<HttpResponseMessage> SendFileRequestAsync(HttpMethod method, string fs, string remote, long offset, CancellationToken ct)
+    /// <summary>
+    /// Reads one object's bytes through <c>--rc-serve</c>, but never more than <paramref name="maxBytes"/> of
+    /// them, and reports which of the four things the cloud actually did: gave the object, gave a first chunk
+    /// because the object is bigger, said the object is gone, or refused.
+    /// <para>
+    /// The limit is sent as a bounded range rather than applied while reading, because every consumer of this is
+    /// a preview-sized read of a file whose size the caller may not know: <c>bytes=0-(maxBytes-1)</c> asks for at
+    /// most that many bytes <em>and</em> answers with the object's total, so "too big to show" is recognised
+    /// without pulling the whole object across the loopback first. Measured against the bundled v1.75.0: a range
+    /// whose end is past the end of the object is <strong>clamped</strong> (206 with <c>Content-Range: bytes
+    /// 0-(size-1)/size</c>) and never 416, and a range whose <em>start</em> is past it is answered as a
+    /// successful 206 with an empty body — which is why a caller that has to tell "nothing left to read" from
+    /// "read past the end" cannot do it from these answers alone (the resume path in
+    /// <see cref="RcloneRangeContent"/> is the one that has that problem, and it checks the seam instead).
+    /// </para>
+    /// </summary>
+    public async Task<RcloneObjectRead> ReadAsync(string fs, string remote, long maxBytes, CancellationToken ct = default)
+    {
+        if (maxBytes <= 0) return new RcloneObjectRead(RcloneReadStatus.Failed, [], -1, "读取上限必须大于 0 字节。");
+        using var response = await SendFileRequestAsync(HttpMethod.Get, fs, remote, new RangeHeaderValue(0, maxBytes - 1), ct)
+            .ConfigureAwait(false);
+        var status = (int)response.StatusCode;
+        if (status == 404) return new RcloneObjectRead(RcloneReadStatus.Missing, [], -1, null);
+        if (!response.IsSuccessStatusCode)
+            return new RcloneObjectRead(RcloneReadStatus.Failed, [], -1, await ReadRefusalAsync(response, ct).ConfigureAwait(false));
+
+        // Clamped rather than trusted: rclone reports the object's total in Content-Range for a partial answer,
+        // but two measured shapes have no readable range at all — a 0-byte object answers "bytes 0--1/0", and a
+        // range starting past the end answers "bytes 100-53/54" — so the total is derived from what arrived:
+        // fewer bytes than asked for means the object was that size, and exactly as many as asked for means there
+        // is more, which is the answer that must NOT be painted as if it were the whole object.
+        var bytes = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        var total = status == (int)HttpStatusCode.OK
+            ? bytes.Length
+            : response.Content.Headers.ContentRange?.Length ?? (bytes.Length < maxBytes ? bytes.Length : maxBytes + 1);
+        return total > maxBytes
+            // The bytes in hand are only the object's beginning, so they are dropped: a caller that showed them
+            // would be showing a truncated picture or half a document without saying so.
+            ? new RcloneObjectRead(RcloneReadStatus.TooLarge, [], total, null)
+            : new RcloneObjectRead(RcloneReadStatus.Read, bytes, total, null);
+    }
+
+    /// <summary>
+    /// rclone's own sentence for a refusal, which is what the caller has to report. The <c>--rc-serve</c> error
+    /// body is the same JSON shape as an RC error, so the words survive; the shared classifier is not consulted
+    /// because it reads an HTTP 500 as a temporary connection problem, and "is a directory not a file" is not one.
+    /// </summary>
+    private static async Task<string?> ReadRefusalAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            return document.RootElement.TryGetProperty("error", out var error) ? error.GetString() : body;
+        }
+        catch (JsonException) { return string.IsNullOrWhiteSpace(body) ? null : body; }
+    }
+
+    private async Task<HttpResponseMessage> SendFileRequestAsync(HttpMethod method, string fs, string remote, RangeHeaderValue? range, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(method, new Uri(baseUri, FileServePath(fs, remote)));
         request.Headers.Authorization = new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}")));
-        if (offset > 0) request.Headers.Range = new RangeHeaderValue(offset, null);
+        if (range is not null) request.Headers.Range = range;
         return await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
     }
 
@@ -441,6 +500,21 @@ public sealed record RcloneRangeContent(Stream Content, long Length, DateTimeOff
 
 /// <summary>Size and modification time of one remote object, read without transferring content.</summary>
 public sealed record RcloneFileIdentity(long Length, DateTimeOffset? ModifiedUtc);
+
+/// <summary>
+/// What the cloud did when one object's bytes were asked for: <see cref="Read"/> gave the object (all of it,
+/// within the caller's limit), <see cref="TooLarge"/> holds more than the limit allows and reports its total,
+/// <see cref="Missing"/> says the object is not there, and <see cref="Failed"/> is every other refusal — kept
+/// separate because a preview has to say which of these happened rather than paint one grey box for all four.
+/// </summary>
+public enum RcloneReadStatus { Read, TooLarge, Missing, Failed }
+
+/// <summary>
+/// The answer to a bounded read. <paramref name="Total"/> is the object's own size when the cloud reported it
+/// and <c>-1</c> when it did not; <paramref name="Detail"/> is rclone's sentence for a refusal, which the caller
+/// shows instead of inventing a cause.
+/// </summary>
+public sealed record RcloneObjectRead(RcloneReadStatus Status, byte[] Bytes, long Total, string? Detail);
 
 /// <summary>rclone-backed SFTP, Google Drive, or S3 endpoint. Authentication is supplied exclusively by rclone.conf.</summary>
 public sealed class RcloneEndpoint(RcloneRcClient client, EndpointProfile profile, EndpointCapabilities capabilities) : IEndpoint, IEndpointStateStorage
