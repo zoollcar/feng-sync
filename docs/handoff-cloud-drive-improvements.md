@@ -1,8 +1,8 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **88** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
-> 最后更新：2026-10-04。
+> 分支：`dev`（领先 `origin/dev` **95** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
+> 最后更新：2026-10-05。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
 > 原先那份独立的《云盘功能缺口盘点与演进计划》已把仍有价值的内容（剩余项的现状/缺口/参考做法、实现约束）
@@ -201,6 +201,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `375762f` | B10 | `test(browser): pin the folder drag rules and where a nested download reads from`（UI 880 行：13 条纯规则 + 11 条真窗口拖出 + 4 条下载源目录（3 条纯规则 + 1 条真 rclone 落点）） |
 | `3f32d74` | B10 收尾 | `fix(browser): say a drag is ready when it cannot start, and report a short mirror`（补测试时抓出来的两处「说了假话的状态行」） |
 | `db2764a` | B10 收尾 | `test(browser): pin the honest status lines and the mirror that stayed short`（+4 条；撤掉任一处产品分支各红一条，探针 2 failed / 1 passed） |
+| `46ad0de` | B10 | `docs: record B10 done, its drag rules, and the version-list answer B11 needs`（AGENTS.md 不变式 + 本文件；§6 第 5 条就此结案） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
