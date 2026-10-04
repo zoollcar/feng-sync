@@ -393,6 +393,163 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
         Assert.Equal(["docs/a (2).txt", "img/a (1).txt"], placements.Select(placement => placement.Destination));
     }
 
+    // ---------------------------------------------------------------- details (属性)
+
+    [Fact]
+    public void A_folder_is_never_reported_as_zero_bytes()
+    {
+        // A listing carries no size for a directory, and the object really might hold something: 0 字节 is a
+        // number the user reads as "this folder is empty".
+        var rows = CloudItemDetails.For(FolderEntry("docs"), Account("files", "shared"),
+            BackendStat(size: 0, directory: true, mime: "inode/directory"));
+
+        Assert.Equal("未统计", DetailValue(rows, "大小"));
+        Assert.DoesNotContain("0 字节", DetailValue(rows, "大小"));
+    }
+
+    [Fact]
+    public void A_file_shows_the_exact_byte_count_beside_the_rounded_size()
+    {
+        var rows = CloudItemDetails.For(FileEntry("a.txt", 2_097_152), Account("files", "shared"),
+            BackendStat(size: 2_097_152));
+
+        Assert.Equal("2.0 MB（2,097,152 字节）", DetailValue(rows, "大小"));
+    }
+
+    [Fact]
+    public void The_backend_s_answer_wins_over_the_row_that_happens_to_be_on_screen()
+    {
+        // The listing is a snapshot; 属性 is asked about the object now. A panel that reprinted the row would
+        // tell the user the file it just read is the size it had when the directory was opened.
+        var rows = CloudItemDetails.For(FileEntry("a.txt", 1024), Account("files", "shared"),
+            BackendStat(size: 4096));
+
+        Assert.Equal("4.0 KB（4,096 字节）", DetailValue(rows, "大小"));
+        // A MIME type is not something a listing reports at all, so this row exists only because the stat did.
+        Assert.Equal("text/plain", DetailValue(rows, "MIME 类型"));
+    }
+
+    [Fact]
+    public void An_object_the_backend_no_longer_has_is_said_to_be_gone()
+    {
+        var rows = CloudItemDetails.For(FileEntry("a.txt", 1024), Account("files", "shared"), CloudItemStat.Missing);
+
+        Assert.Contains("云端已没有", DetailValue(rows, "状态"));
+        Assert.DoesNotContain(rows, row => row.Label == "大小");
+        // Where it was is still worth knowing: the path is what the user would check with rclone directly.
+        Assert.Equal("files:a.txt", DetailValue(rows, "路径"));
+    }
+
+    [Fact]
+    public void A_checksum_is_only_offered_for_a_file_the_backend_still_has()
+    {
+        var file = FileEntry("a.txt", 1024);
+
+        Assert.True(CloudItemDetails.OffersHash(file, BackendStat()));
+        Assert.False(CloudItemDetails.OffersHash(file, BackendStat(hashes: new Dictionary<string, string> { ["md5"] = "ab" })));
+        Assert.False(CloudItemDetails.OffersHash(FolderEntry("docs"), BackendStat(directory: true)));
+        Assert.False(CloudItemDetails.OffersHash(file, CloudItemStat.Missing));
+        // Nothing was read yet, so nothing can be promised about what the backend would answer.
+        Assert.False(CloudItemDetails.OffersHash(file, stat: null));
+    }
+
+    [Theory]
+    [InlineData(false, "未计算")]
+    [InlineData(true, "此后端未提供校验值")]
+    public void An_absent_checksum_says_who_left_it_out(bool asked, string expected)
+    {
+        // "Not computed" is about this dialog and "this backend has none" is about the endpoint; the user has
+        // to be able to tell whether asking again could help.
+        var rows = CloudItemDetails.For(FileEntry("a.txt", 1024), Account("files", "shared"),
+            BackendStat(), hashRequested: asked);
+
+        Assert.Equal(expected, DetailValue(rows, "校验值"));
+    }
+
+    [Fact]
+    public void A_folder_does_not_get_asked_for_a_checksum_it_cannot_have()
+    {
+        var rows = CloudItemDetails.For(FolderEntry("docs"), Account("files", "shared"),
+            BackendStat(directory: true, mime: "inode/directory"), hashRequested: true);
+
+        Assert.Equal("文件夹没有校验值", DetailValue(rows, "校验值"));
+    }
+
+    [Fact]
+    public void Every_checksum_the_backend_gives_is_named_by_the_type_it_is()
+    {
+        // An unlabelled hex string invites the user to compare it against a file's SHA-256 and conclude the
+        // copy is broken. The order is the application's preference, shared with the sync engine's fingerprint.
+        var rows = CloudItemDetails.For(FileEntry("a.txt", 1024), Account("files", "shared"),
+            BackendStat(hashes: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["sha1"] = "aa",
+                ["md5"] = "bb",
+            }));
+
+        var checksums = rows.Where(row => row.Label.StartsWith("校验值", StringComparison.Ordinal)).ToList();
+
+        Assert.Equal(["校验值（MD5）", "校验值（SHA-1）"], checksums.Select(row => row.Label));
+        Assert.Equal(["bb", "aa"], checksums.Select(row => row.Value));
+    }
+
+    [Fact]
+    public void The_checksums_offered_for_a_read_are_the_ones_the_engine_trusts()
+    {
+        // Rclone names these itself, and each extra one costs another pass over an object that has no stored
+        // value, so the list stays the engine's preferred chain rather than whatever backend hash exists.
+        Assert.Equal(["md5", "sha1", "sha256"], CloudItemDetails.HashPreference);
+    }
+
+    [Fact]
+    public void A_selection_adds_up_the_files_and_leaves_the_folders_unmeasured()
+    {
+        var rows = CloudItemDetails.ForSelection([
+            FileEntry("a.txt", 1024),
+            FileEntry("b.txt", 3072),
+            FolderEntry("docs"),
+        ], Account("files", "shared"));
+
+        Assert.Equal("3 项", DetailValue(rows, "选择"));
+        Assert.Equal("2 个", DetailValue(rows, "文件"));
+        Assert.Equal("4.0 KB（4,096 字节）", DetailValue(rows, "大小"));
+        Assert.Equal("1 个（大小未统计）", DetailValue(rows, "文件夹"));
+    }
+
+    [Fact]
+    public void A_selection_of_nothing_but_folders_claims_no_total()
+    {
+        var rows = CloudItemDetails.ForSelection([FolderEntry("a"), FolderEntry("b")], account: null);
+
+        Assert.Equal("没有文件", DetailValue(rows, "大小"));
+        Assert.Equal("未知", DetailValue(rows, "最近修改"));
+    }
+
+    [Theory]
+    [InlineData(0, "0 B")]
+    [InlineData(512, "512 B")]
+    [InlineData(512_000, "500.0 KB")]
+    [InlineData(2_097_152, "2.0 MB")]
+    [InlineData(3_221_225_472, "3.0 GB")]
+    public void The_size_units_are_the_same_words_the_list_column_uses(long bytes, string expected)
+    {
+        // The column used to print "0.0 MB" for anything under a megabyte; both it and the details panel now
+        // read through this one formatter, so a file cannot be 500.0 KB in one place and 0.0 MB in the other.
+        Assert.Equal(expected, CloudItemDetails.HumanSize(bytes));
+        Assert.Equal(expected, new CloudFileEntry("a.bin", "a.bin", false, bytes, null).SizeDisplay);
+    }
+
+    [Fact]
+    public void The_location_rows_name_the_address_rclone_would_take()
+    {
+        var rows = CloudItemDetails.For(FileEntry("a.txt", 1024, path: "shared/docs/a.txt"), Account("files", "shared"),
+            BackendStat());
+
+        Assert.Equal("files:shared/docs/a.txt", DetailValue(rows, "路径"));
+        Assert.Equal("files · SFTP · sftp", DetailValue(rows, "所在端点"));
+        Assert.Equal("/shared", DetailValue(rows, "端点根目录"));
+    }
+
     // ---------------------------------------------------------------- endpoint health
 
     [Fact]
@@ -812,6 +969,19 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
     /// <summary>An endpoint account with the given name and configured root folder.</summary>
     private static CloudEndpointAccount Account(string name, string root) =>
         new(new RcloneAccount(name, "sftp"), new CloudEndpointMetadata(name, "sftp", "SFTP", root, ""));
+
+    /// <summary>
+    /// What the backend answered about one object just now: its current size and MIME type, and whichever
+    /// checksums it happens to hold. Nothing here is computed — the point of the fake is to be able to say
+    /// "this endpoint has no MD5" without finding one.
+    /// </summary>
+    private static CloudItemStat BackendStat(long size = 4096, bool directory = false, string? mime = "text/plain",
+        IReadOnlyDictionary<string, string>? hashes = null) =>
+        new(true, directory, size, new DateTimeOffset(2026, 3, 1, 8, 0, 0, TimeSpan.Zero), mime,
+            hashes ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+
+    private static string DetailValue(IReadOnlyList<CloudDetailRow> rows, string label) =>
+        rows.Single(row => row.Label == label).Value;
 
     // ---------------------------------------------------------------- paste: what a clipboard row means
 
