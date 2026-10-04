@@ -97,6 +97,28 @@ public sealed class CloudTransferWindowBehaviorTests
     }
 
     [Fact]
+    public void A_queued_copy_is_announced_as_one_that_cannot_be_continued()
+    {
+        WithWindow((window, queue) =>
+        {
+            queue.Tasks.Add(new CloudTransferTask(CloudTransferDirection.Upload, "s3://archive", "a.txt",
+                @"C:\tmp\a.txt", 1024));
+            // Without a copy in the list the window says nothing about one.
+            Assert.DoesNotContain("云盘之间", window.HintText.Text, StringComparison.Ordinal);
+
+            queue.Tasks.Add(new CloudTransferTask(CloudTransferDirection.Copy, "s3://archive", "a.txt",
+                string.Empty, 1024, "sftp://files", "incoming/a.txt"));
+
+            // A copy moves bytes between two remotes, so this program never holds them and has no verified
+            // prefix to append to. The generic sentence above hints at that; the row's 重试 is where the user
+            // finds out, which is why the hint has to say it first.
+            Assert.Contains("云盘之间", window.HintText.Text, StringComparison.Ordinal);
+            Assert.Contains("重新复制", window.HintText.Text, StringComparison.Ordinal);
+            Assert.True(queue.HasCopyTasks);
+        });
+    }
+
+    [Fact]
     public void A_closed_window_stops_following_the_shared_queue()
     {
         WithWindow((window, queue) =>
