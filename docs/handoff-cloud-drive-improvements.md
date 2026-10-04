@@ -52,7 +52,7 @@ A3–A6 是分批提交的，所以接手时先自证过一次基线；B0 提交
 A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）。A1 的桌面场景缺口在进 B 组前补上
 （`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / `6be98b9` docs
 （本节的这条 commit 行与 §2 表末行是 `6be98b9` 之后回填的）。**B1 浏览器粘贴**照旧三层：`3c9322b` feat /
-`cd74a61` + `526a634` test / 本节是 docs 层（它的 hash 由下一次 docs 回填补上）。
+`cd74a61` + `526a634` test / `4656a58` docs（本节的 hash 由 `4656a58` 的下一次回填补上）。**A 组 + B0 + B1 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
 
@@ -86,6 +86,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `3c9322b` | B1 | `feat(browser): copy, cut and paste files between cloud endpoints` |
 | `cd74a61` | B1 | `test(browser): cover the paste decisions and the calls they make` |
 | `526a634` | B1 | `test(browser): cover the cut whose source delete was refused` |
+| `4656a58` | B1 | `docs: record B1 done and the paste rules that B2 must keep`（AGENTS.md 不变式 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -241,7 +242,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   目标、取消时 `job/stop` 真的发出去、journal 往返带回两个端点、旧 journal 仍可读、行文案纯函数；
   `CloudTransferWindowBehaviorTests` +1 STA（有复制才提复制）。
 
-### B1 —— 文件浏览器的复制 / 剪切 / 粘贴（**已提交**：`3c9322b` + `cd74a61` + `526a634` + 本节）
+### B1 —— 文件浏览器的复制 / 剪切 / 粘贴（**已提交**：`3c9322b` + `cd74a61` + `526a634` + `4656a58` docs）
 
 - 纯规则在 `src/FengSync/Services/CloudBrowserClipboard.cs`：`CloudClipboardMode`（Copy / Cut —— **两者的全部差别就是粘贴后删不删源**）、
   `CloudClipboardItem(Source, Entry)`（**行必须带着它来自的端点**：用户可以跨到别的端点再粘贴，脱离了 remote 的 listing 路径没有意义）、
