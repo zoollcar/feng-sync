@@ -225,6 +225,23 @@ public sealed class CloudFolderDragRulesTests : IDisposable
         Assert.Empty(plan.DirectoryLocalPaths);
     }
 
+    [Fact]
+    public void The_status_line_names_what_was_dragged_and_how_much_of_it_there_is()
+    {
+        var populated = CloudFolderDrag.Build(Nas, Folder(Docs),
+            [Leaf($"{Docs}/a.txt", 1024), Leaf($"{Docs}/sub/b.txt", 2048)]);
+
+        // A folder that arrived empty and a folder whose files landed look identical on disk until somebody
+        // opens them, so the line the user reads after a drop has to say which one they got — and the size is
+        // the only part of it that says the bytes really came.
+        Assert.StartsWith("docs · 2 个文件 · ", CloudFolderDrag.Describe(populated), StringComparison.Ordinal);
+        Assert.EndsWith("KB", CloudFolderDrag.Describe(populated), StringComparison.Ordinal);
+
+        var empty = CloudFolderDrag.Build(Nas, Folder(Docs), [Dir($"{Docs}/empty")]);
+
+        Assert.Equal("docs（空文件夹）", CloudFolderDrag.Describe(empty));
+    }
+
     private const string Docs = "team/docs";
 
     private static CloudEndpointAccount Nas =>
@@ -447,6 +464,59 @@ public sealed class CloudBrowserFolderDragTests
             Assert.Equal("docs/a.txt", task.RemotePath);
             Assert.Equal(harness.Mirror("docs", "a.txt"), task.LocalPath);
             Assert.Equal(1, harness.Surfaced);
+        });
+
+    [Fact]
+    public async Task A_folder_that_cannot_start_its_drag_says_it_is_ready_instead_of_claiming_a_drop() =>
+        await WithWindow(async harness =>
+        {
+            Write(harness.Mirror("docs", "a.txt"), 1024);
+            Write(harness.Mirror("docs", "sub", "b.txt"), 2048);
+            // No hand-off seam means no pointer, which is also what a released mouse button looks like: the
+            // gesture cannot start. The folder is whole, so the honest answer is that the next drag will work —
+            // not a drop that never happened.
+            harness.Window.DragOutHandoff = null;
+
+            var handed = await harness.Drag(harness.FolderRow(Docs));
+
+            Assert.Empty(handed);
+            Assert.Equal("“docs”已经全部下载好了，再拖一次即可。", harness.Window.StatusText.Text);
+            Assert.Empty(harness.Queue.Tasks);
+            Assert.Empty(harness.Revealed);
+        });
+
+    [Fact]
+    public async Task A_file_that_cannot_start_its_drag_says_it_is_ready_instead_of_claiming_a_drop() =>
+        await WithWindow(async harness =>
+        {
+            Write(harness.Mirror("docs", "a.txt"), 512);
+            harness.Window.DragOutHandoff = null;
+
+            await harness.Drag(harness.FileRow($"{Root}/docs/a.txt", 512));
+
+            Assert.Equal("“a.txt”已经下载好了，再拖一次即可。", harness.Window.StatusText.Text);
+            // The bytes were already here, so the queue was never asked: there is no transfer row to explain the
+            // silence, which is exactly why this case needs a sentence of its own.
+            Assert.Empty(harness.Queue.Tasks);
+            Assert.Empty(harness.Revealed);
+        });
+
+    [Fact]
+    public async Task A_folder_whose_mirror_stays_short_is_reported_instead_of_left_downloading() =>
+        await WithWindow(async harness =>
+        {
+            harness.Window.DragBudget = TimeSpan.Zero;
+            harness.Rclone.Serves("[nas:/]/team/docs/a.txt", 1024);
+            // b.txt is left to the stand-in's default answer, which is shorter than the 2048 the listing
+            // promised. That is the case where every transfer reports success and the mirror still is not the
+            // folder the listing described: the cloud's own numbers disagree with the bytes that came back.
+            // Leaving 正在下载 on screen would describe a download that has already finished.
+            var handed = await harness.Drag(harness.FolderRow(Docs));
+
+            Assert.Empty(handed);
+            await WaitUntil(() => harness.Window.StatusText.Text.Contains("没有下载完整", StringComparison.Ordinal),
+                "不完整的镜像没有被报出来");
+            Assert.Empty(harness.Revealed);
         });
 
     /// <summary>
