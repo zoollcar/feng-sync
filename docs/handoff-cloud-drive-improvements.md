@@ -1,7 +1,7 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **73** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
+> 分支：`dev`（领先 `origin/dev` **87** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
 > 最后更新：2026-10-04。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
@@ -117,7 +117,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 本节的这条 hash 行与 §2 表末行是那几条之后回填的。
 **B9 文件夹大小**照旧三层：`57007b3` feat（Core 的 `SizeAsync` + `RcloneFolderSize`、`CloudFolderSize`、`CloudItemDetails` 的 offer 规则、
 面板的唯一动作按钮、窗口的读取接缝）/ `f172bd7` test（Core 7 条事实 + UI 9 条真窗口 + 13 条纯规则 + `sftp-ui` 那一段）/
-`<pending>` docs（AGENTS.md 的不变式 + 本文件）。本节的这条 hash 行与 §2 表末行是那条 docs 之后回填的。
+`6ace64e` docs（AGENTS.md 的不变式 + 本文件）。本节的这条 hash 行与 §2 表末行是 `6ace64e` 之后回填的。
 **A 组 + B0 + B1 + B2 + B3 + B4 + B5 + B6 + B7 + B8 + B9 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
@@ -184,7 +184,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `61d60a4` | B8 | `docs: record B8 done and the bookmark rules that B9 must keep`（AGENTS.md 规则 + 本文件） |
 | `57007b3` | B9 | `feat(cloud): count a folder's size through the cloud's own walk`（`RcloneRcClient.SizeAsync` + `CloudFolderSize` + 面板的唯一动作按钮） |
 | `f172bd7` | B9 | `test(cloud): pin what operations/size answers and who may ask it`（Core 7 条真 rclone 事实 + UI 9 条真窗口 + 13 条纯规则 + `sftp-ui` 那段右键→属性→统计大小） |
-| `<pending>` | B9 | `docs: record B9 done and the size facts that B10 must keep`（AGENTS.md 不变式 + 本文件） |
+| `6ace64e` | B9 | `docs: record B9 done and the size facts that B10 must keep`（AGENTS.md 不变式 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -766,7 +766,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   修完才重跑成现在这份；别把它当成「一次通过」。
 
 
-### B9 —— 文件夹大小（**已提交**：`57007b3` feat / `f172bd7` test / `92c5eea` + `9aa29ce` 收尾修复 / `<pending>` docs）
+### B9 —— 文件夹大小（**已提交**：`57007b3` feat / `f172bd7` test / `92c5eea` + `9aa29ce` 收尾修复 / `6ace64e` docs）
 
 - **一个入口、一个问题**（本批的核心形状）。「这个文件夹多大」只有一处可以问：属性面板上那**一个**动作按钮。
   `CloudDetailsPanel` 因此**最多带一个** `CloudDetailsAction` —— 文件可以要校验值、目录可以走树，永远不会同时要；
