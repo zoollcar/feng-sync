@@ -15,9 +15,9 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）、**B3**（属性 / 详情：`operations/stat` + 按需校验值）、**B4**（分享链接：`operations/publiclink` + 先确认再生成）、**B5**（回收站：端点根下的 `.fengsync-trash` + 还原，清空复用**同一条**删除门槛）、**B6**（键盘快捷键：一张纯表把按键映射成命令，命令一律调按钮已有的方法）、**B7**（网格视图 / 缩略图 / 内置预览：**同一份行集合的第二种画法** + 13 个具名预览结果 + 只在 converter 里查缓存、拉字节走可取消的一轮）。**A 组全部收尾，B 组走到 B7。**见 §2。 |
-| **下一步** | **B8–B11 文件浏览器**（§5）。B1 打通了「一条剪贴板行 → `EnqueueCopy` 的五个参数」，B2 把「同名冲突怎么答」抽成上传与粘贴共用的纯规则，B3 又加了一条**读单个对象**的路（`StatAsync` → `CloudItemDetails` 定行 → 代码搭的面板），B4 加了**第一个会对外发出权限的动作**（确认走 `ConfirmShare`、剪贴板走 `CopyLink`，都是接缝），B5 加了**第一个「删掉但还能回来」的动作**（规则全在 `CloudRecycleBin`，移动照 §4 实测的两条腿走，「清空回收站」问的还是 `CloudDeleteSafety` 那**一道**门槛），B6 把键盘接上了**同一批方法**（`CloudBrowserShortcuts.Resolve` 只做路由，新加的 `PromptRename` 是重命名问题的接缝），B7 加了**同一份行集合的第二种画法**（`ApplyBrowserView` 只换 `View`/`ItemTemplate`/`ItemsPanel`，`ItemsSource` 仍是那一份 `_entries`）和**读字节的那条有界路**（`54eb6f5` 的 `ReadAsync` → 13 个具名结果的 `CloudBrowserPreview`，缩略图 converter 只查缓存、拉字节走 `RestartTileRound` 那一轮可取消的）。样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗／对外副作用的决定走接缝 + 需要落点或答案形状才上真 rclone**。⚠️ **B11 动手前先按 §6 实证**（rclone 是否暴露版本列表；B5 那条 `use_trash` 已由 §6 第 1 条答复：RC **根本没有** trash 动词，所以回收站只能是应用自己的文件夹）。全量门禁 2026-10-04 再跑，`Failed: 0`（**Core 425 / UI 442**，UI 3m3s；Core 的 +10 = B7 前置 `54eb6f5` 的 9 条有界读事实 + 1 条「行必须自带名字」的 XAML 静态栅格，UI 的 +40 是 B7 的纯规则 + 真窗口）。 |
-| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；**`operations/stat` 里「校验值」只有把名字列进 `opt.hashTypes` 才会给**，而 `opt.hashes`（位域）与 `opt.HashTypes`（大小写）都被**静默忽略或报错** —— 拼错读起来就跟「这个后端没有校验值」一模一样；**`operations/publiclink` 里多写的字段同样被静默忽略**，而它那句「不支持公开链接」的 500 会被共用分类器读成**临时连接中断**（先读文字再看 category）；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）；**接缝返回 `null` 是「用户取消」，不是「没装接缝」**——用 `??` 兜到真弹窗会在测试里打开一个无人可答的对话框，并且 `Window.Owner` 指向一个从未 `Show()` 过的窗口时直接抛（B2 撞到过一次测试宿主崩溃）；**`operations/movefile` 对已存在的目标名是覆盖**、`sync/move` 落到已存在的目录是**合并并把源留成一个空壳**，而 `operations/rmdir` 打**已不存在**的路径答 HTTP 500、被共用分类器读成 `Temporary`（于是 `RemoveIfEmptyAsync` 先 `stat`，不拿 rmdir 的报错当「目录没有了」）（B5）；**键盘的坑是「两处写」而不是「按不动」**：快捷键一旦自己写一遍拒绝语或确认，就和按钮分岔（B6 的做法是命令只调按钮已有的方法）；`TextBox` 会**自己吃掉** Del 与 Ctrl+A、却**不吃** F2，所以 typing 闸门只对 F2 这类键真正起作用；`Keyboard.Modifiers` 读的是**物理**键盘，合成事件改不了它（见 §4 的 WPF 表）；**网格视图必须 `ClearValue` 复原，不能写 `ItemsPanel = null`** —— 本地 null 让**一行都不呈现**而集合完整，进程内的 `Assert.Null` 会把这个 bug 读成正确（B7）；**桌面场景跑的是 `tests/FengSync.UiTests/bin/` 里那份 `FengSync.exe`**，只建 `src/FengSync` 会让场景**绿在它本该检查的那个改动上**（B7 排查时踩过一次）。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）、**B3**（属性 / 详情：`operations/stat` + 按需校验值）、**B4**（分享链接：`operations/publiclink` + 先确认再生成）、**B5**（回收站：端点根下的 `.fengsync-trash` + 还原，清空复用**同一条**删除门槛）、**B6**（键盘快捷键：一张纯表把按键映射成命令，命令一律调按钮已有的方法）、**B7**（网格视图 / 缩略图 / 内置预览：**同一份行集合的第二种画法** + 13 个具名预览结果 + 只在 converter 里查缓存、拉字节走可取消的一轮）、**B8**（收藏 / 最近访问：**两条不同的承诺** —— 收藏的顺序归用户且永不修剪，最近访问是应用写的有界队列；规则一个纯类 + 一个只存地名不存凭据的文件 + 同一批行的两个下拉；端点重命名从此一起搬**四**份文件）。**A 组全部收尾，B 组走到 B8。**见 §2。 |
+| **下一步** | **B9–B11 文件浏览器**（§5）。B1 打通了「一条剪贴板行 → `EnqueueCopy` 的五个参数」，B2 把「同名冲突怎么答」抽成上传与粘贴共用的纯规则，B3 又加了一条**读单个对象**的路（`StatAsync` → `CloudItemDetails` 定行 → 代码搭的面板），B4 加了**第一个会对外发出权限的动作**（确认走 `ConfirmShare`、剪贴板走 `CopyLink`，都是接缝），B5 加了**第一个「删掉但还能回来」的动作**（规则全在 `CloudRecycleBin`，移动照 §4 实测的两条腿走，「清空回收站」问的还是 `CloudDeleteSafety` 那**一道**门槛），B6 把键盘接上了**同一批方法**（`CloudBrowserShortcuts.Resolve` 只做路由，新加的 `PromptRename` 是重命名问题的接缝），B7 加了**同一份行集合的第二种画法**（`ApplyBrowserView` 只换 `View`/`ItemTemplate`/`ItemsPanel`，`ItemsSource` 仍是那一份 `_entries`）和**读字节的那条有界路**（`54eb6f5` 的 `ReadAsync` → 13 个具名结果的 `CloudBrowserPreview`，缩略图 converter 只查缓存、拉字节走 `RestartTileRound` 那一轮可取消的）。B8 加了**两条不同的承诺**（`CloudBrowserBookmarks` 一个纯类分别管「收藏的顺序归用户、永不为容量修剪」和「最近访问是应用写的有界队列」，`CloudBrowserBookmarkStore` 落一份**只存地名、一个凭据字段都没有**的 `cloud-bookmarks.json`，窗口那两个下拉与「收藏此目录」按钮读的还是同一批行），并把端点重命名从三份文件扩到**四**份。样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗／对外副作用的决定走接缝 + 需要落点或答案形状才上真 rclone**。⚠️ **B11 动手前先按 §6 实证**（rclone 是否暴露版本列表；B5 那条 `use_trash` 已由 §6 第 1 条答复：RC **根本没有** trash 动词，所以回收站只能是应用自己的文件夹）。全量门禁 2026-10-04 再跑，`Failed: 0`（**Core 425 / UI 476**，UI 3m7s；Core 自 B7 起不再变（B8 只动 UI 侧），UI 的 +34 是 B8 的 32 条书签 + 2 条重命名）。 |
+| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；**`operations/stat` 里「校验值」只有把名字列进 `opt.hashTypes` 才会给**，而 `opt.hashes`（位域）与 `opt.HashTypes`（大小写）都被**静默忽略或报错** —— 拼错读起来就跟「这个后端没有校验值」一模一样；**`operations/publiclink` 里多写的字段同样被静默忽略**，而它那句「不支持公开链接」的 500 会被共用分类器读成**临时连接中断**（先读文字再看 category）；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）；**接缝返回 `null` 是「用户取消」，不是「没装接缝」**——用 `??` 兜到真弹窗会在测试里打开一个无人可答的对话框，并且 `Window.Owner` 指向一个从未 `Show()` 过的窗口时直接抛（B2 撞到过一次测试宿主崩溃）；**`operations/movefile` 对已存在的目标名是覆盖**、`sync/move` 落到已存在的目录是**合并并把源留成一个空壳**，而 `operations/rmdir` 打**已不存在**的路径答 HTTP 500、被共用分类器读成 `Temporary`（于是 `RemoveIfEmptyAsync` 先 `stat`，不拿 rmdir 的报错当「目录没有了」）（B5）；**键盘的坑是「两处写」而不是「按不动」**：快捷键一旦自己写一遍拒绝语或确认，就和按钮分岔（B6 的做法是命令只调按钮已有的方法）；`TextBox` 会**自己吃掉** Del 与 Ctrl+A、却**不吃** F2，所以 typing 闸门只对 F2 这类键真正起作用；`Keyboard.Modifiers` 读的是**物理**键盘，合成事件改不了它（见 §4 的 WPF 表）；**网格视图必须 `ClearValue` 复原，不能写 `ItemsPanel = null`** —— 本地 null 让**一行都不呈现**而集合完整，进程内的 `Assert.Null` 会把这个 bug 读成正确（B7）；**桌面场景跑的是 `tests/FengSync.UiTests/bin/` 里那份 `FengSync.exe`**，只建 `src/FengSync` 会让场景**绿在它本该检查的那个改动上**（B7 排查时踩过一次）；**跳转必须「接管」端点，不能只「跟随选中」** —— 跟随会先为目标端点列一次它自己的根，一次跨端点跳转因此打**两**次 `operations/list`（B8 的 `SwitchEndpoint` 直接把那一行采纳成当前端点，并有一条断言数死列表调用的次数）；**收藏文件的路径在 store 构造时就定下来**（`AppDataPaths.Root` 本身每次都认 `FENGSYNC_DATA_DIR`，但一个提前建好的 store 之后不受它影响），所以驱动窗口的测试必须**在建窗口之前**把 `FENGSYNC_DATA_DIR` 换进临时目录并在 `finally` 还原 —— 否则窗口会继续往用户真实的 app data 里写、并在下一次运行读回来；**进程级文件锁里的 await 若回到调用方的调度器，锁就再也解不开** —— 一次没被接应的书签写入能让之后每一条写书签的窗口测试各卡 90 秒（B8 实测：`save held` 之后没有 `save release`；单跑一条又全绿，最容易误判成「别处的 flake」），所以 gate 区间一律 `ConfigureAwait(false)`，并按第 8 条测试的写法「发出写入就退出的线程」去证它真的会 fire；**一份用户选择可以有第三份表示** —— 磁盘上的文件、纯规则类、以及窗口内存里那份列表；B8 唯一的产品缺口（重命名搬对了磁盘那份，窗口却拿旧名字的下一次 listing 把文件写回旧名）就是**只有真实外壳**抓到的，32 + 18 条进程内测试全绿。改动任何一份持久表示时，先问「谁还内存着同一份」。 |
 
 ---
 
@@ -57,6 +57,16 @@ UI 加纯规则 13 条 + 真窗口 17 条。中途一次全绿是 Core 413 / UI 
 `Content-Range` 是**任何解析器都不必读**的形状），第 10 条是 `LiveTextAccessibilityTests` 新加的 XAML 静态栅格
 （浏览器那一行必须由容器自己带绑定来的名字）；UI 的 +40 是 `CloudBrowserGridViewTests` 20 +
 `CloudBrowserPreviewTests` 20。这一轮也**没有**撞上 WinFsp flake。
+**B8 收尾再跑：`Failed: 0`，Core 425 / UI 476，UI 阶段 3m7s** —— Core 计数与 B7 收尾一字不差，因为 B8 只动 UI 侧；
+UI 的 +34 = `CloudBrowserBookmarkTests` 32 条（纯规则 10 + 文件 9 + 真窗口 13）+ `CloudEndpointRenameTests` 2 条。
+⚠️ **这一轮中途红过一次**，而且是本批唯一一次由**真实外壳**抓出来的产品缺口：476 里 1 条 fail
+（`UiAcceptanceTests.Sftp_endpoint_is_created_and_selected_through_the_real_endpoint_ui` →
+`Missing UI element containing: ui_renamed_…`，`Invoke-UiScenario.ps1:339`）。当时 32 + 18 条进程内测试**全绿**，
+根因是窗口内存里那两份书签列表 = 同一份用户选择的**第三份表示**（详见 §2 的 B8 那条 ⚠️）。
+另两处红不是产品问题，都在 §2 的 B8 ⚠️ 里记着：一次**进程级文件锁**卡在停止 pumping 的线程上
+（3 条 `CloudBrowserShortcutTests` 各卡 90 秒，**单跑任何一条又全绿**——最容易误判成别处 flake 的那种形状），
+和一条**踩在时序上**的 B6 `args.Handled` 断言。这三处都不是"改测试让它过"：第一、第三条改了产品，第二条
+是把断言挪回它真正能读到的时刻并写清为什么。
 差值不必精确对上（上一行的 301 是 B2 收尾时的读数），以 `Failed: 0` 为准。
 
 - 约 **3m30s**（UI 阶段占大头）。调用工具时**超时必须给 600000ms**，否则会被掐断在半路。
@@ -73,7 +83,7 @@ UI 加纯规则 13 条 + 真窗口 17 条。中途一次全绿是 Core 413 / UI 
   结束前一个字都不落盘，看着像卡死。写成 `> "$TEMP/x.log" 2>&1` 再 `tail`。B1 用的过滤器
   `--filter "FullyQualifiedName~CloudBrowserPaste|FullyQualifiedName~CloudTransferWindowBehavior"`（19 条）**1 秒**跑完。
 
-### ② A7、B0、B1、B2、B3、B4、B5、B6、B7 已实现并提交 ✅
+### ② A7、B0、B1、B2、B3、B4、B5、B6、B7、B8 已实现并提交 ✅
 
 A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）。A1 的桌面场景缺口在进 B 组前补上
 （`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / `6be98b9` docs
@@ -94,7 +104,11 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 `c66bb6c` test（UI 40 条 + 1 条 Core 侧 XAML 静态栅格 + `sftp-ui` 两条 toggle 断言）/ `546e5b5` docs（AGENTS.md 三条实测规则 + 本文件），
 前面还有一条**不属于本批产品路径**的 Core 地基 `54eb6f5`（`--rc-serve` 有界读 + 9 条事实）。
 本节的这条 hash 行与 §2 表末行是那四条之后回填的。
-**A 组 + B0 + B1 + B2 + B3 + B4 + B5 + B6 + B7 至此收尾。**
+**B8 收藏 / 最近访问**拆成七条：`<pending>` feat（两个新服务文件，含 gate 区间全部 `ConfigureAwait(false)`）/ `<pending>` feat（窗口的两个下拉与「收藏此目录」按钮，含重命名后**先重读书签再刷新**那一行）/
+`<pending>` feat（重命名搬第四份文件）/ `<pending>` test（`CloudBrowserBookmarkTests` 32 条 + 5 个既有 harness 的数据目录隔离 + B6 那条 F2 断言改成事后读）/
+`<pending>` test（`CloudEndpointRenameTests` 那条拆成两份 + 新增的第四份恢复）/ `<pending>` test（`Invoke-UiScenario.ps1` 的收藏与重命名步骤）/ `<pending>` docs（AGENTS.md 的规则 + 本文件）。
+本节的这条 hash 行与 §2 表末行是那几条之后回填的。
+**A 组 + B0 + B1 + B2 + B3 + B4 + B5 + B6 + B7 + B8 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
 
@@ -151,6 +165,13 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `c59ac45` | B7 | `feat(browser): draw the same rows as tiles, and preview only what we can really render` |
 | `c66bb6c` | B7 | `test(browser): pin the tile round, the preview refusals and both drawings of one list`（UI 40 条 + 1 条 Core 侧 XAML 静态栅格 + `sftp-ui` 两条 toggle 断言） |
 | `546e5b5` | B7 | `docs: record B7 done and the view and preview rules that B8 must keep`（AGENTS.md 规则 + 本文件） |
+| `<pending>` | B8 | `feat(browser): keep the places worth going back to`（`CloudBrowserBookmarks` 纯规则 + `CloudBrowserBookmarkStore` 落盘） |
+| `<pending>` | B8 | `feat(browser): offer the remembered places as jumps and a favourite button`（两个下拉 + 一个跟随目录的按钮） |
+| `<pending>` | B8 | `feat(endpoints): move the remembered places with a renamed endpoint`（重命名一起搬第四份文件） |
+| `<pending>` | B8 | `test(browser): pin the bookmark rules, the file it writes and the jump it drives`（32 条 = 纯规则 10 + 文件 9 + 真窗口 13；另把 5 个既有窗口 harness 的 `FENGSYNC_DATA_DIR` 隔离补齐，并把 B6 那条同步读 `args.Handled` 的 F2 断言改成事后读） |
+| `<pending>` | B8 | `test(endpoints): prove the rename carries the bookmarks and unwinds all four files` |
+| `<pending>` | B8 | `test(ui): walk the favourite button, a jump and the renamed bookmark in the real shell` |
+| `<pending>` | B8 | `docs: record B8 done and the bookmark rules that B9 must keep`（AGENTS.md 规则 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -640,6 +661,98 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   UI 从 402 起跳是本批的 40 条。这一轮**没有**撞上 B5 那条 WinFsp detach flake。
 
 
+### B8 —— 收藏 / 最近访问（**已提交**：`<pending>` ×3 feat / `<pending>` ×3 test / `<pending>` docs）
+
+- **两条承诺，两套规则，一个类**（本批的核心形状）。「收藏」是用户挑的：顺序归他，重复添加**不挪位**，
+  永不为容量修剪；「最近访问」是应用写的队列：新的在前、一处一份、`RecentLimit = 20`。
+  `CloudBrowserBookmarks` 把两者写成不同方法（`AddFavorite` vs `RecordVisit`）而不是一个 `Add` 带开关 ——
+  合成一张"书签表"就等于让"某人路过看一眼"可以悄悄改掉"用户精心排过的那一份"。
+- **写盘的只许是地名**。`cloud-bookmarks.json` 的一行只有 `{Remote, Path}`：rclone 端点名 + 端点内的一个目录，
+  **没有能放 token / 密码 / key 的字段**（照 A7 端点导出那条规矩）。两份列表**一次写完**（分开写会留下
+  「收藏已修剪、最近访问还是旧的」这种半状态），落盘走 Guid 临时文件 + `File.Move(…, true)`。
+  读写不对称是有意的：`LoadAsync` 把读不懂的文件挪成 `.corrupt-<时间戳>.bak` 再当空读（那是用户唯一一份选择，
+  覆盖它比读空更糟），而 `RenameRemoteAsync` 内部那次读**不**备份 —— 它紧接着就要在同一份文件上改写，
+  留一份"备份"只会让人以为还能回到重命名之前。
+- **一次跳转只列一个目录**（本批的实测点）。跨端点跳转必须先**接管**那一行所属的端点，而不是"跟随选中"：
+  跟随会先为目标端点列它自己的根，一次跳转因此打**两**次 `operations/list`。`SwitchEndpoint` 采纳端点而不浏览，
+  于是 `Assert.Equal([$"{Files}:{FilesInbox}"], standIn.Listed)` 数死那**一**次；`NavigateToAsync` 也从 private
+  提成 internal，因为测试驱动的就是这条真实路径。假 RC 把 `operations/list` 的 payload 按 `remote` 建树、
+  却记 `fs + directory` —— 只记 `remote` 的话，跨端点跳转会被读成"同一处"，这条断言就什么也没证明。
+- **只有列成功才算一次访问**：记录挂在 listing 之后，失败的那次既不写盘也不建文件；`IsNewestVisit` 那道闸门
+  让"站在原地按刷新"不产生任何写入。这条是用**删掉文件**证明的（不是比时间戳）：刷新后文件仍不存在，才算闸门真的挡住。
+- **端点不在屏上就隐藏，不删**（`VisibleFor` / `HiddenCount`）：`rclone.conf` 这一次读不到，不该清空用户挑过的收藏；
+  ToolTip 说出藏了几份。跳转列表的行来自 `_accounts`（当前可见端点），和 `JumpToAsync` 能选中的集合**是同一批** ——
+  原先一个读全量、一个读可见，会开出"点不动的行"。
+- **标签与前缀的规则是实测出来的**：`LabelFor` 把端点名放前面（同一个目录名可以存在于五个端点，能区分它们的只有路径）；
+  被 alias 强制前缀的端点，它的"根"存的是 `<prefix>` 而不是空串（`CloudBrowse.Normalize(path, root)` 会把越过根的路径
+  夹回来），所以 `根目录` 只出现在真的没有前缀的端点上 —— 这是本批**第一条 fail 的根因**，且是**测试期望写错**、
+  不是产品写错的样本。显示用端点表里那份大小写（重命名过大小写的地方要跟着表读），匹配用 `OrdinalIgnoreCase`
+  （rclone 自己就这么找 section），路径用 `Ordinal`（后端可能大小写敏感，只差大小写的两个目录是两个地方）。
+- **重命名搬第四份文件**。A2 原本只搬 `rclone.conf` / `cloud-endpoints.json` / `profiles.json`；收藏是一条指针，
+  留在旧名上就指向一个 rclone 已不再有的 section，而用户看到的是"收藏空了"、原因看不见。
+  `RenameRemoteAsync` 一次读-改-写，两份列表都没变就**一个字都不写**。改写排在 profiles **之前**是有理由的：
+  把 `profiles.json` 读回来这一步可能被一份无人控制的输入抛（`ProfileStore.LoadAsync` 没有恢复路径），
+  而现在四份 `backups.Capture(...)` 是一份也不会漏的。
+- ⚠️ **把一条永真的回滚断言拆成两条会 fail 的**：原来"daemon 没确认 → 什么都没搬"只断言三份文件，第四份是顺带绿的。
+  现在一条断言"验证成功之前谁都不写"（三份 + 第四份的 before 快照），另一条
+  `A_rename_that_failed_after_the_bookmarks_moved_puts_all_four_files_back` 用一份写坏的 `profiles.json`
+  逼出第四份的**恢复**路径。
+- ⚠️ **磁盘搬完了，窗口内存里那份还没搬** —— 本批**唯一由真实外壳抓到**的产品缺口，也是「第三份表示」这条教训的实例。
+  `CloudEndpointRename.RenameAsync` 把收藏文件里的端点名改对了，可 `RenameEndpoint_Click` 紧接着 `RefreshAsync()`；
+  刷新会启动一次 listing（`ApplyEndpointView` 末尾那句 fire-and-forget `if (browse) _ = FollowSelectionAsync();`），
+  而 listing 末尾记一次访问用的是**窗口内存里那两份旧列表** —— 刚迁移好的文件于是被写回旧端点名，
+  "重命名带着收藏走"这条承诺在真 RC 上原地作废。修法一行：`await LoadBookmarksAsync();` 排在
+  `await RefreshAsync();` **之前**（先重读，再给任何写入创造机会）。
+  **为什么 32 条进程内书签测试 + 18 条重命名测试全绿却漏了它**：进程内那几条测的是 `RenameRemoteAsync` 这个
+  **动作**做对了没有，场景测的是"重命名之后那个下拉里旧名字的行**一行都不剩**、且新那一行**点得动**"这条
+  **状态**；状态要经过窗口自己那份内存，动作测试永远看不见。修复前 `sftp-ui` 在 `Invoke-UiScenario.ps1:339`
+  报 `Missing UI element containing: ui_renamed_…`，修复后同一 harness 同一台机绿（不是 flake 归因，这条守卫**实测证过会 fire**）。
+- ⚠️ **同一形状的缺口本批没堵**：书签列表是**每个窗口各自一份内存副本**。同一进程里第二个已经打开的管理窗口
+  不知道这次重命名，它下一次 listing 仍会拿自己的旧列表覆写那份文件。单窗口场景证明不了这句话，也没有测试覆盖它，
+  所以下面那条「没有证明」清单之外还要再算上这一条（它是第四条，不是那三条里挤出来的）。
+  B9 若把写入改成"读-改-写"、或让任何写入前先重读，就把这条一并收掉；不改就留着这句，别当成已解决。
+- ⚠️ **本批没有证明的三件事**（别当成已验证）：① 「按钮跟着目录走」在真实外壳里只测到点一下标签翻成 取消收藏，
+  翻到别的目录后按钮自己重算只有进程内那条断言担保；② 满 20 条的最近访问在真实下拉里能否滚到底**没测**
+  （进程内测的是 `RecordVisit` 的裁剪）；③ `BookmarkNotice` 那句状态栏话只断言了窗口属性上的文字，
+  状态栏 `TextBlock` 的可见性没有场景步骤。桌面场景只挑**只有真实外壳能证明**的四件事：三个控件在工具栏换行后
+  `BoundingRectangle` 仍在屏内（`Assert-RectangleInside`）、翻状态按钮**不带**静态 `AutomationProperties.Name`
+  （所以"取消收藏"是作为**可访问名**被 `Find-Name` 找到的，见 §4 的 UIA 事实）、下拉能 `ExpandCollapse` 且行能
+  `Select-Ui`（SelectionItemPattern）、重命名之后旧端点名的收藏**一行都不剩**且那一行点得动（真 RC + 真盘上的文件）。
+- ⚠️ **本批查实的两处异步陷阱，都是「测试先撞上、产品也在悬崖边」**：
+  ① **文件锁不能依赖调用方的上下文**。`CloudBrowserBookmarkStore` 的 gate 是**进程级**的，而它里面每一个 await
+  原本都回到「谁调用我」的 `DispatcherSynchronizationContext`。于是一次 listing 记下的访问写入，如果它所在的线程
+  在写入落地前停止 pumping（测试线程退出，或应用正在关闭），那个 `finally { Gate.Release(); }` 就永远不会跑 ——
+  收藏文件从此**锁死整个进程**，后面每一个会写书签的窗口测试都卡在闸门上，各自被 harness 的看门狗砍在 90 秒。
+  实测过程：`CloudBrowserShortcutTests` 单跑 19 条里 3 条红（两条 1m30s 超时 + 一条 43ms 断言 false），
+  单跑其中任何一条**又全绿**；给 gate 加临时 trace 后看到 `save held thread=29` 之后**再没有** `save release`。
+  修法是把 gate 区间里的每个 await 写成 `ConfigureAwait(false)`（`CloudThumbnailStore` 早就这么做的同一条规矩），
+  并补了第 9 条文件级测试 `A_write_whose_thread_stopped_pumping_still_frees_the_file_for_the_next_reader`
+  —— 它从一个「发出写入就停止 pumping 并退出」的 STA 线程之后去读，**并且探针验证过会 fire**：
+  只把 `SaveAsync` 里那一处 `.ConfigureAwait(false)` 撤掉，这条 10 秒内 fail 并报「后来的读取再也进不去」。
+  **同一形状但本批故意没动**：`CloudEndpointMetadataStore`、`CloudEndpointRename` 的静态 gate 与
+  `Filtering` 的按路径写锁 —— 没有测试能证明它们卡住，就不改（见 AGENTS.md 那条）。
+  ② **`FileBrowser_KeyDown` 是在 `await HandleKeyAsync(...)` 的续传里才 `e.Handled = true` 的**，所以
+  「按键被认领」这句话**读不到同步值**。B6 那条 F2 测试原来在 `WaitUntil(FileMoves == 1)` 之后立刻
+  `Assert.True(args.Handled)`，靠的是「整条命令刚好在等 move 的那几轮里也跑完了」—— B8 给 listing 末尾加了一次
+  书签写入，多出一个续传轮次，这条就红了（**不是**产品坏了，是断言本来就踩在时序上）。已改成先
+  `WaitUntil(() => args.Handled, "F2 走完命令后没有被认领")` 再断言，并在注释里写清 `Handled` 为什么只能事后读。
+- 测试：**32 条新增**（`CloudBrowserBookmarkTests`：纯规则 10 + 文件 9 + 真窗口 13）+ `CloudEndpointRenameTests`
+  2 条（1 条扩成四份文件、1 条新的回滚）+ 桌面场景两段；另外把 **5 个既有窗口测试的 harness** 补上
+  `FENGSYNC_DATA_DIR` 隔离（B8 之后窗口会写盘，这五个文件此前只在同一份真实 app data 上跑过），并把 B6 那条
+  F2 断言改成事后读（见上第 ② 条）。守卫**逐条探针验证过会 fire**：`IsNewestVisit` 闸门去掉 → 「刷新不重写作」fail；
+  `SwitchEndpoint` 换成跟随 → 「一次列表」fail（第一次探针因为 `SwitchEndpoint` 仍在而未生效，注释掉之后重跑才确认）；删掉
+  `backups.Capture(bookmarks.FilePath)` → 四文件回滚 fail；不调 `RenameRemoteAsync` → 重命名携带收藏 fail；
+  `SaveAsync` 的 `.ConfigureAwait(false)` 撤掉 → 「没人接应的写入也要放行下一个读者」fail；
+  重命名后不调 `LoadBookmarksAsync` → `sftp-ui` 场景在等 取消收藏 之前先找不到重命名后的那一行（本批修复前实测如此，
+  这一条**只有真实外壳能证明**，见上面那个 ⚠️）。
+  反过来还**撤回了一处自证无用的产品改动**：探针显示 `ShowListing` 里补 `UpdateFavoriteToggle()` 没有任何测试依赖，
+  于是把那段删掉、并把那条测试重新命名、重新限定范围。
+- 门禁：`Failed: 0`，**Core 425 / UI 476**（UI 3m7s）—— Core 与 B7 收尾一字不差（425），UI 从 B7 的 442 涨到 476，
+  差的 34 条正是 B8 新增的 32 条书签 + 2 条重命名；`sftp-ui` 场景那两段算在既有条目里，不改计数。
+  ⚠️ 这一条门禁**跑过一次红的**（476 里 1 条 fail = `sftp-ui`，即上面那个「窗口内存第三份表示」缺口），
+  修完才重跑成现在这份；别把它当成「一次通过」。
+
+
 ---
 
 ## 3. A3/A4 的设计要点与遗留缺口
@@ -715,6 +828,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | `operations/rmdir` 打**已不存在**的路径：HTTP **500** + 操作系统自己的措辞 → 共用分类器读成 **`Temporary`**；同一时刻 `operations/stat` 答 `{"item": null}` | 「还在不在」要用 `stat` 问，**不要**拿 `rmdir` 的报错猜，否则一次正常的重复清理会被报成「rclone 与云端的连接暂时中断，检查网络后重试」（`CloudRecycleBinFactTests` 把这两行钉在一起） |
 | `operations/mkdir` **幂等**（重复调成功）、**会建父目录**，但目标名已被一个**文件**占着时报错而不是替换（那个文件内容不变） | B5 的「回收站」按钮可以放心做成「先 mkdir 再进去」；而回收站名字被文件占用时是一次**明确失败**，不会出现「点进去还是原目录」的假象 |
 | 移走一个**文件**不会带走它所在的目录（回收站里的 `deep/nested` 还原后仍在） | 只有**目录**移动会留壳；文件路径上的空目录一律由用户自己决定，应用不顺手删 |
+| `operations/list` 的载荷**同时**带 `fs`（`nas:`）和 `remote`（`team/docs`，即 fs **内部**的那一段路径） | B8 的地基：一个按 `remote` 建树、却只记 `remote` 的假 RC，会把「跳到**另一个**端点的同一处」读成「同一处列了两次」，于是「一次跳转只列一个目录」这条断言什么也没证明。假 RC 因此记 `fs + directory`，`Assert.Equal([$"{Files}:{FilesInbox}"], standIn.Listed)` 才有意义 |
 
 ### WPF / 测试
 
@@ -743,6 +857,12 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | **绑定了 `GridView` 的 `ListView` 不写任何本地 `ItemTemplate`/`ItemsPanel`/`ItemContainerStyle`（三者实测都是 `unset`）**，行是靠 `ListView` 自己的默认样式画出来的；因此 `ItemsPanel = null` 是一个**本地 null 值**而不是「恢复默认」，它让**一行都不呈现**（实测：可见单元格文字从 2 条变 0 条），而集合里每条行都还在 | 列表视图必须用 `ClearValue(ItemsControl.ItemsPanelProperty)` 复原，**不能**赋 `null`。这条是 B7 唯一一次真实门禁 fail 的根因（`sftp-ui` 在第一次浏览就找不到 `remote-proof.txt`）。进程内那条 `Assert.Null(window.FileList.ItemTemplate)` **恰好把 bug 状态读成正确**（本地 null 也返回 null），所以断言改成 `ReadLocalValue(...) == DependencyProperty.UnsetValue`；探针验证过：把 `= null` 放回去，这条立刻 fail |
 | **网格画法里 tile 内部的文字根本不入 UIA 树**（实测：`RawViewWalker` 下 grid 的 `DataItem` **零子节点**，而它的 `Name` 是数据对象的 `ToString()`，即整条 `CloudFileEntry { … }` 记录）；列表画法的行则把单元格文字作为子 `Text` 暴露 | 行必须**自己带名字**：`FileList.ItemContainerStyle` 上 `Setter Property="AutomationProperties.Name" Value="{Binding NameDisplay}"`。这一个 setter 同时修掉两件事 —— 网格行从此按文件名可寻址（`Find-Name`），以及**两种画法**的行都不再对读屏念整条记录。桌面场景两条 toggle 断言都同时要求 `BoundingRectangle` 有尺寸：那才是「画出来了」而不是「树里有个节点」 |
 | **桌面场景启动的是 `tests/FengSync.UiTests/bin/.../FengSync.exe` 那份副本**，`dotnet build src/FengSync` **不会**刷新它 | 只建 `src/FengSync` 之后跑场景，跑的是**旧二进制**，会「绿」在它本该检查的那个改动上（B7 排查时踩过一次：同一份 bug 源码，旧副本跑绿、重建 UiTests 后立刻在第一次浏览 fail）。改完应用要么建 `tests/FengSync.UiTests`，要么建解决方案 |
+| **一个 Content 是字符串的 `Button` 在 UIA 里同时是「按钮」和「一个同名子 Text」**（实测：`Find-Name $manager '取消收藏'` 找得到，因为 Content 成了内部 `TextBlock` 的 Name），而 `Find-Name` 打的是 NameProperty 的**精确**匹配（不是子串） | 一个**会翻状态**的按钮因此**不许**带静态 `AutomationProperties.Name` —— 静态名会顶掉 Content 派生的名字，那正是批次 0 那条 `LiveTextAccessibilityTests` 规则要防的事，只是这一轮防的是按钮而不是 `TextBlock`。B8 的收藏按钮照此做：场景先按 收藏此目录 找到并点它，再按 取消收藏 等它翻过来 |
+| **`ComboBox` 的行要先 `ExpandCollapsePattern.Expand()` 才进 UIA 树，选中行靠 `SelectionItemPattern`（`Select-Ui`）**；而一份被整份替换的 `ItemsSource` 若把 `SelectedItem` 留着，第二次点同一行就**不再抛** `SelectionChanged` | 跳转列表在场景里因此可达（展开 → 按包含端点名的行找 → 选），但「选完立刻归零」这句留给进程内测试断言（`WaitUntil(() => window.FavoriteJumpBox.SelectedItem is null)`）：桌面场景里等一次事件重抛是拿不准的。归零也必须**在应用这一行之前**做（`_applyingJump` 那层），否则归零自己又抛一次事件 |
+| **窗口一开始写盘，测试就得隔离 `FENGSYNC_DATA_DIR`，而且要在建窗口之前**（`AppDataPaths.Root` 每次被读时都解析环境变量，但 `CloudBrowserBookmarkStore` 把路径**在建的时候就定下来**，之后改环境变量对它无效） | B8 的 `WithWindow` 在 try 里换环境变量、在 `finally` 里还原环境变量 + `AppServices.Install(previous)` + 删临时目录，并把 `window.Close()` 包成允许 `InvalidOperationException`（窗口可能已被测试自己关掉）。同一形状补进了**5 个既有窗口测试**的 harness（Details / Paste / Recycle / Share / Shortcut）—— B8 **之前**窗口什么都不写，所以那五个 harness 从来没换过数据目录，B8 之后不换就会写进开发者自己的 app data 并在下一次运行读回来 |
+| **进程级文件锁里的 await 默认回到调用方的 `DispatcherSynchronizationContext`**：那个线程一旦停止 pumping，`finally { Gate.Release(); }` 就永远不跑，锁**再也没人解**（实测：`save held` 之后没有 `save release`，后面每条会写书签的窗口测试各卡 90 秒） | `CloudBrowserBookmarkStore` 的 gate 区间因此全部 `ConfigureAwait(false)`（`CloudThumbnailStore` 同规则），并由 `A_write_whose_thread_stopped_pumping_still_frees_the_file_for_the_next_reader` 钉住 —— 撤掉其中一处立刻 fail（10 秒内，不是挂死）。**同一形状未改**：`CloudEndpointMetadataStore` / `CloudEndpointRename` / `Filtering` 的写锁，因为没有测试能证明它们卡住。生产侧的对应风险是「应用正在关闭时的一次写入」与「任何在 UI 线程上 block 的调用」 |
+| **`FileBrowser_KeyDown` 的 `e.Handled = true` 写在 `await HandleKeyAsync(...)` 之后**，所以 raise-event 之后**同步**读 `args.Handled` 读到的一定是 `false` | B6 的 F2 断言原来靠 `WaitUntil(FileMoves == 1)` 顺手等完剩下的轮次，B8 给 listing 末尾多加一次书签写入就把它打回红（断言踩在时序上，不是产品坏）。规则：**断言「按键被认领」必须等命令整体跑完**（`WaitUntil(() => args.Handled, …)`），而断言「没被认领」可以同步读 |
+| **一份用户选择可以有第三份表示：磁盘上的文件、纯规则类、以及窗口内存里那份列表**。前两份有测试，第三份只在真实外壳里暴露 | B8 的 `sftp-ui` fail 就是这么来的：`RenameRemoteAsync` 改对了磁盘那份，而窗口仍然拿着旧名字，紧随其后的那次 listing 记一次访问、把文件写回旧端点名，重命名原地作废（修法是重命名后**先重读再刷新**）。教训不是「再补一条单测」，而是**任何改动一份持久表示的写路径，都要问谁还内存着同一份**；进程内的动作测试（"这次调用改了什么"）结构上看不见它，只有走完整状态的场景看得见。**未堵**：同一进程里第二个已打开的窗口照旧会拿自己的旧副本覆写 |
 
 ---
 
@@ -750,7 +870,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 > 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0、B1、B2、B3、B4、B5、B6 与 B7 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
 > **剩余项的顺序与依赖**：B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**（已落）；
-> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B8–B11（B1、B2、B3、B4、B5、B6、B7 已落，见 §2）。**
+> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B9–B11（B1、B2、B3、B4、B5、B6、B7、B8 已落，见 §2）。**
 
 ### A7. 端点导出/导入（原 A9）—— ✅ 已完成，见 §2
 
@@ -792,7 +912,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 > 需求盘点原本列了 21 项（B1–B21）；其中 P0 的 7 项 —— 新建文件夹、重命名、删除、多选批量、搜索、排序、
 > 面包屑 + 地址栏 —— **已在批次 1 落地**。下表是**剩余 11 项**，「现状 / 缺口」与「参考做法」两列是从原盘点文档
-> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1、B2、B3、B4、B5、B6、B7 已落地（见 §2）**，下表从 B8 起都是待做项。
+> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1、B2、B3、B4、B5、B6、B7、B8 已落地（见 §2）**，下表从 B9 起都是待做项。
 > 给 B6 的一条现成接线：`SetClipboard(Copy/Cut, 多选行)` 和 `Paste_Click` 已经是内部方法，
 > Ctrl+C / Ctrl+X / Ctrl+V 只需把键盘事件指到它们，**不要**另造一套剪贴板状态。
 > ✅ **B6 照此落了**：剪贴板状态**一个都没新造**，`SetClipboard` 与（抽出来的）`PasteAsync` 就是 Ctrl+C/X/V 的执行体；
@@ -812,6 +932,11 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 > 切换前后逐行 `ReferenceEquals`；行怎么到达缩略图缓存也不是第二个 view model，而是**窗口作用域的
 > `CloudTileSourceConverter` 资源**（`Peek` 委托在构造函数里接线，只读缓存、绝不加载 —— converter 里联网等于
 > 每个可见行每次 layout 都在 UI 线程上发起不可取消的读取）。
+> ✅ **B8 照此落了**：收藏与最近访问**没有**变成第二个列表控件，也没有新增一份行集合 —— 两个 `ComboBox` 绑的是
+> `CloudBrowserBookmarks.JumpItems(...)` 现算出来的行，`JumpToAsync` 走的仍是 B7 之前就在的那条 `NavigateToAsync`。
+> 顺带查实并修好一条**跨批次的腿**：A2 的端点重命名原本只搬 `rclone.conf`、`cloud-endpoints.json`、`profiles.json`
+> 三份文件，收藏一旦落盘就成了**第四份按端点名存东西**的文件，`CloudEndpointRename` 现在把它一起备份、一起改、
+> 一起回滚。**日后任何新增的「按端点名存东西」的文件都必须进那一次 rename**，否则重命名会把用户记住的地方清空。
 > 给 C7 的一条现成接缝：B4 已把 `PublicLinkAsync` 与「链接是 backend 给的不透明字符串」这条钉好，队列行菜单的
 > 「复制链接」直接复用 `CopyLink` 那个接缝，别在 C 组再摸一次系统剪贴板。
 
@@ -824,7 +949,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | B5 | B13 | 回收站 | ✅ **已完成**（hash 见 §2 的 B5 表行，同 §2 的 B5 小节）。RC 没有 trash 动词（§6 第 1 条），所以是应用自己的 `.fengsync-trash`，**位于端点根**（被 alias 强制前缀的 S3 端点根是空串，写 `RootOf("")` 钉住）；文件走 `operations/movefile`、文件夹走 `sync/move` + 只清空壳；还原回到它来的目录，名字被占就让位 ` (1)`；「清空回收站」问的还是 `CloudDeleteSafety` 那**一道**门槛（多一句「已经在回收站里」），阈值 10 的二次确认原样保留 | 网盘默认「移到回收站」，可还原 |
 | B6 | B14 | 键盘快捷键 | ✅ **已完成**（`f45e06b` + `2299460`，见 §2）。F5 / Del / Shift+Del / Ctrl+Del / F2 / Ctrl+A / Ctrl+C / Ctrl+X / Ctrl+V 全无第二套规则：一张纯表（`CloudBrowserShortcuts.Resolve`）把按键映射成命令，命令调按钮已有的方法；处理器挂在**浏览器面板**的冒泡 `KeyDown` 上，端点与挂载列表保住自己的键；typing 闸门排在 F5 之后（`TextBox` 自己吃掉 Del 与 Ctrl+A，却不吃 F2） | 通用 |
 | B7 | B16–B17 | 网格视图 / 缩略图 / 内置预览 | ✅ **已完成**（hash 见 §2 的 B7 表行）。网格是**同一份 `_entries` 的第二种画法**（只换 `View`/`ItemTemplate`/`ItemsPanel`，逐行 `ReferenceEquals` 钉住，切换不发 `operations/list`）；缩略图只给 WPF 内建能解码的格式，8 MiB / 64 px / 2 并发 / 64 MiB 缓存都有名字；内置预览只画**能解码的图片**与 **UTF-8/UTF-16 文本**，PDF/office/音视频**明确不做**（`net10.0-windows` 没有渲染器），不猜代码页，不可预览的行**一个字节都不读**，预览也不进缩略图缓存 | 网盘有列表/网格切换与在线预览 |
-| B8 | B18 | 收藏 / 最近访问 | 无 | 网盘有「我的收藏」「最近」 |
+| B8 | B18 | 收藏 / 最近访问 | ✅ **已完成**（hash 见 §2 的 B8 表行）。两个列表是**两条不同的承诺**：收藏的顺序归用户（重复添加不挪位、永不为容量修剪），最近访问是应用写的队列（新的在前、一处一份、上限 20）。规则全在 `CloudBrowserBookmarks`（纯），落盘在 `CloudBrowserBookmarkStore`（`cloud-bookmarks.json`，**只存端点名与路径，一个凭据字段都没有**，照 A7 导出的同一条规矩）；两个 `ComboBox` 跳转列表 + 一个「收藏此目录 / 取消收藏」按钮，端点不在屏上时**隐藏而不是删掉**（`rclone.conf` 偶尔读不到不该清空用户挑过的列表），ToolTip 说出藏了几份 | 网盘有「我的收藏」「最近」 |
 | B9 | B19 | 文件夹大小 | 需要递归统计，没有「计算大小」入口 | 网盘可在文件夹属性里看到 |
 | B10 | B20 | 拖出整个文件夹 | **明确不支持**（代码里提示用户先进入文件夹） | 网盘 / Explorer 支持整目录拖出 |
 | B11 | B21 | 版本历史 | 无；部分后端（GDrive、开了版本控制的 S3）可能支持 | 网盘有「历史版本」 |
