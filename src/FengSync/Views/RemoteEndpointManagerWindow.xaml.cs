@@ -774,6 +774,16 @@ public partial class RemoteEndpointManagerWindow : Window
         NewFolderButton.IsEnabled = Selected is not null;
         RenameButton.IsEnabled = selected.Count == 1;
         DeleteEntryButton.IsEnabled = selected.Count > 0;
+        RecycleButton.IsEnabled = selected.Count > 0;
+        // 还原 and 清空回收站 appear only in a trash view. Outside that folder the two commands would be aimed at
+        // objects that were never recycled, and a permanent third pair of buttons would crowd the row that
+        // already holds every other command.
+        var inTrash = Selected is { } account && CloudRecycleBin.IsTrashView(account.RootPath, _currentPath);
+        RestoreButton.Visibility = inTrash ? Visibility.Visible : Visibility.Collapsed;
+        RestoreButton.IsEnabled = inTrash && selected.Count > 0;
+        EmptyTrashButton.Visibility = inTrash ? Visibility.Visible : Visibility.Collapsed;
+        EmptyTrashButton.IsEnabled = Selected is not null;
+        OpenTrashButton.IsEnabled = Selected is not null;
         // A folder is downloaded by entering it and taking its files; the queue's unit is a file.
         DownloadButton.IsEnabled = selected.Count > 0 && selected.All(entry => !entry.IsDirectory);
         // The clipboard survives leaving the directory it came from, which is the point: pasting into another
@@ -1013,17 +1023,28 @@ public partial class RemoteEndpointManagerWindow : Window
     }
 
     /// <summary>
+    /// The delete questions, behind a seam because a test cannot answer a modal. It receives each message in the
+    /// order the user would see it: always <see cref="CloudDeleteSafety.Describe"/>'s, then the bulk
+    /// acknowledgement only when the batch is bulk. Both 删除 and 清空回收站 ask through here, which is how
+    /// "one delete rule, not a second one" stays provable rather than merely intended.
+    /// </summary>
+    internal Func<string, bool>? ConfirmDelete { get; set; }
+
+    /// <summary>
     /// Asks before deleting, and asks twice when the batch is large or the backend cannot undo it: the first
     /// dialog is easy to dismiss by reflex, and there is no undo behind either of them.
     /// </summary>
-    private async Task ConfirmAndDeleteAsync(IReadOnlyList<CloudFileEntry> entries)
+    private async Task ConfirmAndDeleteAsync(IReadOnlyList<CloudFileEntry> entries, bool insideRecycleBin = false)
     {
-        var confirmation = CloudDeleteSafety.Describe(entries, CloudDeleteSafety.SupportsTrash(KindOf(Selected)));
-        if (!TextPrompt.Confirm(this, "删除", confirmation.Message, danger: true)) return;
-        if (confirmation.IsBulk
-            && !TextPrompt.Confirm(this, "再次确认删除",
-                $"即将删除 {entries.Count} 项，其中文件夹会连同其全部内容一起删除。\n\n确定继续？", danger: true)) return;
+        var confirmation = CloudDeleteSafety.Describe(entries, CloudDeleteSafety.SupportsTrash(KindOf(Selected)), insideRecycleBin);
+        if (!Ask(confirmation.Message, "删除")) return;
+        if (confirmation.IsBulk && !Ask(
+                $"即将删除 {entries.Count} 项，其中文件夹会连同其全部内容一起删除。\n\n确定继续？",
+                "再次确认删除")) return;
         await DeleteEntriesAsync(entries);
+
+        bool Ask(string message, string title) =>
+            (ConfirmDelete ?? (text => TextPrompt.Confirm(this, title, text, danger: true)))(message);
     }
 
     /// <summary>
@@ -1049,6 +1070,151 @@ public partial class RemoteEndpointManagerWindow : Window
     }
 
     private async void DownloadSelected_Click(object sender, RoutedEventArgs e) => await DownloadSelectionAsync();
+
+    // ---- 回收站（软删除） ----
+
+    /// <summary>
+    /// The question 移到回收站 asks, behind a seam because a test cannot answer a modal — and the property worth
+    /// pinning is that nothing moves until the user agrees. It is deliberately <em>not</em> a
+    /// <see cref="CloudDeleteSafety"/> question: recycling is reversible, so the bulk threshold and its second
+    /// confirmation stay on 删除 and 清空回收站, which are the two that take bytes away for good.
+    /// </summary>
+    internal Func<IReadOnlyList<CloudFileEntry>, bool>? ConfirmRecycle { get; set; }
+
+    private async void Recycle_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = SelectedEntries();
+        if (selected.Count == 0) { StatusText.Text = "请先选择要移到回收站的项目。"; return; }
+        await RecycleAsync(selected);
+    }
+
+    private async void Restore_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = SelectedEntries();
+        if (selected.Count == 0) { StatusText.Text = "请先选择要还原的项目。"; return; }
+        await RestoreAsync(selected);
+    }
+
+    private async void EmptyTrash_Click(object sender, RoutedEventArgs e) => await EmptyTrashAsync();
+
+    private async void OpenTrash_Click(object sender, RoutedEventArgs e) => await OpenTrashAsync();
+
+    /// <summary>
+    /// 移到回收站 for the given rows: refuse what cannot be recycled, ask once, then move. A row that is already
+    /// in the trash and the trash folder itself are said as that instead of being shuffled deeper in.
+    /// </summary>
+    internal async Task<CloudRecycleResult> RecycleAsync(IReadOnlyList<CloudFileEntry> entries)
+    {
+        if (Selected is not CloudEndpointAccount account) return Say(Failed());
+        var (movable, refusal) = CloudRecycleBin.SelectForMove(account.RootPath, entries);
+        if (refusal is { } denied) return Say(new CloudRecycleResult(denied, []));
+        if ((ConfirmRecycle ?? (targets => TextPrompt.Confirm(this, "移到回收站", CloudRecycleBin.ConfirmFor(targets))))(movable))
+            return Say(await MoveTowardTrashAsync(account, movable, restore: false));
+        return Say(new CloudRecycleResult(CloudRecycleOutcome.Declined, []));
+    }
+
+    /// <summary>
+    /// 还原 for the given rows. Nothing is confirmed: the command returns an object to where it came from, and a
+    /// name that has since been taken is answered by a different destination in the status line rather than by a
+    /// dialog — the user asked for the file back, and the honest report is where it actually landed.
+    /// </summary>
+    internal async Task<CloudRecycleResult> RestoreAsync(IReadOnlyList<CloudFileEntry> entries)
+    {
+        if (Selected is not CloudEndpointAccount account) return Say(Failed());
+        var restorable = CloudRecycleBin.SelectForRestore(account.RootPath, entries);
+        if (restorable.Count == 0) return Say(new CloudRecycleResult(CloudRecycleOutcome.NotInTrash, []));
+        return Say(await MoveTowardTrashAsync(account, restorable, restore: true));
+    }
+
+    /// <summary>
+    /// 清空回收站. The trash's own contents go through the 删除 path rather than a second delete rule, so the bulk
+    /// threshold and its second confirmation apply to the biggest soft-deleted pile in the endpoint; a trash that
+    /// was never used is not an error, it is simply empty.
+    /// </summary>
+    internal async Task EmptyTrashAsync()
+    {
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择云盘。"; return; }
+        var entries = await _files.ListOrEmptyAsync(account.Name, CloudRecycleBin.RootOf(account.RootPath));
+        if (entries.Count == 0) { StatusText.Text = "回收站是空的，没有可删除的项目。"; return; }
+        await ConfirmAndDeleteAsync(entries, insideRecycleBin: true);
+    }
+
+    /// <summary>
+    /// 回收站: opens the mirrored folder. It is created on the way in because it does not exist until the first
+    /// object is recycled, and a first click answering "目录已不存在" would read as a broken feature; measured on
+    /// v1.75.0, <c>operations/mkdir</c> creates missing parents, is idempotent, and refuses loudly to overwrite a
+    /// file that happens to carry the folder's name.
+    /// </summary>
+    internal async Task OpenTrashAsync()
+    {
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择云盘。"; return; }
+        var trash = CloudRecycleBin.RootOf(account.RootPath);
+        try { await _files.CreateDirectoryAsync(account.Name, trash); }
+        catch (Exception ex) { ReportFailure("无法打开回收站", ex, "cloud-trash-open"); return; }
+        await NavigateToAsync(trash);
+    }
+
+    /// <summary>
+    /// Moves a batch between its current directory and the mirrored one on the other side of the trash boundary.
+    /// Landing names come from each destination directory's own listing, read once per directory before anything
+    /// moves, because both move legs overwrite a name that is already taken. A directory then has its husk
+    /// removed: measured on v1.75.0, a directory move onto a destination that exists merges and leaves the source
+    /// sitting there empty, while a move onto a fresh path takes the source with it. Per-row failures are
+    /// collected rather than thrown, so a batch that half-worked is said as a half-work.
+    /// </summary>
+    private async Task<CloudRecycleResult> MoveTowardTrashAsync(CloudEndpointAccount account,
+        IReadOnlyList<CloudFileEntry> entries, bool restore)
+    {
+        var root = account.RootPath;
+        var directories = entries
+            .Select(entry => (restore
+                ? CloudRecycleBin.OriginalDirectory(root, entry.Path)
+                : CloudRecycleBin.LandingDirectory(root, entry.Path)).Trim('/'))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var taken = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var directory in directories)
+            taken[directory] = await _files.NamesAsync(account.Name, directory);
+        var placements = CloudRecycleBin.PlacementsFor(root, entries,
+            directory => taken.TryGetValue(directory, out var names) ? names : [], restore);
+        var isDirectory = entries.ToDictionary(entry => entry.Path, entry => entry.IsDirectory, StringComparer.OrdinalIgnoreCase);
+
+        var moved = new List<CloudRecyclePlacement>();
+        var failures = new List<string>();
+        foreach (var placement in placements)
+        {
+            try
+            {
+                await _files.MoveIntoAsync(account.Name, placement.Source, placement.Destination, isDirectory[placement.Source]);
+                if (isDirectory[placement.Source]) await _files.RemoveIfEmptyAsync(account.Name, placement.Source);
+                moved.Add(placement);
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{placement.Source}：{RcloneUiError.Describe(ex, restore ? "cloud-restore" : "cloud-recycle")}");
+            }
+        }
+        await BrowseAsync();
+        if (moved.Count == 0)
+            return new CloudRecycleResult(CloudRecycleOutcome.Failed, [], failures.Count, Detail(failures));
+        return new CloudRecycleResult(
+            restore ? CloudRecycleOutcome.Restored : CloudRecycleOutcome.Moved,
+            moved,
+            failures.Count,
+            failures.Count == 0 ? null : Detail(failures));
+
+        static string Detail(IEnumerable<string> reasons) => string.Join("；", reasons.Take(3));
+    }
+
+    private static CloudRecycleResult Failed() =>
+        new(CloudRecycleOutcome.Failed, [], Detail: "请先选择云端端点。");
+
+    /// <summary>Says which outcome a recycle or restore batch produced, in the sentence that fact belongs to.</summary>
+    private CloudRecycleResult Say(CloudRecycleResult result)
+    {
+        StatusText.Text = CloudRecycleBin.Explain(result);
+        return result;
+    }
 
     // ---- 复制 / 剪切 / 粘贴 ----
 
@@ -1503,7 +1669,17 @@ public partial class RemoteEndpointManagerWindow : Window
         // only visible at the destination: a cut deletes once its copy lands.
         Add(menu, "复制", () => { SetClipboard(CloudClipboardMode.Copy, selected); return Task.CompletedTask; });
         Add(menu, "剪切", () => { SetClipboard(CloudClipboardMode.Cut, selected); return Task.CompletedTask; });
+        // Which of the three move-commands a selection earns is decided by the same rules that run it: 还原 only
+        // for rows that came out of the trash, 移到回收站 only for rows the trash can still accept, 清空回收站
+        // only while looking at the trash. An item that would only refuse is noise, not a shortcut.
+        var root = Selected?.RootPath ?? "";
+        if (CloudRecycleBin.SelectForRestore(root, selected).Count > 0)
+            Add(menu, selected.Count == 1 ? "还原…" : $"还原所选的 {selected.Count} 项…", async () => await RestoreAsync(selected));
+        if (CloudRecycleBin.SelectForMove(root, selected).Refusal is null)
+            Add(menu, selected.Count == 1 ? "移到回收站…" : $"把所选的 {selected.Count} 项移到回收站…", async () => await RecycleAsync(selected));
         Add(menu, selected.Count == 1 ? "删除…" : $"删除所选的 {selected.Count} 项…", async () => await ConfirmAndDeleteAsync(selected));
+        if (CloudRecycleBin.IsTrashView(root, _currentPath))
+            Add(menu, "清空回收站…", EmptyTrashAsync);
         Add(menu, "新建文件夹…", PromptNewFolderAsync);
         // 属性 is last and after a separator, like Explorer's: it is the read-only answer, and the one that
         // must never be mistaken for an action that changes the cloud.

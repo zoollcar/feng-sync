@@ -94,7 +94,13 @@ public static class CloudDeleteSafety
     /// </summary>
     public static bool SupportsTrash(EndpointType kind) => CloudProviderCatalog.SupportsTrash(kind);
 
-    public static CloudDeleteConfirmation Describe(IReadOnlyList<CloudFileEntry> entries, bool supportsTrash)
+    /// <summary>
+    /// The delete question. <paramref name="insideRecycleBin"/> is what 清空回收站 passes: the same counting, the
+    /// same bulk threshold and the same second confirmation, with one extra line saying that the last safety net
+    /// the application offers is the thing being removed. There is deliberately no second delete rule.
+    /// </summary>
+    public static CloudDeleteConfirmation Describe(IReadOnlyList<CloudFileEntry> entries, bool supportsTrash,
+        bool insideRecycleBin = false)
     {
         var folders = entries.Count(entry => entry.IsDirectory);
         var files = entries.Count - folders;
@@ -111,6 +117,8 @@ public static class CloudDeleteSafety
             var composition = files > 0 ? $"文件夹 {folders} 个、文件 {files} 个" : $"文件夹 {folders} 个";
             lines.Add($"其中{composition}；文件夹会连同其中的全部内容一起删除。");
         }
+        if (insideRecycleBin)
+            lines.Add($"这些项目已经在 {CloudRecycleBin.FolderName} 里，删掉以后本应用的「还原」也帮不上了。");
         lines.Add(supportsTrash
             ? "该端点会先移入云端回收站，可在服务商的网页端还原。"
             : "该端点没有回收站，删除后无法恢复。");

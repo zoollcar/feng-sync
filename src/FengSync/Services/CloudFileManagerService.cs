@@ -1,4 +1,5 @@
 using FengSync.Core;
+using FengSync.Core.Rclone.Diagnostics;
 using FluentIcon = FluentIcons.Common.Icon;
 
 namespace FengSync.Services;
@@ -62,19 +63,12 @@ public sealed class CloudFileManagerService
     }
 
     /// <summary>
-    /// Renames an entry inside its own directory. A file moves with <c>operations/movefile</c>; a directory
-    /// goes through the sync engine's directory move, because a plain file move is defined for one object
-    /// and would leave a folder's contents behind.
+    /// Renames an entry inside its own directory — a move to the same directory under a new name, so it shares
+    /// <see cref="MoveIntoAsync"/> and inherits its measured hazard: a name that is already taken there is
+    /// overwritten or merged into, not refused.
     /// </summary>
-    public async Task RenameAsync(string remote, string path, string newName, bool isDirectory, CancellationToken ct = default)
-    {
-        var client = await _client(ct);
-        var filesystem = FileSystem(remote);
-        var source = path.Trim('/');
-        var target = CloudFileNames.RenameTarget(source, newName);
-        if (isDirectory) await client.MoveDirectoryAsync(filesystem + source, filesystem + target, ct);
-        else await client.MoveFileAsync(filesystem, source, target, ct);
-    }
+    public Task RenameAsync(string remote, string path, string newName, bool isDirectory, CancellationToken ct = default) =>
+        MoveIntoAsync(remote, path, CloudFileNames.RenameTarget(path.Trim('/'), newName), isDirectory, ct);
 
     /// <summary>
     /// Deletes an entry. A directory is purged rather than removed-empty: the browser's "delete this folder"
@@ -98,10 +92,74 @@ public sealed class CloudFileManagerService
     /// <see cref="CloudTransferQueue"/> so it gets progress, cancellation and history like every other
     /// transfer — see <see cref="CloudPastePlanner"/>.
     /// </summary>
-    public async Task MoveAsync(string remote, string sourcePath, string destinationPath, CancellationToken ct = default)
+    public Task MoveAsync(string remote, string sourcePath, string destinationPath, CancellationToken ct = default) =>
+        MoveIntoAsync(remote, sourcePath, destinationPath, isDirectory: false, ct);
+
+    /// <summary>
+    /// Moves one object to another path inside the same remote. A file goes through <c>operations/movefile</c>,
+    /// and a directory through the sync engine's directory move, because v1.75.0 refuses to movefile a directory
+    /// at all (500 "is a directory not a file") and a plain file move would leave a folder's contents behind.
+    /// Both legs were measured to <em>overwrite</em> a destination that already exists, so the caller has to
+    /// choose a free destination name first — see <see cref="CloudRecycleBin.PlacementsFor"/> — and a directory
+    /// caller that wants its source gone has to follow up with <see cref="RemoveIfEmptyAsync"/>.
+    /// </summary>
+    public async Task MoveIntoAsync(string remote, string sourcePath, string destinationPath, bool isDirectory, CancellationToken ct = default)
     {
         var client = await _client(ct);
-        await client.MoveFileAsync(FileSystem(remote), sourcePath.Trim('/'), destinationPath.Trim('/'), ct);
+        var filesystem = FileSystem(remote);
+        var source = sourcePath.Trim('/');
+        var target = destinationPath.Trim('/');
+        if (isDirectory) await client.MoveDirectoryAsync(filesystem + source, filesystem + target, ct);
+        else await client.MoveFileAsync(filesystem, source, target, ct);
+    }
+
+    /// <summary>
+    /// Removes a directory that is empty, and does nothing when it still holds something. This exists for the
+    /// husk a directory move leaves behind: measured on v1.75.0, moving a directory onto a destination that
+    /// already exists merges into it and leaves the source sitting there empty — <c>--delete-empty-src-dirs</c>
+    /// clears the source's subdirectories but never the source root — while moving onto a fresh path renames it
+    /// and the source is gone. Existence is checked with <c>operations/stat</c> rather than inferred from
+    /// <c>rmdir</c>'s answer, because rmdir reports a path that is not there as an HTTP 500 with the operating
+    /// system's own wording, which the shared classifier reads as a temporary failure.
+    /// </summary>
+    public async Task<bool> RemoveIfEmptyAsync(string remote, string path, CancellationToken ct = default)
+    {
+        var client = await _client(ct);
+        var filesystem = FileSystem(remote);
+        var directory = path.Trim('/');
+        if (directory.Length == 0 || await client.StatAsync(filesystem, directory, null, ct) is null) return false;
+        await client.RemoveDirectoryAsync(filesystem, directory, ct);
+        return true;
+    }
+
+    /// <summary>
+    /// The names one directory holds, for choosing a landing name that is free. Built on
+    /// <see cref="ListOrEmptyAsync"/>, so it inherits that reading of a missing directory. Names cover both
+    /// files and directories because a landing name that belongs to an existing <em>directory</em> is refused by
+    /// the move itself (500 "is a directory not a file").
+    /// </summary>
+    public async Task<IReadOnlyList<string>> NamesAsync(string remote, string path, CancellationToken ct = default)
+    {
+        var entries = await ListOrEmptyAsync(remote, path, ct);
+        return entries.Select(entry => entry.Name).ToList();
+    }
+
+    /// <summary>
+    /// Lists one directory and reads a directory that is not there as an empty listing rather than as an error:
+    /// the trash folder does not exist until the first object moves into it, and v1.75.0 answers a missing
+    /// directory with 404 "directory not found" while an existing empty one answers <code>{"list": []}</code>
+    /// (both measured) — so "not found" means genuinely absent, and the two shapes have to be told apart.
+    /// </summary>
+    public async Task<IReadOnlyList<CloudFileEntry>> ListOrEmptyAsync(string remote, string path, CancellationToken ct = default)
+    {
+        try
+        {
+            return await ListAsync(remote, path, ct);
+        }
+        catch (RcloneException ex) when (ex.Failure.Category == RcloneFailureCategory.NotFound)
+        {
+            return [];
+        }
     }
 
     /// <summary>
@@ -131,6 +189,9 @@ public sealed class CloudFileManagerService
     public static string Join(string directory, string name) => string.IsNullOrWhiteSpace(directory) ? name : directory.Trim('/') + "/" + name;
     public static string Parent(string path) { var index = path.Trim('/').LastIndexOf('/'); return index < 0 ? "" : path.Trim('/')[..index]; }
 
+    /// <summary>The last segment of a cloud path — the part worth naming to a user.</summary>
+    public static string NameOf(string path) => path.Trim('/').Split('/').Last();
+
     /// <summary>
     /// The browser addresses paths relative to the rclone remote root, while <see cref="EndpointFactory"/>
     /// addresses an endpoint relative to its configured root (the account's default root folder). Anything
@@ -147,7 +208,6 @@ public sealed class CloudFileManagerService
     }
 
     private static string FileSystem(string remote) => remote.EndsWith(':') ? remote : remote + ":";
-    private static string NameOf(string path) => path.Trim('/').Split('/').Last();
 
     /// <summary>
     /// Turns one RC entry into a browser entry whose <see cref="CloudFileEntry.Path"/> is always relative to
