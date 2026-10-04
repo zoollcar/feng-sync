@@ -1409,6 +1409,19 @@ try {
       Select-UiOrAncestor $remoteItem
       Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } 'Cloud file manager did not browse the endpoint created through its editor.' 30 | Out-Null
       Capture-Element $manager 'remote-file-manager-sftp.png' 'remote-file-manager' 'SFTP endpoint directory listing'
+      # 网格视图 / 列表视图 是这一个行集合的两种画法，而只有真实外壳能证明它成立：没显示过的控件既不会呈现任何
+      # 一行，也不会在换掉 ItemsSource 时丢掉选中项。实测到的两件事都在这里量：切到网格后这一行仍按名字找得到——
+      # 方块内部的文字在网格画法里根本不入树（行节点在网格下没有任何子元素），所以名字必须由行自己带着；切回列表
+      # 后行还在，且 BoundingRectangle 有尺寸——把 ItemsPanel 赋成 null 而不是 ClearValue 时整个列表一行都不画，
+      # 那时连行节点都不存在，尺寸是比“找得到”更直白的证据。
+      Click (Find-Id $manager 'CloudViewToggle')
+      Wait-Until { try { $row = Find-Name $manager 'remote-proof.txt' 2; $rect = $row.Current.BoundingRectangle
+        ($row.Current.Name -eq 'remote-proof.txt') -and ($rect.Width -gt 0) -and ($rect.Height -gt 0) } catch { $false } } '网格视图没有把这一行画出来。' 30 | Out-Null
+      Find-Name $manager '列表视图' 10 | Out-Null
+      Capture-Element $manager 'remote-file-manager-grid.png' 'remote-file-manager' 'SFTP endpoint directory listing drawn as tiles'
+      Click (Find-Id $manager 'CloudViewToggle')
+      Wait-Until { try { $row = Find-Name $manager 'remote-proof.txt' 2; $rect = $row.Current.BoundingRectangle
+        ($row.Current.Name -eq 'remote-proof.txt') -and ($rect.Width -gt 0) -and ($rect.Height -gt 0) } catch { $false } } '列表视图没有把这一行重新画出来。' 30 | Out-Null
       # Editing an existing endpoint has to round-trip the password rclone keeps obscured: a rewrite that
       # obscured it a second time would corrupt it, and nothing about the save would report an error — the
       # endpoint would simply stop authenticating. Re-browsing after the save is what catches that.

@@ -67,6 +67,38 @@ public sealed class LiveTextAccessibilityTests
             "Expected the shell to contain a substantial number of TextBlocks.");
     }
 
+    [Fact]
+    public void The_cloud_file_list_names_every_row_from_the_item_it_shows()
+    {
+        // Measured against the real shell: a grid tile's inner text never reaches the automation tree (the row is
+        // a DataItem with zero children, named by the item's ToString()), so a row in either view is only
+        // announceable and only findable by name when the container carries the name itself.
+        var file = PageFiles().FirstOrDefault(entry => entry.RelativePath == "Views/RemoteEndpointManagerWindow.xaml");
+        Assert.NotNull(file);
+        var list = BrowserListElement.Match(file!.Content);
+        Assert.True(list.Success,
+            "The cloud file list was not found by that scan. Rename the element and this guard needs updating on "
+            + "purpose, not by accident.");
+        var rowStyle = SetterOnRowStyle.Match(list.Groups["body"].Value);
+        Assert.True(rowStyle.Success,
+            "FileList needs an ItemContainerStyle that sets AutomationProperties.Name from a binding, because a "
+            + "tile's own text is not in the automation tree and the row would otherwise announce the whole "
+            + "CloudFileEntry record.");
+        Assert.False(StaticRowName.IsMatch(rowStyle.Groups["value"].Value),
+            $"The row name is bound to the item, not written as a literal, and this is a literal: "
+            + $"'{rowStyle.Groups["value"].Value}'.");
+    }
+
+    private static readonly Regex BrowserListElement = new(
+        @"<ListView\b[^>]*AutomationProperties\.Name=""当前目录中的文件""[^>]*>(?<body>[\s\S]*?)</ListView>",
+        RegexOptions.CultureInvariant);
+
+    private static readonly Regex SetterOnRowStyle = new(
+        @"<Style\b[^>]*TargetType=""ListViewItem""[\s\S]*?Setter\s+Property=""AutomationProperties\.Name""\s+Value=""(?<value>[^""]*)""",
+        RegexOptions.CultureInvariant);
+
+    private static readonly Regex StaticRowName = new(@"^(?!\{\s*Binding)", RegexOptions.CultureInvariant);
+
     private static IEnumerable<XamlFile> PageFiles()
     {
         var applicationDirectory = Path.Combine(RepositoryRoot(), "src", "FengSync");
