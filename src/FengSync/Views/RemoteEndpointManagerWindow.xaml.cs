@@ -53,16 +53,23 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <summary>Visited directories, and where in them the browser currently is, for 后退 and 前进.</summary>
     private readonly List<string> _history = [];
     private readonly RcloneMountService _mountService = AppServices.Current.MountService;
-    private readonly CloudFileManagerService _files = new();
+    private readonly CloudFileManagerService _files;
     /// <summary>
     /// Shared so uploads and downloads keep running after this window closes; falls back to a private
     /// queue only when no shell installed its services (a preview or a test).
     /// </summary>
-    private readonly CloudTransferQueue _transfers = AppServices.TryCurrent?.CloudTransfers ?? new CloudTransferQueue();
+    private readonly CloudTransferQueue _transfers;
     private ApplicationSettings _settings = new();
     private Point _dragStart;
     private bool _dragArmed;
     private string _currentPath = "";
+    /// <summary>
+    /// The rows 复制 or 剪切 put on hold, and how they got there. Held here rather than in the system
+    /// clipboard because a cloud listing row is not something another application could paste, and because
+    /// the mode is the only thing that decides whether a paste ends in a delete.
+    /// </summary>
+    private readonly List<CloudClipboardItem> _clipboard = [];
+    private CloudClipboardMode _clipboardMode;
     /// <summary>
     /// True while the listing came from a recursive search. The search box then no longer filters it: the
     /// results were matched on the whole path, so re-filtering them by name would hide the folder hits the
@@ -90,8 +97,18 @@ public partial class RemoteEndpointManagerWindow : Window
     private bool _busy;
     private bool _mountBusy;
 
-    public RemoteEndpointManagerWindow()
+    public RemoteEndpointManagerWindow() : this(null, null) { }
+
+    /// <summary>
+    /// Builds the browser over the services it should talk to. The parameterless form takes the
+    /// application-owned ones, which is what both shells use; this form lets a test hand in a file service and
+    /// a queue wired to a stand-in rclone, so the browser's own decisions — what a 粘贴 means for each selected
+    /// row, and which call each case makes — are checkable without starting rclone.
+    /// </summary>
+    internal RemoteEndpointManagerWindow(CloudFileManagerService? files, CloudTransferQueue? transfers)
     {
+        _files = files ?? new CloudFileManagerService();
+        _transfers = transfers ?? AppServices.TryCurrent?.CloudTransfers ?? new CloudTransferQueue();
         InitializeComponent();
         EndpointList.ItemsSource = _accounts;
         MountsList.ItemsSource = _mounts;
@@ -118,6 +135,10 @@ public partial class RemoteEndpointManagerWindow : Window
     internal IReadOnlyList<CloudBreadcrumb> Trail => Breadcrumbs.ItemsSource as IReadOnlyList<CloudBreadcrumb> ?? [];
     /// <summary>The rows currently selected in the list.</summary>
     internal IReadOnlyList<CloudFileEntry> Selection => SelectedEntries();
+
+    /// <summary>The rows the browser holds for a 粘贴, and whether they were copied or cut.</summary>
+    internal IReadOnlyList<CloudClipboardItem> ClipboardItems => [.. _clipboard];
+    internal CloudClipboardMode ClipboardMode => _clipboardMode;
 
     /// <summary>The endpoints the list loaded, before the search box and the sort choice are applied.</summary>
     internal IReadOnlyList<CloudEndpointRow> LoadedEndpoints => [.. _loaded];
@@ -755,6 +776,9 @@ public partial class RemoteEndpointManagerWindow : Window
         DeleteEntryButton.IsEnabled = selected.Count > 0;
         // A folder is downloaded by entering it and taking its files; the queue's unit is a file.
         DownloadButton.IsEnabled = selected.Count > 0 && selected.All(entry => !entry.IsDirectory);
+        // The clipboard survives leaving the directory it came from, which is the point: pasting into another
+        // endpoint is what makes this a cloud-to-cloud copy rather than a rename.
+        PasteButton.IsEnabled = Selected is not null && _clipboard.Count > 0;
     }
 
     private IReadOnlyList<CloudFileEntry> SelectedEntries() => [.. FileList.SelectedItems.Cast<CloudFileEntry>()];
@@ -1026,6 +1050,173 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async void DownloadSelected_Click(object sender, RoutedEventArgs e) => await DownloadSelectionAsync();
 
+    // ---- 复制 / 剪切 / 粘贴 ----
+
+    /// <summary>
+    /// Puts rows on hold for a paste, and says what that promise is: a copy leaves the source alone, a cut
+    /// removes it once the copy has landed, and a folder in the selection will not be pasted at all. Saying so
+    /// at the moment of the gesture is what keeps the difference from being discovered at the destination.
+    /// </summary>
+    internal void SetClipboard(CloudClipboardMode mode, IReadOnlyList<CloudFileEntry> entries)
+    {
+        if (Selected is not { } account) { StatusText.Text = "请先选择云盘。"; return; }
+        if (entries.Count == 0) { StatusText.Text = "请先选择要" + (mode == CloudClipboardMode.Cut ? "剪切" : "复制") + "的项目。"; return; }
+        _clipboard.Clear();
+        _clipboard.AddRange(entries.Select(entry => new CloudClipboardItem(account, entry)));
+        _clipboardMode = mode;
+        UpdateFileButtons();
+        var folders = entries.Count(entry => entry.IsDirectory);
+        StatusText.Text = $"已{(mode == CloudClipboardMode.Cut ? "剪切" : "复制")} {entries.Count} 项，进入目标目录后点“粘贴”。"
+            + (folders > 0 ? $"其中 {folders} 个文件夹不会被粘贴：粘贴的单位是文件。" : "")
+            + (mode == CloudClipboardMode.Cut ? "复制成功后源文件会被删除，云端删除无法恢复。" : "");
+    }
+
+    /// <summary>
+    /// What a paste would do right now. The destination directory is listed rather than taken from the rows on
+    /// screen, because a same-name collision is the one thing the user has to be asked about <em>before</em>
+    /// anything is queued.
+    /// </summary>
+    internal async Task<CloudPastePlan?> PlanPasteAsync()
+    {
+        if (Selected is not { } account || _clipboard.Count == 0) return null;
+        try { return CloudPastePlanner.Build([.. _clipboard], account, _currentPath, await _files.ListAsync(account.Name, _currentPath)); }
+        catch (Exception ex) { ReportFailure("无法读取目标目录", ex, "cloud-paste-conflict"); return null; }
+    }
+
+    /// <summary>
+    /// Runs a paste. Every copy goes through <see cref="CloudTransferQueue"/> — including a copy between two
+    /// directories of one endpoint — so it gets the same progress, cancellation, retry and history as an
+    /// upload, instead of a second copy path that has none of them. A cut inside one endpoint is the exception:
+    /// rclone answers that with <c>operations/movefile</c> and no bytes move, and it is the same call 重命名
+    /// already uses. Returns the number of items the paste acted on.
+    /// </summary>
+    internal async Task<int> ExecutePasteAsync(CloudPastePlan plan, bool overwrite)
+    {
+        if (Selected is not { } account) return 0;
+        var targets = overwrite ? plan.Targets : [.. plan.Targets.Where(target => !target.OverwritesExisting)];
+        if (targets.Count == 0)
+        {
+            StatusText.Text = $"已跳过 {plan.Conflicts} 个同名项目。";
+            return 0;
+        }
+        var cutting = _clipboardMode == CloudClipboardMode.Cut;
+        var moved = 0;
+        var copies = new List<(CloudTransferTask Task, CloudClipboardItem Item)>();
+        var failures = new List<string>();
+        foreach (var target in targets)
+        {
+            try
+            {
+                if (cutting && target.SameEndpoint)
+                {
+                    // The destination directory is the one being browsed, so it exists and needs no mkdir.
+                    await _files.MoveAsync(target.Item.Source.Name, target.Item.Entry.Path, target.DestinationPath);
+                    moved++;
+                    continue;
+                }
+                var task = _transfers.EnqueueCopy(EndpointUri(target.Item.Source), target.SourceRelativePath,
+                    EndpointUri(account), target.DestinationRelativePath, target.Item.Entry.Size);
+                copies.Add((task, target.Item));
+            }
+            catch (Exception ex) { failures.Add($"{target.Item.Entry.Name}：{RcloneUiError.Describe(ex, "cloud-paste")}"); }
+        }
+        if (cutting) _clipboard.Clear();
+        if (moved > 0) await BrowseAsync();
+        // Only a cut owes the world a delete: 复制 leaves the source exactly where it is, so queueing the
+        // removal for a plain copy would turn the paste the user expects to be additive into data loss.
+        if (cutting)
+            foreach (var (task, item) in copies) DeleteSourceWhenCopied(task, item, account);
+        var parts = new List<string>();
+        if (moved > 0) parts.Add($"已移动 {moved} 项");
+        if (copies.Count > 0) parts.Add($"已排队复制 {copies.Count} 个文件");
+        if (failures.Count > 0) parts.Add($"{failures.Count} 项失败：{string.Join("；", failures.Take(3))}");
+        if (plan.Skipped.Count > 0) parts.Add(string.Join(" ", plan.Skipped));
+        StatusText.Text = string.Join("。", parts) + "。";
+        return moved + copies.Count;
+    }
+
+    /// <summary>
+    /// Deletes a cut's source once, and only once, its copy has completed — so a copy that failed or was
+    /// cancelled leaves the source exactly where it was. The wait is on the queue rather than in the click
+    /// handler: a batch of cross-endpoint copies may take a long time, and the browser has to stay usable
+    /// while they run. This window owns the deletion, so closing it before a copy lands leaves a duplicate
+    /// rather than losing a file, which is the safe half of that trade.
+    /// </summary>
+    private void DeleteSourceWhenCopied(CloudTransferTask task, CloudClipboardItem item, CloudEndpointAccount destination)
+    {
+        _ = DeleteAfterCopyAsync();
+
+        async Task DeleteAfterCopyAsync()
+        {
+            string message;
+            var refreshed = false;
+            if (!await _transfers.WaitForAsync(task))
+                message = $"“{item.Entry.Name}”没有复制完成，源文件仍然保留。";
+            else
+            {
+                try
+                {
+                    await _files.DeleteAsync(item.Source.Name, item.Entry.Path, false);
+                    message = $"已剪切到 {destination.Name}：{item.Entry.Name}";
+                }
+                catch (Exception ex)
+                {
+                    // The copy landed and the source is still there, so the user now has two files. Saying
+                    // "已复制但源未删除" is the whole report; calling it a success would hide the duplicate.
+                    message = $"“{item.Entry.Name}”已复制但源未删除：{RcloneUiError.Describe(ex, "cloud-delete")}";
+                }
+                // The copy only lands in the directory on screen once the job has finished, so this is the
+                // moment the listing needs to be re-read.
+                refreshed = true;
+            }
+            // The listing is re-read first and the status line written last, because BrowseAsync claims the
+            // status line for itself ("正在读取目录…") and never gives it back: reporting the outcome before
+            // the refresh would leave the row reading a spinner that finished long ago.
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                if (refreshed) await BrowseAsync();
+                StatusText.Text = message;
+            }).Task.Unwrap();
+        }
+    }
+
+    /// <summary>
+    /// Confirms the delete a cut ends with, before any copy starts. Asking after the bytes moved would be
+    /// asking the user to decide with their file already duplicated. Only the rows that leave the endpoint they
+    /// came from are listed: a cut inside one endpoint is a move, and a move is not something this app asks
+    /// twice about — 重命名 is the same call.
+    /// </summary>
+    private bool ConfirmCut(CloudPastePlan plan)
+    {
+        var sources = plan.Targets.Where(target => !target.SameEndpoint).Select(target => target.Item).ToList();
+        if (sources.Count == 0) return true;
+        var entries = sources.Select(item => item.Entry).ToList();
+        // Whether the delete can be undone is the source endpoint's answer, not the destination's.
+        var confirmation = CloudDeleteSafety.Describe(entries, CloudDeleteSafety.SupportsTrash(KindOf(sources[0].Source)));
+        if (!TextPrompt.Confirm(this, "剪切后删除源", $"粘贴会先复制到目标端点，复制成功后再删除下面这些源文件。\n\n{confirmation.Message}", danger: true)) return false;
+        return !confirmation.IsBulk
+            || TextPrompt.Confirm(this, "再次确认删除", $"即将在复制成功后删除 {entries.Count} 项源文件。\n\n确定继续？", danger: true);
+    }
+
+    private async void Paste_Click(object sender, RoutedEventArgs e)
+    {
+        if (_clipboard.Count == 0) { StatusText.Text = "剪贴板是空的：先选中项目，再用右键菜单的“复制”或“剪切”。"; return; }
+        if (Selected is null) { StatusText.Text = "请先选择要粘贴到的云盘。"; return; }
+        var plan = await PlanPasteAsync();
+        if (plan is null) return;
+        if (plan.Targets.Count == 0) { StatusText.Text = "没有可粘贴的项目。" + string.Join(" ", plan.Skipped); return; }
+        var overwrite = true;
+        if (plan.Conflicts > 0)
+        {
+            var answer = MessageBox.Show($"{plan.Conflicts} 个同名项目已存在于目标目录。\n\n是：全部覆盖；否：跳过这些项目；取消：取消本次粘贴。",
+                "目标已有同名项目", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+            if (answer == MessageBoxResult.Cancel) { StatusText.Text = "已取消粘贴。"; return; }
+            overwrite = answer == MessageBoxResult.Yes;
+        }
+        if (_clipboardMode == CloudClipboardMode.Cut && !ConfirmCut(plan)) { StatusText.Text = "已取消粘贴。"; return; }
+        await ExecutePasteAsync(plan, overwrite);
+    }
+
     /// <summary>Queues every selected file, asking for a destination only when there is no usable default.</summary>
     internal async Task DownloadSelectionAsync()
     {
@@ -1042,7 +1233,7 @@ public partial class RemoteEndpointManagerWindow : Window
             directory = dialog.FolderName;
         }
         foreach (var file in files)
-            _transfers.Enqueue(CloudTransferDirection.Download, EndpointUri(account), ToEndpointRelative(account, file.Path), Path.Combine(directory, file.Name), file.Size);
+            _transfers.Enqueue(CloudTransferDirection.Download, EndpointUri(account), CloudFileManagerService.RelativeToEndpoint(account, file.Path), Path.Combine(directory, file.Name), file.Size);
         StatusText.Text = $"已加入传输队列：{files.Count} 个文件。";
         ShowTransferWindow();
     }
@@ -1066,7 +1257,7 @@ public partial class RemoteEndpointManagerWindow : Window
             if (dialog.ShowDialog(this) != true) return;
             destination = dialog.FileName;
         }
-        _transfers.Enqueue(CloudTransferDirection.Download, EndpointUri(account), ToEndpointRelative(account, entry.Path), destination, entry.Size);
+        _transfers.Enqueue(CloudTransferDirection.Download, EndpointUri(account), CloudFileManagerService.RelativeToEndpoint(account, entry.Path), destination, entry.Size);
         StatusText.Text = "已加入传输队列：" + entry.Name;
         ShowTransferWindow();
         await Task.CompletedTask;
@@ -1077,7 +1268,7 @@ public partial class RemoteEndpointManagerWindow : Window
         if (Selected is not CloudEndpointAccount account) return;
         var folder = Path.Combine(Path.GetTempPath(), "FengSync", "cloud-open", Guid.NewGuid().ToString("N"));
         var local = Path.Combine(folder, entry.Name);
-        var task = _transfers.Enqueue(CloudTransferDirection.Download, EndpointUri(account), ToEndpointRelative(account, entry.Path), local, entry.Size);
+        var task = _transfers.Enqueue(CloudTransferDirection.Download, EndpointUri(account), CloudFileManagerService.RelativeToEndpoint(account, entry.Path), local, entry.Size);
         ShowTransferWindow();
         StatusText.Text = "正在下载以打开：" + entry.Name;
         if (!await _transfers.WaitForAsync(task))
@@ -1115,6 +1306,10 @@ public partial class RemoteEndpointManagerWindow : Window
             Add(menu, $"下载所选的 {selected.Count} 项…", DownloadSelectionAsync);
             menu.Items.Add(new Separator());
         }
+        // Both commands hold the whole selection, exactly as Explorer's do, and the difference between them is
+        // only visible at the destination: a cut deletes once its copy lands.
+        Add(menu, "复制", () => { SetClipboard(CloudClipboardMode.Copy, selected); return Task.CompletedTask; });
+        Add(menu, "剪切", () => { SetClipboard(CloudClipboardMode.Cut, selected); return Task.CompletedTask; });
         Add(menu, selected.Count == 1 ? "删除…" : $"删除所选的 {selected.Count} 项…", async () => await ConfirmAndDeleteAsync(selected));
         Add(menu, "新建文件夹…", PromptNewFolderAsync);
         FileList.ContextMenu = menu;
@@ -1248,7 +1443,7 @@ public partial class RemoteEndpointManagerWindow : Window
 
         var uri = EndpointUri(account);
         foreach (var item in accepted)
-            _transfers.Enqueue(CloudTransferDirection.Upload, uri, ToEndpointRelative(account, item.RemotePath), item.LocalPath, new FileInfo(item.LocalPath).Length);
+            _transfers.Enqueue(CloudTransferDirection.Upload, uri, CloudFileManagerService.RelativeToEndpoint(account, item.RemotePath), item.LocalPath, new FileInfo(item.LocalPath).Length);
 
         StatusText.Text = $"已加入传输队列：{accepted.Count} 个文件。";
         ShowTransferWindow();
@@ -1285,7 +1480,7 @@ public partial class RemoteEndpointManagerWindow : Window
             return;
         }
 
-        var relative = ToEndpointRelative(account, entry.Path);
+        var relative = CloudFileManagerService.RelativeToEndpoint(account, entry.Path);
         if (relative.Length == 0) return;
         var local = CloudDragCache.LocalPathFor(account.Name, relative);
 
@@ -1334,20 +1529,6 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true }); }
         catch (Exception ex) { System.Diagnostics.Trace.TraceWarning("Unable to reveal a downloaded cloud file: " + ex); }
-    }
-
-    /// <summary>
-    /// The browser navigates paths relative to the rclone remote root, while <see cref="EndpointFactory"/>
-    /// addresses an endpoint relative to its configured root (the account's default root folder).
-    /// Transfers go through endpoints, so the root prefix has to be stripped.
-    /// </summary>
-    private static string ToEndpointRelative(CloudEndpointAccount account, string remotePath)
-    {
-        var root = account.RootPath.Trim('/');
-        var path = (remotePath ?? "").Trim('/');
-        if (root.Length == 0) return path;
-        if (path.Equals(root, StringComparison.OrdinalIgnoreCase)) return "";
-        return path.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase) ? path[(root.Length + 1)..] : path;
     }
 
     private static string EndpointUri(CloudEndpointAccount account) =>

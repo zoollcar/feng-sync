@@ -91,8 +91,37 @@ public sealed class CloudFileManagerService
         else await client.DeleteFileAsync(filesystem, target, ct);
     }
 
+    /// <summary>
+    /// Moves one file to another path inside the same remote. rclone answers this without moving bytes
+    /// through this process, so it is what a 剪切 inside one endpoint runs. A move across two endpoints is
+    /// deliberately not here: that is a copy with a delete after it, and it belongs to
+    /// <see cref="CloudTransferQueue"/> so it gets progress, cancellation and history like every other
+    /// transfer — see <see cref="CloudPastePlanner"/>.
+    /// </summary>
+    public async Task MoveAsync(string remote, string sourcePath, string destinationPath, CancellationToken ct = default)
+    {
+        var client = await _client(ct);
+        await client.MoveFileAsync(FileSystem(remote), sourcePath.Trim('/'), destinationPath.Trim('/'), ct);
+    }
+
     public static string Join(string directory, string name) => string.IsNullOrWhiteSpace(directory) ? name : directory.Trim('/') + "/" + name;
     public static string Parent(string path) { var index = path.Trim('/').LastIndexOf('/'); return index < 0 ? "" : path.Trim('/')[..index]; }
+
+    /// <summary>
+    /// The browser addresses paths relative to the rclone remote root, while <see cref="EndpointFactory"/>
+    /// addresses an endpoint relative to its configured root (the account's default root folder). Anything
+    /// that goes through an endpoint — every transfer, including a paste — has to be told in the second
+    /// shape, or the root would be addressed twice.
+    /// </summary>
+    public static string RelativeToEndpoint(CloudEndpointAccount account, string remotePath)
+    {
+        var root = account.RootPath.Trim('/');
+        var path = (remotePath ?? "").Trim('/');
+        if (root.Length == 0) return path;
+        if (path.Equals(root, StringComparison.OrdinalIgnoreCase)) return "";
+        return path.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase) ? path[(root.Length + 1)..] : path;
+    }
+
     private static string FileSystem(string remote) => remote.EndsWith(':') ? remote : remote + ":";
     private static string NameOf(string path) => path.Trim('/').Split('/').Last();
 
