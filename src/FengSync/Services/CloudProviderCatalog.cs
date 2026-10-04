@@ -59,6 +59,14 @@ public sealed record CloudFormField(
 /// A rule no single field can state, given every collected value; returns the error to show, or
 /// <see langword="null"/>. SFTP's "a password or a key file" is the only one so far.
 /// </param>
+/// <param name="WebConsoleUrl">
+/// The provider's own web console, when it has exactly one. This exists for the one thing rclone cannot do:
+/// it exposes no version list (see <see cref="CloudVersionHistory"/>), so the honest answer to "show me this
+/// file's history" is to send the user where the history actually is. Deliberately <see langword="null"/> for
+/// SFTP, WebDAV and S3 — a self-hosted SFTP server has no console at all, and an S3-compatible endpoint's
+/// belongs to whichever service it points at, which this descriptor does not model. A null here means the
+/// browser offers no link rather than inventing one.
+/// </param>
 public sealed record CloudProviderDescriptor(
     EndpointType Kind,
     string NamePlaceholder,
@@ -70,7 +78,8 @@ public sealed record CloudProviderDescriptor(
     bool SupportsPublicLink,
     string DefaultRoot = "",
     IReadOnlyDictionary<string, string>? ConstantParameters = null,
-    Func<IReadOnlyDictionary<string, string>, string?>? CrossFieldRule = null)
+    Func<IReadOnlyDictionary<string, string>, string?>? CrossFieldRule = null,
+    string? WebConsoleUrl = null)
 {
     /// <summary>The rclone backend type this provider is stored under.</summary>
     public string RcloneType => EndpointSchemes.RcloneTypeFor(Kind);
@@ -118,13 +127,17 @@ public static class CloudProviderCatalog
     [
         new(EndpointType.GoogleDrive, "Google Drive", "GDriveRemoteName", "GDriveRemoteRoot",
             OAuthClientFields, RequiresOAuth: true, SupportsTrash: true, SupportsPublicLink: true,
-            ConstantParameters: new Dictionary<string, string> { ["scope"] = "drive" }),
+            ConstantParameters: new Dictionary<string, string> { ["scope"] = "drive" },
+            WebConsoleUrl: "https://drive.google.com/"),
         new(EndpointType.OneDrive, "OneDrive", "OneDriveRemoteName", "OneDriveRemoteRoot",
-            OAuthClientFields, RequiresOAuth: true, SupportsTrash: false, SupportsPublicLink: true),
+            OAuthClientFields, RequiresOAuth: true, SupportsTrash: false, SupportsPublicLink: true,
+            WebConsoleUrl: "https://onedrive.live.com/"),
         new(EndpointType.Dropbox, "Dropbox", "DropboxRemoteName", "DropboxRemoteRoot",
-            OAuthClientFields, RequiresOAuth: true, SupportsTrash: false, SupportsPublicLink: true),
+            OAuthClientFields, RequiresOAuth: true, SupportsTrash: false, SupportsPublicLink: true,
+            WebConsoleUrl: "https://www.dropbox.com/home"),
         new(EndpointType.Box, "Box", "BoxRemoteName", "BoxRemoteRoot",
-            OAuthClientFields, RequiresOAuth: true, SupportsTrash: false, SupportsPublicLink: true),
+            OAuthClientFields, RequiresOAuth: true, SupportsTrash: false, SupportsPublicLink: true,
+            WebConsoleUrl: "https://app.box.com/"),
         new(EndpointType.WebDav, "WebDAV", "WebDavRemoteName", "WebDavRemoteRoot",
         [
             new("url", "服务器地址", Required: true, AutomationId: "WebDavUrl",

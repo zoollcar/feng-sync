@@ -2147,6 +2147,44 @@ public partial class RemoteEndpointManagerWindow : Window
     internal async Task ShareAsync(CloudFileEntry entry) =>
         StatusText.Text = CloudShareLinks.Explain(await ShareLinkAsync(entry));
 
+    /// <summary>
+    /// Where a history lookup sends the user. Behind a seam because launching a browser is a machine-level
+    /// effect a desktop-free test must not cause — and the URL is the entire decision, since no cloud call is
+    /// involved and there is nothing else to observe.
+    /// </summary>
+    internal Action<string>? OpenExternal { get; set; }
+
+    /// <summary>
+    /// The one thing the browser can do about history: send the user to the console that has it. rclone exposes
+    /// no version list (measured; see <see cref="CloudVersionHistory"/>), so there is no read to make, nothing
+    /// to wait for and nothing that could be cancelled — the explanation and the link are the whole feature.
+    /// An endpoint with no console opens nothing and says why, rather than sending the user somewhere
+    /// arbitrary: a wrong console is worse than an honest "there isn't one".
+    /// </summary>
+    internal void OpenVersionHistory(CloudFileEntry entry)
+    {
+        if (!CloudVersionHistory.Offers(entry))
+        {
+            StatusText.Text = "文件夹没有历史版本：版本是针对单个文件的。";
+            return;
+        }
+        if (Selected is not CloudEndpointAccount account) return;
+
+        var offer = CloudVersionHistory.For(account.Type, account.Provider);
+        if (offer.Url is { } url)
+        {
+            try { (OpenExternal ?? (value => Process.Start(new ProcessStartInfo(value) { UseShellExecute = true })))(url); }
+            catch (Exception ex)
+            {
+                // The history is still where it was, so this is a browser problem and says so — it must not
+                // read as "this file has no history".
+                StatusText.Text = "没能打开浏览器：" + RcloneUiError.Describe(ex, "cloud-version-console");
+                return;
+            }
+        }
+        StatusText.Text = CloudVersionHistory.StatusFor(offer);
+    }
+
     /// <summary>Builds the row menu. Its contents depend on what is selected, so it is rebuilt on each open.</summary>
     private void FileList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
@@ -2186,6 +2224,17 @@ public partial class RemoteEndpointManagerWindow : Window
                 // never for a folder: the backend's own answer for a prefix is 404, and a folder would grant a
                 // whole subtree the selection never named.
                 Add(menu, "复制分享链接…", async () => await ShareAsync(entry));
+                // The last thing the cloud cannot do: it exposes no version list, so this item names the trip
+                // to where the history is rather than a feature the browser does not have. Its tooltip carries
+                // the reason, so the answer is reachable without clicking — and the endpoint the rows came from
+                // is what decides whether there is a console to offer at all.
+                if (Selected is { } endpoint)
+                {
+                    var offer = CloudVersionHistory.For(endpoint.Type, endpoint.Provider);
+                    var history = new MenuItem { Header = CloudVersionHistory.MenuLabel, ToolTip = offer.Explanation };
+                    history.Click += (_, _) => OpenVersionHistory(entry);
+                    menu.Items.Add(history);
+                }
             }
             menu.Items.Add(new Separator());
             Add(menu, "重命名…", async () => await PromptRenameAsync(entry));
