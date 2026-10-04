@@ -106,6 +106,9 @@ public partial class CloudTransferWindow : Window
         HintText.Text = _queue.HasTasks
             ? "取消、暂停或失败的传输都会保留在列表中，可随时继续或重试。本程序沿用同步任务的暂存与断点机制："
               + "能校验已传分片的传输从断点继续，云端传输受 rclone 限制会从文件开头重新开始。"
+              // A copy is the case the sentence above only hints at: rclone moves the bytes between two
+              // remotes, so this program never holds them and has no verified prefix to append to.
+              + (_queue.HasCopyTasks ? "云盘之间的复制由 rclone 在两端之间完成，本程序不接触字节，因此取消或失败之后只能整个文件重新复制。" : "")
             : "把本地文件或文件夹拖入文件浏览器即可上传；把云端文件拖到资源管理器即可下载。";
     }
 

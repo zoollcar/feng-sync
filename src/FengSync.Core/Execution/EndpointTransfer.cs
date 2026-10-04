@@ -49,6 +49,41 @@ public static class EndpointTransfer
         TransferResume.DiscardCandidatesAsync(target, path, CancellationToken.None);
 
     /// <summary>
+    /// Copies one object from a remote straight to another remote, at full path, with no Feng Sync staging
+    /// object and no publish step. Both legs are rclone's, so the bytes never reach this process: there is
+    /// nothing to append to and nothing to verify a seam against, which is why a cancelled copy restarts the
+    /// whole object instead of continuing it.
+    /// <para>
+    /// Skipping staging does not risk a truncated user-visible file. Measured against the bundled v1.75.0:
+    /// while <c>operations/copyfile</c> runs, the destination holds only rclone's own
+    /// <c>&lt;name&gt;.&lt;id&gt;.partial</c> object and the destination name itself does not exist; when the
+    /// job is stopped rclone logs "Removing partially written file on error" and the destination directory is
+    /// left empty. What that measurement does not cover is a daemon killed outright — then rclone's own
+    /// partial object survives in the target directory, unnamed by Feng Sync and invisible to
+    /// <see cref="DiscardStagingAsync"/>, which only knows Feng Sync's staging names.
+    /// </para>
+    /// </summary>
+    public static async Task CopyServerSideAsync(
+        IEndpoint source,
+        IEndpoint target,
+        string sourcePath,
+        string destinationPath,
+        Guid operationId,
+        long totalBytes,
+        int activeTransfers = 0,
+        IProgress<TransferProgress>? progress = null,
+        Func<CancellationToken, Task>? ensureDestinationAsync = null,
+        CancellationToken ct = default)
+    {
+        // A local endpoint has no rclone side to copy into: Feng Sync's own temp file and atomic publish are
+        // what make a local write safe, so a "server-side" copy that lands on disk would bypass them.
+        if (source is not RcloneEndpoint || target is not RcloneEndpoint)
+            throw new NotSupportedException("云端复制的两端都必须是远端；本地文件请走上传或下载。");
+        if (ensureDestinationAsync is not null) await ensureDestinationAsync(ct);
+        await CopyRemoteWithProgressAsync(source, target, sourcePath, destinationPath, operationId, totalBytes, activeTransfers, progress, ct);
+    }
+
+    /// <summary>
     /// Publishes a verified staging object to its user-visible path. Endpoints that own an atomic
     /// publish implement <see cref="IStagedPublishEndpoint"/>; everything else is a plain move.
     /// </summary>

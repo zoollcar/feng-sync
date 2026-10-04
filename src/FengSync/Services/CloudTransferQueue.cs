@@ -11,7 +11,12 @@ using FengSync.Core.Rclone.Diagnostics;
 
 namespace FengSync.Services;
 
-public enum CloudTransferDirection { Upload, Download }
+/// <summary>
+/// What the queue is moving. <see cref="Copy"/> is a remote→remote copy: both ends are cloud endpoints, no
+/// local file is involved, and it is appended last because <see cref="CloudTransferRecord"/> persists the
+/// value in a journal that older files must still read.
+/// </summary>
+public enum CloudTransferDirection { Upload, Download, Copy }
 
 /// <summary>
 /// <see cref="Paused"/> is deliberately distinct from <see cref="Cancelled"/>: both stop a transfer, but a
@@ -34,10 +39,12 @@ public sealed record CloudTransferBatch(int Total, int Completed, int Failed, in
 }
 
 /// <summary>
-/// One user-visible upload or download of a single file. The unit is deliberately a file, matching
-/// <see cref="EndpointTransfer"/>'s staging/resume contract. A download keeps its staging file and can
-/// be continued from where it stopped; an upload cannot, because rclone has no way to append to a
-/// partially written remote object, so a retry starts that file again.
+/// One user-visible upload, download, or remote→remote copy of a single file. The unit is deliberately a
+/// file, matching <see cref="EndpointTransfer"/>'s staging/resume contract. A download keeps its staging
+/// file and can be continued from where it stopped; an upload cannot, because rclone has no way to append to
+/// a partially written remote object, so a retry starts that file again. A <see cref="CloudTransferDirection.Copy"/>
+/// cannot be continued either, and for a sharper reason: both legs are rclone's, so Feng Sync never holds the
+/// bytes and has no seam to verify an append against.
 /// </summary>
 public sealed class CloudTransferTask : INotifyPropertyChanged
 {
@@ -48,22 +55,35 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
     private string? _errorDetail;
     private int _attempt;
 
-    public CloudTransferTask(CloudTransferDirection direction, string remoteUri, string remotePath, string localPath, long totalBytes)
+    public CloudTransferTask(CloudTransferDirection direction, string remoteUri, string remotePath, string localPath, long totalBytes, string? targetUri = null, string? targetPath = null)
     {
         Direction = direction;
         RemoteUri = remoteUri;
         RemotePath = remotePath.Trim('/');
         LocalPath = localPath;
         TotalBytes = totalBytes;
+        TargetUri = targetUri;
+        TargetPath = targetPath?.Trim('/');
     }
 
     public Guid Id { get; init; } = Guid.NewGuid();
     public CloudTransferDirection Direction { get; }
-    /// <summary>Remote root in Feng Sync URI form, e.g. <c>s3://archive</c>. Credentials stay in rclone.conf.</summary>
+    /// <summary>
+    /// Remote root in Feng Sync URI form, e.g. <c>s3://archive</c>. Credentials stay in rclone.conf.
+    /// For a <see cref="CloudTransferDirection.Copy"/> this is the source.
+    /// </summary>
     public string RemoteUri { get; }
     /// <summary>Path relative to the remote root, e.g. <c>team/docs/report.pdf</c>.</summary>
     public string RemotePath { get; }
     public string LocalPath { get; }
+    /// <summary>
+    /// The destination endpoint of a <see cref="CloudTransferDirection.Copy"/>, in the same URI form as
+    /// <see cref="RemoteUri"/>. It is never carried in <see cref="LocalPath"/>: a copy has no local file, and
+    /// a journal entry whose "local path" is really a remote would be read by the next release as one.
+    /// </summary>
+    public string? TargetUri { get; }
+    /// <summary>Destination path relative to <see cref="TargetUri"/>'s root; the target's own root is not repeated.</summary>
+    public string? TargetPath { get; }
     public long TotalBytes { get; internal set; }
 
     public CloudTransferState State
@@ -115,11 +135,23 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
     public bool IsResumable => State is CloudTransferState.Paused or CloudTransferState.Cancelled or CloudTransferState.Failed;
 
     /// <summary>
-    /// Label for the row's restart action. A paused transfer is continued and one that stopped on its own is
-    /// retried: the operation is the same, but the two words are what the user is actually choosing between.
+    /// Label for the row's restart action. A paused transfer that left usable bytes behind is continued and
+    /// one that stopped on its own is retried: the operation is the same, but the two words are what the user
+    /// is actually choosing between — and only a download leaves bytes behind.
     /// </summary>
-    public string RestartText => State == CloudTransferState.Paused ? "继续" : "重试";
-    public string DirectionText => Direction == CloudTransferDirection.Upload ? "上传" : "下载";
+    public string RestartText => State == CloudTransferState.Paused && CanContinueFromStaging ? "继续" : "重试";
+    /// <summary>
+    /// Whether stopping this transfer leaves bytes a later run can build on. Only a download does, because
+    /// only a download has Feng Sync's own staging file to append to; an upload cannot append to a remote
+    /// object and a remote→remote copy never routes the bytes through this process at all.
+    /// </summary>
+    public bool CanContinueFromStaging => Direction == CloudTransferDirection.Download;
+    public string DirectionText => Direction switch
+    {
+        CloudTransferDirection.Upload => "上传",
+        CloudTransferDirection.Download => "下载",
+        _ => "复制"
+    };
     public string FileName => Direction == CloudTransferDirection.Upload ? Path.GetFileName(LocalPath) : NameOf(RemotePath);
     public string Display => $"{DirectionText} · {FileName}";
     public string SizeText => TotalBytes <= 0 ? "" : $"{Megabytes(_completedBytes):N1} / {Megabytes(TotalBytes):N1} MB";
@@ -130,7 +162,12 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
         CloudTransferState.Running => RunText(),
         CloudTransferState.Paused => "已暂停",
         CloudTransferState.Completed => $"已完成  ·  {Megabytes(TotalBytes):N1} MB",
-        CloudTransferState.Cancelled => Direction == CloudTransferDirection.Download ? "已取消，可继续下载" : "已取消，可重新上传",
+        CloudTransferState.Cancelled => Direction switch
+        {
+            CloudTransferDirection.Download => "已取消，可继续下载",
+            CloudTransferDirection.Upload => "已取消，可重新上传",
+            _ => "已取消，重新复制会从头开始"
+        },
         _ => "失败：" + (_error ?? "未知错误")
     };
 
@@ -155,9 +192,9 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
 }
 
 /// <summary>
-/// Serialises cloud uploads/downloads: bounded concurrency, per-task progress, cancellation and pausing,
-/// automatic retries, and a journal so cancelled or failed transfers survive an application restart and can
-/// be continued.
+/// Serialises cloud uploads, downloads, and remote→remote copies: bounded concurrency, per-task progress,
+/// cancellation and pausing, automatic retries, and a journal so cancelled or failed transfers survive an
+/// application restart and can be continued.
 /// </summary>
 public sealed class CloudTransferQueue : INotifyPropertyChanged
 {
@@ -167,6 +204,12 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     public const int MaximumConcurrency = 16;
 
     private readonly CloudTransferJournalStore _journal;
+    /// <summary>
+    /// Resolves the RC client lazily, exactly as <see cref="CloudFileManagerService"/> does, so a queue can be
+    /// built and its copy branch driven before any shell has started a daemon — which is what lets the
+    /// remote→remote payload be asserted without rclone.
+    /// </summary>
+    private readonly Func<CancellationToken, Task<RcloneRcClient>> _client;
     /// <summary>
     /// A hand-rolled gate rather than a <see cref="SemaphoreSlim"/>, because the concurrency limit is
     /// user-adjustable at runtime and a semaphore's capacity cannot be changed after construction.
@@ -185,7 +228,11 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     private int _maxRetries = 2;
     private int _activeCount;
 
-    public CloudTransferQueue(CloudTransferJournalStore? journal = null) => _journal = journal ?? new CloudTransferJournalStore();
+    public CloudTransferQueue(CloudTransferJournalStore? journal = null, Func<CancellationToken, Task<RcloneRcClient>>? client = null)
+    {
+        _journal = journal ?? new CloudTransferJournalStore();
+        _client = client ?? (ct => AppServices.Current.RcloneHost.GetClientAsync(ct));
+    }
 
     /// <summary>
     /// Files at or above this size keep a resumable staging file, so an interrupted download is
@@ -250,6 +297,12 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     public bool HasCompletedTasks => Tasks.Any(task => task.State == CloudTransferState.Completed);
     public bool HasResumableTasks => Tasks.Any(task => task.IsResumable);
     public bool HasPausedTasks => Tasks.Any(task => task.State == CloudTransferState.Paused);
+    /// <summary>
+    /// Whether the queue holds a remote→remote copy. The transfer window reads it to say out loud that a copy
+    /// starts over: rclone moves those bytes between two remotes, so there is no Feng Sync staging file to
+    /// continue from, and a user who paused one expecting a 继续 would otherwise be misled by the row.
+    /// </summary>
+    public bool HasCopyTasks => Tasks.Any(task => task.Direction == CloudTransferDirection.Copy);
     public bool HasTasks => Tasks.Count > 0;
 
     /// <summary>
@@ -300,8 +353,18 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     }
 
     public CloudTransferTask Enqueue(CloudTransferDirection direction, string remoteUri, string remotePath, string localPath, long totalBytes)
+        => Enqueue(new CloudTransferTask(direction, remoteUri, remotePath, localPath, totalBytes));
+
+    /// <summary>
+    /// Queues one remote→remote copy. The destination is a URI plus a path because a copy has two remotes and
+    /// no local file: <see cref="CloudTransferTask.LocalPath"/> stays empty rather than being bent to carry an
+    /// endpoint, which the journal and every local-path consumer would read literally.
+    /// </summary>
+    public CloudTransferTask EnqueueCopy(string sourceUri, string sourcePath, string targetUri, string targetPath, long totalBytes)
+        => Enqueue(new CloudTransferTask(CloudTransferDirection.Copy, sourceUri, sourcePath, string.Empty, totalBytes, targetUri, targetPath));
+
+    private CloudTransferTask Enqueue(CloudTransferTask task)
     {
-        var task = new CloudTransferTask(direction, remoteUri, remotePath, localPath, totalBytes);
         Track(task);
         Tasks.Add(task);
         RaiseSummary();
@@ -335,7 +398,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         foreach (var record in records)
         {
             if (Tasks.Any(task => task.Id == record.Id)) continue;
-            var restored = new CloudTransferTask(record.Direction, record.RemoteUri, record.RemotePath, record.LocalPath, record.TotalBytes)
+            var restored = new CloudTransferTask(record.Direction, record.RemoteUri, record.RemotePath, record.LocalPath, record.TotalBytes, record.TargetUri, record.TargetPath)
             {
                 Id = record.Id,
                 State = record.State == CloudTransferState.Paused ? CloudTransferState.Paused : CloudTransferState.Cancelled,
@@ -475,9 +538,16 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         IEndpoint? target = null;
         // A staging object is named after the file at its own endpoint. For an upload the local file is
         // the source, so the name is the local file name, while the published destination is the full
-        // remote-relative path. For a download both collapse to the remote file name.
-        var stagingPath = task.Direction == CloudTransferDirection.Upload ? Path.GetFileName(task.LocalPath) : CloudTransferTask.NameOf(task.RemotePath);
-        var destination = task.Direction == CloudTransferDirection.Upload ? task.RemotePath : stagingPath;
+        // remote-relative path. For a download both collapse to the remote file name. A remote→remote copy
+        // has neither: the bytes stay inside rclone, so its destination is the target path itself and there
+        // is no staging object to name, publish, or discard.
+        var isCopy = task.Direction == CloudTransferDirection.Copy;
+        var stagingPath = isCopy
+            ? ""
+            : task.Direction == CloudTransferDirection.Upload ? Path.GetFileName(task.LocalPath) : CloudTransferTask.NameOf(task.RemotePath);
+        var destination = isCopy
+            ? task.TargetPath ?? ""
+            : task.Direction == CloudTransferDirection.Upload ? task.RemotePath : stagingPath;
         try
         {
             task.State = CloudTransferState.Pending;
@@ -486,28 +556,39 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             task.Error = null;
         task.ErrorDetail = null;
             task.Attempt = 0;
+            // A task can only arrive here without a destination through a hand-edited journal file, and
+            // copying to an empty path would address the target endpoint's root.
+            if (isCopy && (string.IsNullOrWhiteSpace(task.TargetUri) || string.IsNullOrWhiteSpace(destination)))
+                throw new InvalidOperationException("云端复制缺少目标端点或目标路径。");
             Persist(task);
             await AcquireSlotAsync(ct);
             slotAcquired = true;
             ActiveCount++;
             task.State = CloudTransferState.Running;
 
-            var client = await AppServices.Current.RcloneHost.GetClientAsync(ct);
-            var localDirectory = Path.GetDirectoryName(task.LocalPath) ?? throw new InvalidOperationException($"本地路径缺少目录：{task.LocalPath}");
-            Directory.CreateDirectory(localDirectory);
-
+            var client = await _client(ct);
             IEndpoint source;
-            if (task.Direction == CloudTransferDirection.Upload)
+            if (isCopy)
             {
-                if (!File.Exists(task.LocalPath)) throw new FileNotFoundException("要上传的本地文件已不存在。", task.LocalPath);
-                task.TotalBytes = new FileInfo(task.LocalPath).Length;
-                source = new LocalEndpoint(localDirectory);
-                target = EndpointFactory.CreateWithClient(task.RemoteUri, client);
+                source = EndpointFactory.CreateWithClient(task.RemoteUri, client);
+                target = EndpointFactory.CreateWithClient(task.TargetUri!, client);
             }
             else
             {
-                source = EndpointFactory.CreateWithClient(task.RemoteUri, client);
-                target = new LocalEndpoint(localDirectory);
+                var localDirectory = Path.GetDirectoryName(task.LocalPath) ?? throw new InvalidOperationException($"本地路径缺少目录：{task.LocalPath}");
+                Directory.CreateDirectory(localDirectory);
+                if (task.Direction == CloudTransferDirection.Upload)
+                {
+                    if (!File.Exists(task.LocalPath)) throw new FileNotFoundException("要上传的本地文件已不存在。", task.LocalPath);
+                    task.TotalBytes = new FileInfo(task.LocalPath).Length;
+                    source = new LocalEndpoint(localDirectory);
+                    target = EndpointFactory.CreateWithClient(task.RemoteUri, client);
+                }
+                else
+                {
+                    source = EndpointFactory.CreateWithClient(task.RemoteUri, client);
+                    target = new LocalEndpoint(localDirectory);
+                }
             }
 
             for (var attempt = 0; ; attempt++)
@@ -530,11 +611,17 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
                         lastStamp = Stopwatch.GetTimestamp();
                     });
 
-                    // Passing no resume candidates lets TransferResume search a local target itself.
-                    var temporary = await EndpointTransfer.CopyToStagingAsync(source, target, stagingPath, null, task.Id,
-                        task.TotalBytes, ActiveCount, progress, EnsureParentAsync(target, destination), ResumeMinimumBytes, ct);
+                    if (isCopy)
+                        await EndpointTransfer.CopyServerSideAsync(source, target, task.RemotePath, destination, task.Id,
+                            task.TotalBytes, ActiveCount, progress, EnsureParentAsync(target, destination), ct);
+                    else
+                    {
+                        // Passing no resume candidates lets TransferResume search a local target itself.
+                        var temporary = await EndpointTransfer.CopyToStagingAsync(source, target, stagingPath, null, task.Id,
+                            task.TotalBytes, ActiveCount, progress, EnsureParentAsync(target, destination), ResumeMinimumBytes, ct);
+                        await EndpointTransfer.PublishAsync(target, temporary, destination, overwrite: true, ct);
+                    }
                     task.CompletedBytes = task.TotalBytes;
-                    await EndpointTransfer.PublishAsync(target, temporary, destination, overwrite: true, ct);
                     committed = true;
                     task.State = CloudTransferState.Completed;
                     task.BytesPerSecond = 0;
@@ -579,8 +666,10 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         finally
         {
             // Mirrors the executor: local staging survives so a cancelled download can resume, while a
-            // remote staging object is removed because rclone cannot resume it across runs.
-            if (!committed && target is not null && target is not LocalEndpoint)
+            // remote staging object is removed because rclone cannot resume it across runs. A copy created
+            // no staging object at all, so there is nothing of ours to remove — and rclone's own partial
+            // object is not a name Feng Sync may delete.
+            if (!isCopy && !committed && target is not null && target is not LocalEndpoint)
             {
                 try { await EndpointTransfer.DiscardStagingAsync(target, stagingPath); }
                 catch { /* preserve the original failure */ }
@@ -605,6 +694,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     /// Clears the way for another attempt. An upload's staging object cannot be appended to — rclone has no
     /// offset write — so a retry starts that file over and the partial object has to go first. A download's
     /// local staging file is deliberately kept: continuing it is the whole point of the resume machinery.
+    /// A remote→remote copy stages nothing at all, so there is no object of ours to discard.
     /// </summary>
     private static async Task PrepareRetryAsync(CloudTransferTask task, IEndpoint? target, string stagingPath)
     {
@@ -612,7 +702,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         task.BytesPerSecond = 0;
         task.Error = null;
         task.ErrorDetail = null;
-        if (target is null || target is LocalEndpoint) return;
+        if (task.Direction == CloudTransferDirection.Copy || target is null || target is LocalEndpoint) return;
         try { await EndpointTransfer.DiscardStagingAsync(target, stagingPath); }
         catch { /* a missing staging object is the state a retry wants anyway */ }
     }
@@ -718,7 +808,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
 
     private void Persist(CloudTransferTask task)
     {
-        var record = new CloudTransferRecord(task.Id, task.Direction, task.RemoteUri, task.RemotePath, task.LocalPath, task.TotalBytes, task.State, task.Error, task.ErrorDetail);
+        var record = new CloudTransferRecord(task.Id, task.Direction, task.RemoteUri, task.RemotePath, task.LocalPath, task.TotalBytes, task.State, task.Error, task.ErrorDetail, task.TargetUri, task.TargetPath);
         _ = SaveIgnoringFailureAsync(record);
     }
 
@@ -735,6 +825,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         Raise(nameof(HasCompletedTasks));
         Raise(nameof(HasResumableTasks));
         Raise(nameof(HasPausedTasks));
+        Raise(nameof(HasCopyTasks));
         Raise(nameof(SummaryText));
         Raise(nameof(OverallPercentage));
     }
@@ -754,7 +845,10 @@ public sealed record CloudTransferRecord(
     CloudTransferState State,
     string? Error,
     // Optional so journals written before the field existed still deserialize.
-    string? ErrorDetail = null);
+    string? ErrorDetail = null,
+    // Optional for the same reason: only a remote→remote copy carries a destination endpoint.
+    string? TargetUri = null,
+    string? TargetPath = null);
 
 /// <summary>
 /// Journal for cloud transfers. It mirrors <see cref="TaskJournalStore"/>'s contract — one JSON file per
