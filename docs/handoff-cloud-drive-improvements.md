@@ -15,9 +15,9 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）。**A 组全部收尾，B0 已落。**见 §2。 |
-| **下一步** | **B1–B11 文件浏览器**（§5），第一项就是 B1 复制/剪切/粘贴 —— B0 的 `Copy` 方向就是给它铺的路：`CloudTransferQueue.EnqueueCopy(源URI, 源路径, 目标URI, 目标路径, 大小)` 已经齐了，浏览器只需要把「当前选中 + 目标端点/目录」拼成这五个参数。全量门禁 2026-10-04 跑过两次，都是 `Failed: 0`（Core 390 / UI 264）；§1 里提到的 `UiFeatureBehaviorTests` 既有超时**没有复现**，不用再单独排查。 |
-| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）。**A 组全部收尾，B 组走到 B1。**见 §2。 |
+| **下一步** | **B2–B11 文件浏览器**（§5）。B1 已经把「一条剪贴板行 → `EnqueueCopy` 的五个参数」这条路打通了（`CloudPastePlanner` + `RemoteEndpointManagerWindow` 的 `SetClipboard`/`PlanPasteAsync`/`ExecutePasteAsync`），B2 起的每一项都可以照它的样板走：**纯函数定规则 + 假 RC 驱动真窗口 + 需要落点才上真 rclone**。全量门禁 2026-10-04 又跑了一次，`Failed: 0`（**Core 392 / UI 281**，UI 3m01s）；§1 里提到的 `UiFeatureBehaviorTests` 既有超时**没有复现**，不用再单独排查。 |
+| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）。 |
 
 ---
 
@@ -31,6 +31,7 @@ pwsh -NoProfile -File .\scripts\Test-All.ps1 -Level UiOffline
 
 A3–A6 是分批提交的，所以接手时先自证过一次基线；B0 提交前后各跑了一次全量门禁，两次都是 `Failed: 0`
 （**Core 390 / UI 264**，UI 阶段约 **3m08s**）。§0 说的 `UiFeatureBehaviorTests` 超时在本环境**没有复现**。
+**B1 收尾时又跑了一次：`Failed: 0`，Core 392 / UI 281，UI 阶段 3m01s**（读数随批次上涨，别追死数字）。
 
 - 约 **3m30s**（UI 阶段占大头）。调用工具时**超时必须给 600000ms**，否则会被掐断在半路。
 - 判定标准：日志里出现 **`Passed!  - Failed: 0` 汇总行**。只看日志尾部会误判 —— 被超时掐断时日志正好停在
@@ -42,12 +43,16 @@ A3–A6 是分批提交的，所以接手时先自证过一次基线；B0 提交
   另坑：在 bash 工具里执行 pwsh 时，重定向要写成 `> /c/Users/.../x.log 2>&1`；写 `*>` 会被 bash 先展开，
   结果 `Test-All.ps1` 收到 `Configuration=AGENTS.md` 并报「Cannot validate argument on parameter 'Configuration'」。
 - 读数会比文档 §3 的旧预期更高（A5/A6/B0 各加了测试）；以 `Failed: 0` 为准，不追死具体数字。
+- **单独跑一个测试类**（改窗口代码后的快速回路）时，别把 `dotnet test` 接进管道：`... | tail -20` 会让日志在进程
+  结束前一个字都不落盘，看着像卡死。写成 `> "$TEMP/x.log" 2>&1` 再 `tail`。B1 用的过滤器
+  `--filter "FullyQualifiedName~CloudBrowserPaste|FullyQualifiedName~CloudTransferWindowBehavior"`（19 条）**1 秒**跑完。
 
-### ② A7 与 B0 已实现并提交 ✅
+### ② A7、B0、B1 已实现并提交 ✅
 
 A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）。A1 的桌面场景缺口在进 B 组前补上
 （`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / `6be98b9` docs
-（本节的这条 commit 行与 §2 表末行是 `6be98b9` 之后回填的）。**A 组 + B0 至此收尾。**
+（本节的这条 commit 行与 §2 表末行是 `6be98b9` 之后回填的）。**B1 浏览器粘贴**照旧三层：`3c9322b` feat /
+`cd74a61` + `526a634` test / 本节是 docs 层（它的 hash 由下一次 docs 回填补上）。
 
 ### ③ 提交粒度（一直照这个走）
 
@@ -78,6 +83,9 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `af6fc4c` | B0 | `feat(transfers): copy between two cloud endpoints through the queue` |
 | `85160a9` | B0 | `test(transfers): cover the copy payload and where real rclone writes it` |
 | `6be98b9` | B0 | `docs: record B0 done and the copy invariants that B1 must keep`（AGENTS.md 不变式 + 本文件） |
+| `3c9322b` | B1 | `feat(browser): copy, cut and paste files between cloud endpoints` |
+| `cd74a61` | B1 | `test(browser): cover the paste decisions and the calls they make` |
+| `526a634` | B1 | `test(browser): cover the cut whose source delete was refused` |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -233,6 +241,52 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   目标、取消时 `job/stop` 真的发出去、journal 往返带回两个端点、旧 journal 仍可读、行文案纯函数；
   `CloudTransferWindowBehaviorTests` +1 STA（有复制才提复制）。
 
+### B1 —— 文件浏览器的复制 / 剪切 / 粘贴（**已提交**：`3c9322b` + `cd74a61` + `526a634` + 本节）
+
+- 纯规则在 `src/FengSync/Services/CloudBrowserClipboard.cs`：`CloudClipboardMode`（Copy / Cut —— **两者的全部差别就是粘贴后删不删源**）、
+  `CloudClipboardItem(Source, Entry)`（**行必须带着它来自的端点**：用户可以跨到别的端点再粘贴，脱离了 remote 的 listing 路径没有意义）、
+  `CloudPasteTarget`、`CloudPastePlan.Targets` / `.Skipped` / `.Conflicts`、
+  `CloudPastePlanner.Build(items, destination, destinationDirectory, alreadyThere)`。目标目录的**现有清单是参数**而不是在这里现取 ——
+  冲突必须在**排队之前**发现，同时让规则保持纯函数。
+- 三条规则的落点：① **文件夹永不粘贴**（队列的单位是一个对象，浏览器的答案一直是「先进入文件夹再选文件」），而且把
+  「N 个文件夹没有被复制」**合并成一行**而不是每行重复一次；② **同端点同路径 = 自复制**直接 skip —— rclone 会报成功，
+  用户会盯着一趟什么也不会改变的传输；③ 同名判定用 `OrdinalIgnoreCase`，且**目录标记也算占名**
+  （没有真目录的 backend 上，文件夹标记占掉的正是粘贴要写的那个 key）。
+- **两侧各自剥自己的根，只剥一次**：`CloudFileManagerService.RelativeToEndpoint(account, remotePath)`（由窗口里的私有
+  `ToEndpointRelative` 提升为公共服务，窗口 6 处调用点一并改）。`CloudPasteTarget` 因此同时带 `DestinationPath`
+  （相对 remote 根，`CloudFileManagerService` 用它）和 `SourceRelativePath` / `DestinationRelativePath`
+  （相对端点根，队列与 `EndpointSchemes.BuildUri` 用它）。alias 型 S3 端点的 `RootPath` 是空的，所以没得剥 ——
+  这条由 `A_paste_strips_each_endpoints_own_root_and_only_once` 钉住。
+- 窗口侧（`RemoteEndpointManagerWindow`）：右键菜单加 **复制 / 剪切**（作用于整个多选），工具条加 `PasteButton`
+  （`AutomationId="CloudPaste"`，放在 删除 与 下载 之间）。内部接缝 `SetClipboard` / `PlanPasteAsync` /
+  `ExecutePasteAsync(plan, overwrite)` / `ClipboardItems` / `ClipboardMode` / `ShowListing`，构造函数新增
+  `internal RemoteEndpointManagerWindow(CloudFileManagerService?, CloudTransferQueue?)` —— 两个 shell 仍走无参形式。
+- 执行分工：**复制一律进队列**（`EnqueueCopy`，因此有进度 / 取消 / 重试 / 历史，同端点内的复制也一样）；
+  **同端点的剪切走 `operations/movefile`**（`CloudFileManagerService.MoveAsync`，字节不动，和 重命名 是同一个调用），
+  所以它既不留重复也不需要二次确认。
+- 删除只在**复制真的完成之后**：`DeleteSourceWhenCopied` 等 `_transfers.WaitForAsync(task)`；返回 false（失败/取消）就只报
+  「源文件仍然保留」，删除本身抛错就报「已复制但源未删除」而**不报成功**（用户此刻有两个文件，报成功会把重复藏起来）。
+  粘贴前的确认用 `CloudDeleteSafety.Describe` + `SupportsTrash`（**能不能撤销问的是源端点**，不是目标端点），
+  批量阈值 10 的第二次确认照旧保留。
+- ⚠️ **本批抓出的两条生产 bug**（都是测试先红、再改代码）：
+  1. **纯复制也会排队删源** —— 第一版无条件调 `DeleteSourceWhenCopied`，把用户以为可加的粘贴变成数据丢失。
+     现在 `if (cutting)` 才安排删除，测试用「复制之后 `Assert.Empty(deleted)`、不发 `movefile`/`deletefile`」钉住。
+  2. **复制结果被刷新吃掉** —— `BrowseAsync` 会自己占用状态行（「正在读取目录…」）并且**不还原**，
+     所以先写结果再刷新时，界面最后停在一个早已结束却没转完的 spinner。现在刷新在前、写状态在后，同一次 dispatcher 操作里完成。
+- 测试：`tests/FengSync.UiTests/CloudBrowserPasteTests.cs`（14 条，**真窗口 + 假 RC**）—— 空剪贴板（按钮 off + 「剪贴板是空的」）、
+  复制记住来源端点、剪切的预告（「已剪切 2 项」「文件夹不会被粘贴」「无法恢复」）、文件夹永不粘贴、跨端点两侧路径各自成立、
+  自复制 skip、冲突计数、两行 = 两条 `operations/copyfile` 且 `srcFs/dstFs` 是**两个不同**端点、`overwrite=false` 只排非冲突行、
+  同端点剪切只发一条 `movefile` 并清空剪贴板、跨端点剪切**复制完成后**才删源并写成「已剪切到 files」、拒绝复制时 `Failed` +
+  「源文件仍然保留」且删除记录为空、**拒绝删除时报告「已复制但源未删除」并带上原因**（而不是报成功）、
+  离开来源端点后粘贴仍落在目标端点的目录里。
+  `CloudFeatureBehaviorTests` +3 STA 纯规则（大小写/斜杠不同写法仍算同一个文件、skip 原因合并成一行、两侧各自剥根一次）；
+  `ServerSideCopyTests` +2 真 rclone 实证（结论见 §4）；`CloudPaste` 的 `AutomationId` 在窗口测试里直接断言。
+- ⚠️ 断言状态行时**别指望后端原文**：窗口那句经过 `RcloneUiError.Describe(ex, "cloud-delete")`，403 会被映射成
+  「云端拒绝了此操作。检查目标目录权限和远程端点授权…」。后端原文只在队列层可断言
+  （`CloudTransferTask.ErrorDetail`，`CloudTransferCopyTests` 就是这么钉的）。
+- **桌面场景没动**：`Invoke-UiScenario.ps1` 里没有枚举云盘工具条的断言，所以新增工具条按钮不需要改场景脚本。
+  日后若要断言「工具条上有哪个按钮」，改动点是 `UiAcceptanceTests.cs` + `Invoke-UiScenario.ps1` 两处（见 §7）。
+
 ---
 
 ## 3. A3/A4 的设计要点与遗留缺口
@@ -279,6 +333,8 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | duration 字段拒绝纯数字，接受字符串 `"5s"` / `"1h"` | |
 | `config/create` 同名是**整段替换**；写回 obscured 值**必须** `opt.noObscure=true` | 否则二次加密静默损坏密码 |
 | `mountPoint` 路径**必须不存在**；卸载要用反斜杠形式 | |
+| **同一个 fs 两端**调 `operations/copyfile`：目标名落在源旁边、**源原样保留**（字节 hash 相同） | B1 的依据：同端点内的复制不需要第二套机制，也不会把 复制 变成 剪切（`ServerSideCopyTests`，真 rclone + alias remote） |
+| **同一个 fs 两端**调 `operations/movefile`：目标处出现、**源目录里不再有这个对象** | B1 的依据：同端点的剪切用 move 而不是「复制 + 删源」——字节不动，也就不需要删除确认；`RcloneRcClient.MoveFileAsync` 走 `CallAsync`（载荷里**没有** `_async`，也不返回 jobid），所以它是同步等回复的那类调用，和 `copyfile` 的 `_async` 腿不同。`RemoteEndpointManagerWindow` 的 重命名 早就在用同一条腿 |
 | `operations/copyfile` **原生支持跨 fs**；`drive` backend 默认 `use_trash=true` | B8/B9 的地基 |
 | **`operations/copyfile` 中途只有 rclone 自己的 `<name>.<id>.partial`**，目标名要等 job 成功才出现；`job/stop` 后目标目录**为空**（日志 `Removing partially written file on error`）；对**已存在**的目标名是直接**覆盖** | B0 的依据：跨端点复制可以不过 Feng Sync 的 staging，失败/取消不会留下半成品，重试前不需要清理。**残余风险**：daemon 被硬杀时 rclone 的 `.partial` 会留在目标目录，Feng Sync 叫不出它的名字，也就清不掉 |
 | `operations/copyfile` 走 `_async`+`_group` 时，进度只能从 `core/stats` 读；RC **没有** offset 写，所以远端→远端**不可能续传** | 复制行的按钮只能是「重试」，传输窗必须明说会从头再来 |
@@ -299,14 +355,17 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | `RcloneLifecycleHost.GetClientAsync` **会真的起 rclone 进程**，而 `IAppServiceHost.RcloneHost` 是 **sealed 具体类**（无法替换） | 「不碰 rclone」的测试必须靠**不触发 `BrowseAsync`**，并用「`StatusText` 没被写过」来证明（`AssertNoDirectoryListing` 就是这个）。B0 给 `CloudTransferQueue` 也加了同款**可选 RC 客户端工厂**构造参数（`CloudFileManagerService` 早就有），于是「队列发了什么载荷」能在假 RC 上断言（`CloudTransferCopyTests`）；没有接缝的那条腿照旧靠不起 daemon 的写法 |
 | 桌面场景里 `AutomationProperties.Name` 会**覆盖** `Content` 派生的名字 | 别想用 UIA 的 `Name` 去断言一个「标签会变」的按钮；改断言它的 `SelectionPattern` / 布局 |
 | WPF 跨进程 UIA 客户端拿不到 `TextBlock` 的 `TextPattern` | 断言文本要靠 `Name`（因此动态文本 `TextBlock` 必须**去掉**静态 `Name`） |
+| **一个进程/AppDomain 只能有一个 `System.Windows.Application`**，而 `Application.Current` **只有创建它的那个线程看得见**；一个还活着（或正在关闭）的实例会让别的线程 `new Application()` 直接抛「Cannot create more than one…」/「The Application object is being shut down」 | B1 的窗口测试每条跑在自己的 STA 线程上，**不能**各自重建 Application。规则：**只在 `Application.Current is null` 时构造并配置它，并记住自己是否拥有它**；拥有它的那个线程负责在结束时 `Shutdown()` + `dispatcher.InvokeShutdown()` 把它释放掉，否则下一个建窗口的测试类会死在 `new Application` 上而不是自己的断言上（`CloudBrowserPasteTests` 的 `MergeApplicationThemes()` 返回 bool 就是为了这个）。`IClassFixture` 共享 Application 的写法**试过且不行**：`Dispose` 里无论 `BeginInvokeShutdown` 还是 `BeginInvoke(Shutdown)` 都 release 不掉，因为 WPF 只在其 dispatcher 关闭时销毁 Application |
+| `ShutdownMode` 默认 `OnLastWindowClose`：测试里第一次 `window.Close()` 会**连带结束整个 Application 和正在 pumping 的 dispatcher**，粘贴剩下的续传就永远不会跑；在一个**不属于本线程**的 Application 上设 `ShutdownMode` 会 `VerifyAccess` | 自己建的 Application 一律设 `OnExplicitShutdown`；别人的**只读不写**。窗口可能已被测试自己关掉，收尾 `Close()` 要容许 `InvalidOperationException` |
+| `Dispatcher.InvokeAsync` 的续传只在**它自己的线程 pumping 时**才执行；线程停在 `Thread.Join` 里 = 续传永不跑（窗口那句状态行就是续传） | 异步窗口行为必须在 STA 线程里 `Dispatcher.PushFrame(frame)` pumping，任务完成时把 `frame.Continue = false`。**并且要有 watchdog**：`System.Threading.Timer` 到点 `dispatcher.BeginInvoke(() => frame.Continue = false)`，否则一条卡住的粘贴会挂住整个 UI 套件（B1 撞到过一次 >10 分钟无输出的后台跑） |
 
 ---
 
 ## 5. 剩余路线图（B1 → E）
 
-> 这一节同时是那份 307 行改进计划的替代。**A0–A7 与 B0 已完成**（见 §2），本节的 A5/A6/A7/B0 只留设计与规则的留档。
-> **剩余项的顺序与依赖**：B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**；
-> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B1–B11（B0 已落，见 §2）。**
+> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0 与 B1 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
+> **剩余项的顺序与依赖**：B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**（已落）；
+> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B2–B11（B1 已落，见 §2）。**
 
 ### A7. 端点导出/导入（原 A9）—— ✅ 已完成，见 §2
 
@@ -348,11 +407,13 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 > 需求盘点原本列了 21 项（B1–B21）；其中 P0 的 7 项 —— 新建文件夹、重命名、删除、多选批量、搜索、排序、
 > 面包屑 + 地址栏 —— **已在批次 1 落地**。下表是**剩余 11 项**，「现状 / 缺口」与「参考做法」两列是从原盘点文档
-> 一并搬过来的，以免那份文档消失后丢掉判断依据。
+> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1 已落地（见 §2）**，下表从 B2 起都是待做项。
+> 给 B6 的一条现成接线：`SetClipboard(Copy/Cut, 多选行)` 和 `Paste_Click` 已经是内部方法，
+> Ctrl+C / Ctrl+X / Ctrl+V 只需把键盘事件指到它们，**不要**另造一套剪贴板状态。
 
 | 本计划 | 原编号 | 内容 | 现状 / 缺口 | 参考做法 |
 | --- | --- | --- | --- | --- |
-| B1 | B8–B9 | 复制 / 剪切 / 粘贴 + 跨端点复制 | **队列腿已齐（B0）**：`CloudTransferQueue.EnqueueCopy` + `EndpointTransfer.CopyServerSideAsync` + `operations/copyfile` 都通了。缺的是**浏览器侧**：右键菜单 / 剪贴板状态（复制 vs 剪切的差别只在粘贴后删不删源，删除要走 `CloudFileOperationSafety` 校验 + 二次确认）、目标端点/目录的选择、同端点内复制的呈现 | 网盘标配；Air Explorer 支持云到云 |
+| B1 | B8–B9 | 复制 / 剪切 / 粘贴 + 跨端点复制 | ✅ **已完成**（`3c9322b` + `cd74a61` + `526a634`，见 §2）。跨端点复制进队列（`EnqueueCopy`），同端点的剪切走 `operations/movefile`，文件夹一律 skip 并说明原因，源删除只在它自己的复制完成之后才发生 | 网盘标配；Air Explorer 支持云到云 |
 | B2 | B10 | 上传冲突细化 | 现在只有一次性弹窗「全部覆盖 / 全部跳过 / 取消」，缺 **`KeepBoth`（重命名保留两者）** 与**逐文件询问** | 网盘标配 |
 | B3 | B11 | 属性 / 详情 | 无大小统计、无权限、无校验值（`ReadPreferredHash` 已抽好） | 网盘有「详细信息」 |
 | B4 | B12 | 分享链接 | rclone `operations/publiclink` 存在，UI 未接 | 网盘核心功能之一 |
@@ -440,7 +501,7 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | **挂载选项键名拼错被 rclone 静默忽略** | 唯一手段：断言发往 `mount/mount` 的 JSON 键名；关键项（`readOnly`/`diskSpaceTotalSize`）加「负值应报错」探针 |
 | ✅ **已核（B0）**：服务端复制无 staging，失败留半成品 | 实证过（见 §4：`operations/copyfile` 中途只有 rclone 自己的 `.partial`，`job/stop` 后目标目录为空，成功才有目标名）；`ServerSideCopyTests` 用真 rclone 钉住「失败 / 源不存在时目标为空」，`CloudTransferCopyTests` 用假 RC 钉住「失败时没有 publish、没有 deletefile、载荷里不出现 staging 名」。残余：daemon 被硬杀会留下 rclone 自己的 `.partial`，Feng Sync 清不掉 —— B1 的复制 UI 不要把「目标目录有个不认识的 .partial」当成本程序的 bug |
 | 端点重命名迁移中途失败 | 单测覆盖每步注入失败，断言 conf 与两个 JSON 回到原状；S3 场景断言 `<old>_s3` 不残留 |
-| 跨端点 move 的 delete 失败 → 重复文件 | 单测模拟 delete 抛错，断言提示「已复制但源未删除」而不是报成功 |
+| 跨端点 move 的 delete 失败 → 重复文件 | ✅ **已覆盖（B1）**：`A_cut_whose_delete_was_refused_reports_the_duplicate_instead_of_a_success` 用假 RC 拒绝 `operations/deletefile`，断言状态行是「已复制但源未删除」+ 原因，而不是「已剪切」 |
 | 键盘快捷键劫持地址栏/搜索框输入 | UI 场景：在 `AddressBox` 里按 Del/F2，断言不触发删除/重命名 |
 
 ---
@@ -463,6 +524,12 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
    Feng Sync 叫不出它的名字，也就清不掉。
    探测手法照 A2：起 `rclone rcd --rc-addr=127.0.0.1:<port> --rc-user=<u> --rc-pass=<p> --rc-serve`（**不是** `--rcaddr`），
    就绪探测调 `core/version`（**没有** `rc/version` 这个方法），curl 必须带 `Content-Type: application/json`。
+
+8. ✅ **已实证（B1，2026-10-04，真 rclone + 两个 alias remote，`ServerSideCopyTests`）**：**同一个 fs 两端**的
+   `operations/copyfile` 把目标名落在源的**旁边**并且**保留源**（hash 相同）；**同一个 fs 两端**的 `operations/movefile`
+   让对象出现在目标处、**源目录里不再存在**。两条一起决定了 B1 的呈现：同端点内的 复制 不需要第二套机制，
+   同端点的 剪切 用 move 而不是「复制 + 删源」，因此它不留重复、也不需要删除确认。结论已写进 `AGENTS.md` 的
+   粘贴不变式和上面 §4 的 rclone 表。
 
 实证的方法照 A2 的做法：直接 curl 打本机 `rclone rcd` 的 RC（记得带 `Content-Type: application/json`），
 把结论写进 `AGENTS.md` 的不变式列表，而不是留在会话里。
@@ -500,6 +567,7 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 - **不要在云盘路径上重写同步引擎**：上传/下载继续走 `CloudTransferQueue`（它复用同步引擎的 staging/resume/journal）；
   **远端→远端复制也进同一个队列**（B0），走 `EndpointTransfer.CopyServerSideAsync`，不要在 UI 里直接拼
   `RcloneRcClient.CopyFileAsync`；删除/移动仍通过 `IEndpoint` / `RcloneRcClient` 调用，不自己拼 rclone 命令行。
+  B1 照的就是这条：**粘贴的跨端点复制一律 `EnqueueCopy`**，唯一允许直接调 move 的是**同端点内的剪切**（字节不动，没有可续传/进度可言）。
 - **改并发数要同时看续传**：`ActiveCount` 与 `MaxConcurrentTransfers` 在 `CloudTransferQueue.RunAsync` 里是
   **当作进度参数**传给 `EndpointTransfer.CopyToStagingAsync` 的，所以调并发会影响续传判定；
   并发数从 `const` 改为可配时还要保证 `SemaphoreSlim` 重建不破坏在途任务。
@@ -532,13 +600,15 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `src/FengSync/Views/CloudEndpointEditorWindow.xaml(.cs)` | 新建/编辑端点表单（按 descriptor 生成，非 S3 部分无手写面板） |
 | `src/FengSync.Core/Execution/EndpointTransfer.cs` | **唯一的** staging-aware 传输原语（同步引擎与云盘浏览器共用）。`CopyToStagingAsync`+`PublishAsync` 是可续传的上传/下载腿；`CopyServerSideAsync` 是两端都远端、**不 staging 不 publish** 的复制腿（B0） |
 | `src/FengSync/Services/CloudTransferQueue.cs` | 云盘传输队列（staging / resume / journal / 并发 / 重试 / **远端→远端复制 `EnqueueCopy`**）；构造参数里的可选 RC 客户端工厂是「不起 daemon 也能断言载荷」的接缝 |
-| `src/FengSync/Services/CloudFileManagerService.cs` | 文件浏览器服务层（列表/搜索/重命名/删除/移动/新建目录） |
+| `src/FengSync/Services/CloudFileManagerService.cs` | 文件浏览器服务层（列表/搜索/重命名/删除/**同端点移动 `MoveAsync`**/新建目录）；`RelativeToEndpoint` 是「剥的是**自己**端点的根、只剥一次」的唯一体（B1） |
+| `src/FengSync/Services/CloudBrowserClipboard.cs` | 粘贴规则的纯函数（B1）：`CloudClipboardMode` / `CloudClipboardItem`（行 + 它的来源端点）/ `CloudPasteTarget` / `CloudPastePlan` / `CloudPastePlanner.Build`。不碰 WPF 也不碰 rclone，所以落点与 skip 原因能直接测 |
 | `src/FengSync.Core/Mount/MountOptions.cs` | 挂载参数（D 组的改造对象） |
 | `src/FengSync.Core/Rclone/Transport/RcloneProxyConfiguration.cs` | 代理（A5 的现成机制） |
 | `src/FengSync/Services/AppServices.cs` | `IAppServiceHost` / `AppServices.Install`（**两个 exe 共用服务宿主**） |
 | `src/FengSync.DriveHub/` | 第二个入口 `DriveHub.exe`（独立 daemon） |
 | `tests/FengSync.Tests/ServerSideCopyTests.cs` | 真 rclone（两个 alias remote）钉住跨端点复制的**落点**：目标名精确、源不消失、重试覆盖、失败不留对象、本地端点被拒（B0） |
 | `tests/FengSync.UiTests/CloudTransferCopyTests.cs` | 假 RC 钉住复制的**载荷**：`srcFs/srcRemote/dstFs/dstRemote`+`_group`、`core/stats` 进度、取消发 `job/stop`、不许出现 movefile/deletefile/staging 名、journal 往返与旧文件兼容（B0） |
+| `tests/FengSync.UiTests/CloudBrowserPasteTests.cs` | **真窗口 + 假 RC**钉住 B1 的浏览器侧决定：剪贴板带着来源端点、两侧各自剥根、文件夹与自复制的 skip、冲突与 `overwrite=false`、同端点剪切只发 `movefile`、跨端点剪切**复制完成后**才删源（拒绝复制 → 源保留且无删除；拒绝删除 → 报告重复而不是成功）。`RunSta` 的 pumping + 单 `Application` 所有权 + watchdog 是这类**异步窗口测试**的样板（见 §4 的 WPF 表） |
 | `tests/FengSync.Tests/` | Core 层 + 需要真 rclone 的测试（门禁里的 Core 阶段） |
 | `tests/FengSync.UiTests/` | in-process WPF 行为测试 + 桌面场景（`UiAcceptanceTests` + `Scripts/Invoke-UiScenario.ps1`） |
 | `scripts/Test-All.ps1` | 门禁入口（`-Level Core|UiOffline|Online`，`-ShowOnScreen`） |
