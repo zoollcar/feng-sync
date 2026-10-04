@@ -91,7 +91,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 它没有往 Core 加东西，也没有新造一条产品路径：一张纯表把按键映射成命令，命令一律调按钮本来就在调的那个方法。
 **B7 网格视图 / 缩略图 / 内置预览**拆成四层：`1334311` feat(core)（`AppDataPaths.CloudThumbnails` +
 `ApplicationSettings.CloudBrowserView` + 校验）/ `c59ac45` feat（三个新服务文件 + `CloudPreviewPrompt` + 窗口两种画法）/
-`c66bb6c` test（UI 40 条 + 1 条 Core 侧 XAML 静态栅格 + `sftp-ui` 两条 toggle 断言）/ `<docs>` docs（AGENTS.md 三条实测规则 + 本文件），
+`c66bb6c` test（UI 40 条 + 1 条 Core 侧 XAML 静态栅格 + `sftp-ui` 两条 toggle 断言）/ `546e5b5` docs（AGENTS.md 三条实测规则 + 本文件），
 前面还有一条**不属于本批产品路径**的 Core 地基 `54eb6f5`（`--rc-serve` 有界读 + 9 条事实）。
 本节的这条 hash 行与 §2 表末行是那四条之后回填的。
 **A 组 + B0 + B1 + B2 + B3 + B4 + B5 + B6 + B7 至此收尾。**
@@ -150,7 +150,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `1334311` | B7 | `feat(core): remember the browser's view and give its tiles a cache folder` |
 | `c59ac45` | B7 | `feat(browser): draw the same rows as tiles, and preview only what we can really render` |
 | `c66bb6c` | B7 | `test(browser): pin the tile round, the preview refusals and both drawings of one list`（UI 40 条 + 1 条 Core 侧 XAML 静态栅格 + `sftp-ui` 两条 toggle 断言） |
-| `<docs>` | B7 | `docs: record B7 done and the view and preview rules that B8 must keep`（AGENTS.md 规则 + 本文件） |
+| `546e5b5` | B7 | `docs: record B7 done and the view and preview rules that B8 must keep`（AGENTS.md 规则 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -580,7 +580,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 - 门禁：`Failed: 0`，**Core 415 / UI 402**（UI 3m1s）—— Core 计数与 B5 收尾相同，因为 B6 只动 UI 侧。
 
 
-### B7 —— 网格视图 / 缩略图 / 内置预览（**已提交**：`1334311` feat(core) / `c59ac45` feat / `c66bb6c` test / `<docs>` docs）
+### B7 —— 网格视图 / 缩略图 / 内置预览（**已提交**：`1334311` feat(core) / `c59ac45` feat / `c66bb6c` test / `546e5b5` docs）
 
 - **一个行集合，两种画法**（本批的核心形状）。`RemoteEndpointManagerWindow` 只有一份 `_entries`（`VisibleEntries`
   是它过滤+排序后的读数），键盘、剪贴板、回收站、删除阈值全读它。所以网格视图**只是** `FileList.View = null`
