@@ -62,7 +62,8 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 `cd74a61` + `526a634` test / `4656a58` docs（本节的 hash 由 `4656a58` 的下一次回填补上）。
 **B2 同名冲突**照旧三层：`dedc2b5` feat / `1649dc6` test / `0349467` docs（本节的这条 hash 行与 §2 表末行是
 `0349467` 之后回填的）。**B3 属性/详情**照旧三层：`844b93b` feat / `7370af0` test / `ef211a3` docs（本节的这条 hash 行与 §2 表末行是
-`ef211a3` 之后回填的）。**B4 分享链接**照旧三层：`3d1d532` feat / `1b4b7ed` test / docs 待回填。
+`ef211a3` 之后回填的）。**B4 分享链接**照旧三层：`3d1d532` feat / `1b4b7ed` test / `b5c0c91` docs（本节的这条 hash 行与 §2 表末行是
+`b5c0c91` 之后回填的）。
 **A 组 + B0 + B1 + B2 + B3 + B4 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
@@ -106,6 +107,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `ef211a3` | B3 | `docs: record B3 done and the stat facts that B4 must keep`（AGENTS.md 不变式 + 本文件） |
 | `3d1d532` | B4 | `feat(browser): hand out a cloud link only after saying what it grants` |
 | `1b4b7ed` | B4 | `test(browser): pin the link shape against a real S3 server` |
+| `b5c0c91` | B4 | `docs: record B4 done and the link facts that B5 must keep`（AGENTS.md 不变式 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -409,7 +411,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 - 面板在进程内**不打开**（`ShowDialog` 没人能答；owner 从未 `Show()` 过会抛，见 §4 的 WPF 表），所以两条接缝都得是 internal。
   确认过没有桌面场景断言行菜单，因此新增的 属性 项不会挂 `Invoke-UiScenario.ps1`。
 
-### B4 —— 分享链接（**已提交**：`3d1d532` feat / `1b4b7ed` test / docs 待回填）
+### B4 —— 分享链接（**已提交**：`3d1d532` feat / `1b4b7ed` test / `b5c0c91` docs）
 
 - **这是第一个把访问权交给「别人」的动作**：链接一旦生成，任何拿到它的人都能读那个文件，不需要登录用户的账号；
   而它能活多久、能不能撤回，**都是 backend 的决定，本应用一句都不能承诺**。所以形状必须是「先用用户的话说清楚，
@@ -624,7 +626,7 @@ B 组还有一条**只在这里出现**的约束：**并发数从 `const` 改为
 | C4 | 失败诊断（C9） | 消费批次 0 的 `CloudTransferRecord.ErrorDetail`；传输窗加「复制详情」「查看日志」 |
 | C5 | 计划传输（C10） | 设置「仅在此时间段传输」；实现为**队列在窗口外暂停**，不引入系统级调度器 |
 | C6 | 完成后动作（C11） | 队列 drained 时（复用已有的 `BatchCompleted` 事件）执行关机 / 休眠 / 退出，**需二次确认** |
-| C7 | 队列右键菜单（C13） | 「打开所在文件夹」「复制链接」（依赖 B4 的 `publiclink`） |
+| C7 | 队列右键菜单（C13） | 「打开所在文件夹」「复制链接」—— B4 的 `PublicLinkAsync` 与 `CopyLink` 接缝已落，直接复用，**不要**在 C 组再摸一次系统剪贴板 |
 
 ### D1–D6. 挂载
 
