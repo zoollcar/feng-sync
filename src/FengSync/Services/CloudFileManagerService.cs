@@ -186,6 +186,20 @@ public sealed class CloudFileManagerService
         return await client.PublicLinkAsync(FileSystem(remote), path.Trim('/'), ct);
     }
 
+    /// <summary>
+    /// Reads up to <paramref name="maxBytes"/> of one object's bytes — the only content read the browser does
+    /// for itself, and the reason the cap is a parameter rather than a constant: a grid tile, a preview and a
+    /// checksum each owe the user a different amount of bandwidth for the same file. The status must be read,
+    /// never assumed — <see cref="RcloneReadStatus.TooLarge"/> reports the object's real size and no bytes,
+    /// <c>Missing</c> and <c>Failed</c> each need their own sentence, and only <c>Read</c> means the bytes in
+    /// hand are the whole object.
+    /// </summary>
+    public async Task<RcloneObjectRead> ReadAsync(string remote, string path, long maxBytes, CancellationToken ct = default)
+    {
+        var client = await _client(ct);
+        return await client.ReadAsync(FileSystem(remote), path.Trim('/'), maxBytes, ct);
+    }
+
     public static string Join(string directory, string name) => string.IsNullOrWhiteSpace(directory) ? name : directory.Trim('/') + "/" + name;
     public static string Parent(string path) { var index = path.Trim('/').LastIndexOf('/'); return index < 0 ? "" : path.Trim('/')[..index]; }
 

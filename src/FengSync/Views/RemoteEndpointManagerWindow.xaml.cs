@@ -5,6 +5,8 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
 using FengSync.Core;
 using FengSync.Core.Configuration;
 using FengSync.Core.Mount;
@@ -60,6 +62,20 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     private readonly CloudTransferQueue _transfers;
     private ApplicationSettings _settings = new();
+    /// <summary>
+    /// The pictures the grid view paints. Its own object because a tile is not a transfer: it has no journal,
+    /// no progress the user asked to see, and no reason to wait behind either.
+    /// </summary>
+    private readonly CloudThumbnailStore _thumbnails;
+    /// <summary>The window's own tile lookup, so a repaint of a row can ask the store without the row knowing it exists.</summary>
+    private readonly CloudTileSourceConverter _tileConverter;
+    /// <summary>The GridView the XAML declares, kept so 列表视图 restores exactly the columns it was built with.</summary>
+    private ViewBase? _listView;
+    private CloudBrowserViewMode _browserView = CloudBrowserViewMode.List;
+    /// <summary>Cancels the tile reads started by the previous listing or the previous view.</summary>
+    private CancellationTokenSource? _tileRound;
+    private Task _tileWait = Task.CompletedTask;
+    private bool _tileRefreshQueued;
     private Point _dragStart;
     private bool _dragArmed;
     private string _currentPath = "";
@@ -109,10 +125,17 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         _files = files ?? new CloudFileManagerService();
         _transfers = transfers ?? AppServices.TryCurrent?.CloudTransfers ?? new CloudTransferQueue();
+        _thumbnails = new CloudThumbnailStore(_files);
         InitializeComponent();
         EndpointList.ItemsSource = _accounts;
         MountsList.ItemsSource = _mounts;
         FileList.ItemsSource = _entries;
+        _listView = FileList.View;
+        _tileConverter = (CloudTileSourceConverter)Resources["CloudTileConverter"];
+        // The tile template binds a row to the picture it currently has. Both the thumbnail store and which
+        // endpoint is being browsed belong to the window, not to the row, so the lookup is handed to the
+        // converter here rather than being reached from inside the template.
+        _tileConverter.Peek = entry => _thumbnails.Peek(Selected?.Name ?? "", entry);
         BuildSortOptions();
         BuildEndpointSortOptions();
         // A GridView header click is routed, not bubbled as a per-column event, so it is attached here.
@@ -162,6 +185,10 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         try { _settings = (await new SettingsStore().LoadAsync()).Settings; }
         catch (Exception ex) { StatusText.Text = "无法读取设置：" + RcloneUiError.Describe(ex, "cloud-settings"); }
+        // Applied before the first listing so the directory the window opens on is drawn in the view the user
+        // chose, rather than being drawn as a list and then re-drawn as tiles.
+        _browserView = Enum.IsDefined(_settings.CloudBrowserView) ? _settings.CloudBrowserView : CloudBrowserViewMode.List;
+        ApplyBrowserView();
         await RefreshAsync();
     }
 
@@ -759,6 +786,8 @@ public partial class RemoteEndpointManagerWindow : Window
             : visible.Count == _listed.Count ? $"共 {_listed.Count} 项" : $"显示 {visible.Count} / {_listed.Count} 项";
         if (ViewSummary.Text.Length > 0) StatusText.Text = ViewSummary.Text + "。";
         UpdateFileButtons();
+        // The rows a search or a sort change left on screen are the only ones worth pulling pictures for.
+        RestartTileRound();
     }
 
     private void UpdateBreadcrumbs()
@@ -794,6 +823,146 @@ public partial class RemoteEndpointManagerWindow : Window
     private IReadOnlyList<CloudFileEntry> SelectedEntries() => [.. FileList.SelectedItems.Cast<CloudFileEntry>()];
 
     private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateFileButtons();
+
+    // ---- 视图与缩略图 ----
+
+    /// <summary>Which drawing the browser is currently using for its rows.</summary>
+    internal CloudBrowserViewMode BrowserView => _browserView;
+
+    /// <summary>
+    /// Completes once every tile the current listing asked for has been pulled or refused, and the pictures that
+    /// arrived have been painted. An await on this is how a test knows the grid is finished rather than guessing
+    /// how long two bounded reads take.
+    /// </summary>
+    internal Task PendingThumbnails => _tileWait;
+
+    /// <summary>
+    /// The picture the grid would paint for this row right now, which is exactly what a realised tile asks the
+    /// converter for. A window that was never shown has no realised rows, so this is how a test checks the bytes
+    /// reached the drawing without measuring pixels.
+    /// </summary>
+    internal ImageSource? TileFor(CloudFileEntry entry) => _tileConverter.Peek?.Invoke(entry);
+
+    private void ViewToggle_Click(object sender, RoutedEventArgs e) => _ = SetBrowserViewAsync(
+        _browserView == CloudBrowserViewMode.Grid ? CloudBrowserViewMode.List : CloudBrowserViewMode.Grid);
+
+    /// <summary>
+    /// Switches between 列表视图 and 网格视图 and remembers the choice. The rows are not rebuilt: both drawings
+    /// read the same <see cref="_entries"/>, so 全选, the row menu and the clipboard keep aiming at exactly the
+    /// rows that were on screen before the switch.
+    /// </summary>
+    internal async Task SetBrowserViewAsync(CloudBrowserViewMode view)
+    {
+        // Normalised because the value reaches this window from a settings file as well as from the button, and a
+        // number that names no view must not be painted — or written back — as though it did.
+        var chosen = Enum.IsDefined(view) ? view : CloudBrowserViewMode.List;
+        if (chosen == _browserView) return;
+        _browserView = chosen;
+        ApplyBrowserView();
+        try
+        {
+            // Read-modify-write instead of saving this window's own snapshot: the settings file also holds the main
+            // window's sidebar width and every other shell's choices, so writing back what was loaded when this
+            // window opened would quietly undo whatever changed since.
+            var store = new SettingsStore();
+            var loaded = await store.LoadAsync();
+            _settings = loaded.Settings with { CloudBrowserView = chosen };
+            await store.SaveAsync(_settings);
+        }
+        catch (Exception ex) { StatusText.Text = "无法记住视图选择：" + RcloneUiError.Describe(ex, "cloud-view-choice"); }
+    }
+
+    /// <summary>
+    /// Points the one list control at the drawing the current view asks for. Nothing else changes: the items
+    /// source, the selection, the search filter and the sort all stay exactly where they were, which is the whole
+    /// reason the toggle goes through <see cref="ListView.View"/> rather than a second control or a second
+    /// collection.
+    /// </summary>
+    private void ApplyBrowserView()
+    {
+        var grid = _browserView == CloudBrowserViewMode.Grid;
+        FileList.View = grid ? null : _listView;
+        if (grid)
+        {
+            FileList.ItemTemplate = (DataTemplate)Resources["CloudTileTemplate"];
+            FileList.ItemsPanel = (ItemsPanelTemplate)Resources["CloudTilePanel"];
+        }
+        else
+        {
+            // Cleared, not set to null. A bound GridView writes no local row template or panel of its own (it
+            // renders through the ListView's own style), so the list view is restored by removing this window's
+            // overrides — and `ItemsPanel = null` is a local null rather than "unset", which measured against a
+            // shown window stops every row being presented at all: the list is empty, the rows are still there,
+            // and only the real shell can see it.
+            FileList.ClearValue(ItemsControl.ItemTemplateProperty);
+            FileList.ClearValue(ItemsControl.ItemsPanelProperty);
+        }
+        ViewToggleButton.Content = grid ? "列表视图" : "网格视图";
+        RestartTileRound();
+    }
+
+    /// <summary>
+    /// Starts the tile reads the current rows and view call for, and stops the ones the previous listing or the
+    /// previous view started. Called from <see cref="ApplyView"/>, so a search or a sort change re-aims the reads
+    /// at the rows that are actually visible instead of going on feeding pictures to rows that scrolled away.
+    /// </summary>
+    private void RestartTileRound()
+    {
+        // Not disposed: a cancelled source can still be registered by a read on its way out, and disposing it
+        // there would throw inside that read rather than cancel it.
+        _tileRound?.Cancel();
+        if (_browserView != CloudBrowserViewMode.Grid || Selected is not { } account)
+        {
+            _tileWait = Task.CompletedTask;
+            return;
+        }
+        var round = new CancellationTokenSource();
+        _tileRound = round;
+        _tileWait = PaintTilesAsync(account.Name, _entries.Where(CloudBrowserTiles.OffersThumbnail).ToList(), round);
+    }
+
+    private async Task PaintTilesAsync(string remote, IReadOnlyList<CloudFileEntry> rows, CancellationTokenSource round)
+    {
+        try
+        {
+            await Task.WhenAll(rows.Select(entry => PaintOneTileAsync(remote, entry, round.Token))).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+            or System.Net.Http.HttpRequestException or OperationCanceledException)
+        {
+            // A tile round that fell over leaves the rows drawn with their file icons, which is the fallback every
+            // refusal in CloudBrowserTiles already describes. The listing itself is not at fault and stays up.
+        }
+        // One final repaint when the round is over, so an await on PendingThumbnails guarantees the arrived
+        // pictures are on screen; the coalesced repaints along the way are only what makes them appear one by one.
+        if (round.IsCancellationRequested) return;
+        await Dispatcher.InvokeAsync(() =>
+        {
+            if (_browserView == CloudBrowserViewMode.Grid) FileList.Items.Refresh();
+        }).Task.ConfigureAwait(false);
+    }
+
+    private async Task PaintOneTileAsync(string remote, CloudFileEntry entry, CancellationToken ct)
+    {
+        try
+        {
+            if (await _thumbnails.LoadAsync(remote, entry, ct).ConfigureAwait(false)) QueueTileRefresh();
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void QueueTileRefresh()
+    {
+        if (_tileRefreshQueued) return;
+        _tileRefreshQueued = true;
+        // Coalesced rather than one repaint per picture: in a folder of photos the reads land a few milliseconds
+        // apart, and re-drawing every realised row for each of them is work nobody gets to see.
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _tileRefreshQueued = false;
+            if (_browserView == CloudBrowserViewMode.Grid) FileList.Items.Refresh();
+        }), DispatcherPriority.Background);
+    }
 
     // ---- 键盘快捷键 ----
 
@@ -918,7 +1087,10 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         if (FileList.SelectedItem is not CloudFileEntry entry) return;
         if (entry.IsDirectory) { await NavigateToAsync(entry.Path); return; }
-        await OpenAsync(entry);
+        // A row the browser can paint is shown in place; everything else keeps the route it always had — pull it
+        // into a temporary folder and hand it to the program the system associates with the format.
+        if (CloudBrowserPreview.OffersPreview(entry)) await ShowPreviewAsync(entry);
+        else await OpenAsync(entry);
     }
 
     // ---- Ordering and search ----
@@ -1656,6 +1828,52 @@ public partial class RemoteEndpointManagerWindow : Window
         CloudDetailsPrompt.Show(this, "所选项目的属性", CloudItemDetails.ForSelection(Selection, Selected));
 
     /// <summary>
+    /// The panel 预览 shows for one row, behind a seam because a test cannot sit through a modal. Whether a row
+    /// may be painted at all is <see cref="CloudBrowserPreview"/>'s decision; this only carries it out, and the two
+    /// halves stay separate — a row that cannot be painted is explained <em>before</em> any read is spent on it,
+    /// and a row that can gets its own sentence for each thing the cloud might answer instead (gone, bigger than
+    /// the ceiling, bytes no decoder claims, text in a code page the program will not guess).
+    /// </summary>
+    internal async Task<CloudPreviewPanel> PreviewAsync(CloudFileEntry entry)
+    {
+        var decision = CloudBrowserPreview.DecideFor(entry);
+        if (!CloudBrowserPreview.IsPaintable(decision))
+            return CloudPreviewPanel.Refused(decision, CloudBrowserPreview.ReasonFor(decision, entry));
+        if (Selected is not { } account)
+            return CloudPreviewPanel.Refused(CloudPreviewOutcome.Failed, "没有选中的云盘端点，读不到任何内容。");
+        RcloneObjectRead read;
+        try
+        {
+            read = await _files.ReadAsync(account.Name, entry.Path, CloudBrowserPreview.ReadCapFor(decision));
+        }
+        catch (Exception ex)
+        {
+            return CloudPreviewPanel.Refused(CloudPreviewOutcome.Failed,
+                CloudBrowserPreview.ReasonFor(CloudPreviewOutcome.Failed, entry, -1, RcloneUiError.Describe(ex, "cloud-preview")));
+        }
+        var outcome = CloudBrowserPreview.OutcomeOf(decision, read);
+        if (outcome == CloudPreviewOutcome.Picture)
+        {
+            var image = CloudBrowserPreview.DecodePicture(read.Bytes);
+            return image is null
+                ? CloudPreviewPanel.Refused(CloudPreviewOutcome.UndecodableBytes,
+                    CloudBrowserPreview.ReasonFor(CloudPreviewOutcome.UndecodableBytes, entry))
+                : CloudPreviewPanel.Picture(image);
+        }
+        if (outcome == CloudPreviewOutcome.Text)
+        {
+            var (state, text, label) = CloudBrowserPreview.ExtractText(read.Bytes);
+            return state == CloudPreviewOutcome.Text
+                ? CloudPreviewPanel.Text(text, label)
+                : CloudPreviewPanel.Refused(state, CloudBrowserPreview.ReasonFor(state, entry));
+        }
+        return CloudPreviewPanel.Refused(outcome, CloudBrowserPreview.ReasonFor(outcome, entry, read.Total, read.Detail));
+    }
+
+    private async Task ShowPreviewAsync(CloudFileEntry entry) =>
+        CloudPreviewPrompt.Show(this, "预览 · " + entry.Name, entry, await PreviewAsync(entry));
+
+    /// <summary>
     /// The question a share link asks before anything is created, behind a seam because a test cannot answer a
     /// modal — and the property worth pinning is exactly that nothing reaches the cloud until the user agrees.
     /// A link is a grant rather than a read: rclone's default is one anyone holding the URL can use without an
@@ -1731,6 +1949,10 @@ public partial class RemoteEndpointManagerWindow : Window
             }
             else
             {
+                // 预览 only for a row it can actually paint: a command that can only refuse is noise, not a
+                // shortcut — the same rule that keeps 还原 off a row that did not come from the trash.
+                if (CloudBrowserPreview.OffersPreview(entry))
+                    Add(menu, "预览", async () => await ShowPreviewAsync(entry));
                 Add(menu, "下载…", async () => await DownloadAsync(entry));
                 Add(menu, "打开", async () => await OpenAsync(entry));
                 // A link is the one command here that gives somebody else access, so it is offered per file and
