@@ -795,6 +795,55 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateFileButtons();
 
+    // ---- 键盘快捷键 ----
+
+    /// <summary>
+    /// The rename question, behind a seam because a test cannot answer a modal. It hands back the new name, or
+    /// <see langword="null"/> for "cancelled" — the same contract every other seam here uses, so a test that
+    /// means "the user typed report.txt" cannot be read as one that means "the user closed the dialog".
+    /// </summary>
+    internal Func<CloudFileEntry, string?>? PromptRename { get; set; }
+
+    /// <summary>
+    /// Decides what a keystroke in the browser pane means and runs the command it names. The four arguments are
+    /// the facts the XAML handler reads off the event and off <see cref="Keyboard"/>: a test cannot put Ctrl on
+    /// the physical keyboard that <see cref="Keyboard.Modifiers"/> reports, so it hands the modifiers in and
+    /// still exercises the real table and the real dispatch. Returns true when the keystroke was the browser's
+    /// own, which is the only case its handler may claim.
+    /// </summary>
+    internal async Task<bool> HandleKeyAsync(Key key, bool ctrl, bool shift, bool typing)
+    {
+        if (CloudBrowserShortcuts.Resolve(key, ctrl, shift, typing) is not { } command) return false;
+        switch (command)
+        {
+            case CloudBrowserShortcut.Refresh: await BrowseAsync(); break;
+            case CloudBrowserShortcut.Recycle: await RecycleSelectedAsync(); break;
+            case CloudBrowserShortcut.DeleteForever: await DeleteSelectedAsync(); break;
+            case CloudBrowserShortcut.Rename: await RenameSelectedAsync(); break;
+            // SelectAll goes through the list itself, so the rows it picks are the ones the search box and the
+            // sort left on screen — Ctrl+A that ignored an active filter would select what the user cannot see.
+            case CloudBrowserShortcut.SelectAll: FileList.SelectAll(); break;
+            case CloudBrowserShortcut.Copy: SetClipboard(CloudClipboardMode.Copy, SelectedEntries()); break;
+            case CloudBrowserShortcut.Cut: SetClipboard(CloudClipboardMode.Cut, SelectedEntries()); break;
+            case CloudBrowserShortcut.Paste: await PasteAsync(); break;
+        }
+        return true;
+    }
+
+    private async void FileBrowser_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (await HandleKeyAsync(e.Key, Keyboard.Modifiers.HasFlag(ModifierKeys.Control),
+                Keyboard.Modifiers.HasFlag(ModifierKeys.Shift), IsTyping(e))) e.Handled = true;
+    }
+
+    /// <summary>
+    /// True when the keystroke belongs to a text field rather than to the list. Real input and a test's raised
+    /// event both report the field as <see cref="RoutedEventArgs.OriginalSource"/>, which is the one fact the
+    /// gate needs: a TextBox consumes Del and Ctrl+A before they ever bubble here, but not F2, so without this
+    /// check a rename question would open while the user is mid-address.
+    /// </summary>
+    private static bool IsTyping(KeyEventArgs e) => e.OriginalSource is TextBox;
+
     private void UpdateHistoryButtons()
     {
         HistoryBackButton.IsEnabled = _historyIndex > 0;
@@ -984,7 +1033,14 @@ public partial class RemoteEndpointManagerWindow : Window
         catch (Exception ex) { ReportFailure("新建文件夹失败", ex, "cloud-mkdir"); return false; }
     }
 
-    private async void Rename_Click(object sender, RoutedEventArgs e)
+    private async void Rename_Click(object sender, RoutedEventArgs e) => await RenameSelectedAsync();
+
+    /// <summary>
+    /// 重命名 for whatever is selected, which is one row or none: a rename has exactly one new name, so a multi-
+    /// selection has no single answer to give it. The keyboard's F2 comes through here too, so the two routes
+    /// cannot grow different rules about what "selected" means.
+    /// </summary>
+    internal async Task RenameSelectedAsync()
     {
         var selected = SelectedEntries();
         if (selected.Count != 1) { StatusText.Text = "请先选择要重命名的单个项目。"; return; }
@@ -993,7 +1049,8 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async Task PromptRenameAsync(CloudFileEntry entry)
     {
-        var name = TextPrompt.Ask(this, "重命名", $"“{entry.Name}”的新名称：", entry.Name, CloudFileNames.Validate);
+        var name = (PromptRename ?? (target => TextPrompt.Ask(this, "重命名",
+            $"“{target.Name}”的新名称：", target.Name, CloudFileNames.Validate)))(entry);
         if (name is null || name == entry.Name) return;
         await RenameEntryAsync(entry, name);
     }
@@ -1015,11 +1072,20 @@ public partial class RemoteEndpointManagerWindow : Window
         catch (Exception ex) { ReportFailure("重命名失败", ex, "cloud-rename"); return false; }
     }
 
-    private async void DeleteEntries_Click(object sender, RoutedEventArgs e)
+    private async void DeleteEntries_Click(object sender, RoutedEventArgs e) => await DeleteSelectedAsync();
+
+    /// <summary>
+    /// 删除 for whatever is selected — the same question, the same bulk threshold and the same second
+    /// acknowledgement whether the user clicked the button or pressed Shift+Del. Standing in the trash adds
+    /// <see cref="CloudDeleteSafety.Describe"/>'s one extra line, because a row on screen in a trash view is by
+    /// definition trash's own content, and the net being removed is the fact that belongs in the confirmation.
+    /// </summary>
+    internal async Task DeleteSelectedAsync()
     {
         var selected = SelectedEntries();
         if (selected.Count == 0) { StatusText.Text = "请先选择要删除的项目。"; return; }
-        await ConfirmAndDeleteAsync(selected);
+        var insideTrash = Selected is { } account && CloudRecycleBin.IsTrashView(account.RootPath, _currentPath);
+        await ConfirmAndDeleteAsync(selected, insideTrash);
     }
 
     /// <summary>
@@ -1081,7 +1147,14 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     internal Func<IReadOnlyList<CloudFileEntry>, bool>? ConfirmRecycle { get; set; }
 
-    private async void Recycle_Click(object sender, RoutedEventArgs e)
+    private async void Recycle_Click(object sender, RoutedEventArgs e) => await RecycleSelectedAsync();
+
+    /// <summary>
+    /// 移到回收站 for whatever is selected. Del and the button land here, so the empty-selection sentence is
+    /// written once — and it is a different sentence from 删除's, because the two commands undo each other and a
+    /// user must be able to tell which one the keystroke asked for.
+    /// </summary>
+    internal async Task RecycleSelectedAsync()
     {
         var selected = SelectedEntries();
         if (selected.Count == 0) { StatusText.Text = "请先选择要移到回收站的项目。"; return; }
@@ -1458,7 +1531,15 @@ public partial class RemoteEndpointManagerWindow : Window
             || TextPrompt.Confirm(this, "再次确认删除", $"即将在复制成功后删除 {entries.Count} 项源文件。\n\n确定继续？", danger: true);
     }
 
-    private async void Paste_Click(object sender, RoutedEventArgs e)
+    private async void Paste_Click(object sender, RoutedEventArgs e) => await PasteAsync();
+
+    /// <summary>
+    /// 粘贴 into the directory on screen. Ctrl+V and the button both come through here, which is what keeps the
+    /// keyboard from growing a second, cheaper set of checks in front of the same queue: the empty-clipboard and
+    /// no-endpoint refusals, the destination's own listing, the collision question and the cut's delete
+    /// confirmation are the paste, whatever opened it.
+    /// </summary>
+    internal async Task PasteAsync()
     {
         if (_clipboard.Count == 0) { StatusText.Text = "剪贴板是空的：先选中项目，再用右键菜单的“复制”或“剪切”。"; return; }
         if (Selected is null) { StatusText.Text = "请先选择要粘贴到的云盘。"; return; }
@@ -1677,7 +1758,7 @@ public partial class RemoteEndpointManagerWindow : Window
             Add(menu, selected.Count == 1 ? "还原…" : $"还原所选的 {selected.Count} 项…", async () => await RestoreAsync(selected));
         if (CloudRecycleBin.SelectForMove(root, selected).Refusal is null)
             Add(menu, selected.Count == 1 ? "移到回收站…" : $"把所选的 {selected.Count} 项移到回收站…", async () => await RecycleAsync(selected));
-        Add(menu, selected.Count == 1 ? "删除…" : $"删除所选的 {selected.Count} 项…", async () => await ConfirmAndDeleteAsync(selected));
+        Add(menu, selected.Count == 1 ? "删除…" : $"删除所选的 {selected.Count} 项…", DeleteSelectedAsync);
         if (CloudRecycleBin.IsTrashView(root, _currentPath))
             Add(menu, "清空回收站…", EmptyTrashAsync);
         Add(menu, "新建文件夹…", PromptNewFolderAsync);

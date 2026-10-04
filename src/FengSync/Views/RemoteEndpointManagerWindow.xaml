@@ -93,7 +93,7 @@
             </GroupBox>
         </Grid>
 
-        <Grid Grid.Column="2" AllowDrop="True" DragOver="FileBrowser_DragOver" DragLeave="FileBrowser_DragLeave" Drop="FileBrowser_Drop">
+        <Grid Grid.Column="2" AllowDrop="True" DragOver="FileBrowser_DragOver" DragLeave="FileBrowser_DragLeave" Drop="FileBrowser_Drop" KeyDown="FileBrowser_KeyDown">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
