@@ -104,6 +104,19 @@ public sealed class CloudFileManagerService
         await client.MoveFileAsync(FileSystem(remote), sourcePath.Trim('/'), destinationPath.Trim('/'), ct);
     }
 
+    /// <summary>
+    /// Reads one object for the details panel without listing its directory.
+    /// <paramref name="hashTypes"/> stays null unless the user asked for a checksum: on a backend that stores
+    /// none, answering one means rclone reading the whole object, and a details panel that fetched it on
+    /// opening would spend that cost on every double-click.
+    /// </summary>
+    public async Task<CloudItemStat> StatAsync(string remote, string path, IReadOnlyList<string>? hashTypes = null, CancellationToken ct = default)
+    {
+        var client = await _client(ct);
+        var stat = await client.StatAsync(FileSystem(remote), path.Trim('/'), hashTypes, ct);
+        return stat is null ? CloudItemStat.Missing : CloudItemStat.Found(stat);
+    }
+
     public static string Join(string directory, string name) => string.IsNullOrWhiteSpace(directory) ? name : directory.Trim('/') + "/" + name;
     public static string Parent(string path) { var index = path.Trim('/').LastIndexOf('/'); return index < 0 ? "" : path.Trim('/')[..index]; }
 
@@ -157,7 +170,7 @@ public sealed record CloudFileEntry(string Name, string Path, bool IsDirectory, 
     // Fully qualified: this record's own Path property shadows System.IO.Path here.
     public FluentIcon Icon => IsDirectory ? FluentIcon.Folder : ExtensionIcon(System.IO.Path.GetExtension(Name));
     public string Type => IsDirectory ? "文件夹" : "文件";
-    public string SizeDisplay => IsDirectory ? "" : Size < 1024 ? Size + " B" : $"{Size / 1024d / 1024d:N1} MB";
+    public string SizeDisplay => IsDirectory ? "" : CloudItemDetails.HumanSize(Size);
     public string ModifiedDisplay => ModifiedUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "";
 
     private static FluentIcon ExtensionIcon(string extension) => extension.ToLowerInvariant() switch

@@ -1374,11 +1374,56 @@ public partial class RemoteEndpointManagerWindow : Window
         StatusText.Text = "已打开：" + entry.Name;
     }
 
+    /// <summary>
+    /// The rows 属性 shows for one entry, and the seam the dialog is built on. The values come from a
+    /// <c>stat</c> of the object itself rather than from the row on screen, because the listing is a snapshot:
+    /// it can name a file the backend has already dropped, and it has no MIME type to show. A read that fails
+    /// still produces the listing's facts plus the reason, so the panel is never an empty window.
+    /// </summary>
+    internal async Task<CloudDetailsPanel> DetailsAsync(CloudFileEntry entry, bool withHash = false)
+    {
+        var account = Selected;
+        if (account is null) return new CloudDetailsPanel(CloudItemDetails.For(entry, null, null), false);
+        CloudItemStat? stat = null;
+        var failure = (CloudDetailRow?)null;
+        try
+        {
+            stat = await _files.StatAsync(account.Name, entry.Path, withHash ? CloudItemDetails.HashPreference : null);
+        }
+        catch (Exception ex) { failure = new CloudDetailRow("读取详情", RcloneUiError.Describe(ex, "cloud-stat")); }
+        var rows = new List<CloudDetailRow>(CloudItemDetails.For(entry, account, stat, hashRequested: withHash));
+        if (failure is { } reason) rows.Add(reason);
+        return new CloudDetailsPanel(rows, CloudItemDetails.OffersHash(entry, stat));
+    }
+
+    private async Task ShowDetailsAsync(CloudFileEntry entry)
+    {
+        var panel = await DetailsAsync(entry);
+        // The menu item stays available either way: a folder's 属性 and a gone object's 属性 are exactly the
+        // two answers the user needs, and a panel that could compute nothing shows no button.
+        CloudDetailsPrompt.Show(this, "属性 · " + entry.Name, panel.Rows,
+            panel.CanComputeHash ? async () => (await DetailsAsync(entry, withHash: true)).Rows : null);
+    }
+
+    private void ShowSelectionDetails() =>
+        CloudDetailsPrompt.Show(this, "所选项目的属性", CloudItemDetails.ForSelection(Selection, Selected));
+
     /// <summary>Builds the row menu. Its contents depend on what is selected, so it is rebuilt on each open.</summary>
     private void FileList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
+        if (BuildRowMenu() is not { } menu) { e.Handled = true; return; }
+        FileList.ContextMenu = menu;
+    }
+
+    /// <summary>
+    /// The row menu for the current selection, or <see langword="null"/> when there is nothing to put a menu
+    /// on. The commands are decided apart from WPF's opening event so which ones a selection earns — 属性 for
+    /// one row and for many, a folder's 属性 but never its checksum — is checkable without a shown window.
+    /// </summary>
+    internal ContextMenu? BuildRowMenu()
+    {
         var selected = SelectedEntries();
-        if (selected.Count == 0) { e.Handled = true; return; }
+        if (selected.Count == 0) return null;
         var menu = new ContextMenu();
         if (selected.Count == 1)
         {
@@ -1406,7 +1451,12 @@ public partial class RemoteEndpointManagerWindow : Window
         Add(menu, "剪切", () => { SetClipboard(CloudClipboardMode.Cut, selected); return Task.CompletedTask; });
         Add(menu, selected.Count == 1 ? "删除…" : $"删除所选的 {selected.Count} 项…", async () => await ConfirmAndDeleteAsync(selected));
         Add(menu, "新建文件夹…", PromptNewFolderAsync);
-        FileList.ContextMenu = menu;
+        // 属性 is last and after a separator, like Explorer's: it is the read-only answer, and the one that
+        // must never be mistaken for an action that changes the cloud.
+        menu.Items.Add(new Separator());
+        Add(menu, selected.Count == 1 ? "属性" : $"查看所选 {selected.Count} 项的属性",
+            selected.Count == 1 ? new Func<Task>(() => ShowDetailsAsync(selected[0])) : () => { ShowSelectionDetails(); return Task.CompletedTask; });
+        return menu;
 
         static void Add(ContextMenu menu, string header, Func<Task> action)
         {

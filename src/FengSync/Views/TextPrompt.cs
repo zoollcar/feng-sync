@@ -83,7 +83,7 @@ internal static class TextPrompt
         return window.ShowDialog() == true;
     }
 
-    private static Window NewWindow(string title, Window owner, double width) => new()
+    internal static Window NewWindow(string title, Window owner, double width) => new()
     {
         Title = title,
         Owner = owner,
