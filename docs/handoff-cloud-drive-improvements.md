@@ -1,7 +1,7 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **40** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
+> 分支：`dev`（领先 `origin/dev` **63** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
 > 最后更新：2026-10-04。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
@@ -73,10 +73,10 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 **B2 同名冲突**照旧三层：`dedc2b5` feat / `1649dc6` test / `0349467` docs（本节的这条 hash 行与 §2 表末行是
 `0349467` 之后回填的）。**B3 属性/详情**照旧三层：`844b93b` feat / `7370af0` test / `ef211a3` docs（本节的这条 hash 行与 §2 表末行是
 `ef211a3` 之后回填的）。**B4 分享链接**照旧三层：`3d1d532` feat / `1b4b7ed` test / `b5c0c91` docs（本节的这条 hash 行与 §2 表末行是
-`b5c0c91` 之后回填的）。**B5 回收站**照旧三层：`f61c1a1` feat / `0bbea38` test / `<docs-hash>` docs，外加两条**不属于
+`b5c0c91` 之后回填的）。**B5 回收站**照旧三层：`f61c1a1` feat / `0bbea38` test / `7d013a6` docs，外加两条**不属于
 回收站**、由这一批顺手查实并修好的测试提交：`a11b3f5`（B4 的十条窗口测试因为没 `await` 而从未真正断言，现在有了
 `UiTestAwaitGuardTests` 守着）与 `e66d42c`（`RealWinFspMountIntegrationTests` 的 teardown 与 WinFsp 异步 detach 竞态，
-是 B5 门禁连跑三次的两处 flake 之一）。本节的这条 hash 行与 §2 表末行是 `<docs-hash>` 之后回填的。
+是 B5 门禁连跑三次的两处 flake 之一）。本节的这条 hash 行与 §2 表末行是 `7d013a6` 之后回填的。
 **A 组 + B0 + B1 + B2 + B3 + B4 + B5 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
@@ -125,7 +125,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `0bbea38` | B5 | `test(browser): cover what the trash takes from the cloud and what it says back` |
 | `a11b3f5` | B5 顺手 | `test(ui): await the window harness so its assertions can fail`（B4 的十条窗口测试**从未真正断言**；`UiTestAwaitGuardTests` 把这条变成会失败的检查） |
 | `e66d42c` | B5 顺手 | `test(mount): remove the temporary tree through WinFsp's asynchronous detach`（B5 门禁连跑三次的两处 flake 之一，根因是 teardown 竞态） |
-| `<docs-hash>` | B5 | `docs: record B5 done and the trash facts that B6 must keep`（AGENTS.md 规则 + 本文件） |
+| `7d013a6` | B5 | `docs: record B5 done and the trash facts that B6 must keep`（AGENTS.md 规则 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -473,7 +473,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   逐态措辞、剪贴板抛异常时的 `CopiedNotStored`、状态行同时说「已复制到剪贴板」和「无需登录」）+ **4 条真 rclone**。
 - 确认过的现状：行菜单**没有**桌面场景断言（上面 B3 的最后一条已经查过一遍），所以多出来的 `复制分享链接…` 不会挂 `Invoke-UiScenario.ps1`。
 
-### B5 —— 回收站 / 软删除（**已提交**：`f61c1a1` feat / `0bbea38` + `a11b3f5` + `e66d42c` test / `<docs-hash>` docs）
+### B5 —— 回收站 / 软删除（**已提交**：`f61c1a1` feat / `0bbea38` + `a11b3f5` + `e66d42c` test / `7d013a6` docs）
 
 - **形状是被 rclone 逼出来的，不是选出来的**：RC **没有** `operations/trash`（404 `couldn't find method`，
   `CloudRecycleBinFactTests` 第一条钉住）。所以「软删除」在这个应用里只能是**一个应用自己的文件夹**
