@@ -15,8 +15,8 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）、**B3**（属性 / 详情：`operations/stat` + 按需校验值）、**B4**（分享链接：`operations/publiclink` + 先确认再生成）、**B5**（回收站：端点根下的 `.fengsync-trash` + 还原，清空复用**同一条**删除门槛）、**B6**（键盘快捷键：一张纯表把按键映射成命令，命令一律调按钮已有的方法）、**B7**（网格视图 / 缩略图 / 内置预览：**同一份行集合的第二种画法** + 13 个具名预览结果 + 只在 converter 里查缓存、拉字节走可取消的一轮）、**B8**（收藏 / 最近访问：**两条不同的承诺** —— 收藏的顺序归用户且永不修剪，最近访问是应用写的有界队列；规则一个纯类 + 一个只存地名不存凭据的文件 + 同一批行的两个下拉；端点重命名从此一起搬**四**份文件）。**B9**（文件夹大小：**属性面板上那一个按钮**是唯一发起递归统计的地方 —— 目录必须写在 `fs` 里（多发的 `remote` 字段被**静默忽略**，而答复是整个端点的字节数），这一次读取**发出去就收不回**（`job/stop` 答 `{}`、遍历照跑），所以措辞只能说「不再等」；统计到的数字**永不缓存**，下一次开面板还是 未统计；统计**不打** `operations/list`，因此不记一次最近访问）。**B10**（拖出整个文件夹：一句「请先进入文件夹」的拒绝换成了**一棵树要么给、要么不给** —— Explorer 在放下那一刻复制磁盘上现有的东西、并且两种情况都报成功，所以闸门是「每个目录都在、每个文件都在且长度对得上」；一棵树由**一次递归读取**得到，空目录靠 `CreateDirectories` 才能活着到达拖放目标；一个手势等不完的文件夹继续下载、下完才 reveal。**顺带抓到一个静默取错文件的产品缺陷**：下载的 staging 名是文件的**裸名**，源端点挂在端点根上就等于去**上一层**找同名对象 —— 实测 `docs/a.txt` 读了 `[nas:/]/team/a.txt`，而上一层的同名文件存在时它被取回来并发布成功，于是整目录拖出会把树里每个文件都这样下错一遍）。**A 组全部收尾，B 组走到 B10。**见 §2。 |
-| **下一步** | **B11 版本历史**（§5）。B1 打通了「一条剪贴板行 → `EnqueueCopy` 的五个参数」，B2 把「同名冲突怎么答」抽成上传与粘贴共用的纯规则，B3 又加了一条**读单个对象**的路（`StatAsync` → `CloudItemDetails` 定行 → 代码搭的面板），B4 加了**第一个会对外发出权限的动作**（确认走 `ConfirmShare`、剪贴板走 `CopyLink`，都是接缝），B5 加了**第一个「删掉但还能回来」的动作**（规则全在 `CloudRecycleBin`，移动照 §4 实测的两条腿走，「清空回收站」问的还是 `CloudDeleteSafety` 那**一道**门槛），B6 把键盘接上了**同一批方法**（`CloudBrowserShortcuts.Resolve` 只做路由，新加的 `PromptRename` 是重命名问题的接缝），B7 加了**同一份行集合的第二种画法**（`ApplyBrowserView` 只换 `View`/`ItemTemplate`/`ItemsPanel`，`ItemsSource` 仍是那一份 `_entries`）和**读字节的那条有界路**（`54eb6f5` 的 `ReadAsync` → 13 个具名结果的 `CloudBrowserPreview`，缩略图 converter 只查缓存、拉字节走 `RestartTileRound` 那一轮可取消的）。B8 加了**两条不同的承诺**（`CloudBrowserBookmarks` 一个纯类分别管「收藏的顺序归用户、永不为容量修剪」和「最近访问是应用写的有界队列」，`CloudBrowserBookmarkStore` 落一份**只存地名、一个凭据字段都没有**的 `cloud-bookmarks.json`，窗口那两个下拉与「收藏此目录」按钮读的还是同一批行），并把端点重命名从三份文件扩到**四**份。**B9 加了「按目录走的那一次读取」**（`CloudFolderSize` 定这个按钮叫什么、怎么警告、五种答复各说什么话；哪一行还欠一次统计由 `CloudItemDetails.OffersSize` 决定；读取挂在属性面板**唯一那个动作按钮**上，一块面板**最多只有一个**动作）。**B10 把「请先进入文件夹」那句拒绝换成了整目录拖出**（`CloudFolderDrag` 定「一棵树要么给、要么不给」，`ListTreeAsync` 一次读完整棵树，空目录靠 `CreateDirectories` 才活得到拖放目标，一个手势等不完的继续下载、下完才 reveal；拖动手势本身造不出来，所以 `DragOutAsync` / `DragOutHandoff` / `Reveal` / `DragBudget` / `SurfaceTransfers` 是接缝），**并顺带修掉一个静默取错文件的下载缺陷**（`CloudTransferQueue.DownloadSourceUri`）。样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗／对外副作用的决定走接缝 + 需要落点或答案形状才上真 rclone**。⚠️ **B11 的实证已经在做，结论是「rclone 不暴露版本列表」**：`rc/list` 的**全部 101 个方法**里唯一带 version 的是 `core/version`（rclone 自己的版本号），`operations/versions` / `operations/history` / `backend/versions` 一律 404 `couldn't find method`，`operations/fsinfo` 的 `Features` 没有版本标志，而 `operations/list` 的 `opt` 只是**列表选项**（不是 backend 配置覆盖）—— 所以 `--s3-versions` 这类只能写进 `rclone.conf`；完整答复与降级做法见 §6 第 5 条。全量门禁 2026-10-05 再跑，`Failed: 0`（**Core 442 / UI 530**，UI 2m51s；Core 的 +10 是 B10 前置那 10 条递归列表事实，UI 的 +32 = B10 的 14 条纯规则 + 14 条真窗口拖出 + 4 条下载源目录）。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）、**B3**（属性 / 详情：`operations/stat` + 按需校验值）、**B4**（分享链接：`operations/publiclink` + 先确认再生成）、**B5**（回收站：端点根下的 `.fengsync-trash` + 还原，清空复用**同一条**删除门槛）、**B6**（键盘快捷键：一张纯表把按键映射成命令，命令一律调按钮已有的方法）、**B7**（网格视图 / 缩略图 / 内置预览：**同一份行集合的第二种画法** + 13 个具名预览结果 + 只在 converter 里查缓存、拉字节走可取消的一轮）、**B8**（收藏 / 最近访问：**两条不同的承诺** —— 收藏的顺序归用户且永不修剪，最近访问是应用写的有界队列；规则一个纯类 + 一个只存地名不存凭据的文件 + 同一批行的两个下拉；端点重命名从此一起搬**四**份文件）。**B9**（文件夹大小：**属性面板上那一个按钮**是唯一发起递归统计的地方 —— 目录必须写在 `fs` 里（多发的 `remote` 字段被**静默忽略**，而答复是整个端点的字节数），这一次读取**发出去就收不回**（`job/stop` 答 `{}`、遍历照跑），所以措辞只能说「不再等」；统计到的数字**永不缓存**，下一次开面板还是 未统计；统计**不打** `operations/list`，因此不记一次最近访问）。**B10**（拖出整个文件夹：一句「请先进入文件夹」的拒绝换成了**一棵树要么给、要么不给** —— Explorer 在放下那一刻复制磁盘上现有的东西、并且两种情况都报成功，所以闸门是「每个目录都在、每个文件都在且长度对得上」；一棵树由**一次递归读取**得到，空目录靠 `CreateDirectories` 才能活着到达拖放目标；一个手势等不完的文件夹继续下载、下完才 reveal。**顺带抓到一个静默取错文件的产品缺陷**：下载的 staging 名是文件的**裸名**，源端点挂在端点根上就等于去**上一层**找同名对象 —— 实测 `docs/a.txt` 读了 `[nas:/]/team/a.txt`，而上一层的同名文件存在时它被取回来并发布成功，于是整目录拖出会把树里每个文件都这样下错一遍）。**B11**（版本历史：实证结论是 rclone **不暴露版本列表**，所以这一项按计划**降级** —— 菜单项叫「在网页端查看历史版本…」，名字说的是它真做的事（打开网盘自己的控制台），理由挂在 ToolTip 与状态行上，没有控制台的端点什么都不打开；`CloudVersionHistory` 一个纯类出「给谁 / 去哪儿 / 为什么」三样东西）。**A 组与 B 组全部收尾。**见 §2。 |
+| **下一步** | **C 组（传输队列，C1–C7）**（§5）。B1 打通了「一条剪贴板行 → `EnqueueCopy` 的五个参数」，B2 把「同名冲突怎么答」抽成上传与粘贴共用的纯规则，B3 又加了一条**读单个对象**的路（`StatAsync` → `CloudItemDetails` 定行 → 代码搭的面板），B4 加了**第一个会对外发出权限的动作**（确认走 `ConfirmShare`、剪贴板走 `CopyLink`，都是接缝），B5 加了**第一个「删掉但还能回来」的动作**（规则全在 `CloudRecycleBin`，移动照 §4 实测的两条腿走，「清空回收站」问的还是 `CloudDeleteSafety` 那**一道**门槛），B6 把键盘接上了**同一批方法**（`CloudBrowserShortcuts.Resolve` 只做路由，新加的 `PromptRename` 是重命名问题的接缝），B7 加了**同一份行集合的第二种画法**（`ApplyBrowserView` 只换 `View`/`ItemTemplate`/`ItemsPanel`，`ItemsSource` 仍是那一份 `_entries`）和**读字节的那条有界路**（`54eb6f5` 的 `ReadAsync` → 13 个具名结果的 `CloudBrowserPreview`，缩略图 converter 只查缓存、拉字节走 `RestartTileRound` 那一轮可取消的）。B8 加了**两条不同的承诺**（`CloudBrowserBookmarks` 一个纯类分别管「收藏的顺序归用户、永不为容量修剪」和「最近访问是应用写的有界队列」，`CloudBrowserBookmarkStore` 落一份**只存地名、一个凭据字段都没有**的 `cloud-bookmarks.json`，窗口那两个下拉与「收藏此目录」按钮读的还是同一批行），并把端点重命名从三份文件扩到**四**份。**B9 加了「按目录走的那一次读取」**（`CloudFolderSize` 定这个按钮叫什么、怎么警告、五种答复各说什么话；哪一行还欠一次统计由 `CloudItemDetails.OffersSize` 决定；读取挂在属性面板**唯一那个动作按钮**上，一块面板**最多只有一个**动作）。**B10 把「请先进入文件夹」那句拒绝换成了整目录拖出**（`CloudFolderDrag` 定「一棵树要么给、要么不给」，`ListTreeAsync` 一次读完整棵树，空目录靠 `CreateDirectories` 才活得到拖放目标，一个手势等不完的继续下载、下完才 reveal；拖动手势本身造不出来，所以 `DragOutAsync` / `DragOutHandoff` / `Reveal` / `DragBudget` / `SurfaceTransfers` 是接缝），**并顺带修掉一个静默取错文件的下载缺陷**（`CloudTransferQueue.DownloadSourceUri`）。样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗／对外副作用的决定走接缝 + 需要落点或答案形状才上真 rclone**。⚠️ **B11 的实证结论是「rclone 不暴露版本列表」**：`rc/list` 的**全部 101 个方法**里唯一带 version 的是 `core/version`（rclone 自己的版本号），`operations/versions` / `operations/history` / `backend/versions` 一律 404 `couldn't find method`，`operations/fsinfo` 的 `Features` 没有版本标志，而 `operations/list` 的 `opt` 只是**列表选项**（不是 backend 配置覆盖）—— 所以 `--s3-versions` 这类只能写进 `rclone.conf`，而它会**改写列表的命名空间**，因此不打开。**B11 已按这个结论落成降级**（菜单项「在网页端查看历史版本…」+ `CloudVersionHistory` 纯规则 + `WebConsoleUrl`；完整答复见 §6 第 5 条）。全量门禁 2026-10-05 再跑，`Failed: 0`（**Core 442 / UI 545**，UI 2m50s；Core 的 +10 是 B10 前置那 10 条递归列表事实，UI 的 +47 = B10 的 32 条 + B11 的 15 条）。 |
 | **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；**`operations/stat` 里「校验值」只有把名字列进 `opt.hashTypes` 才会给**，而 `opt.hashes`（位域）与 `opt.HashTypes`（大小写）都被**静默忽略或报错** —— 拼错读起来就跟「这个后端没有校验值」一模一样；**`operations/publiclink` 里多写的字段同样被静默忽略**，而它那句「不支持公开链接」的 500 会被共用分类器读成**临时连接中断**（先读文字再看 category）；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）；**接缝返回 `null` 是「用户取消」，不是「没装接缝」**——用 `??` 兜到真弹窗会在测试里打开一个无人可答的对话框，并且 `Window.Owner` 指向一个从未 `Show()` 过的窗口时直接抛（B2 撞到过一次测试宿主崩溃）；**`operations/movefile` 对已存在的目标名是覆盖**、`sync/move` 落到已存在的目录是**合并并把源留成一个空壳**，而 `operations/rmdir` 打**已不存在**的路径答 HTTP 500、被共用分类器读成 `Temporary`（于是 `RemoveIfEmptyAsync` 先 `stat`，不拿 rmdir 的报错当「目录没有了」）（B5）；**键盘的坑是「两处写」而不是「按不动」**：快捷键一旦自己写一遍拒绝语或确认，就和按钮分岔（B6 的做法是命令只调按钮已有的方法）；`TextBox` 会**自己吃掉** Del 与 Ctrl+A、却**不吃** F2，所以 typing 闸门只对 F2 这类键真正起作用；`Keyboard.Modifiers` 读的是**物理**键盘，合成事件改不了它（见 §4 的 WPF 表）；**网格视图必须 `ClearValue` 复原，不能写 `ItemsPanel = null`** —— 本地 null 让**一行都不呈现**而集合完整，进程内的 `Assert.Null` 会把这个 bug 读成正确（B7）；**桌面场景跑的是 `tests/FengSync.UiTests/bin/` 里那份 `FengSync.exe`**，只建 `src/FengSync` 会让场景**绿在它本该检查的那个改动上**（B7 排查时踩过一次）；**跳转必须「接管」端点，不能只「跟随选中」** —— 跟随会先为目标端点列一次它自己的根，一次跨端点跳转因此打**两**次 `operations/list`（B8 的 `SwitchEndpoint` 直接把那一行采纳成当前端点，并有一条断言数死列表调用的次数）；**收藏文件的路径在 store 构造时就定下来**（`AppDataPaths.Root` 本身每次都认 `FENGSYNC_DATA_DIR`，但一个提前建好的 store 之后不受它影响），所以驱动窗口的测试必须**在建窗口之前**把 `FENGSYNC_DATA_DIR` 换进临时目录并在 `finally` 还原 —— 否则窗口会继续往用户真实的 app data 里写、并在下一次运行读回来；**进程级文件锁里的 await 若回到调用方的调度器，锁就再也解不开** —— 一次没被接应的书签写入能让之后每一条写书签的窗口测试各卡 90 秒（B8 实测：`save held` 之后没有 `save release`；单跑一条又全绿，最容易误判成「别处的 flake」），所以 gate 区间一律 `ConfigureAwait(false)`，并按第 8 条测试的写法「发出写入就退出的线程」去证它真的会 fire；**一份用户选择可以有第三份表示** —— 磁盘上的文件、纯规则类、以及窗口内存里那份列表；B8 唯一的产品缺口（重命名搬对了磁盘那份，窗口却拿旧名字的下一次 listing 把文件写回旧名）就是**只有真实外壳**抓到的，32 + 18 条进程内测试全绿。改动任何一份持久表示时，先问「谁还内存着同一份」；**`operations/size` 要把目录写进 `fs`** —— 这个载荷里的 `remote` 字段**静默忽略**，于是「一个文件夹的大小」实际答回**整个端点**的字节数，而且是个看起来完全正常的数字（B9 用一条**原始 `CallAsync`** 的事实测试钉住，`RcloneRcClient.SizeAsync` 因此根本不接受 `remote` 参数）；**云盘下载的 staging 名是文件的「裸名」而不是它的远端相对路径** —— 于是把源端点挂在**端点根**上就等于让 rclone 去**上一层**找同名对象（实测：`RemotePath` 为 `docs/a.txt` 的任务读了 `[nas:/]/team/a.txt`），而上一层的同名文件存在时它**被取回来并发布成功、一句错都不报**，所以源端点必须根到**文件自己所在的目录**（`CloudTransferQueue.DownloadSourceUri`）；这条坑只在给整目录拖出打探针时才露头，因为那会把树里每一个文件都这样下一遍（B10）；**递归统计没有取消**（`job/stop` 返回 `{}` 而遍历继续，`job/abort`、`core/commands`、`core/list` 是 404），所以关掉面板只能说**不再等**，任何「已停止统计」的说法都是假承诺；**统计数字不缓存** —— 把上一次走树的总数留在内存里，等于宣称知道一个不确定时刻的事实，所以新鲜的面板就该是 未统计 并把按钮再给一遍（B9）；**改桌面场景要改 `tests/` 下那份 `Invoke-UiScenario.ps1`** —— `dotnet test` 每次 build 都把脚本复制进 `bin/`，探针打在 `bin/` 那份上会得到一次**毫无意义的 Passed**（B9 先这样误判过一次，重打源文件才看到那条断言真的会 fail）。 |
 
 ---
@@ -85,6 +85,9 @@ UI 的 +22 = `CloudBrowserDetailsTests` 9 条真窗口 + `CloudFeatureBehaviorTe
 ② 一次用工具的后台模式跑，**UI 阶段跑到一半那个后台 shell 自己死了**，日志停在「匹配到一个测试文件」之后、没有任何汇总行，
 看起来像失败 —— **前台重跑全绿**。日后看到「日志已完整/没汇总行、任务还 running 或 failed」，先看那个 shell 与孤儿 `rclone`，
 别怀疑门禁本身。
+**B11 收尾再跑：`Failed: 0`，Core 442 / UI 545**（Build 4s / Core 23s / UI 2m50s）—— Core 与 B10 **一字不差**（B11 只动 UI 侧），
+UI 的 +15 = `CloudVersionHistoryTests` 11 条纯规则 + `CloudBrowserDetailsTests` 4 条真窗口。这一轮**没有**再撞上孤儿 daemon；
+「前台调用被工具自动转成后台」这个形状又出现了一次（这次是真跑完了），所以照旧**以 UiTests 那行的 `Passed!` 为准**再读日志。
 
 - 约 **3m30s**（UI 阶段占大头）。调用工具时**超时必须给 600000ms**，否则会被掐断在半路。
 - 判定标准：日志里出现 **`Passed!  - Failed: 0` 汇总行**。只看日志尾部会误判 —— 被超时掐断时日志正好停在
@@ -100,7 +103,7 @@ UI 的 +22 = `CloudBrowserDetailsTests` 9 条真窗口 + `CloudFeatureBehaviorTe
   结束前一个字都不落盘，看着像卡死。写成 `> "$TEMP/x.log" 2>&1` 再 `tail`。B1 用的过滤器
   `--filter "FullyQualifiedName~CloudBrowserPaste|FullyQualifiedName~CloudTransferWindowBehavior"`（19 条）**1 秒**跑完。
 
-### ② A7、B0、B1、B2、B3、B4、B5、B6、B7、B8、B9、B10 已实现并提交 ✅
+### ② A7、B0、B1、B2、B3、B4、B5、B6、B7、B8、B9、B10、B11 已实现并提交 ✅
 
 A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）。A1 的桌面场景缺口在进 B 组前补上
 （`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / `6be98b9` docs
@@ -202,6 +205,8 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `3f32d74` | B10 收尾 | `fix(browser): say a drag is ready when it cannot start, and report a short mirror`（补测试时抓出来的两处「说了假话的状态行」） |
 | `db2764a` | B10 收尾 | `test(browser): pin the honest status lines and the mirror that stayed short`（+4 条；撤掉任一处产品分支各红一条，探针 2 failed / 1 passed） |
 | `46ad0de` | B10 | `docs: record B10 done, its drag rules, and the version-list answer B11 needs`（AGENTS.md 不变式 + 本文件；§6 第 5 条就此结案） |
+| `79e37a0` | B11 | `feat(browser): send the history question to the console that has the answer`（`CloudVersionHistory` 纯规则 + `CloudProviderDescriptor.WebConsoleUrl` + 行菜单里那一项与 `OpenExternal` 接缝） |
+| `5dea2f4` | B11 | `test(browser): pin what the history lookup offers and where it sends the user`（UI 15 条 = 11 条纯规则 + 4 条真窗口；探针 3 failed） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -918,6 +923,46 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 ---
 
+### B11 —— 版本历史（**已提交**：`79e37a0` feat / `5dea2f4` test / docs 见下）
+
+- **先实证，结论是「不给」**（§6 第 5 条）：rclone **不暴露**版本列表。这不是「没找到」，是**问遍了** ——
+  `rc/list` 的**全部 101 个**方法里唯一带 version 的是 `core/version`（rclone 自己的版本号），
+  `operations/versions` / `operations/history` / `backend/versions` 一律 404，`operations/fsinfo` 的 `Features` 没有版本标志，
+  而 `operations/list` 的 `opt` 只是**列表选项**（不是 backend 配置覆盖）。唯一的杠杆是 `s3-versions` / `b2-versions` /
+  `imagekit-versions` 三个**写进 `rclone.conf`** 的开关，而它们**改写列表的命名空间**：旧版本会以对象形式混进文件列表，
+  「列表里的名字 = 云端真实的对象」这个前提就没了 —— 所以**不打开它们**。GDrive 一个都没有；OneDrive / Jottacloud
+  那两项还是**反向**的（`no_versions` = 修改时删掉所有版本）。
+- **命令的名字说的是它真做的事**。这条是从本仓库既有的规矩推出来的（`预览` 那条：*a command that can only refuse is
+  noise*）—— 一个叫「版本历史」、点开只讲一段道理的菜单项就是同一类谎。所以菜单项叫 **在网页端查看历史版本…**：
+  它承诺的是**这一趟**，而这一趟它真的做到了（打开网盘自己的控制台）。
+- **一句解释、一个链接，就是整个功能**。`CloudVersionHistory`（纯）出三样东西：给谁（**只给单个文件** —— 文件夹不是
+  云端会存版本的对象，与 `复制分享链接` 同一条规矩）、去哪儿（`CloudProviderDescriptor.WebConsoleUrl`，**只有 4 个
+  provider 有**：GDrive / OneDrive / Dropbox / Box；SFTP、WebDAV、S3 是 `null` —— 自建 SFTP 根本没有控制台，
+  而 S3 兼容端的控制台属于它指向的那家服务，descriptor 不建模）、以及**为什么**（`Explain`：一句说清 rclone 不提供版本列表，
+  一句说清那个开关为什么不打开，一句说清去哪儿看）。
+- **没有控制台时什么都不打开，并且说出来**：`offer.Url` 为 `null` 就只把理由写进状态行（「…也没有可打开的网页端」）。
+  **不编一个 URL** —— 一个错的控制台比一句「没有」更坏。理由同时挂在菜单项的 **ToolTip** 上，所以**点之前**就能读到，
+  而不是点完才知道。
+- 接缝只有一个：`OpenExternal`（开浏览器是机器级副作用，进程内测试不能真的拉起一个浏览器；而这里的 URL 就是**全部**的决定，
+  因为整条路上**一次 RC 都不发**）。菜单项在 `BuildRowMenu` 里用 `Selected` 的 type / provider 现算，
+  所以「这个端点有没有控制台」在建菜单时就定了。
+- 测试：**UI 15 条** —— `CloudVersionHistoryTests` 11 条纯规则（只给文件；4 个有控制台的 provider 各一条 URL；
+  SFTP/WebDAV/S3 没有控制台且句子说「去自己的控制台」；解释里必须出现 `rclone`、`不提供版本列表`、`旧版本列进目录`；
+  两种状态行；provider 名缺失时仍给得出答案）＋ `CloudBrowserDetailsTests` 4 条真窗口（菜单项只在一个文件上、
+  文件夹与多选都没有、ToolTip 带着理由、点了就开那个 URL 且状态行说出原因、没有控制台就什么都不开并说出来、
+  文件夹被告知「版本是针对单个文件的」）。既有 harness 为此加了一行 **drive 端点**（`WithWindow` 的 `select` 参数），
+  所以那一行是「有控制台」与「没控制台」之间唯一的差别。
+- 门禁：`Failed: 0`，**Core 442 / UI 545**（Build 4s / Core 23s / UI 2m50s）—— Core 与 B10 一字不差（B11 只动 UI 侧），
+  UI 的 +15 就是上面那 15 条。**探针证过会 fire**：把 `Offers` 改成永远 `true` → `Only_a_file_is_offered_a_history_lookup`
+  与 `A_folder_is_told_it_has_no_history…` 各红；把菜单项的 `ToolTip` 去掉 → 那条菜单测试红（3 failed / 33 passed）。
+- ⚠️ **本批没有证明的事**：① **一次真实的浏览器打开没测过** —— 桌面场景也做不到（那要一个 Google Drive 端点 + 凭据），
+  所以「URL 交给了系统」与「浏览器真的开了那一页」之间那一步只有代码在担保；② 那 4 个控制台 URL 是各家的**根地址**，
+  **没有逐个访问验证过**，也没有测试守着它们会不会变（改一个 provider 的地址只需要改 descriptor 那一行）；③ 对象级深链
+  **做不到** —— 列表与 `operations/stat` 的答案里**有没有**可用的对象 ID 我们**没有实测**（`CloudFileEntry` 里没有这个字段），
+  所以用户落地在控制台首页而不是那个文件；这是**已知且有意**的取舍，不是缺口。
+
+---
+
 ## 3. A3/A4 的设计要点与遗留缺口
 
 代码已提交，文件与测试清单见 §2 的 A3+A4。这里只留**日后改这块必须知道的三件事**和**一处尚未补的缺口**。
@@ -1038,9 +1083,9 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 ## 5. 剩余路线图（B1 → E）
 
-> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0–B10 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
+> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0–B11 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
 > **剩余项的顺序与依赖**：B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**（已落）；
-> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批只剩 B11（B1–B10 已落，见 §2）。**
+> D 与 A/B/C 完全解耦；E 是收尾集成。**B 组就此全部完成，下一批是 C 组（C1–C7，见 §2 之后那张表）。**
 
 ### A7. 端点导出/导入（原 A9）—— ✅ 已完成，见 §2
 
@@ -1082,7 +1127,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 > 需求盘点原本列了 21 项（B1–B21）；其中 P0 的 7 项 —— 新建文件夹、重命名、删除、多选批量、搜索、排序、
 > 面包屑 + 地址栏 —— **已在批次 1 落地**。下表是**剩余 11 项**，「现状 / 缺口」与「参考做法」两列是从原盘点文档
-> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1–B10 已落地（见 §2）**，下表只剩 B11 一项待做。
+> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1–B11 已全部落地（见 §2）**，下表留档。
 > 给 B6 的一条现成接线：`SetClipboard(Copy/Cut, 多选行)` 和 `Paste_Click` 已经是内部方法，
 > Ctrl+C / Ctrl+X / Ctrl+V 只需把键盘事件指到它们，**不要**另造一套剪贴板状态。
 > ✅ **B6 照此落了**：剪贴板状态**一个都没新造**，`SetClipboard` 与（抽出来的）`PasteAsync` 就是 Ctrl+C/X/V 的执行体；
@@ -1126,7 +1171,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | B8 | B18 | 收藏 / 最近访问 | ✅ **已完成**（hash 见 §2 的 B8 表行）。两个列表是**两条不同的承诺**：收藏的顺序归用户（重复添加不挪位、永不为容量修剪），最近访问是应用写的队列（新的在前、一处一份、上限 20）。规则全在 `CloudBrowserBookmarks`（纯），落盘在 `CloudBrowserBookmarkStore`（`cloud-bookmarks.json`，**只存端点名与路径，一个凭据字段都没有**，照 A7 导出的同一条规矩）；两个 `ComboBox` 跳转列表 + 一个「收藏此目录 / 取消收藏」按钮，端点不在屏上时**隐藏而不是删掉**（`rclone.conf` 偶尔读不到不该清空用户挑过的列表），ToolTip 说出藏了几份。**B9 因此欠一条**：统计走树**不打** `operations/list`，所以它**不记**一次访问 —— 「列成功才算一次访问」那道闸门照旧只有列表能开（§2 的 B9 有正控） | 网盘有「我的收藏」「最近」 |
 | B9 | B19 | 文件夹大小 | ✅ **已完成**（`57007b3` + `f172bd7` + `92c5eea` + `9aa29ce`，见 §2）。走树交给云端的 `operations/size`（**目录写在 `fs` 里**，多发的 `remote` 被静默忽略而答回整个端点），入口只有属性面板那**一个**动作按钮、一块面板最多**一个**动作；答复分五种（数出来 / 空目录 / 不在了 / 那是文件 / 未能统计：原话），`sizeless` 单独说一句「按 0 计入」；**结果不缓存**（下一次开面板还是 未统计）、**没有取消**（所以措辞只说 不再等，而 关闭 全程按得动）、**不打 `operations/list`**（所以不记最近访问，带正控证过） | 网盘可在文件夹属性里看到 |
 | B10 | B20 | 拖出整个文件夹 | ✅ **已完成**（`27bc80c` 前置事实 / `0983080` feat / `27b6a87` fix / `375762f` test + 收尾补充，见 §2）。**一棵树要么给、要么不给**：Explorer 在放下那一刻复制磁盘上现有的东西、并且两种情况都报成功，所以闸门是「每个目录都在、每个文件都在且长度对得上」；一次递归读取拿到整棵树，空目录靠 `CreateDirectories` 才活得到拖放目标；超过 `MaxFilesPerDrag`（= 浏览器自己的 `SearchResultLimit`）或名字本地放不下就**整棵树拒绝**；一个手势等不完的继续下载、下完才 reveal。**顺带修掉一个静默取错文件的下载缺陷**（`CloudTransferQueue.DownloadSourceUri`） | 网盘 / Explorer 支持整目录拖出 |
-| B11 | B21 | 版本历史 | 无；部分后端（GDrive、开了版本控制的 S3）可能支持 | 网盘有「历史版本」 |
+| B11 | B21 | 版本历史 | ✅ **已完成，按计划降级**（`79e37a0` feat / `5dea2f4` test / docs 见下，实证见 §6 第 5 条）。rclone **不暴露**版本列表（101 个 RC 方法里唯一带 version 的是 `core/version`；`operations/versions` / `operations/history` / `backend/versions` 全 404；`fsinfo` 没有版本标志；`list` 的 `opt` 不是 backend 配置覆盖），所以没有「读版本」这条路可走。菜单项因此叫 **在网页端查看历史版本…** —— 名字说的是它真做的事；`CloudVersionHistory` 一个纯类定「只给单个文件 / 去哪儿 / 为什么」，理由同时挂在 ToolTip 与状态行上；有控制台的 4 个 provider 从 `CloudProviderDescriptor.WebConsoleUrl` 取，没有的（SFTP / WebDAV / S3）**什么都不打开并说出来**，绝不编一个 URL | 网盘有「历史版本」 |
 
 B 组还有一条**只在这里出现**的约束：**并发数从 `const` 改为可配时**，要保证 `SemaphoreSlim` 重建不破坏在途任务；
 `ActiveCount` 与 `MaxConcurrentTransfers` 在 `CloudTransferQueue.RunAsync` 里是**当作进度参数**传给
@@ -1376,7 +1421,7 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `src/FengSync.Core/Rclone/Lifecycle/RcloneLifecycleHost.cs` | `ProxyOptionsProvider`：启动锁内、子进程创建前只读一次代理（批次 A5） |
 | `src/FengSync/Services/CloudEndpointStatusService.cs` | 端点体检：`ProbeAsync` / `Classify` / `RunBoundedAsync` / `FormatBytes` |
 | `src/FengSync/Services/CloudEndpointService.cs` | 端点 CRUD 与 URI 构造的门面（转发到 catalog + schemes） |
-| `src/FengSync/Views/RemoteEndpointManagerWindow.xaml(.cs)` | **三合一**窗口：端点管理 + 挂载管理 + 文件浏览器。凡是「要问用户」或「碰系统状态」的决定都在这里以 internal 接缝露出：`AskConflict`（B2）、`DetailsAsync` / `BuildRowMenu`（B3）、`ConfirmShare` / `CopyLink` / `ShareLinkAsync` / `ShareAsync`（B4）、`ConfirmRecycle` / `ConfirmDelete` / `RecycleAsync` / `RestoreAsync` / `EmptyTrashAsync` / `OpenTrashAsync`（B5 —— 后者是「清空回收站问的那句话」，所以默认路径仍是真 `TextPrompt.Confirm`）、`PromptRename` / `HandleKeyAsync`（B6 —— 前者是重命名的问题，后者是键盘的入口：把修饰键与「正在输入」当参数接进来，测试因此不必伪造物理键盘也能走真表真派发）、`DragOutAsync` / `DragOutHandoff` / `DragBudget` / `SurfaceTransfers` / `Reveal`（B10 —— 拖动本身造不出来：WPF 拿**真实指针**做命中测试，所以「一次手势交给 Explorer 什么路径」「这个手势等多久」「下完把谁推到用户面前」都走接缝） |
+| `src/FengSync/Views/RemoteEndpointManagerWindow.xaml(.cs)` | **三合一**窗口：端点管理 + 挂载管理 + 文件浏览器。凡是「要问用户」或「碰系统状态」的决定都在这里以 internal 接缝露出：`AskConflict`（B2）、`DetailsAsync` / `BuildRowMenu`（B3）、`ConfirmShare` / `CopyLink` / `ShareLinkAsync` / `ShareAsync`（B4）、`ConfirmRecycle` / `ConfirmDelete` / `RecycleAsync` / `RestoreAsync` / `EmptyTrashAsync` / `OpenTrashAsync`（B5 —— 后者是「清空回收站问的那句话」，所以默认路径仍是真 `TextPrompt.Confirm`）、`PromptRename` / `HandleKeyAsync`（B6 —— 前者是重命名的问题，后者是键盘的入口：把修饰键与「正在输入」当参数接进来，测试因此不必伪造物理键盘也能走真表真派发）、`DragOutAsync` / `DragOutHandoff` / `DragBudget` / `SurfaceTransfers` / `Reveal`（B10 —— 拖动本身造不出来：WPF 拿**真实指针**做命中测试，所以「一次手势交给 Explorer 什么路径」「这个手势等多久」「下完把谁推到用户面前」都走接缝）、`OpenExternal`（B11 —— 开浏览器是机器级副作用；而它的 URL 就是**全部**的决定，因为历史版本那条路上一次 RC 都不发） |
 | `src/FengSync/Views/CloudEndpointEditorWindow.xaml(.cs)` | 新建/编辑端点表单（按 descriptor 生成，非 S3 部分无手写面板） |
 | `src/FengSync.Core/Execution/EndpointTransfer.cs` | **唯一的** staging-aware 传输原语（同步引擎与云盘浏览器共用）。`CopyToStagingAsync`+`PublishAsync` 是可续传的上传/下载腿；`CopyServerSideAsync` 是两端都远端、**不 staging 不 publish** 的复制腿（B0） |
 | `src/FengSync/Services/CloudTransferQueue.cs` | 云盘传输队列（staging / resume / journal / 并发 / 重试 / **远端→远端复制 `EnqueueCopy`**）；构造参数里的可选 RC 客户端工厂是「不起 daemon 也能断言载荷」的接缝。`DownloadSourceUri`（B10，`internal static`，纯）是「下载的源端点要根到**文件自己所在的目录**」这条唯一的规定动作 —— 少了它，嵌套下载会静默取到上一层目录的同名文件（见 §4） |
@@ -1392,6 +1437,7 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `src/FengSync/Services/CloudShareLink.cs` | 分享链接的**规则**（B4）：`CloudShareLinkOutcome` 七态 / `CloudShareLinkResult(Outcome, Url, Detail)` / `OffersLink`（只有文件）/ `ConfirmationFor`（那句话本体）/ `Explain`（一态一句、七句互不相同）/ `FromAnswer`（没有链接就是失败，不是空成功）/ `FromFailure`（**先读文字再看 category**）/ `IsUnsupported`。窗口的接缝是 `ConfirmShare`、`CopyLink`、`ShareLinkAsync`、`ShareAsync` |
 | `src/FengSync/Services/CloudBrowserShortcuts.cs` | 浏览器键盘的**唯一一张表**（B6）：`CloudBrowserShortcut` 八态（`Refresh / Recycle / DeleteForever / Rename / SelectAll / Copy / Cut / Paste`）+ `Resolve(key, ctrl, shift, typing)`。**只有映射，没有动作**，所以「一键一命令」「Del 的三种拼法」「文本框只放行 F5」在不开窗口的前提下就可断言 |
 | `src/FengSync/Services/CloudFolderDrag.cs` | 整目录拖出的**全部规则**（B10，纯，除 `IsMirrorReady` 只问磁盘它已经命名的东西）：`MaxFilesPerDrag`（= `CloudFileManagerService.SearchResultLimit`，复用而不是另发明）、`Item(RemotePath, LocalPath, Size)`、`Plan(FolderLocalPath, DirectoryLocalPaths, Files, TotalBytes, Refusal)`、`Build(account, folder, listing)`（两套坐标同时算出来；`..`／Windows 保留字符／S3 允许的「同名文件与目录」／超过上限一律**整棵树拒绝**）、`IsReady`（**故意不复用 `CloudDragCache.IsUsable`**：0 字节的云端对象是真的空）、`IsMirrorReady`、`CreateDirectories`（空目录活到拖放目标的唯一原因）、`Describe`（状态行说清是空文件夹还是 N 个文件 · 多大） |
+| `src/FengSync/Services/CloudVersionHistory.cs` | 历史版本的**全部答案**（B11，纯）：`MenuLabel`（「在网页端查看历史版本…」——名字说的是它真做的事）、`Title`、`Offer(Provider, Explanation, Url)`（`CanOpen` / `OpenLabel`）、`Offers(entry)`（**只给文件**）、`For(rcloneType, provider)`（控制台来自 `CloudProviderDescriptor.WebConsoleUrl`，SFTP / WebDAV / S3 是 `null`）、`Explain(provider, hasConsole)`（三句话：rclone 不提供版本列表、那个开关为什么不打开、去哪儿看）、`StatusFor(offer)`。类文档写着**为什么**这条路只能是这一条（实测的 101 个方法、被静默忽略的 `opt`、以及那个会改写命名空间的 `rclone.conf` 开关） |
 | `src/FengSync.Core/Mount/MountOptions.cs` | 挂载参数（D 组的改造对象） |
 | `src/FengSync.Core/Rclone/Transport/RcloneProxyConfiguration.cs` | 代理（A5 的现成机制） |
 | `src/FengSync/Services/AppServices.cs` | `IAppServiceHost` / `AppServices.Install`（**两个 exe 共用服务宿主**） |
@@ -1411,6 +1457,7 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `tests/FengSync.Tests/RcloneRecursiveListFactTests.cs` | 真 rclone v1.75.0（`alias` remote + 一棵临时目录树 + 真 daemon，无网络无凭据）钉住 B10 的**全部**前提：递归列表的每条路径**已经相对 remote 根**且**带着被浏览的那一段**（`top` → `top/sub/b.txt`）、**被浏览的目录自己不在答案里**、深浅一次到齐、目录带 `IsDir`、空目录被报出来而不是被丢掉、目录的 `Size` 恒为 0、文件带真实字节数、缺失目录答那句 404 原话而不是空列表。10 条。这一条是 B10 的地基：**假 RC 的列表形状照它写**，写错会让整棵树多嵌一层 |
 | `tests/FengSync.UiTests/CloudBrowserFolderDragTests.cs` | 两个类，B10 的 UI 侧：`CloudFolderDragRulesTests` 14 条**纯规则**（镜像的每条路径、空目录活着、目录的大小不算内容、强制前缀的 S3 端点不重复根、`..` 与 Windows 保留字符、S3 的同名文件/目录、500/501 边界、不是本文件夹的列表是调用方错误、长度对不上就不 ready、0 字节对象算 ready、缺目录就不 ready、被拒的计划什么都不建、状态行文案）＋ `CloudBrowserFolderDragTests` 14 条**真窗口**（镜像已在就只交文件夹本身、只问缺的文件且从不问目录、空目录真的被建出来、等不完就 reveal、有文件失败就报出来、**每个文件从它自己所在的目录读**、云端已没有这个文件夹、空文件夹是拖出去的不是被拒的、被拒就什么都不建什么都不问、缓存文件仍只交那一个、缺缓存的文件进队列、**拖不动就说「再拖一次」而不是假装拖成了**（文件夹与文件各一条）、**镜像没下完就报出来而不是把 正在下载 留在屏上**）。`DragBudget`／`DragOutHandoff`／`SurfaceTransfers`／`Reveal` 四个接缝都在这里用上 |
 | `tests/FengSync.UiTests/CloudDownloadPathTests.cs` | B10 修掉的那个**静默取错文件**缺陷：`CloudDownloadSourceUriTests` 3 条纯规则（嵌套下载的源端点根到文件的目录、端点根的下载原样不动、本地 URI 不碰）＋ `CloudDownloadPathFactTests` 1 条真 bundled rclone 事实 —— `alias` remote 的**根上放一个同名诱饵** `b.txt`，断言嵌套对象的字节落地、诱饵没被取走、且没有 `.fengsync.partial` 残留 |
+| `tests/FengSync.UiTests/CloudVersionHistoryTests.cs` | B11 的**纯规则** 11 条：只给文件；4 个有控制台的 provider 各一条 URL（`drive` / `onedrive` / `dropbox` / `box`）；SFTP / WebDAV / S3 没有控制台且句子说「去自己的控制台」；解释里必须出现 `rclone`、`不提供版本列表`、`旧版本列进目录`（最后一条是给**下一个想打开那个开关的人**看的）；两种状态行各自带着理由；provider 名缺失时仍给得出答案。`CloudBrowserDetailsTests` 另加 4 条真窗口（菜单项只在一个文件上、文件夹与多选都没有、ToolTip 带着理由、点了就开那个 URL 且状态行说出原因、没有控制台就什么都不开并说出来、文件夹被告知「版本是针对单个文件的」），它的 harness 为此加了一行 **drive 端点**与一个 `select` 参数 |
 | `tests/FengSync.Tests/` | Core 层 + 需要真 rclone 的测试（门禁里的 Core 阶段） |
 | `tests/FengSync.UiTests/` | in-process WPF 行为测试 + 桌面场景（`UiAcceptanceTests` + `Scripts/Invoke-UiScenario.ps1`） |
 | `scripts/Test-All.ps1` | 门禁入口（`-Level Core|UiOffline|Online`，`-ShowOnScreen`） |
