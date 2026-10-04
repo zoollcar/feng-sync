@@ -482,6 +482,18 @@ function Find-WindowById([string]$id, [int]$seconds = 20) {
   Park-AllAppWindows
   return $window
 }
+function Get-CloudDetailsValue($panel, [string]$label) {
+  # 属性 面板的每一行是 CloudDetailsLabel{i} 和 CloudDetailsValue{i} 两个 TextBlock，行号由画它们的那个循环
+  # 给出来，没有人替用户排好顺序。所以先按名字定位标签那一格，再用它自己 AutomationId 的尾巴去取同一行的值——
+  # 直接找第 N 格会在面板多一行或少一行时读到隔壁的内容。
+  $index = $null
+  foreach ($cell in $panel.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $label))) {
+    $id = $cell.Current.AutomationId
+    if ($id -like 'CloudDetailsLabel*') { $index = $id.Substring('CloudDetailsLabel'.Length); break }
+  }
+  if ($null -eq $index) { throw "属性 面板里没有名为 '$label' 的行。" }
+  return (Find-Id $panel "CloudDetailsValue$index" 5).Current.Name
+}
 # Open the SettingsWindow via the main sidebar's Settings button.
 # Returns the SettingsWindow automation element. The window title is "设置中心".
 function Open-SettingsCenter {
@@ -1065,6 +1077,15 @@ try {
     $fixture = Join-Path $root 'sftp'; $share = Join-Path $fixture 'share'
     New-Item -ItemType Directory -Force -Path $share | Out-Null
     [IO.File]::WriteAllText((Join-Path $share 'remote-proof.txt'), 'from-sftp')
+    if ($Scenario -eq 'sftp-ui') {
+      # 统计大小 需要一段真实的子树才能证明它统计的是子目录而不是整个端点：两个已知字节数的文件放在一个
+      # 文件夹里，面板上的那一行就有唯一一个正确答案。只给 sftp-ui 建，sftp-to-local 的比较/同步计划里
+      # 多出一个目录会改变它断言的内容。
+      $proofDir = Join-Path $share 'proof-dir'
+      New-Item -ItemType Directory -Force -Path $proofDir | Out-Null
+      [IO.File]::WriteAllBytes((Join-Path $proofDir 'small.bin'), (New-Object byte[] 1024))
+      [IO.File]::WriteAllBytes((Join-Path $proofDir 'large.bin'), (New-Object byte[] 2048))
+    }
     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0); $listener.Start(); $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port; $listener.Stop()
     $hostKey = Join-Path $root 'host-key.pem'
     & ssh-keygen.exe -q -t ed25519 -N '' -f $hostKey
@@ -1438,6 +1459,27 @@ try {
       $recentExpand.Expand(); Start-Sleep -Milliseconds 200
       Select-Ui (Find-NameContaining $recentBox $remoteName 5); Start-Sleep -Milliseconds 300
       Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } '从最近访问里选了一项之后，文件面板没有回到这个端点的内容。' 30 | Out-Null
+      # 属性 面板里的 统计大小 是这一整套里只有真实外壳才能证明的一环，原因有两层：行的右键菜单在 XAML 里根本
+      # 不存在（它是 BuildRowMenu 每次打开时用代码搭起来的），面板自己又是模态对话框，进程内测试只能验到
+      # DetailsAsync 这个接缝。于是这里把整条路走一遍——右键、属性、点按钮、内置 rclone 真的经 SFTP 走完子树——
+      # fixture 里放了多少字节，统计完的那一行就必须说多少。
+      $proofRow = Wait-Until { try { Find-Name $manager 'proof-dir' 2 } catch { $null } } 'SFTP fixture 里的 proof-dir 没有出现在文件列表中。' 30
+      Select-UiOrAncestor $proofRow
+      Invoke-RightClickGesture $proofRow
+      $rowMenu = Wait-Until { try { Find-ContextMenuInApp 'CloudRowMenu' } catch { $null } } '文件行的右键菜单没有出现。' 15
+      Click (Find-Name $rowMenu '属性' 10)
+      $details = Find-WindowLike '属性 · proof-dir' 30
+      # 未统计 是这张面板在有人按下去之前唯一被允许的大小：SFTP 给目录字段填的数（这里是 0）一旦被当成大小印出来，
+      # 用户读到的是“这个文件夹是空的”。
+      if ((Get-CloudDetailsValue $details '大小') -ne '未统计') { throw "还没统计时 大小 那一行不是 未统计：'$(Get-CloudDetailsValue $details '大小')'。" }
+      if ((Find-Id $details 'CloudDetailsHint').Current.Name -notmatch '遍历整个子目录树') { throw '统计按钮没有说清它要花多久、能不能收回。' }
+      Click (Find-Id $details 'CloudDetailsAction')
+      Wait-Until { (Get-CloudDetailsValue $details '大小') -eq '3.0 KB（3,072 字节）· 2 个对象' } '统计大小 之后 大小 那一行没有变成子树里的真实字节数。' 90 | Out-Null
+      # 数完之后这一格不再提供同一个按钮：面板已经拿到了它要的数，再点一次只是把同一遍遍历再花一次。
+      Wait-Until { try { $null -eq (Find-Id $details 'CloudDetailsAction' 1) } catch { $true } } '统计完成之后面板还在提供同一次遍历。' 15 | Out-Null
+      Capture-Element $details 'cloud-details-folder-size.png' 'remote-file-manager' 'the 属性 panel after counting a folder over real SFTP'
+      Click (Find-Id $details 'CloudDetailsClose')
+      Wait-Until { try { $null -eq (Find-AppWindow { param($window) $window.Current.Name -like '*属性 · proof-dir*' }) } catch { $false } } '属性 面板关不掉。' 15 | Out-Null
       # Editing an existing endpoint has to round-trip the password rclone keeps obscured: a rewrite that
       # obscured it a second time would corrupt it, and nothing about the save would report an error — the
       # endpoint would simply stop authenticating. Re-browsing after the save is what catches that.

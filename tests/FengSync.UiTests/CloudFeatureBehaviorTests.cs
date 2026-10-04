@@ -550,6 +550,154 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
         Assert.Equal("/shared", DetailValue(rows, "端点根目录"));
     }
 
+    // ---------------------------------------------------------------- folder size (统计大小)
+
+    [Fact]
+    public void A_counted_folder_shows_the_total_and_the_objects_it_came_from()
+    {
+        var text = CloudFolderSize.TextFor(new CloudSizeResult(CloudSizeOutcome.Counted, 49_688_615_745, 205_034, 0));
+
+        // The object count is what distinguishes a real walk from the backend's own guess at a folder size:
+        // 46.3 GB on its own could be anything the endpoint chose to put in that field.
+        Assert.Equal("46.3 GB（49,688,615,745 字节）· 205,034 个对象", text);
+    }
+
+    [Fact]
+    public void Objects_the_backend_would_not_size_are_named_rather_than_added_up_as_nothing()
+    {
+        var text = CloudFolderSize.TextFor(new CloudSizeResult(CloudSizeOutcome.Counted, 1_048_576, 30, 12));
+
+        // Measured: rclone counts an object it cannot size as zero bytes and reports how many in sizeless. A
+        // Google Drive folder of Docs therefore totals 0 字节 while holding gigabytes, and a bare total is a
+        // number a user budgets storage against.
+        Assert.Contains("1.0 MB", text, StringComparison.Ordinal);
+        Assert.Contains("30 个对象", text, StringComparison.Ordinal);
+        Assert.Contains("其中 12 个云端不报大小，按 0 计入", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_empty_folder_is_an_answer_rather_than_a_failed_read()
+    {
+        // Measured against the bundled v1.75.0: an empty directory answers {"bytes":0,"count":0,"sizeless":0},
+        // which is the same shape as a failure that found nothing — so the zero has to be read as a result.
+        var counted = CloudSizeResult.Of(new RcloneFolderSize(0, 0, 0));
+
+        Assert.Equal(CloudSizeOutcome.Empty, counted.Outcome);
+        Assert.Equal("0 个对象，空目录", CloudFolderSize.TextFor(counted));
+    }
+
+    [Fact]
+    public void The_walk_refused_by_rclone_is_read_from_its_own_sentence()
+    {
+        // Measured: a missing directory answers 404 "directory not found" and a file answers 500 "is a file not
+        // a directory". The status code cannot separate them the way the sentence does, and both of these are
+        // permanent facts about the row rather than something a retry could fix.
+        Assert.Equal(CloudSizeOutcome.Gone,
+            CloudSizeResult.Refused("directory not found").Outcome);
+        Assert.Equal(CloudSizeOutcome.NotADirectory,
+            CloudSizeResult.Refused("sftp: path \"team/report.txt\" is a file not a directory").Outcome);
+        Assert.Equal(CloudSizeOutcome.Failed, CloudSizeResult.Refused("connection refused").Outcome);
+        Assert.Equal(CloudSizeOutcome.Failed, CloudSizeResult.Refused(null).Outcome);
+    }
+
+    [Fact]
+    public void Each_refusal_gets_its_own_sentence_and_none_of_them_claims_a_size()
+    {
+        Assert.Equal("云端已没有这个文件夹",
+            CloudFolderSize.TextFor(CloudSizeResult.Refused("directory not found")));
+        Assert.Equal("这是一个文件，不是文件夹",
+            CloudFolderSize.TextFor(CloudSizeResult.Refused("is a file not a directory")));
+        // The reason stays on screen: "未能统计" alone would leave the user guessing whether the folder is empty.
+        Assert.Equal("未能统计：Remote quota exceeded",
+            CloudFolderSize.TextFor(CloudSizeResult.Refused("Remote quota exceeded")));
+        Assert.Equal("未能统计：云端没有给出可读取的大小。", CloudFolderSize.TextFor(CloudSizeResult.NoAnswer));
+    }
+
+    [Fact]
+    public void An_answer_with_no_numbers_in_it_is_not_mistaken_for_an_empty_folder()
+    {
+        Assert.Equal(CloudSizeOutcome.Counted, CloudSizeResult.Of(new RcloneFolderSize(4096, 2, 0)).Outcome);
+        Assert.Equal(CloudSizeOutcome.Empty, CloudSizeResult.Of(new RcloneFolderSize(0, 0, 0)).Outcome);
+        // A reply that carried neither field is the one case with nothing to report.
+        Assert.Equal(CloudSizeOutcome.Failed, CloudSizeResult.NoAnswer.Outcome);
+    }
+
+    [Fact]
+    public void Only_an_uncounted_folder_still_has_a_walk_left_to_offer()
+    {
+        var folder = FolderEntry("docs");
+        var file = FileEntry("a.txt", 1024);
+
+        Assert.True(CloudItemDetails.OffersSize(folder, BackendStat(directory: true), counted: null));
+        // A file's size already came from the stat, and rclone refuses to size one outright; a folder the
+        // backend no longer has answers 404 for the same reason.
+        Assert.False(CloudItemDetails.OffersSize(file, BackendStat(), counted: null));
+        Assert.False(CloudItemDetails.OffersSize(folder, CloudItemStat.Missing, counted: null));
+        Assert.False(CloudItemDetails.OffersSize(folder, stat: null, counted: null));
+        // The number belongs to the panel that read it: keeping it would let this panel quote a total the
+        // listing behind it never saw.
+        Assert.False(CloudItemDetails.OffersSize(folder, BackendStat(directory: true),
+            CloudSizeResult.Of(new RcloneFolderSize(4096, 2, 0))));
+    }
+
+    [Fact]
+    public void A_counted_folder_replaces_the_uncounted_word_with_the_total()
+    {
+        var counted = CloudSizeResult.Of(new RcloneFolderSize(49_688_615_745, 205_034, 0));
+
+        var rows = CloudItemDetails.For(FolderEntry("docs"), Account("files", "shared"),
+            BackendStat(size: 0, directory: true, mime: "inode/directory"), size: counted);
+
+        Assert.Equal("46.3 GB（49,688,615,745 字节）· 205,034 个对象", DetailValue(rows, "大小"));
+    }
+
+    [Theory]
+    [InlineData(true, null, "统计大小")]
+    [InlineData(true, 4096L, null)]
+    [InlineData(false, null, "计算校验值")]
+    public void A_panel_offers_at_most_one_read_and_which_one_is_decided_by_the_row(bool folder, long? counted,
+        string? expected)
+    {
+        // The two reads aim at different objects — one walks a subtree, the other reads one object's bytes — so
+        // a panel with both buttons would be offering the user a command the row cannot answer.
+        var entry = folder ? FolderEntry("docs") : FileEntry("a.txt", 1024);
+        var stat = BackendStat(directory: folder);
+        var size = counted is { } bytes ? CloudSizeResult.Of(new RcloneFolderSize(bytes, 4, 0)) : null;
+
+        var action = CloudItemDetails.ActionFor(entry, stat, hashAsked: false, size,
+            () => Task.FromResult(new CloudDetailsPanel([])), () => Task.FromResult(new CloudDetailsPanel([])));
+
+        Assert.Equal(expected, action?.Label);
+    }
+
+    [Fact]
+    public void A_panel_that_already_asked_for_a_checksum_offers_nothing_more()
+    {
+        // The backend was read and answered with none; a second click would pay for the same pass again and get
+        // the same 此后端未提供校验值 row back.
+        var action = CloudItemDetails.ActionFor(FileEntry("a.txt", 1024), BackendStat(), hashAsked: true, null,
+            () => Task.FromResult(new CloudDetailsPanel([])), () => Task.FromResult(new CloudDetailsPanel([])));
+
+        Assert.Null(action);
+    }
+
+    [Fact]
+    public void Each_offer_arrives_with_the_words_that_explain_what_it_costs()
+    {
+        var hash = CloudItemDetails.ActionFor(FileEntry("a.txt", 1024), BackendStat(), false, null,
+            () => Task.FromResult(new CloudDetailsPanel([])), () => Task.FromResult(new CloudDetailsPanel([])));
+        var size = CloudItemDetails.ActionFor(FolderEntry("docs"), BackendStat(directory: true), false, null,
+            () => Task.FromResult(new CloudDetailsPanel([])), () => Task.FromResult(new CloudDetailsPanel([])));
+
+        // A button that does not say what it spends is the one a user clicks twice by mistake, and neither of
+        // these can be taken back once sent.
+        Assert.Equal("计算校验值", hash?.Label);
+        Assert.Contains("读取整个文件", hash?.Hint, StringComparison.Ordinal);
+        Assert.Equal("统计大小", size?.Label);
+        Assert.Contains("遍历整个子目录树", size?.Hint, StringComparison.Ordinal);
+        Assert.Contains("收不回", size?.Hint, StringComparison.Ordinal);
+    }
+
     // ---------------------------------------------------------------- share link (分享链接)
 
     [Fact]
