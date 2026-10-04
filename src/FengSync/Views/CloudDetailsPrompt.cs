@@ -104,10 +104,11 @@ internal static class CloudDetailsPrompt
             actionButton.Visibility = Visibility.Visible;
             actionButton.Click += async (_, _) =>
             {
-                // Both buttons go dark for the duration: the read cannot be recalled, and leaving 关闭 clickable
-                // would let the panel vanish while its answer is still in flight.
+                // Only the action goes dark: one click must not send a second walk. 关闭 stays enabled because
+                // the read cannot be recalled, so leaving the panel is the user's only way out — which is
+                // exactly what the hint promises (关掉面板只是不再等它). An answer that arrives after the panel
+                // is gone redraws a window nobody is looking at, which costs nothing.
                 actionButton.IsEnabled = false;
-                close.IsEnabled = false;
                 try
                 {
                     var panel = await action.Run();
@@ -121,7 +122,6 @@ internal static class CloudDetailsPrompt
                 finally
                 {
                     actionButton.IsEnabled = true;
-                    close.IsEnabled = true;
                 }
             };
         }
