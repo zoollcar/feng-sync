@@ -20,9 +20,9 @@ public sealed record CloudEndpointRenameContext(
 
 /// <summary>
 /// Renames a cloud endpoint. rclone has no rename operation, so the work is a rewrite of the section in
-/// rclone.conf plus a migration of the two files that remember the endpoint by name — and all three are
-/// backed up first, because a half-applied rename would leave profiles pointing at an endpoint that no
-/// longer exists.
+/// rclone.conf plus a migration of the three files that remember the endpoint by name — its metadata, the
+/// profiles that sync through it, and the browser's 收藏 and 最近访问 — and all four are backed up first,
+/// because a half-applied rename would leave one of them pointing at an endpoint that no longer exists.
 /// </summary>
 /// <remarks>
 /// The conf rewrite is deliberately not a <c>config/create</c> of the new name followed by a
@@ -124,10 +124,12 @@ public static class CloudEndpointRename
 
             var configPath = BundledRclone.ConfigPath;
             var profiles = new ProfileStore();
+            var bookmarks = new CloudBrowserBookmarkStore();
             using var backups = new ArtifactBackups();
             backups.Capture(configPath);
             backups.Capture(metadataStore.FilePath);
             backups.Capture(profiles.FilePath);
+            backups.Capture(bookmarks.FilePath);
             try
             {
                 await RenameInConfigAsync(configPath, api, oldName, newName, backing, entry, parameters, ct);
@@ -135,6 +137,15 @@ public static class CloudEndpointRename
                 if (entry is not null)
                     await metadataStore.RenameAsync(oldName,
                         entry with { RemoteName = newName, AliasOf = backing is null ? null : CloudEndpointService.BackingRemoteName(newName) }, ct);
+
+                // A bookmark is a pointer at an endpoint name, so it has to move with the endpoint: left behind it
+                // addresses a section rclone no longer has, and the 收藏 list hides it — the user's favourites
+                // emptied by a rename, with no word about why.
+                //
+                // This comes before the profiles on purpose. Rewriting profiles reads a file this build did not
+                // just write, so it is the step that can fail on input nobody controls, and a rename that failed
+                // there would otherwise leave the bookmarks moved while everything else stayed where it was.
+                await bookmarks.RenameRemoteAsync(oldName, newName, ct);
 
                 var loaded = await profiles.LoadAsync(ct);
                 var rewritten = RewriteProfiles(loaded, oldName, newName);
