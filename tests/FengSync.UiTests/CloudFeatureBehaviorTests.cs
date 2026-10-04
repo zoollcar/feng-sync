@@ -670,6 +670,238 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
         Assert.Contains("文件夹", sentences[5], StringComparison.Ordinal);
     }
 
+    // ---------------------------------------------------------------- recycle bin (回收站)
+
+    [Fact]
+    public void The_trash_is_one_named_folder_at_the_endpoint_root()
+    {
+        // The mirror lives at the *endpoint's* root, not the rclone remote's: an S3 endpoint whose prefix is
+        // enforced by an alias would otherwise be told to write outside the area rclone lets it touch.
+        Assert.Equal(".fengsync-trash", CloudRecycleBin.RootOf(""));
+        Assert.Equal("Documents/.fengsync-trash", CloudRecycleBin.RootOf("Documents"));
+        Assert.True(CloudRecycleBin.IsRoot("Documents", "Documents/.fengsync-trash"));
+        Assert.True(CloudRecycleBin.IsRoot("Documents", "/Documents/.fengsync-trash/"));
+        Assert.False(CloudRecycleBin.IsRoot("Documents", "Documents/.fengsync-trash/a.txt"));
+        Assert.True(CloudRecycleBin.IsInside("Documents", "Documents/.fengsync-trash/a/b.txt"));
+        Assert.False(CloudRecycleBin.IsInside("Documents", "Documents/.fengsync-trash"));
+        Assert.False(CloudRecycleBin.IsInside("Documents", "Documents/a/b.txt"));
+        // Standing in the folder or anywhere under it is what shows 还原 and 清空回收站.
+        Assert.True(CloudRecycleBin.IsTrashView("Documents", "Documents/.fengsync-trash"));
+        Assert.True(CloudRecycleBin.IsTrashView("Documents", "Documents/.fengsync-trash/a"));
+        Assert.False(CloudRecycleBin.IsTrashView("Documents", "Documents"));
+    }
+
+    [Fact]
+    public void A_trashed_object_keeps_the_directory_it_came_from_as_a_mirror()
+    {
+        // The object carries its own origin in its path, so 还原 needs no lookup table and survives the app data
+        // being cleared — which is also why the mirror has to be exactly reversible.
+        Assert.Equal("Documents/.fengsync-trash/reports", CloudRecycleBin.LandingDirectory("Documents", "Documents/reports/a.pdf"));
+        Assert.Equal("Documents/.fengsync-trash", CloudRecycleBin.LandingDirectory("Documents", "Documents/top.txt"));
+        Assert.Equal("Documents/reports/a.pdf", CloudRecycleBin.OriginalPath("Documents", "Documents/.fengsync-trash/reports/a.pdf"));
+        Assert.Equal("Documents/top.txt", CloudRecycleBin.OriginalPath("Documents", "Documents/.fengsync-trash/top.txt"));
+        Assert.Equal("Documents/reports", CloudRecycleBin.OriginalDirectory("Documents", "Documents/.fengsync-trash/reports/sub"));
+        // A row that came from the endpoint's top level goes back to that top level, named in full: the browser
+        // addresses rows from the remote root, so the root is a path rather than the empty string.
+        Assert.Equal("Documents", CloudRecycleBin.OriginalDirectory("Documents", "Documents/.fengsync-trash/top.txt"));
+        // Same rule with no endpoint root, which is what an alias-backed S3 endpoint has.
+        Assert.Equal(".fengsync-trash/a", CloudRecycleBin.LandingDirectory("", "a/x.txt"));
+        Assert.Equal("a/x.txt", CloudRecycleBin.OriginalPath("", ".fengsync-trash/a/x.txt"));
+    }
+
+    [Fact]
+    public void Something_that_was_never_recycled_has_nowhere_to_be_restored_to()
+    {
+        Assert.Null(CloudRecycleBin.OriginalPath("Documents", "Documents/notes.txt"));
+        Assert.Null(CloudRecycleBin.OriginalPath("Documents", "Documents/.fengsync-trash"));
+
+        var rows = new[] { FileEntry("a.txt", 10, "Documents/.fengsync-trash/a.txt"), FileEntry("b.txt", 10, "Documents/b.txt") };
+        var restorable = CloudRecycleBin.SelectForRestore("Documents", rows);
+
+        // A restore that moved b.txt would put it somewhere the user never asked for, so it is filtered out here
+        // rather than trusted to the caller.
+        Assert.Equal(["Documents/.fengsync-trash/a.txt"], restorable.Select(entry => entry.Path));
+    }
+
+    [Fact]
+    public void The_trash_folder_is_never_moved_into_itself()
+    {
+        var root = new[] { FolderAt("Documents/.fengsync-trash") };
+        Assert.Equal(CloudRecycleOutcome.IsTrashFolder, CloudRecycleBin.SelectForMove("Documents", root).Refusal);
+
+        var trashed = new[] { FileEntry("a.txt", 10, "Documents/.fengsync-trash/a.txt") };
+        Assert.Equal(CloudRecycleOutcome.InsideTrash, CloudRecycleBin.SelectForMove("Documents", trashed).Refusal);
+
+        // A selection of the folder and its neighbours is the user pointing at both at once: the neighbours still
+        // move, because refusing the whole gesture is less useful than saying what was left out.
+        var mixed = new[]
+        {
+            FileEntry("a.txt", 10, "Documents/a.txt"),
+            FileEntry("gone.txt", 10, "Documents/.fengsync-trash/gone.txt"),
+        };
+        var (movable, refusal) = CloudRecycleBin.SelectForMove("Documents", mixed);
+        Assert.Null(refusal);
+        Assert.Equal(["Documents/a.txt"], movable.Select(entry => entry.Path));
+    }
+
+    [Fact]
+    public void A_taken_landing_name_becomes_name_1_instead_of_replacing_what_is_there()
+    {
+        // Measured on v1.75.0: operations/movefile overwrites a file that is already at the destination, and a
+        // directory move merges and lets the incoming bytes win. Both would destroy the copy that got there
+        // first — the object the whole gesture exists to keep — so the name is chosen free before anything moves.
+        var entries = new[] { FileEntry("x.txt", 10, "Documents/x.txt") };
+        var placements = CloudRecycleBin.PlacementsFor("Documents", entries,
+            _ => ["x.txt", "KEEPME"], restore: false);
+
+        Assert.Single(placements);
+        Assert.Equal("Documents/.fengsync-trash/x (1).txt", placements[0].Destination);
+        Assert.True(placements[0].Renamed);
+    }
+
+    [Fact]
+    public void One_batch_cannot_point_two_rows_at_the_same_path()
+    {
+        // The taken list is only what the directory held when it was listed; the rows in this same batch have to
+        // be claimed too, or two of them would land on a name the first one already took.
+        var entries = new[]
+        {
+            FileEntry("x.txt", 10, "Documents/a/x.txt"),
+            FileEntry("x.txt", 12, "Documents/a/x.txt"),
+        };
+        var placements = CloudRecycleBin.PlacementsFor("Documents", entries, _ => [], restore: false);
+
+        Assert.Equal(
+            ["Documents/.fengsync-trash/a/x.txt", "Documents/.fengsync-trash/a/x (1).txt"],
+            placements.Select(placement => placement.Destination));
+        Assert.Equal(new[] { false, true }, placements.Select(placement => placement.Renamed).ToList());
+    }
+
+    [Fact]
+    public void Two_same_named_rows_from_two_directories_both_keep_their_name()
+    {
+        // Freeness is a property of the directory the row lands in, so it is tracked per directory: two rows the
+        // listing says nothing about, from two different folders, both keep their own name even though the names
+        // are identical to each other.
+        var entries = new[]
+        {
+            FileEntry("x.txt", 10, "Documents/a/x.txt"),
+            FileEntry("x.txt", 12, "Documents/b/x.txt"),
+        };
+        var placements = CloudRecycleBin.PlacementsFor("Documents", entries, _ => [], restore: false);
+
+        Assert.Equal(
+            ["Documents/.fengsync-trash/a/x.txt", "Documents/.fengsync-trash/b/x.txt"],
+            placements.Select(placement => placement.Destination));
+        Assert.All(placements, placement => Assert.False(placement.Renamed));
+    }
+
+    [Fact]
+    public void A_restore_lands_back_where_it_came_from_and_yields_to_what_is_there_now()
+    {
+        var entries = new[] { FileEntry("a.pdf", 10, "Documents/.fengsync-trash/reports/a.pdf") };
+        // Nothing else took the name in the meantime, so the row goes back under the name the user remembers —
+        // and the missing directory is not a problem, because both move legs create the parents they need.
+        var moved = CloudRecycleBin.PlacementsFor("Documents", entries, _ => [], restore: true);
+        Assert.Equal("Documents/reports/a.pdf", moved[0].Destination);
+        Assert.False(moved[0].Renamed);
+
+        // Something already holds that name: both move legs overwrite rather than refuse, so the restore yields
+        // to it and says the new name out loud instead of replacing that other object.
+        var blocked = CloudRecycleBin.PlacementsFor("Documents", entries, _ => ["a.pdf"], restore: true);
+        Assert.Equal("Documents/reports/a (1).pdf", blocked[0].Destination);
+        Assert.True(blocked[0].Renamed);
+    }
+
+    [Fact]
+    public void The_recycle_question_says_space_is_not_freed_and_where_to_look()
+    {
+        var text = CloudRecycleBin.ConfirmFor([FileEntry("a.txt", 10, "Documents/a.txt")]);
+
+        Assert.Contains("不会释放空间", text, StringComparison.Ordinal);
+        Assert.Contains(CloudRecycleBin.FolderName, text, StringComparison.Ordinal);
+        Assert.Contains("还原", text, StringComparison.Ordinal);
+        Assert.Contains("名称 (1)", text, StringComparison.Ordinal);
+        Assert.Contains("清空回收站", text, StringComparison.Ordinal);
+        Assert.EndsWith("确定移动？", text, StringComparison.Ordinal);
+        // A folder goes whole, and the count of rows the user pointed at says nothing about that on its own.
+        Assert.Contains("文件夹 1 个会连同里面的全部内容一起移动",
+            CloudRecycleBin.ConfirmFor([FolderAt("Documents/docs")]), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Emptying_the_trash_is_the_delete_question_with_one_more_line_not_a_second_rule()
+    {
+        var entries = Enumerable.Range(0, 11).Select(index => FileEntry($"a{index}.txt", 10, $".fengsync-trash/a{index}.txt")).ToList();
+
+        var plain = CloudDeleteSafety.Describe(entries, supportsTrash: false);
+        var fromTrash = CloudDeleteSafety.Describe(entries, supportsTrash: false, insideRecycleBin: true);
+
+        // The threshold, the counting and the irreversibility flag are the ones 删除 already uses; the two
+        // messages differ by exactly the one line about the last safety net.
+        Assert.Equal(1, fromTrash.Message.Split('\n').Length - plain.Message.Split('\n').Length);
+        Assert.Contains("本应用的「还原」也帮不上了", fromTrash.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("本应用的「还原」", plain.Message, StringComparison.Ordinal);
+        Assert.True(fromTrash.IsBulk);
+        Assert.Equal(plain.IsBulk, fromTrash.IsBulk);
+        Assert.Equal(plain.IsIrreversible, fromTrash.IsIrreversible);
+        // The threshold itself stays where it was: ten is one click, eleven is a deliberate one.
+        Assert.False(CloudDeleteSafety.Describe(entries.Take(CloudDeleteSafety.BulkThreshold).ToList(), false).IsBulk);
+    }
+
+    [Fact]
+    public void Every_recycle_outcome_gets_a_sentence_of_its_own()
+    {
+        var outcomes = new[]
+        {
+            CloudRecycleOutcome.Moved, CloudRecycleOutcome.Restored, CloudRecycleOutcome.Declined,
+            CloudRecycleOutcome.InsideTrash, CloudRecycleOutcome.IsTrashFolder, CloudRecycleOutcome.NotInTrash,
+            CloudRecycleOutcome.Failed,
+        };
+        var sentences = outcomes.Select(outcome => CloudRecycleBin.Explain(new CloudRecycleResult(outcome, [
+            new CloudRecyclePlacement("Documents/a.txt", "Documents/.fengsync-trash/a.txt", false),
+            new CloudRecyclePlacement("Documents/b.txt", "Documents/.fengsync-trash/b.txt", false),
+        ]))).ToList();
+
+        Assert.Equal(outcomes.Length, sentences.Distinct().Count());
+        Assert.All(sentences, sentence => Assert.False(string.IsNullOrWhiteSpace(sentence)));
+        Assert.Contains("空间未释放", sentences[0], StringComparison.Ordinal);
+        Assert.Contains("已还原 2 项", sentences[1], StringComparison.Ordinal);
+        Assert.Contains("云端没有任何东西被移动", sentences[2], StringComparison.Ordinal);
+        Assert.Contains("已经在回收站里", sentences[3], StringComparison.Ordinal);
+        Assert.Contains("回收站文件夹本身", sentences[4], StringComparison.Ordinal);
+        Assert.Contains("没有可还原的来源", sentences[5], StringComparison.Ordinal);
+        Assert.Contains("没有完成", sentences[6], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_rename_inside_the_batch_and_a_half_finished_batch_are_both_said_out_loud()
+    {
+        var intoTrash = new[]
+        {
+            new CloudRecyclePlacement("Documents/x.txt", "Documents/.fengsync-trash/x (1).txt", true),
+            new CloudRecyclePlacement("Documents/y.txt", "Documents/.fengsync-trash/y.txt", false),
+        };
+
+        var moved = CloudRecycleBin.Explain(new CloudRecycleResult(CloudRecycleOutcome.Moved, intoTrash, 2, "云端拒绝了操作"));
+        Assert.Contains("其中 1 项在回收站里已有同名项目，改存为 x (1).txt", moved, StringComparison.Ordinal);
+        // The count of what did NOT move is what tells the user to refresh, so it belongs in the same sentence.
+        Assert.Contains("2 项没有成功：云端拒绝了操作", moved, StringComparison.Ordinal);
+
+        var back = new[]
+        {
+            new CloudRecyclePlacement("Documents/.fengsync-trash/reports/a.pdf", "Documents/reports/a (1).pdf", true),
+            new CloudRecyclePlacement("Documents/.fengsync-trash/reports/b.pdf", "Documents/reports/b.pdf", false),
+        };
+        Assert.Contains("其中 1 项原名仍被占用，还原为 a (1).pdf",
+            CloudRecycleBin.Explain(new CloudRecycleResult(CloudRecycleOutcome.Restored, back)), StringComparison.Ordinal);
+
+        // With one row that kept its name the destination is the whole answer, and a count alone would not be.
+        var single = new[] { new CloudRecyclePlacement("Documents/.fengsync-trash/top.txt", "Documents/top.txt", false) };
+        Assert.Contains("已回到 Documents/top.txt",
+            CloudRecycleBin.Explain(new CloudRecycleResult(CloudRecycleOutcome.Restored, single)), StringComparison.Ordinal);
+    }
+
     // ---------------------------------------------------------------- endpoint health
 
     [Fact]
@@ -1085,6 +1317,10 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
         new(name, path ?? name, IsDirectory: false, size, modified);
 
     private static CloudFileEntry FolderEntry(string name) => new(name, name, IsDirectory: true, 0, null);
+
+    /// <summary>A folder row at an explicit path, for rules that read the path rather than the name.</summary>
+    private static CloudFileEntry FolderAt(string path) =>
+        new(path.Trim('/').Split('/')[^1], path, IsDirectory: true, 0, null);
 
     /// <summary>An endpoint account with the given name and configured root folder.</summary>
     private static CloudEndpointAccount Account(string name, string root) =>
