@@ -32,12 +32,14 @@ public sealed class CloudBrowserShareTests
     private const string Link = "https://cloud.example.test/team/a.txt?token=signed-value";
 
     [Fact]
-    public void A_single_file_earns_the_share_command_and_a_folder_does_not()
+    public async Task A_single_file_earns_the_share_command_and_a_folder_does_not()
     {
         // A prefix has no link to give — the bundled v1.75.0 answers 404 for one against a real S3 server — and
         // a link over a folder would grant a subtree the selection never named.
-        WithWindow((window, _) =>
+        await WithWindow((window, _) =>
         {
+            // A row has to be selected for there to be a menu at all, so the case starts where the click does.
+            Select(window, $"{Root}/a.txt");
             Assert.Contains("复制分享链接…", Headers(window.BuildRowMenu()!));
             Select(window, $"{Root}/incoming");
             Assert.DoesNotContain("复制分享链接…", Headers(window.BuildRowMenu()!));
@@ -47,9 +49,9 @@ public sealed class CloudBrowserShareTests
     }
 
     [Fact]
-    public void The_link_is_asked_for_on_the_object_the_row_points_at()
+    public async Task The_link_is_asked_for_on_the_object_the_row_points_at()
     {
-        WithWindow(async (window, standIn) =>
+        await WithWindow(async (window, standIn) =>
         {
             window.ConfirmShare = _ => true;
             var result = await window.ShareLinkAsync(Entry(window, $"{Root}/a.txt"));
@@ -63,9 +65,9 @@ public sealed class CloudBrowserShareTests
     }
 
     [Fact]
-    public void Nothing_is_asked_of_the_cloud_until_the_user_agrees()
+    public async Task Nothing_is_asked_of_the_cloud_until_the_user_agrees()
     {
-        WithWindow(async (window, standIn) =>
+        await WithWindow(async (window, standIn) =>
         {
             var copied = new List<string>();
             window.ConfirmShare = _ => false;
@@ -80,9 +82,9 @@ public sealed class CloudBrowserShareTests
     }
 
     [Fact]
-    public void The_generated_link_is_the_exact_string_that_reaches_the_clipboard()
+    public async Task The_generated_link_is_the_exact_string_that_reaches_the_clipboard()
     {
-        WithWindow(async (window, standIn) =>
+        await WithWindow(async (window, standIn) =>
         {
             var copied = new List<string>();
             window.ConfirmShare = _ => true;
@@ -95,9 +97,9 @@ public sealed class CloudBrowserShareTests
     }
 
     [Fact]
-    public void A_backend_without_links_is_reported_as_unsupported_and_copies_nothing()
+    public async Task A_backend_without_links_is_reported_as_unsupported_and_copies_nothing()
     {
-        WithWindow(async (window, standIn) =>
+        await WithWindow(async (window, standIn) =>
         {
             var copied = new List<string>();
             window.ConfirmShare = _ => true;
@@ -114,9 +116,9 @@ public sealed class CloudBrowserShareTests
     }
 
     [Fact]
-    public void An_object_the_cloud_has_dropped_is_reported_as_missing()
+    public async Task An_object_the_cloud_has_dropped_is_reported_as_missing()
     {
-        WithWindow(async (window, _) =>
+        await WithWindow(async (window, _) =>
         {
             window.ConfirmShare = _ => true;
             var result = await window.ShareLinkAsync(Entry(window, $"{Root}/a.txt"));
@@ -126,9 +128,9 @@ public sealed class CloudBrowserShareTests
     }
 
     [Fact]
-    public void An_answer_that_carries_no_link_copies_nothing()
+    public async Task An_answer_that_carries_no_link_copies_nothing()
     {
-        WithWindow(async (window, _) =>
+        await WithWindow(async (window, _) =>
         {
             var copied = new List<string>();
             window.ConfirmShare = _ => true;
@@ -142,9 +144,9 @@ public sealed class CloudBrowserShareTests
     }
 
     [Fact]
-    public void A_folder_row_is_answered_without_troubling_the_backend()
+    public async Task A_folder_row_is_answered_without_troubling_the_backend()
     {
-        WithWindow(async (window, standIn) =>
+        await WithWindow(async (window, standIn) =>
         {
             window.ConfirmShare = _ => true;
 
@@ -156,11 +158,11 @@ public sealed class CloudBrowserShareTests
     }
 
     [Fact]
-    public void The_status_line_says_what_the_link_grants_as_well_as_where_it_went()
+    public async Task The_status_line_says_what_the_link_grants_as_well_as_where_it_went()
     {
         // The link is now in the user's clipboard and readable by anyone who gets it; a status line that only
         // said "已复制" would leave the grant unmentioned.
-        WithWindow(async (window, _) =>
+        await WithWindow(async (window, _) =>
         {
             window.ConfirmShare = _ => true;
             window.CopyLink = _ => { };
@@ -173,9 +175,9 @@ public sealed class CloudBrowserShareTests
     }
 
     [Fact]
-    public void A_link_the_clipboard_refused_is_still_told_to_the_user_as_a_link()
+    public async Task A_link_the_clipboard_refused_is_still_told_to_the_user_as_a_link()
     {
-        WithWindow(async (window, _) =>
+        await WithWindow(async (window, _) =>
         {
             window.ConfirmShare = _ => true;
             window.CopyLink = _ => throw new IOException("剪贴板正被其他程序占用。");
