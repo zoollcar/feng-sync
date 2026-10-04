@@ -1,7 +1,7 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **39** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
+> 分支：`dev`（领先 `origin/dev` **40** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
 > 最后更新：2026-10-04。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
@@ -46,7 +46,8 @@ A3–A6 是分批提交的，所以接手时先自证过一次基线；B0 提交
 ### ② A7 与 B0 已实现并提交 ✅
 
 A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）。A1 的桌面场景缺口在进 B 组前补上
-（`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / 本文。**A 组 + B0 至此收尾。**
+（`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / `6be98b9` docs
+（本节的这条 commit 行与 §2 表末行是 `6be98b9` 之后回填的）。**A 组 + B0 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
 
@@ -76,6 +77,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `fd12512` | A1 缺口 | `test(ui): walk every provider form in the endpoint editor`（7 张 descriptor 表单全走一遍，含「不得出现别家字段」） |
 | `af6fc4c` | B0 | `feat(transfers): copy between two cloud endpoints through the queue` |
 | `85160a9` | B0 | `test(transfers): cover the copy payload and where real rclone writes it` |
+| `6be98b9` | B0 | `docs: record B0 done and the copy invariants that B1 must keep`（AGENTS.md 不变式 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -202,7 +204,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   坏参数名、重名、`UniqueName`）；`UiFeatureBehaviorTests` +2 STA（draft 预填 SFTP 与 S3）；`sftp-ui` 场景的
   工具条矩形断言加上两个新控件。
 
-### B0 —— 队列泛化：远端→远端复制（**已提交**：`af6fc4c` + `85160a9`）
+### B0 —— 队列泛化：远端→远端复制（**已提交**：`af6fc4c` + `85160a9` + `6be98b9`）
 
 - `EndpointTransfer.CopyServerSideAsync(source, target, sourcePath, destinationPath, operationId, totalBytes,
   activeTransfers, progress, ensureDestinationAsync, ct)`（`src/FengSync.Core/Execution/EndpointTransfer.cs`）——
