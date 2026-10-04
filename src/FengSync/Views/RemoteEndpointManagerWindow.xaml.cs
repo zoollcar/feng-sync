@@ -2423,10 +2423,22 @@ public partial class RemoteEndpointManagerWindow : Window
             await Task.WhenAny(_transfers.WaitForAsync(task), Task.Delay(DragBudget));
         }
 
-        if (CloudDragCache.IsUsable(local, entry.Size) && HandOffToExplorer([local], entry.Name))
+        if (CloudDragCache.IsUsable(local, entry.Size))
         {
-            StatusText.Text = "已拖出：" + entry.Name;
-            return;
+            if (HandOffToExplorer([local], entry.Name))
+            {
+                StatusText.Text = "已拖出：" + entry.Name;
+                return;
+            }
+            if (task is null)
+            {
+                // The bytes are already here, the hand-off refused to start, and there is nothing left to wait
+                // for — so the honest answer is that it is ready for the next drag rather than a drop that never
+                // happened. (The folder path says the same thing; a cached file is the one case where the queue
+                // was never asked, so no transfer row exists to explain the silence.)
+                StatusText.Text = $"“{entry.Name}”已经下载好了，再拖一次即可。";
+                return;
+            }
         }
 
         if (task is not null) RevealWhenReady(task, local);
@@ -2542,7 +2554,16 @@ public partial class RemoteEndpointManagerWindow : Window
                 await Dispatcher.InvokeAsync(() => StatusText.Text = $"“{name}”有 {failed} 个文件没能下载，没有拖出整个文件夹。");
                 return;
             }
-            if (!await Task.Run(() => CloudFolderDrag.IsMirrorReady(plan))) return;
+            if (!await Task.Run(() => CloudFolderDrag.IsMirrorReady(plan)))
+            {
+                // Every transfer reported success and the mirror still is not the folder the listing described:
+                // the cloud's own numbers disagree with the bytes that came back. Saying nothing would leave
+                // 正在下载 on screen for a download that has already finished, so "done but not whole" is its
+                // own sentence — and dragging again really does fetch the short file, because IsReady compares
+                // each file against the length the cloud reported.
+                await Dispatcher.InvokeAsync(() => StatusText.Text = $"“{name}”没有下载完整，请再拖一次。");
+                return;
+            }
             await Dispatcher.InvokeAsync(() =>
             {
                 StatusText.Text = $"文件夹“{name}”已下载完成，把它拖到目标位置即可。";
