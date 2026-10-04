@@ -1,7 +1,7 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **67** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
+> 分支：`dev`（领先 `origin/dev` **73** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
 > 最后更新：2026-10-04。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
@@ -15,9 +15,9 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）、**B3**（属性 / 详情：`operations/stat` + 按需校验值）、**B4**（分享链接：`operations/publiclink` + 先确认再生成）、**B5**（回收站：端点根下的 `.fengsync-trash` + 还原，清空复用**同一条**删除门槛）、**B6**（键盘快捷键：一张纯表把按键映射成命令，命令一律调按钮已有的方法）。**A 组全部收尾，B 组走到 B6。**见 §2。 |
-| **下一步** | **B7–B11 文件浏览器**（§5）。B1 打通了「一条剪贴板行 → `EnqueueCopy` 的五个参数」，B2 把「同名冲突怎么答」抽成上传与粘贴共用的纯规则，B3 又加了一条**读单个对象**的路（`StatAsync` → `CloudItemDetails` 定行 → 代码搭的面板），B4 加了**第一个会对外发出权限的动作**（确认走 `ConfirmShare`、剪贴板走 `CopyLink`，都是接缝），B5 加了**第一个「删掉但还能回来」的动作**（规则全在 `CloudRecycleBin`，移动照 §4 实测的两条腿走，「清空回收站」问的还是 `CloudDeleteSafety` 那**一道**门槛），B6 把键盘接上了**同一批方法**（`CloudBrowserShortcuts.Resolve` 只做路由，新加的 `PromptRename` 是重命名问题的接缝）。样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗／对外副作用的决定走接缝 + 需要落点或答案形状才上真 rclone**。⚠️ **B11 动手前先按 §6 实证**（rclone 是否暴露版本列表；B5 那条 `use_trash` 已由 §6 第 1 条答复：RC **根本没有** trash 动词，所以回收站只能是应用自己的文件夹）。全量门禁 2026-10-04 再跑，`Failed: 0`（**Core 415 / UI 402**，UI 3m01s；Core 与 B5 收尾一致 —— B6 只动 UI 侧，19 条新测试全在 UiTests）。 |
-| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；**`operations/stat` 里「校验值」只有把名字列进 `opt.hashTypes` 才会给**，而 `opt.hashes`（位域）与 `opt.HashTypes`（大小写）都被**静默忽略或报错** —— 拼错读起来就跟「这个后端没有校验值」一模一样；**`operations/publiclink` 里多写的字段同样被静默忽略**，而它那句「不支持公开链接」的 500 会被共用分类器读成**临时连接中断**（先读文字再看 category）；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）；**接缝返回 `null` 是「用户取消」，不是「没装接缝」**——用 `??` 兜到真弹窗会在测试里打开一个无人可答的对话框，并且 `Window.Owner` 指向一个从未 `Show()` 过的窗口时直接抛（B2 撞到过一次测试宿主崩溃）；**`operations/movefile` 对已存在的目标名是覆盖**、`sync/move` 落到已存在的目录是**合并并把源留成一个空壳**，而 `operations/rmdir` 打**已不存在**的路径答 HTTP 500、被共用分类器读成 `Temporary`（于是 `RemoveIfEmptyAsync` 先 `stat`，不拿 rmdir 的报错当「目录没有了」）（B5）；**键盘的坑是「两处写」而不是「按不动」**：快捷键一旦自己写一遍拒绝语或确认，就和按钮分岔（B6 的做法是命令只调按钮已有的方法）；`TextBox` 会**自己吃掉** Del 与 Ctrl+A、却**不吃** F2，所以 typing 闸门只对 F2 这类键真正起作用；`Keyboard.Modifiers` 读的是**物理**键盘，合成事件改不了它（见 §4 的 WPF 表）。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）、**B3**（属性 / 详情：`operations/stat` + 按需校验值）、**B4**（分享链接：`operations/publiclink` + 先确认再生成）、**B5**（回收站：端点根下的 `.fengsync-trash` + 还原，清空复用**同一条**删除门槛）、**B6**（键盘快捷键：一张纯表把按键映射成命令，命令一律调按钮已有的方法）、**B7**（网格视图 / 缩略图 / 内置预览：**同一份行集合的第二种画法** + 13 个具名预览结果 + 只在 converter 里查缓存、拉字节走可取消的一轮）。**A 组全部收尾，B 组走到 B7。**见 §2。 |
+| **下一步** | **B8–B11 文件浏览器**（§5）。B1 打通了「一条剪贴板行 → `EnqueueCopy` 的五个参数」，B2 把「同名冲突怎么答」抽成上传与粘贴共用的纯规则，B3 又加了一条**读单个对象**的路（`StatAsync` → `CloudItemDetails` 定行 → 代码搭的面板），B4 加了**第一个会对外发出权限的动作**（确认走 `ConfirmShare`、剪贴板走 `CopyLink`，都是接缝），B5 加了**第一个「删掉但还能回来」的动作**（规则全在 `CloudRecycleBin`，移动照 §4 实测的两条腿走，「清空回收站」问的还是 `CloudDeleteSafety` 那**一道**门槛），B6 把键盘接上了**同一批方法**（`CloudBrowserShortcuts.Resolve` 只做路由，新加的 `PromptRename` 是重命名问题的接缝），B7 加了**同一份行集合的第二种画法**（`ApplyBrowserView` 只换 `View`/`ItemTemplate`/`ItemsPanel`，`ItemsSource` 仍是那一份 `_entries`）和**读字节的那条有界路**（`54eb6f5` 的 `ReadAsync` → 13 个具名结果的 `CloudBrowserPreview`，缩略图 converter 只查缓存、拉字节走 `RestartTileRound` 那一轮可取消的）。样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗／对外副作用的决定走接缝 + 需要落点或答案形状才上真 rclone**。⚠️ **B11 动手前先按 §6 实证**（rclone 是否暴露版本列表；B5 那条 `use_trash` 已由 §6 第 1 条答复：RC **根本没有** trash 动词，所以回收站只能是应用自己的文件夹）。全量门禁 2026-10-04 再跑，`Failed: 0`（**Core 425 / UI 442**，UI 3m3s；Core 的 +10 = B7 前置 `54eb6f5` 的 9 条有界读事实 + 1 条「行必须自带名字」的 XAML 静态栅格，UI 的 +40 是 B7 的纯规则 + 真窗口）。 |
+| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；**`operations/stat` 里「校验值」只有把名字列进 `opt.hashTypes` 才会给**，而 `opt.hashes`（位域）与 `opt.HashTypes`（大小写）都被**静默忽略或报错** —— 拼错读起来就跟「这个后端没有校验值」一模一样；**`operations/publiclink` 里多写的字段同样被静默忽略**，而它那句「不支持公开链接」的 500 会被共用分类器读成**临时连接中断**（先读文字再看 category）；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）；**接缝返回 `null` 是「用户取消」，不是「没装接缝」**——用 `??` 兜到真弹窗会在测试里打开一个无人可答的对话框，并且 `Window.Owner` 指向一个从未 `Show()` 过的窗口时直接抛（B2 撞到过一次测试宿主崩溃）；**`operations/movefile` 对已存在的目标名是覆盖**、`sync/move` 落到已存在的目录是**合并并把源留成一个空壳**，而 `operations/rmdir` 打**已不存在**的路径答 HTTP 500、被共用分类器读成 `Temporary`（于是 `RemoveIfEmptyAsync` 先 `stat`，不拿 rmdir 的报错当「目录没有了」）（B5）；**键盘的坑是「两处写」而不是「按不动」**：快捷键一旦自己写一遍拒绝语或确认，就和按钮分岔（B6 的做法是命令只调按钮已有的方法）；`TextBox` 会**自己吃掉** Del 与 Ctrl+A、却**不吃** F2，所以 typing 闸门只对 F2 这类键真正起作用；`Keyboard.Modifiers` 读的是**物理**键盘，合成事件改不了它（见 §4 的 WPF 表）；**网格视图必须 `ClearValue` 复原，不能写 `ItemsPanel = null`** —— 本地 null 让**一行都不呈现**而集合完整，进程内的 `Assert.Null` 会把这个 bug 读成正确（B7）；**桌面场景跑的是 `tests/FengSync.UiTests/bin/` 里那份 `FengSync.exe`**，只建 `src/FengSync` 会让场景**绿在它本该检查的那个改动上**（B7 排查时踩过一次）。 |
 
 ---
 
@@ -51,6 +51,12 @@ UI 加纯规则 13 条 + 真窗口 17 条。中途一次全绿是 Core 413 / UI 
 **B6 收尾再跑：`Failed: 0`，Core 415 / UI 402，UI 阶段 3m1s** —— B6 只动 UI 侧（一张纯表 + 真窗口路由 + 命令派发），
 所以 Core 计数与 B5 收尾一字不差；19 条新测试全在 `CloudBrowserShortcutTests`（3 条纯表 +
 5 条真实冒泡 `KeyDown` 证明处理器挂在浏览器面板上 + 11 条命令本身）。这一轮**没有**再撞上上面那条 WinFsp flake。
+**B7 收尾再跑：`Failed: 0`，Core 425 / UI 442，UI 阶段 3m3s** —— Core 的 +10 里有 9 条是 B7 前置 `54eb6f5` 那 9 条
+`RcloneServeReadFactTests`（每条都打 bundled 二进制的 `--rc-serve` 有界读：range 越过对象末尾被夹而不是 416、
+超上限仍报总大小、对象不存在答 404 而目录答 500 那句会被共用分类器读成连接问题、0 字节与起始越界的
+`Content-Range` 是**任何解析器都不必读**的形状），第 10 条是 `LiveTextAccessibilityTests` 新加的 XAML 静态栅格
+（浏览器那一行必须由容器自己带绑定来的名字）；UI 的 +40 是 `CloudBrowserGridViewTests` 20 +
+`CloudBrowserPreviewTests` 20。这一轮也**没有**撞上 WinFsp flake。
 差值不必精确对上（上一行的 301 是 B2 收尾时的读数），以 `Failed: 0` 为准。
 
 - 约 **3m30s**（UI 阶段占大头）。调用工具时**超时必须给 600000ms**，否则会被掐断在半路。
@@ -67,7 +73,7 @@ UI 加纯规则 13 条 + 真窗口 17 条。中途一次全绿是 Core 413 / UI 
   结束前一个字都不落盘，看着像卡死。写成 `> "$TEMP/x.log" 2>&1` 再 `tail`。B1 用的过滤器
   `--filter "FullyQualifiedName~CloudBrowserPaste|FullyQualifiedName~CloudTransferWindowBehavior"`（19 条）**1 秒**跑完。
 
-### ② A7、B0、B1、B2、B3、B4、B5、B6 已实现并提交 ✅
+### ② A7、B0、B1、B2、B3、B4、B5、B6、B7 已实现并提交 ✅
 
 A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）。A1 的桌面场景缺口在进 B 组前补上
 （`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / `6be98b9` docs
@@ -83,7 +89,12 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 **B6 键盘快捷键**照旧三层：`f45e06b` feat / `2299460` test / `1893946` docs（本节的这条 hash 行与 §2 表末行是
 `1893946` 之后回填的）。
 它没有往 Core 加东西，也没有新造一条产品路径：一张纯表把按键映射成命令，命令一律调按钮本来就在调的那个方法。
-**A 组 + B0 + B1 + B2 + B3 + B4 + B5 + B6 至此收尾。**
+**B7 网格视图 / 缩略图 / 内置预览**拆成四层：`1334311` feat(core)（`AppDataPaths.CloudThumbnails` +
+`ApplicationSettings.CloudBrowserView` + 校验）/ `c59ac45` feat（三个新服务文件 + `CloudPreviewPrompt` + 窗口两种画法）/
+`c66bb6c` test（UI 40 条 + 1 条 Core 侧 XAML 静态栅格 + `sftp-ui` 两条 toggle 断言）/ `<docs>` docs（AGENTS.md 三条实测规则 + 本文件），
+前面还有一条**不属于本批产品路径**的 Core 地基 `54eb6f5`（`--rc-serve` 有界读 + 9 条事实）。
+本节的这条 hash 行与 §2 表末行是那四条之后回填的。
+**A 组 + B0 + B1 + B2 + B3 + B4 + B5 + B6 + B7 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
 
@@ -135,6 +146,11 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `f45e06b` | B6 | `feat(browser): give the file browser a keyboard that only routes` |
 | `2299460` | B6 | `test(browser): pin the keystroke table, its typing gate and the pane it belongs to` |
 | `1893946` | B6 | `docs: record B6 done and the keystroke rules that B7 must keep`（AGENTS.md 规则 + 本文件） |
+| `54eb6f5` | B7 前置 | `feat(core): read at most the first N bytes of a cloud object through --rc-serve`（Core 侧有界读 + `RcloneServeReadFactTests` 把状态形状钉成 bundled v1.75.0 实测的那几种） |
+| `1334311` | B7 | `feat(core): remember the browser's view and give its tiles a cache folder` |
+| `c59ac45` | B7 | `feat(browser): draw the same rows as tiles, and preview only what we can really render` |
+| `c66bb6c` | B7 | `test(browser): pin the tile round, the preview refusals and both drawings of one list`（UI 40 条 + 1 条 Core 侧 XAML 静态栅格 + `sftp-ui` 两条 toggle 断言） |
+| `<docs>` | B7 | `docs: record B7 done and the view and preview rules that B8 must keep`（AGENTS.md 规则 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -564,6 +580,66 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 - 门禁：`Failed: 0`，**Core 415 / UI 402**（UI 3m1s）—— Core 计数与 B5 收尾相同，因为 B6 只动 UI 侧。
 
 
+### B7 —— 网格视图 / 缩略图 / 内置预览（**已提交**：`1334311` feat(core) / `c59ac45` feat / `c66bb6c` test / `<docs>` docs）
+
+- **一个行集合，两种画法**（本批的核心形状）。`RemoteEndpointManagerWindow` 只有一份 `_entries`（`VisibleEntries`
+  是它过滤+排序后的读数），键盘、剪贴板、回收站、删除阈值全读它。所以网格视图**只是** `FileList.View = null`
+  加上一对 `ItemTemplate`/`ItemsPanel`：不建第二个 `ObservableCollection`、不加第二个控件、切换时**不发
+  `operations/list`**。两条相反的做法都能"看起来能用"，但两份列表会让 `Ctrl+A` 与行菜单各说一套。
+- **tile 的图片是"查"出来的，不是"读"出来的**：模板里的 `Image` 绑一个窗口作用域的 `CloudTileSourceConverter`，
+  它的 `Peek` 委托在构造函数里接到 `CloudThumbnailStore`，**只读缓存、绝不在 converter 里发起加载**（converter
+  里联网 = 每个可见行每次 layout 在 UI 线程上发一次请求，且无法取消）。真正拉字节的是 `RestartTileRound`：
+  按**当前** `_entries` 里 `OffersThumbnail` 的行发起，换目录/换视图/换搜索词时 `_tileRound?.Cancel()` 掐掉上一轮
+  （故意不 `Dispose` —— 在途的 read 还会往那个 source 注册续传，Dispose 会在 read 里抛）。tile 落地用
+  Background 优先级**合并**的 `Items.Refresh()`，一轮结束补一次 Normal 优先级刷新，所以 `await window.PendingThumbnails`
+  才真的等价于「画完了」而不是「请求发完了」。
+- **预览是 13 个具名结果，不是一个 null**。`CloudBrowserPreview.DecideFor` 先看列表这一行（文件夹 / 能解码的图 /
+  像图但没解码器 / 文本表内 / 有格式但本程序没渲染器 / 后缀都不认，再叠加 0 字节与超上限），**读之前**就能开口；
+  `OutcomeOf` 只把云端的答案（`Read`/`TooLarge`/`Missing`/`Failed`）映射成状态；字节是不是真图、是不是能读的文本，
+  由 `DecodePicture`/`ExtractText` 各自回答（`UndecodableBytes`/`Binary`/`NotUtf8`）。每个状态一句自己的话
+  （`ReasonFor`），所以面板上不会出现「无法预览」这种什么都没说的事。窗口侧 `PreviewAsync` 是接缝，
+  `CloudPreviewPrompt` 只是那层壳 —— 模态框在进程内没人能答。
+- **上限是被解释过的数字，不是拍的**：tile 8 MiB / 解码到 64 px（装饰，用户没要求花带宽，可能还没落地就滚走了），
+  预览 32 MiB 图 / 256 KiB 文本（一次**显式点击**才付的钱，且 256 KiB 已经是几十页滚动），预览解码到 1024 px
+  （面板 1000 DIP 宽），并发 2（与传输队列同一口径），解码内存 512 张 ≈ 8 MB，缩略图缓存 64 MiB 后按最旧修剪。
+  缩略图与预览**互不复用缓存**：一个是 64 px 的装饰、一个是 1024 px 的内容，用同一份键就会有一边在偷看另一边。
+- **明确不做**（写进代码里的拒绝，不是漏掉）：PDF / office / 音视频没有渲染器（`net10.0-windows` 的 WPF 没有，
+  `Windows.Data.Pdf` 是 WinRT），照旧走「下载后用外部程序打开」；非 UTF-8/UTF-16 的文本**直接拒绝并说明不猜代码页**
+  （没有 `System.Text.Encoding.CodePages`，猜错的中文看着像文件损坏）；WebP/AVIF/HEIC/SVG/RAW 保留文件图标并说明
+  是「本程序没有它的解码器」。双击不可预览的行**仍然**走原来的下载+外壳打开路径，行菜单里**不给**「预览」
+  （只能拒绝的命令是噪音，不是快捷方式）。
+- **三条实测到的 WPF 事实**（全部写进 AGENTS.md，见 §4 末尾三行）：① 解码失败有三种异常形状，其中
+  `FileFormatException` 派生自 `SystemException`，`IOException` 过滤器接不到，两条解码路径必须共用
+  `CloudBrowserTiles.RefusesDecode`；② 绑了 `GridView` 的 `ListView` **不写任何本地** `ItemTemplate`/`ItemsPanel`
+  （实测 `unset`），所以列表视图必须 `ClearValue` 复原 —— `ItemsPanel = null` 是本地 null，会让**一行都不呈现**
+  （可见单元格 2 → 0）而集合完整无缺；③ 网格 tile 内部的文字**不入 UIA 树**（`RawViewWalker` 下 grid 的
+  `DataItem` 零子节点，`Name` 是整条 `CloudFileEntry` 记录的 `ToString()`），所以行必须自己带
+  `AutomationProperties.Name`。
+- ⚠️ **②是本批唯一一次真实门禁 fail 的根因，也是「进程内测不到」的样本**：原来的断言
+  `Assert.Null(window.FileList.ItemTemplate)` 把 bug 状态读成正确（本地 null 也返回 null），只有真实外壳能看见 ——
+  `sftp-ui` 场景在第一次浏览就找不到 `remote-proof.txt`。修完之后给场景补了两条 toggle 断言（切到网格、切回列表，
+  各自要求行按名字找得到**且** `BoundingRectangle` 有尺寸），并**分别用负向跑验证过**：去掉
+  `ItemContainerStyle` 那个 setter，网格那条 fail；把 `ItemsPanel = null` 放回去，第一次浏览就 fail。
+- ⚠️ **本批没有证明的三件事**（别当成已验证）：① **`ItemsSource` 被换成副本**这一类破坏在进程内**测不出来**
+  （探针查实：从未 `Show()` 的控件不靠视觉树维持选中，`SelectedItems` 原样留着，那条逐行 `ReferenceEquals` 测试
+  照样绿），所以「只有一份集合」只有 diff 本身 + 场景的行可达性在担保；② **像素**：`TileFor` 只证明 converter
+  交得出一张图，不证明它被画在 64×64 的方块里（真实外观靠 §2 记的那次 `-ShowOnScreen` 截图人工看过一次）；
+  ③ **预览面板那层壳**（`CloudPreviewPrompt`）没有任何断言 —— 测的是 `PreviewAsync` 交回来的
+  `CloudPreviewPanel`，弹窗本身只在代码里。附带一条**故意没做**的：按钮 tooltip 与行菜单里仍未写快捷键文字（B6 留的）。
+- 测试：**40 条新增**（`CloudBrowserGridViewTests` 20 + `CloudBrowserPreviewTests` 20）+ 9 条 Core 侧真 rclone
+  事实（`RcloneServeReadFactTests`，`54eb6f5`，把假 RC 的状态形状钉成 bundled v1.75.0 实测的那几种）+ 1 条
+  XAML 静态守卫（`LiveTextAccessibilityTests.The_cloud_file_list_names_every_row_from_the_item_it_shows`：浏览器那一行
+  必须**由容器自己带名字**，且必须是绑定而非字面量 —— 这是上面第 ③ 条事实的唯一廉价格栅，而**删掉那个
+  `ItemContainerStyle` 立刻 fail** 已实跑验证）+ 桌面场景两条
+  toggle 断言。守卫**逐条探针验证过会 fire**：`FileFormatException` 从共用谓词里删掉 → 缩略图与预览各 1 条立刻
+  fail；`OutcomeOf` 不再认 `TooLarge` → 2 条 fail；去掉「不可预览不读字节」的前置拒绝 → 2 条 fail；行菜单去掉
+  `OffersPreview` 闸门 → 1 条 fail；`ApplyView` 尾部不再 `RestartTileRound` → 换目录那条读目标 fail；
+  `ItemsPanel = null` → 视图那条 `UnsetValue` 断言 fail。
+- 门禁：`Failed: 0`，**Core 425 / UI 442**（UI 3m3s）—— Core 从 415 起跳是那 9 条 `RcloneServeReadFactTests`
+  （`54eb6f5`，真 `--rc-serve` 有界读的事实，每条都打 bundled 二进制）+ 本批那条 XAML 静态栅格；
+  UI 从 402 起跳是本批的 40 条。这一轮**没有**撞上 B5 那条 WinFsp detach flake。
+
+
 ---
 
 ## 3. A3/A4 的设计要点与遗留缺口
@@ -645,7 +721,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | 事实 | 影响 |
 | --- | --- |
 | `UiConsistencyGuardrailTests.PageLocalButtonVisual` 的正则**只对 `<Button>` 元素的属性区**生效 | 给 `TextBox` 设 `Padding` 是安全的；`<Button>` 上一律不能写 `Height/MinHeight/Padding/FontSize/Background/Foreground/BorderBrush` |
-| `LiveTextAccessibilityTests` **只扫 `TextBlock`** | `TextBox`/`ComboBox`/`Button` 上的静态 `AutomationProperties.Name` 是允许的；动态文本 `TextBlock` 必须用 `AutomationId` |
+| `LiveTextAccessibilityTests` 扫两件事：**`TextBlock` 的动态文本**（不许带静态 `AutomationProperties.Name`，必须有 `AutomationId`）＋（B7 起）**浏览器那一行必须自己带绑定来的名字**（`FileList` 的 `ListViewItem` 样式里 `AutomationProperties.Name="{Binding …}"`，字面量也算 fail） | `TextBox`/`ComboBox`/`Button` 上的静态 `AutomationProperties.Name` 是允许的；行名之所以进栅格是因为 tile 内部文字不入 UIA（见下面那行）|
 | 无桌面 WPF 测试模板 = `RunSta(Action)` + `EnsureApplicationResources()` + **从不 `Show()`** | 毫秒级，不需要前台会话 |
 | UI 测试**默认桌面无关**：窗口停 `-32000`，输入走 UIA pattern / posted 消息；`-ShowOnScreen` 恢复前台 | 不得引入合成鼠标移动（`DesktopFreeUiHarnessTests` 会拦） |
 | `RcloneLifecycleHost.GetClientAsync` **会真的起 rclone 进程**，而 `IAppServiceHost.RcloneHost` 是 **sealed 具体类**（无法替换） | 「不碰 rclone」的测试必须靠**不触发 `BrowseAsync`**，并用「`StatusText` 没被写过」来证明（`AssertNoDirectoryListing` 就是这个）。B0 给 `CloudTransferQueue` 也加了同款**可选 RC 客户端工厂**构造参数（`CloudFileManagerService` 早就有），于是「队列发了什么载荷」能在假 RC 上断言（`CloudTransferCopyTests`）；没有接缝的那条腿照旧靠不起 daemon 的写法 |
@@ -661,14 +737,20 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | **`KeyEventArgs` 没有单参构造**：唯一可用的公开构造是 `(KeyboardDevice, PresentationSource, int, Key)`，第二个参数**不许为 null**，而 `InputManager.PrimaryKeyboardDevice` 是**实例属性**（`InputManager.Current.PrimaryKeyboardDevice`） | B6 的键盘测试这样造真实路由事件：临时 `new HwndSource(new HwndSourceParameters())`（隐藏、零尺寸）当 source，`RaiseEvent` 之后**立刻 dispose**（路由是同步的，届时已经用完）。拿不到 source 就退化成直接调 internal 方法，那就测不到「挂在哪个元素上」了 |
 | **`RaiseEvent` 出来的 `KeyEventArgs`，其 `OriginalSource` 就是被 raise 的那个元素**（实测；`e.Source` 因此是同一个东西、冗余） | typing 闸门 `e.OriginalSource is TextBox` 在真实输入与测试事件下读**同一个字段**，所以「地址栏里的 F2 不该打开重命名」这类断言能用 raise-event 来证。反过来说：断言 `Handled` 时要按实测写 —— 在 `TextBox` 上 raise `Delete` 得到的是 `true`（控件自己认领了），不是「冒泡上来被窗口处理」 |
 | **`TextBox` 会自己吃掉 Del 与 Ctrl+A（它们根本不冒泡），但不吃 F2**；`Keyboard.Modifiers` 读的是**物理键盘**，合成事件改不了它；WPF 的 `ListBox` **没有**内建 Ctrl+A，裸字母留给 type-to-select | 三处后果：① typing 闸门只对 F2 这类键真正起作用，把 `IsTyping` 写死成 `false` 立刻让地址栏那条测试 fail（闸门不是装饰）；② 带修饰键的用例只能把 Ctrl/Shift **当参数传进** `HandleKeyAsync`，只有 F5/F2/Z 这类「意义不随修饰键变化」的键才走真实事件，因此「XAML 处理器读修饰键读对了」这一环**未被自动化证明**，桌面场景也伪造不出修饰键所以**没有**加键盘场景；③ 表不认的键必须保持 unhandled，否则列表的按字母选中被悄悄弄坏 |
+| **WPF 解码失败的异常形状有三种，且都不在 `IOException` 那一族里**（对 bundled WPF 实测）：字节没有任何 imaging component 认领 → `NotSupportedException`（"No imaging component suitable"）；容器根本认不出来（例如只有 8 字节 PNG 签名）→ `FileFormatException`（0x88982F07，**派生自 `SystemException`**，所以 `when (ex is IOException …)` 的过滤器**接不到它**）；声称的格式而流不完整 → `InvalidOperationException` | 两条解码路径（`CloudThumbnailStore.Decode`、`CloudBrowserPreview.DecodePicture`）**必须共用** `CloudBrowserTiles.RefusesDecode`。漏掉一种不是「少一张缩略图」，是异常顺着 tile 轮次**逃出到 UI 线程上把窗口炸掉**（B7 第一版就炸在 `NotSupportedException`；`FileFormatException` 那条由 `A_container_the_decoder_does_not_recognise_leaves_no_tile_either` 钉住） |
+| **`ListView.View = null` + 换 `ItemTemplate`/`ItemsPanel` 就是同一份行集合的第二种画法**：`Items.Refresh()` **不会**清掉 `SelectedItems`（实测：每条 tile 落地都刷一次，选中行始终在） | B7 的网格切换只动 `View`/`ItemTemplate`/`ItemsPanel`，**不换 ItemsSource、不发 `operations/list`**。`The_toggle_redraws_the_same_rows_and_keeps_which_ones_were_selected` 逐行 `ReferenceEquals` + 选中存活，`Switching_the_view_does_not_re_list_the_directory` 断言 POST 为空。**但探针查实**：把 `ItemsSource` 换成副本（`_entries.ToList()`）在**进程内测不出来** —— 从未 `Show()` 过的控件不靠视觉树维持选中，`SelectedItems` 原样留着，那条测试照样绿。所以「只有一份集合」这一半只有代码与 §2 记的桌面场景在担保，别把它当成被自动化钉住了 |
+| **`DataTemplate` 里的 `IValueConverter` 只拿得到那一行**，模板本身够不着窗口（store、当前端点都在窗口上）；而 converter 里发起读取等于**每个可见行每次 layout 都在 UI 线程上联网、且无法取消** | 缩略图走窗口作用域的 `CloudTileSourceConverter` 资源，`Peek` 委托在构造函数里接线，**只读缓存不加载**；加载由 `RestartTileRound` 按当前 `_entries` 里 `OffersThumbnail` 的行发起，换目录时 `_tileRound?.Cancel()` 掐掉上一轮（**故意不 Dispose**：在途的 read 还会往那个 source 上注册续传，Dispose 会在 read 里抛）。tile 落地用 **Background 优先级合并的 `Items.Refresh()`**，一轮结束再补一次 Normal 优先级刷新，所以 `await window.PendingThumbnails` 才等价于「画完了」 |
+| **绑定了 `GridView` 的 `ListView` 不写任何本地 `ItemTemplate`/`ItemsPanel`/`ItemContainerStyle`（三者实测都是 `unset`）**，行是靠 `ListView` 自己的默认样式画出来的；因此 `ItemsPanel = null` 是一个**本地 null 值**而不是「恢复默认」，它让**一行都不呈现**（实测：可见单元格文字从 2 条变 0 条），而集合里每条行都还在 | 列表视图必须用 `ClearValue(ItemsControl.ItemsPanelProperty)` 复原，**不能**赋 `null`。这条是 B7 唯一一次真实门禁 fail 的根因（`sftp-ui` 在第一次浏览就找不到 `remote-proof.txt`）。进程内那条 `Assert.Null(window.FileList.ItemTemplate)` **恰好把 bug 状态读成正确**（本地 null 也返回 null），所以断言改成 `ReadLocalValue(...) == DependencyProperty.UnsetValue`；探针验证过：把 `= null` 放回去，这条立刻 fail |
+| **网格画法里 tile 内部的文字根本不入 UIA 树**（实测：`RawViewWalker` 下 grid 的 `DataItem` **零子节点**，而它的 `Name` 是数据对象的 `ToString()`，即整条 `CloudFileEntry { … }` 记录）；列表画法的行则把单元格文字作为子 `Text` 暴露 | 行必须**自己带名字**：`FileList.ItemContainerStyle` 上 `Setter Property="AutomationProperties.Name" Value="{Binding NameDisplay}"`。这一个 setter 同时修掉两件事 —— 网格行从此按文件名可寻址（`Find-Name`），以及**两种画法**的行都不再对读屏念整条记录。桌面场景两条 toggle 断言都同时要求 `BoundingRectangle` 有尺寸：那才是「画出来了」而不是「树里有个节点」 |
+| **桌面场景启动的是 `tests/FengSync.UiTests/bin/.../FengSync.exe` 那份副本**，`dotnet build src/FengSync` **不会**刷新它 | 只建 `src/FengSync` 之后跑场景，跑的是**旧二进制**，会「绿」在它本该检查的那个改动上（B7 排查时踩过一次：同一份 bug 源码，旧副本跑绿、重建 UiTests 后立刻在第一次浏览 fail）。改完应用要么建 `tests/FengSync.UiTests`，要么建解决方案 |
 
 ---
 
 ## 5. 剩余路线图（B1 → E）
 
-> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0、B1、B2、B3、B4、B5 与 B6 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
+> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0、B1、B2、B3、B4、B5、B6 与 B7 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
 > **剩余项的顺序与依赖**：B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**（已落）；
-> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B7–B11（B1、B2、B3、B4、B5、B6 已落，见 §2）。**
+> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B8–B11（B1、B2、B3、B4、B5、B6、B7 已落，见 §2）。**
 
 ### A7. 端点导出/导入（原 A9）—— ✅ 已完成，见 §2
 
@@ -710,7 +792,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 > 需求盘点原本列了 21 项（B1–B21）；其中 P0 的 7 项 —— 新建文件夹、重命名、删除、多选批量、搜索、排序、
 > 面包屑 + 地址栏 —— **已在批次 1 落地**。下表是**剩余 11 项**，「现状 / 缺口」与「参考做法」两列是从原盘点文档
-> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1、B2、B3、B4、B5、B6 已落地（见 §2）**，下表从 B7 起都是待做项。
+> 一并搬过来的，以免那份文档消失后丢掉判断依据。**B1、B2、B3、B4、B5、B6、B7 已落地（见 §2）**，下表从 B8 起都是待做项。
 > 给 B6 的一条现成接线：`SetClipboard(Copy/Cut, 多选行)` 和 `Paste_Click` 已经是内部方法，
 > Ctrl+C / Ctrl+X / Ctrl+V 只需把键盘事件指到它们，**不要**另造一套剪贴板状态。
 > ✅ **B6 照此落了**：剪贴板状态**一个都没新造**，`SetClipboard` 与（抽出来的）`PasteAsync` 就是 Ctrl+C/X/V 的执行体；
@@ -726,6 +808,10 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 > 给 B7 的一条约束：浏览器**只有一份行集合**（`VisibleEntries`：搜索框与排序之后的可见行），键盘（B6）、
 > 剪贴板（B1）、回收站（B5）读的都是它。网格视图／预览因此应当是**同一份集合的另一种画法**，不是第二个列表 ——
 > 一旦复制出第二个，`Ctrl+A` 与行菜单就会各说一套（另见 §3：重建 WPF 列表会抛一次「无选中」事件）。
+> ✅ **B7 照此落了**：网格切换**只动** `FileList.View`/`ItemTemplate`/`ItemsPanel`，`ItemsSource` 仍是那一份 `_entries`，
+> 切换前后逐行 `ReferenceEquals`；行怎么到达缩略图缓存也不是第二个 view model，而是**窗口作用域的
+> `CloudTileSourceConverter` 资源**（`Peek` 委托在构造函数里接线，只读缓存、绝不加载 —— converter 里联网等于
+> 每个可见行每次 layout 都在 UI 线程上发起不可取消的读取）。
 > 给 C7 的一条现成接缝：B4 已把 `PublicLinkAsync` 与「链接是 backend 给的不透明字符串」这条钉好，队列行菜单的
 > 「复制链接」直接复用 `CopyLink` 那个接缝，别在 C 组再摸一次系统剪贴板。
 
@@ -737,7 +823,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | B4 | B12 | 分享链接 | ✅ **已完成**（`3d1d532` + `1b4b7ed`，见 §2）。单文件行菜单 `复制分享链接…` → 先确认（说清「任何拿到链接的人无需登录即可读取」）→ `operations/publiclink {fs, remote}` → 复制到剪贴板。文件夹与多选一律本地拒绝（实测前缀答 404）；措辞不承诺有效期也不承诺撤回（backend 决定）；「云端已生成、剪贴板没收下」是独立一态 | 网盘核心功能之一 |
 | B5 | B13 | 回收站 | ✅ **已完成**（hash 见 §2 的 B5 表行，同 §2 的 B5 小节）。RC 没有 trash 动词（§6 第 1 条），所以是应用自己的 `.fengsync-trash`，**位于端点根**（被 alias 强制前缀的 S3 端点根是空串，写 `RootOf("")` 钉住）；文件走 `operations/movefile`、文件夹走 `sync/move` + 只清空壳；还原回到它来的目录，名字被占就让位 ` (1)`；「清空回收站」问的还是 `CloudDeleteSafety` 那**一道**门槛（多一句「已经在回收站里」），阈值 10 的二次确认原样保留 | 网盘默认「移到回收站」，可还原 |
 | B6 | B14 | 键盘快捷键 | ✅ **已完成**（`f45e06b` + `2299460`，见 §2）。F5 / Del / Shift+Del / Ctrl+Del / F2 / Ctrl+A / Ctrl+C / Ctrl+X / Ctrl+V 全无第二套规则：一张纯表（`CloudBrowserShortcuts.Resolve`）把按键映射成命令，命令调按钮已有的方法；处理器挂在**浏览器面板**的冒泡 `KeyDown` 上，端点与挂载列表保住自己的键；typing 闸门排在 F5 之后（`TextBox` 自己吃掉 Del 与 Ctrl+A，却不吃 F2） | 通用 |
-| B7 | B16–B17 | 网格视图 / 缩略图 / 内置预览 | 只有列表；图片、文本、PDF 都要先下载再用外部程序打开 | 网盘有列表/网格切换与在线预览 |
+| B7 | B16–B17 | 网格视图 / 缩略图 / 内置预览 | ✅ **已完成**（hash 见 §2 的 B7 表行）。网格是**同一份 `_entries` 的第二种画法**（只换 `View`/`ItemTemplate`/`ItemsPanel`，逐行 `ReferenceEquals` 钉住，切换不发 `operations/list`）；缩略图只给 WPF 内建能解码的格式，8 MiB / 64 px / 2 并发 / 64 MiB 缓存都有名字；内置预览只画**能解码的图片**与 **UTF-8/UTF-16 文本**，PDF/office/音视频**明确不做**（`net10.0-windows` 没有渲染器），不猜代码页，不可预览的行**一个字节都不读**，预览也不进缩略图缓存 | 网盘有列表/网格切换与在线预览 |
 | B8 | B18 | 收藏 / 最近访问 | 无 | 网盘有「我的收藏」「最近」 |
 | B9 | B19 | 文件夹大小 | 需要递归统计，没有「计算大小」入口 | 网盘可在文件夹属性里看到 |
 | B10 | B20 | 拖出整个文件夹 | **明确不支持**（代码里提示用户先进入文件夹） | 网盘 / Explorer 支持整目录拖出 |
@@ -798,7 +884,8 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | --- | --- |
 | E3 按需文件（Files On-Demand） | **不做**。真正的按需文件需要文件系统驱动 + 占位符语义，`rclone mount` 无法表达。替代：提供「不缓存、直读」挂载模式（`vfsOpt.cacheMode = "off"`），在 UI 说明代价（每次读都走网络） |
 | B11 版本历史（B21） | **降级**：先实证 rclone 是否暴露版本列表；不可得则只给网页端入口并说明原因 |
-| B7 缩略图（B16） | **限范围**：仅图片、按需下载到缓存；不做视频缩略图 |
+| B7 缩略图（B16） | **限范围（已照此落地）**：仅 WPF 内建能解码的图片格式、按需拉到 `AppDataPaths.CloudThumbnails`；**不做视频缩略图**（要抽帧就得引 ffmpeg 或 `--rc-serve` 之外的一条进程，而缩略图只是装饰）；WebP/AVIF/HEIC/SVG/RAW 也不做（`PresentationCore` 没有它们的解码器，`net10.0-windows` 又拿不到 WinRT imaging），这些行**保留文件图标并说明是哪一种** |
+| B7 内置预览（B17） | **不做 PDF / office / 音视频**：`net10.0-windows` 的 WPF 没有任何 PDF/DOCX 渲染器，`Windows.Data.Pdf` 是 WinRT 且不在该 TFM 的引用面上，所以照旧「下载后用外部程序打开」，预览面板只说这件事而**不假装**画了半页。文本只接 **UTF-8 / UTF-16（带 BOM）**：非 UTF-8 的字节**直接拒绝并说明不猜代码页**（要读 GBK 得加 `System.Text.Encoding.CodePages` 这个包，本批没引，因此不许出现「看起来像文件损坏的问号」） |
 
 ### 已选定的设计决策（可推翻，推翻请说明）
 
@@ -820,7 +907,7 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | ✅ **已核（B0）**：服务端复制无 staging，失败留半成品 | 实证过（见 §4：`operations/copyfile` 中途只有 rclone 自己的 `.partial`，`job/stop` 后目标目录为空，成功才有目标名）；`ServerSideCopyTests` 用真 rclone 钉住「失败 / 源不存在时目标为空」，`CloudTransferCopyTests` 用假 RC 钉住「失败时没有 publish、没有 deletefile、载荷里不出现 staging 名」。残余：daemon 被硬杀会留下 rclone 自己的 `.partial`，Feng Sync 清不掉 —— B1 的复制 UI 不要把「目标目录有个不认识的 .partial」当成本程序的 bug |
 | 端点重命名迁移中途失败 | 单测覆盖每步注入失败，断言 conf 与两个 JSON 回到原状；S3 场景断言 `<old>_s3` 不残留 |
 | 跨端点 move 的 delete 失败 → 重复文件 | ✅ **已覆盖（B1）**：`A_cut_whose_delete_was_refused_reports_the_duplicate_instead_of_a_success` 用假 RC 拒绝 `operations/deletefile`，断言状态行是「已复制但源未删除」+ 原因，而不是「已剪切」 |
-| 键盘快捷键劫持地址栏/搜索框输入 | UI 场景：在 `AddressBox` 里按 Del/F2，断言不触发删除/重命名 |
+| 键盘快捷键劫持地址栏/搜索框输入 | ✅ **已核（B6，进程内）**：`CloudBrowserShortcutTests` 用真实路由事件在 `AddressBox`/`EndpointList` 上 raise F2/Del，断言窗口命令一条都不动；§4 的 WPF 表里记着实测依据（`TextBox` 自己吃掉 Del 与 Ctrl+A、但不吃 F2，`RaiseEvent` 的 `OriginalSource` 就是被 raise 的元素）。**残余**：带 Ctrl/Shift 的组合键只能把修饰键**当参数传进** `HandleKeyAsync`（`Keyboard.Modifiers` 读物理键盘，合成事件改不了），所以「XAML 处理器读修饰键读对了」这一环只有代码在担保，桌面场景也因此没加键盘步骤 |
 
 ---
 
@@ -912,6 +999,13 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 2. `ConfigurationValidator`（否则值**不被夹取**）
 3. `SettingsWindow` 的 **五处**：`SettingsWindow.xaml`、`EditablePages`、`NavigateTo`、
    `BuildSettings`、`ApplyTextValue` 的 AutomationId switch（漏注册 → **静默不保存**）。
+
+**例外（B7 起，形状要说清）**：由**拥有它的那个窗口自己保存**的状态不进第 3 处 —— `MainWindowSidebarWidth`（主窗口）
+与 `CloudBrowserView`（云盘管理窗口的列表/网格开关）都是这一类：第 1、2 处照改，保存方是**该窗口**，且必须
+**读-改-写**当前文件（`SettingsStore.LoadAsync` → `with { … }` → `SaveAsync`），否则会把别的 shell 在此期间改过的字段
+一起写回默认值（`A_view_choice_is_remembered_without_overwriting_anybody_else_s_choice` 预写 `MainWindowSidebarWidth = 300`
+来钉这条）。枚举型设置还要在**写回前**归一化（`Enum.IsDefined` 否则回落默认值），因为 `SaveAsync` 会跑
+`ConfigurationValidator`，一个从文件里读出的越界值不该让这次保存整体失败。
 
 ### 其他铁律
 
