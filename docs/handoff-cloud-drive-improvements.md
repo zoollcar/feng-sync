@@ -1,7 +1,7 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **95** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
+> 分支：`dev`（领先 `origin/dev` **99** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
 > 最后更新：2026-10-05。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
@@ -207,6 +207,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `46ad0de` | B10 | `docs: record B10 done, its drag rules, and the version-list answer B11 needs`（AGENTS.md 不变式 + 本文件；§6 第 5 条就此结案） |
 | `79e37a0` | B11 | `feat(browser): send the history question to the console that has the answer`（`CloudVersionHistory` 纯规则 + `CloudProviderDescriptor.WebConsoleUrl` + 行菜单里那一项与 `OpenExternal` 接缝） |
 | `5dea2f4` | B11 | `test(browser): pin what the history lookup offers and where it sends the user`（UI 15 条 = 11 条纯规则 + 4 条真窗口；探针 3 failed） |
+| `673ecfc` | B11 | `docs: record B11 done and why the history answer is a trip, not a read`（AGENTS.md 不变式 + 本文件；**B 组到此全部完成**） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
