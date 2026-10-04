@@ -153,6 +153,23 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     }
 
     /// <summary>
+    /// Asks the backend for a public link to one object through <c>operations/publiclink</c>. v1.75.0 answers
+    /// <c>{"url": "&lt;link&gt;"}</c> — measured against a real S3 server (<c>rclone serve s3</c>) because a
+    /// backend without link support never reaches an answer: local and SFTP reply 500 "… doesn't support public
+    /// links" and a directory or a gone object replies 404 "object not found". Those are the caller's to
+    /// report, so this only reads the link and leaves <c>null</c> for an answer that carries none.
+    /// The payload is deliberately two fields: an unknown field in it is <em>silently ignored</em> by v1.75.0
+    /// (measured — a bogus key changes nothing and raises nothing), so nothing is sent that the backend has not
+    /// been proven to read. An expiry the caller could ask for is therefore not offered; the cloud decides how
+    /// long its own link lives.
+    /// </summary>
+    public async Task<string?> PublicLinkAsync(string fs, string remote, CancellationToken ct = default)
+    {
+        var response = await CallAsync("operations/publiclink", new { fs, remote }, ct);
+        return response.TryGetProperty("url", out var url) && url.ValueKind == JsonValueKind.String ? url.GetString() : null;
+    }
+
+    /// <summary>
     /// Lists one directory level for file-manager style views.  Unlike <see cref="ListAsync"/>, this must never recurse.
     /// </summary>
     public async Task<IReadOnlyList<RcloneDirectoryEntry>> ListDirectoryAsync(string fs, string remote, CancellationToken ct = default)

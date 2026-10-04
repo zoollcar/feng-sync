@@ -1408,6 +1408,56 @@ public partial class RemoteEndpointManagerWindow : Window
     private void ShowSelectionDetails() =>
         CloudDetailsPrompt.Show(this, "所选项目的属性", CloudItemDetails.ForSelection(Selection, Selected));
 
+    /// <summary>
+    /// The question a share link asks before anything is created, behind a seam because a test cannot answer a
+    /// modal — and the property worth pinning is exactly that nothing reaches the cloud until the user agrees.
+    /// A link is a grant rather than a read: rclone's default is one anyone holding the URL can use without an
+    /// account, and how long it survives is the backend's decision, so this is asked once per file, in the
+    /// user's own language, and never on a batch.
+    /// </summary>
+    internal Func<CloudFileEntry, bool>? ConfirmShare { get; set; }
+
+    /// <summary>
+    /// Where a finished link goes. Behind a seam because WPF's clipboard is process-wide state a desktop-free
+    /// test must not fight over, and because a failed copy is a different sentence from a missing link.
+    /// </summary>
+    internal Action<string>? CopyLink { get; set; }
+
+    /// <summary>
+    /// One share request, end to end: confirm, ask the backend, hand the link to the clipboard. Every branch
+    /// returns a result the status line can name, so a request that created nothing is never reported as one
+    /// that copied something.
+    /// </summary>
+    internal async Task<CloudShareLinkResult> ShareLinkAsync(CloudFileEntry entry)
+    {
+        if (!CloudShareLinks.OffersLink(entry))
+            return new CloudShareLinkResult(CloudShareLinkOutcome.NotAFile);
+        if ((ConfirmShare ?? (target => TextPrompt.Confirm(this, CloudShareLinks.ConfirmationTitle,
+                CloudShareLinks.ConfirmationFor(target), danger: true)))(entry))
+        {
+            var account = Selected;
+            if (account is null) return new CloudShareLinkResult(CloudShareLinkOutcome.Failed, Detail: "请先选择云端端点。");
+            CloudShareLinkResult result;
+            try { result = CloudShareLinks.FromAnswer(await _files.PublicLinkAsync(account.Name, entry.Path)); }
+            catch (Exception ex) { result = CloudShareLinks.FromFailure(ex); }
+            if (result is { Outcome: CloudShareLinkOutcome.Copied, Url: { } url })
+            {
+                try { (CopyLink ?? (value => Clipboard.SetText(value)))(url); }
+                // The link exists by now, so a clipboard that will not take it must be said as that rather than
+                // as "no link", which would send the user to retry a request the cloud has already answered.
+                catch (Exception ex) { return new CloudShareLinkResult(CloudShareLinkOutcome.CopiedNotStored, Url: url, Detail: RcloneUiError.Describe(ex, "cloud-share-clipboard")); }
+                return result;
+            }
+            return result;
+        }
+        return new CloudShareLinkResult(CloudShareLinkOutcome.Declined);
+    }
+
+    /// <summary>Runs one share request and tells the user what it was. The sentence is the whole product here:
+    /// a link the user cannot see explained is a grant they did not know they made.</summary>
+    internal async Task ShareAsync(CloudFileEntry entry) =>
+        StatusText.Text = CloudShareLinks.Explain(await ShareLinkAsync(entry));
+
     /// <summary>Builds the row menu. Its contents depend on what is selected, so it is rebuilt on each open.</summary>
     private void FileList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
@@ -1436,6 +1486,10 @@ public partial class RemoteEndpointManagerWindow : Window
             {
                 Add(menu, "下载…", async () => await DownloadAsync(entry));
                 Add(menu, "打开", async () => await OpenAsync(entry));
+                // A link is the one command here that gives somebody else access, so it is offered per file and
+                // never for a folder: the backend's own answer for a prefix is 404, and a folder would grant a
+                // whole subtree the selection never named.
+                Add(menu, "复制分享链接…", async () => await ShareAsync(entry));
             }
             menu.Items.Add(new Separator());
             Add(menu, "重命名…", async () => await PromptRenameAsync(entry));

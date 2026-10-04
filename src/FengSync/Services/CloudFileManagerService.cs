@@ -117,6 +117,17 @@ public sealed class CloudFileManagerService
         return stat is null ? CloudItemStat.Missing : CloudItemStat.Found(stat);
     }
 
+    /// <summary>
+    /// Asks the cloud for a public link to one object. A link is not a read: on the backends that do support it,
+    /// rclone's default is a grant that anyone holding the URL can use without logging in, which is why the
+    /// browser only ever reaches this from an explicit, confirmed action on one file.
+    /// </summary>
+    public async Task<string?> PublicLinkAsync(string remote, string path, CancellationToken ct = default)
+    {
+        var client = await _client(ct);
+        return await client.PublicLinkAsync(FileSystem(remote), path.Trim('/'), ct);
+    }
+
     public static string Join(string directory, string name) => string.IsNullOrWhiteSpace(directory) ? name : directory.Trim('/') + "/" + name;
     public static string Parent(string path) { var index = path.Trim('/').LastIndexOf('/'); return index < 0 ? "" : path.Trim('/')[..index]; }
 
