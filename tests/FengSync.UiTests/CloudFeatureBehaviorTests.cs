@@ -652,6 +652,80 @@ public sealed class CloudFeatureBehaviorTests : IDisposable
 
     private static CloudFileEntry FolderEntry(string name) => new(name, name, IsDirectory: true, 0, null);
 
+    /// <summary>An endpoint account with the given name and configured root folder.</summary>
+    private static CloudEndpointAccount Account(string name, string root) =>
+        new(new RcloneAccount(name, "sftp"), new CloudEndpointMetadata(name, "sftp", "SFTP", root, ""));
+
+    // ---------------------------------------------------------------- paste: what a clipboard row means
+
+    [Fact]
+    public void A_paste_recognises_the_same_file_on_the_same_endpoint_however_it_is_spelled()
+    {
+        // Whether a path's case is significant is the backend's answer, not Feng Sync's, so the browser's
+        // identity rule has always been one remote plus one path, compared the way the rest of the app
+        // compares paths. A different remote is a different file even when the paths match exactly.
+        var nas = Account("nas", "team");
+        var ontoItself = CloudPastePlanner.Build(
+            [new CloudClipboardItem(nas, FileEntry("A.TXT", 10, path: "TEAM/a.txt"))], nas, "team", []);
+        Assert.Empty(ontoItself.Targets);
+        Assert.Contains("已经在目标目录里", string.Join(" ", ontoItself.Skipped), StringComparison.Ordinal);
+
+        var otherEndpoint = CloudPastePlanner.Build(
+            [new CloudClipboardItem(nas, FileEntry("a.txt", 10, path: "team/a.txt"))],
+            Account("files", "team"), "team", []);
+        var target = Assert.Single(otherEndpoint.Targets);
+        Assert.Equal("team/a.txt", target.DestinationPath);
+        Assert.False(target.SameEndpoint);
+    }
+
+    [Fact]
+    public void A_paste_reports_the_rows_it_cannot_paste_rather_than_dropping_them_silently()
+    {
+        // A folder is not a paste target, because the transfer unit is one object, and the reason belongs in
+        // the plan: a plan that quietly returned one target would read like a paste that lost the user's files.
+        // One line for the folders, not one per row, because the answer is the same for all of them.
+        var nas = Account("nas", "team");
+        var plan = CloudPastePlanner.Build(
+            [
+                new CloudClipboardItem(nas, FolderEntry("docs")),
+                new CloudClipboardItem(nas, FolderEntry("photos")),
+                new CloudClipboardItem(nas, FileEntry("c.txt", 10, path: "team/c.txt")),
+            ],
+            nas, "team/incoming", [FileEntry("c.txt", 10, path: "team/incoming/c.txt")]);
+
+        var target = Assert.Single(plan.Targets);
+        Assert.True(target.OverwritesExisting);
+        Assert.Equal(1, plan.Conflicts);
+        var skipped = Assert.Single(plan.Skipped);
+        Assert.StartsWith("2 个文件夹没有被复制", skipped, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_paste_strips_each_endpoints_own_root_and_only_once()
+    {
+        // The queue addresses an endpoint URI, so both sides of a paste have to be relative to their own
+        // endpoint's root — and an endpoint whose prefix lives in an rclone alias has no root to strip,
+        // because the alias already applies it. Composing either wrong copies to team/team/a.txt.
+        var nas = Account("nas", "team");
+        var betweenRoots = CloudPastePlanner.Build(
+            [new CloudClipboardItem(nas, FileEntry("a.txt", 10, path: "team/a.txt"))],
+            Account("files", "shared"), "shared/incoming", []);
+        var across = Assert.Single(betweenRoots.Targets);
+        Assert.Equal("a.txt", across.SourceRelativePath);
+        Assert.Equal("incoming/a.txt", across.DestinationRelativePath);
+
+        var aliasBacked = new CloudEndpointAccount(new RcloneAccount("docs", "alias"),
+            new CloudEndpointMetadata("docs", "alias", "Backblaze", "bucket", "team/files", AliasOf: "docs_s3"));
+        var insideAlias = CloudPastePlanner.Build(
+            [new CloudClipboardItem(aliasBacked, FileEntry("a.txt", 10, path: "team/files/a.txt"))],
+            aliasBacked, "team/files/backup", []);
+        var kept = Assert.Single(insideAlias.Targets);
+        Assert.Equal("team/files/a.txt", kept.SourceRelativePath);
+        Assert.Equal("team/files/backup/a.txt", kept.DestinationRelativePath);
+        Assert.Equal("team/files/backup/a.txt", kept.DestinationPath);
+        Assert.True(kept.SameEndpoint);
+    }
+
     private static RcloneException Rclone(RcloneFailureCategory category) =>
         new(new RcloneFailure(category, false, "test", null, null, $"rclone failed: {category}", "", "", "", ""));
 

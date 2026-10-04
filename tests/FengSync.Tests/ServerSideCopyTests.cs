@@ -110,10 +110,42 @@ public sealed class ServerSideCopyTests : IAsyncLifetime
         Assert.Empty(TargetFiles());
     }
 
+    [Fact]
+    public async Task A_copy_inside_one_endpoint_lands_beside_its_source_and_keeps_the_source()
+    {
+        // Pasting inside the endpoint the rows came from is the same call with one fs on both sides, so the
+        // browser does not need a second mechanism for it. What has to hold is that the source survives: a
+        // 复制 that quietly became a 剪切 would lose the file from wherever the user still needs it.
+        await Source().CreateDirectoryAsync("copies");
+
+        await EndpointTransfer.CopyServerSideAsync(Source(), Source(), "big.bin", "copies/copied.bin", Guid.NewGuid(), _content.Length);
+
+        Assert.Equal(["source/big.bin", "source/copies/copied.bin"], SourceFiles());
+        Assert.Equal(Hash(_content), Hash(await File.ReadAllBytesAsync(Path.Combine(SourceDirectory, "copies", "copied.bin"))));
+    }
+
+    [Fact]
+    public async Task A_move_inside_one_endpoint_lands_at_its_destination_and_leaves_no_source()
+    {
+        // 剪切 within one endpoint is rclone's own move, which is what makes it instant and byte-free. The
+        // destination directory is the one the browser is showing, so it exists before the call.
+        await Source().CreateDirectoryAsync("moved");
+
+        await _daemon!.Client.MoveFileAsync("source:", "big.bin", "moved/big.bin");
+
+        Assert.Equal(["source/moved/big.bin"], SourceFiles());
+        Assert.False(File.Exists(SourceObject));
+    }
+
     /// <summary>Every file under the target directory, named relative to it with forward slashes.</summary>
-    private string[] TargetFiles() => Directory
-        .GetFiles(TargetDirectory, "*", SearchOption.AllDirectories)
-        .Select(file => "target/" + Path.GetRelativePath(TargetDirectory, file).Replace('\\', '/'))
+    private string[] TargetFiles() => Files(TargetDirectory, "target");
+
+    /// <summary>Every file under the source directory, which is what a copy inside one endpoint must still show.</summary>
+    private string[] SourceFiles() => Files(SourceDirectory, "source");
+
+    private static string[] Files(string root, string label) => Directory
+        .GetFiles(root, "*", SearchOption.AllDirectories)
+        .Select(file => label + "/" + Path.GetRelativePath(root, file).Replace('\\', '/'))
         .OrderBy(file => file, StringComparer.Ordinal)
         .ToArray();
 
