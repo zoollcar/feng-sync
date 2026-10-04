@@ -129,6 +129,11 @@ public sealed class CloudBrowserShortcutTests
 
             var args = RaiseKey(window.FileList, Key.F2);
             await WaitUntil(() => standIn.FileMoves.Count == 1, "F2 没有走出重命名");
+            // Read after the handler has run, not right after raising it: FileBrowser_KeyDown claims the key on
+            // the continuation that follows `await HandleKeyAsync(...)`, so the whole command — the move, the
+            // re-listing and the visit it records — has to finish first. Waiting for the move alone used to be
+            // enough by luck; a keystroke that is still in flight is not "unclaimed".
+            await WaitUntil(() => args.Handled, "F2 走完命令后没有被认领");
 
             Assert.True(args.Handled);
             Assert.Equal([FileA], asked);
@@ -512,6 +517,10 @@ public sealed class CloudBrowserShortcutTests
     {
         var journalRoot = NewDirectory();
         var previous = AppServices.TryCurrent;
+        // The browser writes its 收藏 / 最近访问 file under the application's data root, so a window driven through
+        // a real listing would otherwise write into the developer's own app data and read it back next run.
+        var previousDataDir = Environment.GetEnvironmentVariable("FENGSYNC_DATA_DIR");
+        Environment.SetEnvironmentVariable("FENGSYNC_DATA_DIR", journalRoot);
         var standIn = rclone ?? new FakeRclone { Directories = Tree(FileNode(FileA), FileNode(FileB),
             FileNode(FileC), DirNode(Docs)) };
         var http = new HttpClient(standIn) { BaseAddress = new Uri("http://rc.test/") };
@@ -531,6 +540,7 @@ public sealed class CloudBrowserShortcutTests
         finally
         {
             AppServices.Install(previous);
+            Environment.SetEnvironmentVariable("FENGSYNC_DATA_DIR", previousDataDir);
             // A test may close the window itself, and WPF rejects closing a closed window.
             try { window?.Close(); }
             catch (InvalidOperationException) { }

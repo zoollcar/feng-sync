@@ -227,6 +227,10 @@ public sealed class CloudBrowserShareTests
     {
         var journalRoot = NewDirectory();
         var previous = AppServices.TryCurrent;
+        // The browser writes its 收藏 / 最近访问 file under the application's data root, so a window driven through
+        // a real listing would otherwise write into the developer's own app data and read it back next run.
+        var previousDataDir = Environment.GetEnvironmentVariable("FENGSYNC_DATA_DIR");
+        Environment.SetEnvironmentVariable("FENGSYNC_DATA_DIR", journalRoot);
         var standIn = rclone ?? new FakeRclone();
         var http = new HttpClient(standIn) { BaseAddress = new Uri("http://rc.test/") };
         var client = new RcloneRcClient(http, new Uri("http://rc.test/"), "user", "pass");
@@ -245,6 +249,7 @@ public sealed class CloudBrowserShareTests
         finally
         {
             AppServices.Install(previous);
+            Environment.SetEnvironmentVariable("FENGSYNC_DATA_DIR", previousDataDir);
             try { window?.Close(); }
             catch (InvalidOperationException) { }
             TryDelete(journalRoot);
