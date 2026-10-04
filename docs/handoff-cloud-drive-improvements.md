@@ -1,7 +1,7 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **31** 个已提交，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
+> 分支：`dev`（领先 `origin/dev` **39** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
 > 最后更新：2026-10-04。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
@@ -15,35 +15,40 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）。**A 组全部收尾。**见 §2。 |
-| **下一步** | 进 **B0 队列泛化 → B 组文件浏览器**。注：全量门禁 `Test-All.ps1 -Level UiOffline` 里 `UiFeatureBehaviorTests` 整类在本环境超时是**既有问题**（与 A7 无关），需单独排查；A7 的窄门禁（护栏 13 + 纯函数 11 + STA 2 = 26）已全过。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）。**A 组全部收尾，B0 已落。**见 §2。 |
+| **下一步** | **B1–B11 文件浏览器**（§5），第一项就是 B1 复制/剪切/粘贴 —— B0 的 `Copy` 方向就是给它铺的路：`CloudTransferQueue.EnqueueCopy(源URI, 源路径, 目标URI, 目标路径, 大小)` 已经齐了，浏览器只需要把「当前选中 + 目标端点/目录」拼成这五个参数。全量门禁 2026-10-04 跑过两次，都是 `Failed: 0`（Core 390 / UI 264）；§1 里提到的 `UiFeatureBehaviorTests` 既有超时**没有复现**，不用再单独排查。 |
 | **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）。 |
 
 ---
 
 ## 1. 接手先做的三件事
 
-### ① 先跑一次全量门禁，确认 A6 基线是绿的
+### ① 门禁照跑，基线已经自证过（2026-10-04）
 
 ```powershell
 pwsh -NoProfile -File .\scripts\Test-All.ps1 -Level UiOffline
 ```
 
-A3–A6 是分批提交的，只有 A3/A4 有「单跑通过」的记录；A5/A6 依赖提交时门禁绿，但**接手时先自证一次基线**，
-后续任何红都能明确归因到新改动上。
+A3–A6 是分批提交的，所以接手时先自证过一次基线；B0 提交前后各跑了一次全量门禁，两次都是 `Failed: 0`
+（**Core 390 / UI 264**，UI 阶段约 **3m08s**）。§0 说的 `UiFeatureBehaviorTests` 超时在本环境**没有复现**。
 
-- 约 **2m30s**。调用工具时**超时必须给 600000ms**，否则会被掐断在半路。
+- 约 **3m30s**（UI 阶段占大头）。调用工具时**超时必须给 600000ms**，否则会被掐断在半路。
 - 判定标准：日志里出现 **`Passed!  - Failed: 0` 汇总行**。只看日志尾部会误判 —— 被超时掐断时日志正好停在
   `A total of 1 test files matched the specified pattern.` 之后，看起来像正常进行中。
+  ⚠️ 后台跑时还会遇到第二次同样的误判：**Bash 后台任务会在 UI 阶段还在跑的时候就报 completed**（父 pwsh 退出、
+  `dotnet test` 孙进程继续），日志尾部暂时只有 Core 那一行。以「UiTests 那行的 `Passed!` 出现」为准，别信任务通知。
 - 日志**写 `$env:TEMP`**，不要写进 `.fengsync-test/`：那个目录会被 `Reset-TestArtifacts` 清空，
   文件被占用时脚本 3 秒就退出（`The process cannot access the file ... because it is being used by another process`）。
-- 读数会比文档 §3 的旧预期更高（A5/A6 各加了测试）；以 `Failed: 0` 为准，不追死具体数字。
+  另坑：在 bash 工具里执行 pwsh 时，重定向要写成 `> /c/Users/.../x.log 2>&1`；写 `*>` 会被 bash 先展开，
+  结果 `Test-All.ps1` 收到 `Configuration=AGENTS.md` 并报「Cannot validate argument on parameter 'Configuration'」。
+- 读数会比文档 §3 的旧预期更高（A5/A6/B0 各加了测试）；以 `Failed: 0` 为准，不追死具体数字。
 
-### ② A7 已实现并提交 ✅
+### ② A7 与 B0 已实现并提交 ✅
 
-A7 的代码、测试与文档已按 §1 ③ 的粒度提交（`60733ae` feat / `d58cd4a` test / `344d3cd` docs，见 §2）。窄门禁全过（护栏 13 + 纯函数 11 + STA 2）。全量门禁因 `UiFeatureBehaviorTests` 既有超时未跑，单独排查。**A 组至此全部收尾。**
+A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）。A1 的桌面场景缺口在进 B 组前补上
+（`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / 本文。**A 组 + B0 至此收尾。**
 
-### ③ A7 的提交粒度（已执行）
+### ③ 提交粒度（一直照这个走）
 
 按层次拆 `feat` / `test`（`docs` 单独），用**显式路径** `git add`（**不要 `git add -A`**）。**只提交不 push。**
 
@@ -68,6 +73,9 @@ A7 的代码、测试与文档已按 §1 ③ 的粒度提交（`60733ae` feat / 
 | `60733ae` | A7 | `feat(endpoints): export and import endpoints without their credentials` |
 | `d58cd4a` | A7 | `test(endpoints): cover the export shape and the import file's validation` |
 | `344d3cd` | A7 | `docs: record A7 done and archive A3-A6 in the handoff` |
+| `fd12512` | A1 缺口 | `test(ui): walk every provider form in the endpoint editor`（7 张 descriptor 表单全走一遍，含「不得出现别家字段」） |
+| `af6fc4c` | B0 | `feat(transfers): copy between two cloud endpoints through the queue` |
+| `85160a9` | B0 | `test(transfers): cover the copy payload and where real rclone writes it` |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -194,6 +202,35 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   坏参数名、重名、`UniqueName`）；`UiFeatureBehaviorTests` +2 STA（draft 预填 SFTP 与 S3）；`sftp-ui` 场景的
   工具条矩形断言加上两个新控件。
 
+### B0 —— 队列泛化：远端→远端复制（**已提交**：`af6fc4c` + `85160a9`）
+
+- `EndpointTransfer.CopyServerSideAsync(source, target, sourcePath, destinationPath, operationId, totalBytes,
+  activeTransfers, progress, ensureDestinationAsync, ct)`（`src/FengSync.Core/Execution/EndpointTransfer.cs`）——
+  两端都必须是 `RcloneEndpoint`，否则**在任何字节移动之前**抛 `NotSupportedException`；不 staging、不 publish，
+  直接把 `destinationPath` 交给 `operations/copyfile`。本地端点被拒是**有意的**：直接写目标名会绕过
+  Feng Sync 的临时文件 + 原子发布，一个取消的复制就会留下与完整文件无法区分的截断文件。
+- `CloudTransferDirection` 追加 `Copy`（**枚举只能追加**：journal 存的是数字）。
+- `CloudTransferTask` 加 `TargetUri` / `TargetPath`，`CloudTransferRecord` 加两个**可选尾字段**（照 `ErrorDetail` 的做法，
+  旧 journal 文件照样能读）。⚠️ **与本文原计划的偏差**：B0 原来只写 `TargetUri`，实现时发现跨端点粘贴还需要一个
+  **与源路径无关的目标路径**，所以 `TargetPath` 一起做掉了 —— 和 A2 那次一样，属于实现期修正，后续 B1 直接用它。
+- `CloudTransferQueue` 加 `EnqueueCopy(源URI, 源路径, 目标URI, 目标路径, 大小)`、`HasCopyTasks`，
+  `RunAsync` 的 `Copy` 分支：两端都 `EndpointFactory.CreateWithClient(uri, client)`，**跳过**
+  `CopyToStagingAsync` / `PublishAsync` / `PrepareRetryAsync` / `DiscardStagingAsync`（finally 里的丢弃也带 `!isCopy` 守卫）。
+  缺目标（只有手改的 journal 文件能造出这种行）在**建端点之前**就失败，不发任何 RC 请求。
+- 构造参数加了 `Func<CancellationToken, Task<RcloneRcClient>>? client`（默认仍走 `AppServices.Current.RcloneHost`）——
+  这是 `CloudFileManagerService` 早就有的接缝：`RcloneLifecycleHost` 是 sealed 且 `GetClientAsync` **会真起 rclone**，
+  没有这个接缝就没法在 UiTests 里断言复制的载荷。
+- 任务文案：`DirectionText`=复制、`CanContinueFromStaging`（只有 Download 为真）、`RestartText` 在 Paused 时
+  对复制仍显示**重试**、取消文案「已取消，重新复制会从头开始」；`CloudTransferWindow` 的 hint 在 `HasCopyTasks` 时
+  追加「云盘之间的复制…只能整个文件重新复制」—— 这是 §5 B0 那条「UI 必须明说」的落点。
+- 测试：`tests/FengSync.Tests/ServerSideCopyTests.cs`（真 rclone，两个 alias remote）4 条 —— 目标名精确落位
+  （含 `ensureDestinationAsync` 先建父目录、顺序可证）、复制不搬走源、**重试覆盖已存在目标**、失败/源不存在时
+  目标目录为空、本地端点两端各拒一次；`tests/FengSync.UiTests/CloudTransferCopyTests.cs`（假 RC）8 条 ——
+  `srcFs/srcRemote/dstFs/dstRemote` 与 `_group` 精确断言、`core/stats` 用的是同一个 group、不发
+  `movefile`/`deletefile`/任何含 `fengsync.partial` 的载荷、失败时 `Failed`+`ErrorDetail` 带后端原文且不 materialise
+  目标、取消时 `job/stop` 真的发出去、journal 往返带回两个端点、旧 journal 仍可读、行文案纯函数；
+  `CloudTransferWindowBehaviorTests` +1 STA（有复制才提复制）。
+
 ---
 
 ## 3. A3/A4 的设计要点与遗留缺口
@@ -214,9 +251,12 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 ### 遗留缺口
 
-- **A1 未覆盖的新 Provider 编辑表单**：`sftp-ui` 桌面场景的 Provider 遍历目前只有
-  `Google Drive / S3 Bucket / SFTP`，**未覆盖新增的 OneDrive/Dropbox/Box/WebDAV**。建议在 A7 之后、进 B 组之前补上
-  （这是「加 Provider 请照抄既有模式」这条约定的现成反例）。
+- ~~**A1 未覆盖的新 Provider 编辑表单**~~ —— **已补（2026-10-04，`fd12512`）**。`sftp-ui` 桌面场景现在把
+  `CloudProviderDescriptor` 生成的 7 张表单全部走一遍：选服务 → 进连接步骤 → 断言该 descriptor 声明的每个
+  AutomationId 都是**有尺寸的**控件、名称框与根目录框在窗口内可达，并断言**别家 Provider 的字段没出现在这张表单上**
+  （编辑器按当前输入写 rclone 参数，残留字段会把另一个后端的键写进这个 remote）。
+  S3 走自己的 bespoke 面板，放在最前面（它要先加载 provider 元数据）。新增 Provider 时**必须**在这张表里加一行，
+  场景会自动要求它的字段可寻址 —— 这就是「加 Provider 只是加一行」那条约定的现成反例。
 
 ---
 
@@ -238,10 +278,13 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | `config/create` 同名是**整段替换**；写回 obscured 值**必须** `opt.noObscure=true` | 否则二次加密静默损坏密码 |
 | `mountPoint` 路径**必须不存在**；卸载要用反斜杠形式 | |
 | `operations/copyfile` **原生支持跨 fs**；`drive` backend 默认 `use_trash=true` | B8/B9 的地基 |
+| **`operations/copyfile` 中途只有 rclone 自己的 `<name>.<id>.partial`**，目标名要等 job 成功才出现；`job/stop` 后目标目录**为空**（日志 `Removing partially written file on error`）；对**已存在**的目标名是直接**覆盖** | B0 的依据：跨端点复制可以不过 Feng Sync 的 staging，失败/取消不会留下半成品，重试前不需要清理。**残余风险**：daemon 被硬杀时 rclone 的 `.partial` 会留在目标目录，Feng Sync 叫不出它的名字，也就清不掉 |
+| `operations/copyfile` 走 `_async`+`_group` 时，进度只能从 `core/stats` 读；RC **没有** offset 写，所以远端→远端**不可能续传** | 复制行的按钮只能是「重试」，传输窗必须明说会从头再来 |
 | rclone 的 s3 backend 自带 **53 个 provider**（含 `TencentCOS`/`Alibaba`/`HuaweiOBS`/`Qiniu`/`NetEase`），**没有 Backblaze** | 「加国产 S3 兼容」是零代码路径；B2 走 s3 的通用 `Other` provider |
 | OAuth 状态机对所有 OAuth backend **完全相同** | Drive/OneDrive/Dropbox/Box 共用一套流程 |
 | `rclone mount` 的 fs 串是 `<name>:`，在**挂载时**解析 | 改名时若有活跃挂载 → 直接阻断（A2 已实现） |
 | rclone 的 HTTP 客户端**只读 `HTTP_PROXY`/`HTTPS_PROXY`**，**不读 `ALL_PROXY`**；RC 无全局 proxy 透传 | 代理只能靠子进程环境变量传；`RcloneProxyResolver` 把 only-`all_proxy` 镜像进 http/https（A5） |
+| 手工 curl 探测 daemon：启动参数是 `--rc-addr/--rc-user/--rc-pass`（**不是** `--rcaddr`），就绪探测调 `core/version`（**没有** `rc/version` 这个方法） | 下一次做 §6 的实证不必再撞一遍 |
 
 ### WPF / 测试
 
@@ -251,17 +294,17 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | `LiveTextAccessibilityTests` **只扫 `TextBlock`** | `TextBox`/`ComboBox`/`Button` 上的静态 `AutomationProperties.Name` 是允许的；动态文本 `TextBlock` 必须用 `AutomationId` |
 | 无桌面 WPF 测试模板 = `RunSta(Action)` + `EnsureApplicationResources()` + **从不 `Show()`** | 毫秒级，不需要前台会话 |
 | UI 测试**默认桌面无关**：窗口停 `-32000`，输入走 UIA pattern / posted 消息；`-ShowOnScreen` 恢复前台 | 不得引入合成鼠标移动（`DesktopFreeUiHarnessTests` 会拦） |
-| `RcloneLifecycleHost.GetClientAsync` **会真的起 rclone 进程**，而 `IAppServiceHost.RcloneHost` 是 **sealed 具体类**（无法替换） | 「不碰 rclone」的测试必须靠**不触发 `BrowseAsync`**，并用「`StatusText` 没被写过」来证明（`AssertNoDirectoryListing` 就是这个） |
+| `RcloneLifecycleHost.GetClientAsync` **会真的起 rclone 进程**，而 `IAppServiceHost.RcloneHost` 是 **sealed 具体类**（无法替换） | 「不碰 rclone」的测试必须靠**不触发 `BrowseAsync`**，并用「`StatusText` 没被写过」来证明（`AssertNoDirectoryListing` 就是这个）。B0 给 `CloudTransferQueue` 也加了同款**可选 RC 客户端工厂**构造参数（`CloudFileManagerService` 早就有），于是「队列发了什么载荷」能在假 RC 上断言（`CloudTransferCopyTests`）；没有接缝的那条腿照旧靠不起 daemon 的写法 |
 | 桌面场景里 `AutomationProperties.Name` 会**覆盖** `Content` 派生的名字 | 别想用 UIA 的 `Name` 去断言一个「标签会变」的按钮；改断言它的 `SelectionPattern` / 布局 |
 | WPF 跨进程 UIA 客户端拿不到 `TextBlock` 的 `TextPattern` | 断言文本要靠 `Name`（因此动态文本 `TextBlock` 必须**去掉**静态 `Name`） |
 
 ---
 
-## 5. 剩余路线图（A7 → E）
+## 5. 剩余路线图（B1 → E）
 
-> 这一节同时是那份 307 行改进计划的替代。**A0–A7 已完成**（见 §2），本节的 A5/A6/A7 已移入 §2。
+> 这一节同时是那份 307 行改进计划的替代。**A0–A7 与 B0 已完成**（见 §2），本节的 A5/A6/A7/B0 只留设计与规则的留档。
 > **剩余项的顺序与依赖**：B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**；
-> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B0。**
+> D 与 A/B/C 完全解耦；E 是收尾集成。**下一批是 B1–B11（B0 已落，见 §2）。**
 
 ### A7. 端点导出/导入（原 A9）—— ✅ 已完成，见 §2
 
@@ -285,14 +328,19 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 - 导入被篡改的 JSON（多出段头、远端名带 `:`）应被**拒绝**而不是写坏 conf。
 - 往返：分组/标签/别名（S3 强制前缀）都保留。
 
-### B0. 队列泛化（**前置**，与批次 C 共用）
+### B0. 队列泛化（**前置**，与批次 C 共用）—— ✅ 已完成，见 §2
 
-- `CloudTransferDirection` 加 `Copy`。
-- `CloudTransferTask` / `CloudTransferRecord` 加 `string? TargetUri`（承载目标远端，**不挪用 `LocalPath`**）。
-- `CloudTransferQueue.RunAsync` 加分支：`Copy` 时 source/target **都从 URI 建端点**，
-  调新增的 `EndpointTransfer.CopyServerSideAsync`，并**跳过**
-  `CopyToStagingAsync` / `PublishAsync` / `PrepareRetryAsync` / `DiscardStagingAsync`。
-- ⚠️ **远端 → 远端无法 append，会退化为不可续传** —— 这是设计取舍不是 bug，**UI 必须明说**。
+代码与测试清单在 §2 的 B0。下面是 **B1 接手时必须知道的三条规则**：
+
+- **复制进队列，不进轻量直连**（§5「已选定的设计决策」第 1 条）：跨端点复制真的走网络字节流，可能很久，
+  用户需要进度 / 取消 / 重试 / 历史。B1 只需组装 `EnqueueCopy(源URI, 源路径, 目标URI, 目标路径, 大小)`。
+- ⚠️ **远端 → 远端无法 append，会退化为不可续传** —— 设计取舍不是 bug，UI 已经明说
+  （`HasCopyTasks` → hint，`RestartText`/`CanContinueFromStaging` → 行内按钮）。**不要**为了「看起来能续传」
+  去给它造 staging：rclone 没有 offset 写，造出来的 staging 既校验不了也接不上。
+- **journal 的新字段只能是可选尾字段**（`TargetUri` / `TargetPath`），`CloudTransferDirection` 只能追加。
+  复制的目标**永远不写进 `LocalPath`** —— 那是处处按本地路径解释的字段，写进去下一版会把它当下载去建目录。
+- 要断言「复制到底发了什么」就注入假 RC 客户端（`new CloudTransferQueue(journal, clientFactory)`）；
+  要断言「字节到底落在哪」才用 `tests/FengSync.Tests` 的真 rclone + alias remote。两种都在 §2 的 B0 里有现成样板。
 
 ### B1–B11. 文件浏览器（缺口最大的一组）
 
@@ -302,7 +350,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 | 本计划 | 原编号 | 内容 | 现状 / 缺口 | 参考做法 |
 | --- | --- | --- | --- | --- |
-| B1 | B8–B9 | 复制 / 剪切 / 粘贴 + 跨端点复制 | `RcloneRcClient.CopyFileAsync` **已存在且原生支持跨 fs**，云盘 UI 一个都没接 | 网盘标配；Air Explorer 支持云到云 |
+| B1 | B8–B9 | 复制 / 剪切 / 粘贴 + 跨端点复制 | **队列腿已齐（B0）**：`CloudTransferQueue.EnqueueCopy` + `EndpointTransfer.CopyServerSideAsync` + `operations/copyfile` 都通了。缺的是**浏览器侧**：右键菜单 / 剪贴板状态（复制 vs 剪切的差别只在粘贴后删不删源，删除要走 `CloudFileOperationSafety` 校验 + 二次确认）、目标端点/目录的选择、同端点内复制的呈现 | 网盘标配；Air Explorer 支持云到云 |
 | B2 | B10 | 上传冲突细化 | 现在只有一次性弹窗「全部覆盖 / 全部跳过 / 取消」，缺 **`KeepBoth`（重命名保留两者）** 与**逐文件询问** | 网盘标配 |
 | B3 | B11 | 属性 / 详情 | 无大小统计、无权限、无校验值（`ReadPreferredHash` 已抽好） | 网盘有「详细信息」 |
 | B4 | B12 | 分享链接 | rclone `operations/publiclink` 存在，UI 未接 | 网盘核心功能之一 |
@@ -388,7 +436,7 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | 新设置字段漏加 `ConfigurationValidator` 规则 → 不被夹取 | 加规则 + 单测：越界值应被拒绝 |
 | 新增 `<Button>` 撞样式白名单 | 跑 `UiConsistencyGuardrailTests`；需要新样式就先加进 `DesignTokens.xaml` 并同步白名单 |
 | **挂载选项键名拼错被 rclone 静默忽略** | 唯一手段：断言发往 `mount/mount` 的 JSON 键名；关键项（`readOnly`/`diskSpaceTotalSize`）加「负值应报错」探针 |
-| 服务端复制无 staging，失败留半成品 | 实证 `operations/copyfile` 失败后目标不存在；用假 RC 断言失败时无目标对象 |
+| ✅ **已核（B0）**：服务端复制无 staging，失败留半成品 | 实证过（见 §4：`operations/copyfile` 中途只有 rclone 自己的 `.partial`，`job/stop` 后目标目录为空，成功才有目标名）；`ServerSideCopyTests` 用真 rclone 钉住「失败 / 源不存在时目标为空」，`CloudTransferCopyTests` 用假 RC 钉住「失败时没有 publish、没有 deletefile、载荷里不出现 staging 名」。残余：daemon 被硬杀会留下 rclone 自己的 `.partial`，Feng Sync 清不掉 —— B1 的复制 UI 不要把「目标目录有个不认识的 .partial」当成本程序的 bug |
 | 端点重命名迁移中途失败 | 单测覆盖每步注入失败，断言 conf 与两个 JSON 回到原状；S3 场景断言 `<old>_s3` 不残留 |
 | 跨端点 move 的 delete 失败 → 重复文件 | 单测模拟 delete 抛错，断言提示「已复制但源未删除」而不是报成功 |
 | 键盘快捷键劫持地址栏/搜索框输入 | UI 场景：在 `AddressBox` 里按 Del/F2，断言不触发删除/重命名 |
@@ -405,6 +453,14 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 4. rclone `mountPoint` 是否接受 UNC 路径（**D6**）。
 5. rclone 是否暴露版本列表（**B11**）。
 6. `core/bwlimit` 的作用域是全局还是 per-fs（**C1**）。
+
+7. ✅ **已实证（B0，2026-10-04）**：跨端点 `operations/copyfile` **不会**留下可续传的中途状态 —— 作业运行中目标只有
+   rclone 自己的 `<name>.<id>.partial`，目标名要等作业成功才出现；`job/stop` 之后目标目录为空
+   （rclone 日志 `Removing partially written file on error`）；对已存在的目标名是直接**覆盖**（重试前不需要清理）。
+   结论已写进 `AGENTS.md` 的不变式列表，实现与测试见 §2 的 B0。**残余**：daemon 被硬杀时 rclone 的 `.partial` 会留下，
+   Feng Sync 叫不出它的名字，也就清不掉。
+   探测手法照 A2：起 `rclone rcd --rc-addr=127.0.0.1:<port> --rc-user=<u> --rc-pass=<p> --rc-serve`（**不是** `--rcaddr`），
+   就绪探测调 `core/version`（**没有** `rc/version` 这个方法），curl 必须带 `Content-Type: application/json`。
 
 实证的方法照 A2 的做法：直接 curl 打本机 `rclone rcd` 的 RC（记得带 `Content-Type: application/json`），
 把结论写进 `AGENTS.md` 的不变式列表，而不是留在会话里。
@@ -440,7 +496,8 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 
 - **破坏性操作**必须走 `CloudFileOperationSafety` 校验 + 二次确认，并保留批量阈值（10）。
 - **不要在云盘路径上重写同步引擎**：上传/下载继续走 `CloudTransferQueue`（它复用同步引擎的 staging/resume/journal）；
-  删除/移动/复制通过 `IEndpoint` / `RcloneRcClient` 调用，不自己拼 rclone 命令行。
+  **远端→远端复制也进同一个队列**（B0），走 `EndpointTransfer.CopyServerSideAsync`，不要在 UI 里直接拼
+  `RcloneRcClient.CopyFileAsync`；删除/移动仍通过 `IEndpoint` / `RcloneRcClient` 调用，不自己拼 rclone 命令行。
 - **改并发数要同时看续传**：`ActiveCount` 与 `MaxConcurrentTransfers` 在 `CloudTransferQueue.RunAsync` 里是
   **当作进度参数**传给 `EndpointTransfer.CopyToStagingAsync` 的，所以调并发会影响续传判定；
   并发数从 `const` 改为可配时还要保证 `SemaphoreSlim` 重建不破坏在途任务。
@@ -471,12 +528,15 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `src/FengSync/Services/CloudEndpointService.cs` | 端点 CRUD 与 URI 构造的门面（转发到 catalog + schemes） |
 | `src/FengSync/Views/RemoteEndpointManagerWindow.xaml(.cs)` | **三合一**窗口：端点管理 + 挂载管理 + 文件浏览器 |
 | `src/FengSync/Views/CloudEndpointEditorWindow.xaml(.cs)` | 新建/编辑端点表单（按 descriptor 生成，非 S3 部分无手写面板） |
-| `src/FengSync/Services/CloudTransferQueue.cs` | 云盘传输队列（staging / resume / journal / 并发 / 重试） |
+| `src/FengSync.Core/Execution/EndpointTransfer.cs` | **唯一的** staging-aware 传输原语（同步引擎与云盘浏览器共用）。`CopyToStagingAsync`+`PublishAsync` 是可续传的上传/下载腿；`CopyServerSideAsync` 是两端都远端、**不 staging 不 publish** 的复制腿（B0） |
+| `src/FengSync/Services/CloudTransferQueue.cs` | 云盘传输队列（staging / resume / journal / 并发 / 重试 / **远端→远端复制 `EnqueueCopy`**）；构造参数里的可选 RC 客户端工厂是「不起 daemon 也能断言载荷」的接缝 |
 | `src/FengSync/Services/CloudFileManagerService.cs` | 文件浏览器服务层（列表/搜索/重命名/删除/移动/新建目录） |
 | `src/FengSync.Core/Mount/MountOptions.cs` | 挂载参数（D 组的改造对象） |
 | `src/FengSync.Core/Rclone/Transport/RcloneProxyConfiguration.cs` | 代理（A5 的现成机制） |
 | `src/FengSync/Services/AppServices.cs` | `IAppServiceHost` / `AppServices.Install`（**两个 exe 共用服务宿主**） |
 | `src/FengSync.DriveHub/` | 第二个入口 `DriveHub.exe`（独立 daemon） |
+| `tests/FengSync.Tests/ServerSideCopyTests.cs` | 真 rclone（两个 alias remote）钉住跨端点复制的**落点**：目标名精确、源不消失、重试覆盖、失败不留对象、本地端点被拒（B0） |
+| `tests/FengSync.UiTests/CloudTransferCopyTests.cs` | 假 RC 钉住复制的**载荷**：`srcFs/srcRemote/dstFs/dstRemote`+`_group`、`core/stats` 进度、取消发 `job/stop`、不许出现 movefile/deletefile/staging 名、journal 往返与旧文件兼容（B0） |
 | `tests/FengSync.Tests/` | Core 层 + 需要真 rclone 的测试（门禁里的 Core 阶段） |
 | `tests/FengSync.UiTests/` | in-process WPF 行为测试 + 桌面场景（`UiAcceptanceTests` + `Scripts/Invoke-UiScenario.ps1`） |
 | `scripts/Test-All.ps1` | 门禁入口（`-Level Core|UiOffline|Online`，`-ShowOnScreen`） |
