@@ -58,7 +58,8 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 （本节的这条 commit 行与 §2 表末行是 `6be98b9` 之后回填的）。**B1 浏览器粘贴**照旧三层：`3c9322b` feat /
 `cd74a61` + `526a634` test / `4656a58` docs（本节的 hash 由 `4656a58` 的下一次回填补上）。
 **B2 同名冲突**照旧三层：`dedc2b5` feat / `1649dc6` test / `0349467` docs（本节的这条 hash 行与 §2 表末行是
-`0349467` 之后回填的）。**B3 属性/详情**照旧三层：`844b93b` feat / `7370af0` test / docs 待回填。
+`0349467` 之后回填的）。**B3 属性/详情**照旧三层：`844b93b` feat / `7370af0` test / `ef211a3` docs（本节的这条 hash 行与 §2 表末行是
+`ef211a3` 之后回填的）。
 **A 组 + B0 + B1 + B2 + B3 至此收尾。**
 
 ### ③ 提交粒度（一直照这个走）
@@ -99,6 +100,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 | `0349467` | B2 | `docs: record B2 done and the conflict answers that B3 must keep`（AGENTS.md 不变式 + 本文件） |
 | `844b93b` | B3 | `feat(browser): read one object's details instead of trusting the listing row` |
 | `7370af0` | B3 | `test(browser): pin the properties panel and the stat facts it rests on` |
+| `ef211a3` | B3 | `docs: record B3 done and the stat facts that B4 must keep`（AGENTS.md 不变式 + 本文件） |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
