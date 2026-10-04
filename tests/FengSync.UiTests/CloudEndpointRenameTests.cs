@@ -10,10 +10,11 @@ using Xunit;
 namespace FengSync.UiTests;
 
 /// <summary>
-/// Renaming an endpoint has no rclone operation behind it: the section in rclone.conf is rewritten, and the
-/// two files that remember the endpoint by name are migrated. These tests cover the three ways that can go
-/// wrong silently — a name that collides with a hidden backing store, a profile left pointing at a remote
-/// that no longer exists, and a rewrite that a running daemon does not pick up.
+/// Renaming an endpoint has no rclone operation behind it: the section in rclone.conf is rewritten, and the three
+/// files that remember the endpoint by name are migrated — its metadata, the profiles that sync through it, and
+/// the browser's 收藏 / 最近访问. These tests cover the ways that can go wrong silently — a name that collides
+/// with a hidden backing store, a profile left pointing at a remote that no longer exists, a bookmark that
+/// addresses a section rclone no longer has, and a rewrite that a running daemon does not pick up.
 /// </summary>
 [Collection(ProcessWideStateCollection.Name)]
 public sealed class CloudEndpointRenameTests
@@ -227,7 +228,32 @@ public sealed class CloudEndpointRenameTests
     // ---- rollback -------------------------------------------------------------------------------------
 
     [Fact]
-    public async Task A_rename_the_daemon_does_not_confirm_puts_all_three_files_back()
+    public async Task Renaming_an_endpoint_repoints_the_places_the_browser_remembered()
+    {
+        await WithRealShellAsync(async () =>
+        {
+            await CloudEndpointService.CreateRemoteAsync(EndpointType.Sftp, "nas",
+                new Dictionary<string, string> { ["host"] = "nas.local", ["user"] = "bob", ["pass"] = "hunter2" });
+            await CloudEndpointService.SaveMetadataAsync("nas", EndpointType.Sftp, "team/docs");
+
+            var bookmarks = new CloudBrowserBookmarkStore();
+            await bookmarks.SaveAsync([new CloudBookmark("nas", "team/docs"), new CloudBookmark("other", "shared")],
+                [new CloudBookmark("NAS", "team")]);
+
+            await CloudEndpointRename.RenameAsync("nas", "archive");
+
+            // A bookmark is a pointer at an endpoint name. Left behind it addresses a section rclone no longer
+            // has, the jump list hides it, and the user's favourites look emptied by a rename nobody mentioned.
+            var loaded = await new CloudBrowserBookmarkStore().LoadAsync();
+            Assert.Equal([new CloudBookmark("archive", "team/docs"), new CloudBookmark("other", "shared")], loaded.Favorites);
+            // The third entry was written as "NAS", which is the same section, so it moves too — and it collides
+            // with nothing, so the two stay two rows.
+            Assert.Equal([new CloudBookmark("archive", "team")], loaded.Recent);
+        });
+    }
+
+    [Fact]
+    public async Task A_rename_the_daemon_does_not_confirm_fails_before_anything_is_migrated()
     {
         var dataRoot = NewDirectory();
         var previousDataDir = Environment.GetEnvironmentVariable("FENGSYNC_DATA_DIR");
@@ -258,14 +284,19 @@ public sealed class CloudEndpointRenameTests
             await profiles.SaveAsync([SyncProfile.Create("docs", "sftp://docs/team/docs", @"C:\local\docs")]);
             var profilesBefore = await File.ReadAllTextAsync(profiles.FilePath);
 
+            var bookmarks = new CloudBrowserBookmarkStore();
+            await bookmarks.SaveAsync([new CloudBookmark("docs", "team/docs")], []);
+            var bookmarksBefore = await File.ReadAllTextAsync(bookmarks.FilePath);
+
             var error = await Assert.ThrowsAsync<InvalidOperationException>(() => CloudEndpointRename.RenameAsync("docs", "archive"));
 
             Assert.Contains("已还原", error.Message, StringComparison.Ordinal);
-            // All three go back together: a config that still has the old section, next to a profile that
-            // already points at the new name, is worse than no rename at all.
+            // The verification runs before any of the four files is migrated, so there is nothing to put back
+            // here — which is the point: a rewrite the daemon will not confirm never reaches the user's data.
             Assert.Equal(config, await File.ReadAllTextAsync(configPath));
             Assert.Equal(metadataBefore, await File.ReadAllTextAsync(metadata.FilePath));
             Assert.Equal(profilesBefore, await File.ReadAllTextAsync(profiles.FilePath));
+            Assert.Equal(bookmarksBefore, await File.ReadAllTextAsync(bookmarks.FilePath));
         }
         finally
         {
@@ -273,6 +304,43 @@ public sealed class CloudEndpointRenameTests
             Environment.SetEnvironmentVariable("FENGSYNC_DATA_DIR", previousDataDir);
             TryDelete(dataRoot);
         }
+    }
+
+    /// <summary>
+    /// A rename that got as far as migrating the bookmarks and then failed. The config rewrite and the verification
+    /// both succeed here, so the failure lands after the first file has already been rewritten — the only shape of
+    /// rollback that actually restores something rather than proving nothing was touched.
+    /// </summary>
+    [Fact]
+    public async Task A_rename_that_failed_after_the_bookmarks_moved_puts_all_four_files_back()
+    {
+        await WithRealShellAsync(async () =>
+        {
+            await CloudEndpointService.CreateRemoteAsync(EndpointType.Sftp, "nas",
+                new Dictionary<string, string> { ["host"] = "nas.local", ["user"] = "bob", ["pass"] = "hunter2" });
+            await CloudEndpointService.SaveMetadataAsync("nas", EndpointType.Sftp, "team/docs");
+
+            var bookmarks = new CloudBrowserBookmarkStore();
+            await bookmarks.SaveAsync([new CloudBookmark("nas", "team/docs")], [new CloudBookmark("nas", "team")]);
+            var bookmarksBefore = await File.ReadAllTextAsync(bookmarks.FilePath);
+
+            // Reading the profiles back is the step after the bookmark migration, and a file this build cannot
+            // parse throws there — which is where a rename has to unwind what it already rewrote.
+            var profiles = new ProfileStore();
+            await File.WriteAllTextAsync(profiles.FilePath, "{ this is not the profile file");
+
+            await Assert.ThrowsAnyAsync<Exception>(() => CloudEndpointRename.RenameAsync("nas", "archive"));
+
+            // All four go back together: a config that still has the old section, next to a bookmark that already
+            // points at the new name, is worse than no rename at all.
+            var loaded = await new CloudBrowserBookmarkStore().LoadAsync();
+            Assert.Equal([new CloudBookmark("nas", "team/docs")], loaded.Favorites);
+            Assert.Equal([new CloudBookmark("nas", "team")], loaded.Recent);
+            Assert.Contains("nas", await RemoteNamesAsync());
+            Assert.DoesNotContain("archive", await RemoteNamesAsync());
+            var account = Assert.Single(await CloudEndpointService.LoadEndpointAccountsAsync());
+            Assert.Equal("nas", account.Name);
+        });
     }
 
     [Fact]
