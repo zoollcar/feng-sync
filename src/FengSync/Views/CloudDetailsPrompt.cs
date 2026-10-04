@@ -15,13 +15,16 @@ namespace FengSync.Views;
 internal static class CloudDetailsPrompt
 {
     /// <summary>
-    /// Shows one details panel. <paramref name="computeHash"/> is what the 计算校验值 button calls, and it is
-    /// passed only when the answer can still change (a file that is still there and has no checksum shown);
-    /// without it the panel is read-only, which is the case for a folder, a selection and an object the
-    /// backend no longer has.
+    /// Shows one details panel. <paramref name="action"/> is the one expensive read the panel may still offer,
+    /// already named and worded by <see cref="CloudItemDetails"/>: a checksum walks one object and a size walks a
+    /// whole subtree, so which of them a row earns — and whether it earns neither — is decided before this is
+    /// reached. Without it the panel is read-only, which is the case for a selection and for an object the backend
+    /// no longer has. Running the action redraws the rows from the answer it produced and asks what is left to
+    /// offer: a directory that has just been counted and a file whose backend has no checksums stop asking,
+    /// because a second click would spend the same read for the same sentence.
     /// </summary>
     public static void Show(Window owner, string title, IReadOnlyList<CloudDetailRow> rows,
-        Func<Task<IReadOnlyList<CloudDetailRow>>>? computeHash = null)
+        CloudDetailsAction? action = null)
     {
         var window = TextPrompt.NewWindow(title, owner, 560);
         var body = new StackPanel { Margin = new Thickness(20) };
@@ -45,16 +48,16 @@ internal static class CloudDetailsPrompt
             Margin = new Thickness(0, 0, 0, 12),
             Visibility = Visibility.Collapsed
         };
+        AutomationProperties.SetAutomationId(hint, "CloudDetailsHint");
         body.Children.Add(hint);
 
-        var hashButton = new Button
+        var actionButton = new Button
         {
-            Content = "计算校验值",
             Style = TextPrompt.Resource<Style>("SecondaryButtonStyle"),
             Margin = new Thickness(8, 0, 0, 0),
             Visibility = Visibility.Collapsed
         };
-        AutomationProperties.SetAutomationId(hashButton, "CloudDetailsHash");
+        AutomationProperties.SetAutomationId(actionButton, "CloudDetailsAction");
         var close = new Button { Content = "关闭", IsDefault = true, IsCancel = true, Style = TextPrompt.Resource<Style>("TertiaryButtonStyle") };
         AutomationProperties.SetAutomationId(close, "CloudDetailsClose");
         var buttons = new StackPanel
@@ -63,9 +66,10 @@ internal static class CloudDetailsPrompt
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 0, 4)
         };
-        // Reading a checksum can cost a full pass over the object, so it is the one thing here the user has to
-        // ask for; opening 属性 must never start it. Enter closes the panel instead of computing anything.
-        buttons.Children.Add(hashButton);
+        // Both reads cost the cloud real work — a checksum a pass over one object, a size a walk down a whole
+        // subtree — so neither happens on opening 属性; the user asks for the one they want. Enter closes the
+        // panel instead of starting anything.
+        buttons.Children.Add(actionButton);
         buttons.Children.Add(close);
         body.Children.Add(buttons);
 
@@ -92,19 +96,31 @@ internal static class CloudDetailsPrompt
             }
         }
 
-        if (computeHash is not null)
+        if (action is not null)
         {
-            hashButton.Visibility = Visibility.Visible;
-            hint.Text = "校验值需要读取整个文件；云端对象会因此走完一遍下载，大文件请耐心等待。";
+            actionButton.Content = action.Label;
+            hint.Text = action.Hint;
             hint.Visibility = Visibility.Visible;
-            hashButton.Click += async (_, _) =>
+            actionButton.Visibility = Visibility.Visible;
+            actionButton.Click += async (_, _) =>
             {
-                hashButton.IsEnabled = false;
+                // Both buttons go dark for the duration: the read cannot be recalled, and leaving 关闭 clickable
+                // would let the panel vanish while its answer is still in flight.
+                actionButton.IsEnabled = false;
                 close.IsEnabled = false;
-                try { Render(await computeHash()); }
+                try
+                {
+                    var panel = await action.Run();
+                    Render(panel.Rows);
+                    if (panel.Action is null)
+                    {
+                        actionButton.Visibility = Visibility.Collapsed;
+                        hint.Visibility = Visibility.Collapsed;
+                    }
+                }
                 finally
                 {
-                    hashButton.IsEnabled = true;
+                    actionButton.IsEnabled = true;
                     close.IsEnabled = true;
                 }
             };

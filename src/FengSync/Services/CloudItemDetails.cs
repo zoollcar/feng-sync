@@ -6,11 +6,20 @@ namespace FengSync.Services;
 public sealed record CloudDetailRow(string Label, string Value);
 
 /// <summary>
-/// A panel's rows plus the one thing about them the dialog cannot see: whether a checksum is still worth
-/// asking for. Saying so here rather than letting the view look for a row that reads 未计算 keeps the
-/// wording and the button owned by the same file.
+/// The one expensive read a panel may still offer, with the words that go around it. The label and the warning
+/// travel with the action because they are the same decision: a checksum walks one object and a size walks a
+/// whole subtree, so the panel says which one it is about to do and what it costs.
 /// </summary>
-public sealed record CloudDetailsPanel(IReadOnlyList<CloudDetailRow> Rows, bool CanComputeHash);
+public sealed record CloudDetailsAction(string Label, string Hint, Func<Task<CloudDetailsPanel>> Run);
+
+/// <summary>
+/// A panel's rows plus the one thing about them the dialog cannot see: whether a read is still worth offering,
+/// and which one. Saying so here rather than letting the view look for a row that reads 未计算 keeps the wording
+/// and the button owned by the same file. A panel carries <em>at most one</em> action, because the two candidates
+/// are mutually exclusive by what they can be asked about — only a file still has a checksum to read, only a
+/// directory still has a subtree to walk.
+/// </summary>
+public sealed record CloudDetailsPanel(IReadOnlyList<CloudDetailRow> Rows, CloudDetailsAction? Action = null);
 
 /// <summary>
 /// What <c>operations/stat</c> answered about one object, already reduced to what the browser shows.
@@ -59,9 +68,12 @@ public static class CloudItemDetails
     /// is null the caller read nothing, so only the listing's own facts are shown.
     /// <paramref name="hashRequested"/> separates "the user asked and the backend has none" from "nobody asked
     /// yet" — the first is a fact about the endpoint, the second is about this dialog.
+    /// <paramref name="size"/> is a directory's counted answer, and it is null until somebody asks for a walk:
+    /// the listing's own size field for a folder is whatever the backend chose to put there, so an uncounted
+    /// directory says 未统计 rather than quoting a number it never counted.
     /// </summary>
     public static IReadOnlyList<CloudDetailRow> For(CloudFileEntry entry, CloudEndpointAccount? account,
-        CloudItemStat? stat, bool hashRequested = false)
+        CloudItemStat? stat, bool hashRequested = false, CloudSizeResult? size = null)
     {
         var rows = new List<CloudDetailRow>
         {
@@ -78,11 +90,11 @@ public static class CloudItemDetails
         }
 
         var read = stat;
-        var size = read?.Size ?? entry.Size;
+        var reported = read?.Size ?? entry.Size;
         var modified = read?.ModifiedUtc ?? entry.ModifiedUtc;
         rows.Add(new CloudDetailRow("大小", entry.IsDirectory
-            ? "未统计"
-            : HumanSize(size) + "（" + size.ToString("N0") + " 字节）"));
+            ? size is null ? CloudFolderSize.NotCounted : CloudFolderSize.TextFor(size)
+            : HumanSize(reported) + "（" + reported.ToString("N0") + " 字节）"));
         rows.Add(new CloudDetailRow("修改时间", ModifiedText(modified)));
         // rclone answers a MimeType for every object, including inode/directory, so this row is about the
         // bytes rather than the extension the listing shows.
@@ -101,13 +113,44 @@ public static class CloudItemDetails
         return rows;
     }
 
+    /// <summary>The button that asks for a checksum, and the warning that goes with it before anything is read.</summary>
+    public const string HashActionLabel = "计算校验值";
+
+    public const string HashActionHint = "校验值需要读取整个文件；云端对象会因此走完一遍下载，大文件请耐心等待。";
+
     /// <summary>
-    /// Whether the panel may still offer to read a checksum: only an object that is there, is a file, and
-    /// reported nothing — because the read costs a pass over it and a folder or a gone object has nothing to
-    /// pay for.
+    /// Whether the panel may still offer to read a checksum: only an object that is there, is a file, reported
+    /// nothing, and has not already been asked in this panel. The first three are because the read costs a pass
+    /// over the object and a folder or a gone object has nothing to pay for; the last is because an endpoint that
+    /// was just asked and answered with none has now been asked — offering again spends the same pass for the same
+    /// 此后端未提供校验值.
     /// </summary>
-    public static bool OffersHash(CloudFileEntry entry, CloudItemStat? stat) =>
-        !entry.IsDirectory && stat is { Exists: true, Hashes: { Count: 0 } };
+    public static bool OffersHash(CloudFileEntry entry, CloudItemStat? stat, bool alreadyAsked = false) =>
+        !alreadyAsked && !entry.IsDirectory && stat is { Exists: true, Hashes: { Count: 0 } };
+
+    /// <summary>
+    /// Whether the panel may still offer to walk a directory's subtree: a row that is a directory, is still
+    /// there, and has not been counted in this panel yet. The first two are because counting a file is refused
+    /// outright and a gone directory answers 404, so the offer would be an error with extra steps; the third is
+    /// because a counted number belongs to the panel it was read for — keeping it would make the row on screen
+    /// and the listing behind it two more places claiming to know a size they never re-read.
+    /// </summary>
+    public static bool OffersSize(CloudFileEntry entry, CloudItemStat? stat, CloudSizeResult? counted) =>
+        counted is null && entry.IsDirectory && stat is { Exists: true };
+
+    /// <summary>
+    /// The one read a panel may still start, or null for a panel that has nothing left to ask. A file with no
+    /// checksum earns the hash pass and a directory with no count earns the subtree walk, and the two conditions
+    /// cannot both hold — a row is one or the other — which is why a panel carries one action rather than two
+    /// buttons. The words come from the rule that owns each read, so a button and its warning can never disagree.
+    /// </summary>
+    public static CloudDetailsAction? ActionFor(CloudFileEntry entry, CloudItemStat? stat, bool hashAsked,
+        CloudSizeResult? counted, Func<Task<CloudDetailsPanel>> computeHash, Func<Task<CloudDetailsPanel>> computeSize)
+    {
+        if (OffersHash(entry, stat, hashAsked)) return new CloudDetailsAction(HashActionLabel, HashActionHint, computeHash);
+        if (OffersSize(entry, stat, counted)) return new CloudDetailsAction(CloudFolderSize.ActionLabel, CloudFolderSize.CostHint, computeSize);
+        return null;
+    }
 
     /// <summary>
     /// The rows for a multi-selection, which has no single object to stat. Only files contribute bytes: a

@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -2002,30 +2003,49 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <c>stat</c> of the object itself rather than from the row on screen, because the listing is a snapshot:
     /// it can name a file the backend has already dropped, and it has no MIME type to show. A read that fails
     /// still produces the listing's facts plus the reason, so the panel is never an empty window.
+    /// <para>
+    /// The two optional reads are the expensive ones and each is asked for by its own button: <paramref
+    /// name="withHash"/> passes the checksums rclone may then compute, <paramref name="withSize"/> walks the
+    /// subtree for a directory's total. Neither is a re-read of something the panel already has, and neither
+    /// result is kept here — a fresh call starts from 未计算 / 未统计 again, which is the whole point of asking
+    /// the user before spending the bandwidth.
+    /// </para>
     /// </summary>
-    internal async Task<CloudDetailsPanel> DetailsAsync(CloudFileEntry entry, bool withHash = false)
+    internal async Task<CloudDetailsPanel> DetailsAsync(CloudFileEntry entry, bool withHash = false, bool withSize = false)
     {
         var account = Selected;
-        if (account is null) return new CloudDetailsPanel(CloudItemDetails.For(entry, null, null), false);
+        if (account is null) return new CloudDetailsPanel(CloudItemDetails.For(entry, null, null));
         CloudItemStat? stat = null;
+        CloudSizeResult? size = null;
         var failure = (CloudDetailRow?)null;
         try
         {
             stat = await _files.StatAsync(account.Name, entry.Path, withHash ? CloudItemDetails.HashPreference : null);
         }
         catch (Exception ex) { failure = new CloudDetailRow("读取详情", RcloneUiError.Describe(ex, "cloud-stat")); }
-        var rows = new List<CloudDetailRow>(CloudItemDetails.For(entry, account, stat, hashRequested: withHash));
+        // Only a directory the backend still claims is worth walking: the panel offers no other case, and a read
+        // that this method made on its own would be a second representation of that rule.
+        if (withSize && stat is { IsDirectory: true, Exists: true })
+        {
+            try
+            {
+                var answer = await _files.SizeAsync(account.Name, entry.Path);
+                size = answer is null ? CloudSizeResult.NoAnswer : CloudSizeResult.Of(answer);
+            }
+            catch (Exception ex) { size = CloudFolderSize.FromFailure(ex); }
+        }
+        var rows = new List<CloudDetailRow>(CloudItemDetails.For(entry, account, stat, withHash, size));
         if (failure is { } reason) rows.Add(reason);
-        return new CloudDetailsPanel(rows, CloudItemDetails.OffersHash(entry, stat));
+        return new CloudDetailsPanel(rows, CloudItemDetails.ActionFor(entry, stat, withHash, size,
+            () => DetailsAsync(entry, withHash: true), () => DetailsAsync(entry, withSize: true)));
     }
 
     private async Task ShowDetailsAsync(CloudFileEntry entry)
     {
         var panel = await DetailsAsync(entry);
         // The menu item stays available either way: a folder's 属性 and a gone object's 属性 are exactly the
-        // two answers the user needs, and a panel that could compute nothing shows no button.
-        CloudDetailsPrompt.Show(this, "属性 · " + entry.Name, panel.Rows,
-            panel.CanComputeHash ? async () => (await DetailsAsync(entry, withHash: true)).Rows : null);
+        // two answers the user needs, and a panel with nothing left to read shows no button.
+        CloudDetailsPrompt.Show(this, "属性 · " + entry.Name, panel.Rows, panel.Action);
     }
 
     private void ShowSelectionDetails() =>
@@ -2144,6 +2164,9 @@ public partial class RemoteEndpointManagerWindow : Window
         var selected = SelectedEntries();
         if (selected.Count == 0) return null;
         var menu = new ContextMenu();
+        // The menu is built in code, so nothing in the XAML names it for UI Automation; the id is what lets the
+        // desktop scenario prove the row menu is reachable in the real shell rather than only on paper.
+        AutomationProperties.SetAutomationId(menu, "CloudRowMenu");
         if (selected.Count == 1)
         {
             var entry = selected[0];

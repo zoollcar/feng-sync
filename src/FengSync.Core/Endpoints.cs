@@ -423,6 +423,36 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
             ? parsed
             : null;
 
+    /// <summary>
+    /// Counts what one directory holds, through rclone's <c>operations/size</c>.
+    /// <para>
+    /// <paramref name="fs"/> must carry the directory itself (<c>nas:team/docs</c>): measured against the
+    /// bundled v1.75.0, a <c>remote</c> field in this payload is <strong>silently ignored</strong> —
+    /// <c>{fs:"data:",remote:"sub"}</c> answered the whole endpoint's bytes, and so did
+    /// <c>{fs:"data:",remote:"gone"}</c> for a directory that does not exist, while <c>{fs:"data:sub"}</c>
+    /// answered only that directory. Sending the ignored key would therefore hand back the size of the entire
+    /// drive labelled as one folder's, which is why this method takes one composed fs and no remote at all.
+    /// </para>
+    /// <para>
+    /// The answer is <c>{bytes, count, sizeless}</c>. The count counts objects,
+    /// not directories: a tree of 403 files under 4 folders answered 403. <c>sizeless</c> is the number of
+    /// objects the backend refused to give a size for — rclone counts those as zero bytes rather than failing,
+    /// so a non-zero value means the byte total is a floor and not the truth (Google Docs and Google Photos are
+    /// the documented cases). A missing directory answers 404 <c>directory not found</c> and a file answers 500
+    /// <c>is a file not a directory</c>; an empty directory answers <c>{0, 0, 0}</c>, which is a real answer and
+    /// not an error.
+    /// </para>
+    /// </summary>
+    public async Task<RcloneFolderSize?> SizeAsync(string fs, CancellationToken ct = default)
+    {
+        var response = await CallAsync("operations/size", new { fs }, ct);
+        if (response.ValueKind != JsonValueKind.Object) return null;
+        var bytes = ReadOptionalLong(response, "bytes");
+        var count = ReadOptionalLong(response, "count");
+        if (bytes is null && count is null) return null;
+        return new RcloneFolderSize(bytes ?? 0, count ?? 0, ReadOptionalLong(response, "sizeless") ?? 0);
+    }
+
     public async Task<JsonElement> RunJobAsync(string operation, object payload, CancellationToken ct = default)
     {
         var started = await CallAsync(operation, payload, ct).ConfigureAwait(false);
@@ -491,6 +521,14 @@ public sealed record RcloneStatEntry(string Path, bool IsDirectory, long Size, D
 /// answer with different subsets — Google Drive reports all three, S3 usually reports nothing.
 /// </summary>
 public sealed record RcloneAbout(long? Total, long? Used, long? Free);
+
+/// <summary>
+/// What <c>operations/size</c> counted for one directory. <paramref name="Count"/> is objects, not entries:
+/// folders are walked through and never counted. <paramref name="Sizeless"/> is how many objects the backend
+/// would not give a size for; rclone counts those as zero bytes, so a non-zero value makes
+/// <paramref name="Bytes"/> a floor rather than a total.
+/// </summary>
+public sealed record RcloneFolderSize(long Bytes, long Count, long Sizeless);
 
 /// <summary>A byte-range read of one remote object; <paramref name="Length"/> is the object's full size.</summary>
 public sealed record RcloneRangeContent(Stream Content, long Length, DateTimeOffset? ModifiedUtc) : IDisposable

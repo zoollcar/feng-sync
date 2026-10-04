@@ -176,6 +176,21 @@ public sealed class CloudFileManagerService
     }
 
     /// <summary>
+    /// Counts what one directory holds, through <c>operations/size</c>. The directory is sent inside the fs
+    /// (<c>nas:team/docs</c>) rather than as a <c>remote</c> field, because v1.75.0 <strong>silently ignores</strong>
+    /// <c>remote</c> here and answers for the whole endpoint — the same silently-ignored-field trap the details
+    /// read had with <c>opt.hashes</c>, but this one hands back a plausible number instead of a missing one.
+    /// The walk is the cloud's own: it is not interruptible once sent (measured — <c>job/stop</c> reports success
+    /// and the recursion continues), so callers ask only when a user asks.
+    /// </summary>
+    public async Task<RcloneFolderSize?> SizeAsync(string remote, string path, CancellationToken ct = default)
+    {
+        var client = await _client(ct);
+        var directory = path.Trim('/');
+        return await client.SizeAsync(directory.Length == 0 ? FileSystem(remote) : FileSystem(remote) + directory, ct);
+    }
+
+    /// <summary>
     /// Asks the cloud for a public link to one object. A link is not a read: on the backends that do support it,
     /// rclone's default is a grant that anyone holding the URL can use without logging in, which is why the
     /// browser only ever reaches this from an explicit, confirmed action on one file.
