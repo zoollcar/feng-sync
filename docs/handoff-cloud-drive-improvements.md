@@ -1,7 +1,7 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **103** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
+> 分支：`dev`（领先 `origin/dev` **104** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
 > 最后更新：2026-10-05。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
@@ -150,7 +150,7 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 **B9 文件夹大小**照旧三层：`57007b3` feat（Core 的 `SizeAsync` + `RcloneFolderSize`、`CloudFolderSize`、`CloudItemDetails` 的 offer 规则、
 面板的唯一动作按钮、窗口的读取接缝）/ `f172bd7` test（Core 7 条事实 + UI 9 条真窗口 + 13 条纯规则 + `sftp-ui` 那一段）/
 `6ace64e` docs（AGENTS.md 的不变式 + 本文件）。本节的这条 hash 行与 §2 表末行是 `6ace64e` 之后回填的。
-**C 组 + D 组**照旧三层：`c5ef1e3` feat / `b767f90` test / `CD_DOCS_HASH` docs
+**C 组 + D 组**照旧三层：`c5ef1e3` feat / `b767f90` test / `83e06c5` docs
 （本节的这条 hash 行与 §2 两节标题里的 hash 是最后那条 docs 之后回填的）。
 ⚠️ **feat 只有一条，不是两条** —— C 组与 D 组**共用五个文件**：`ApplicationSettings`、`ConfigurationValidator`
 （限速/时段/完成后动作与挂载缓存上限在同一处）、`App.xaml.cs` 与 `DriveHub/App.xaml.cs`（同一个 `OnStartup`
@@ -991,7 +991,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 ---
 
-### C1–C7 —— 传输队列（**已提交**：`c5ef1e3` feat / `b767f90` test / `CD_DOCS_HASH` docs）
+### C1–C7 —— 传输队列（**已提交**：`c5ef1e3` feat / `b767f90` test / `83e06c5` docs）
 
 - **C1 限速 —— 先实证作用域，答案是「全局」**（§6 第 6 条）。`core/bwlimit` **没有** `fs` 参数：
   per-remote 写法 `nas:1M` 被拒（`bad bwlimit: bad suffix 's'`），`:100k` 与 `100k:` 被拒（`bad bwlimit: empty string`），
@@ -1056,7 +1056,7 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   （测试走的是 `Perform` 接缝），所以「`shutdown /s /t 60` 真的会关」这一步只有代码在担保；
   ③ **传输时段跨午夜的真实长跑没测**（只测了纯规则与一次性唤醒）。
 
-### D1–D6 —— 挂载（**已提交**：`c5ef1e3` feat / `b767f90` test / `CD_DOCS_HASH` docs）
+### D1–D6 —— 挂载（**已提交**：`c5ef1e3` feat / `b767f90` test / `83e06c5` docs）
 
 - **D 组唯一的防线是键名，而这一批找到了一个不需要 WinFsp 就能验它的判别器**（§6 第 4 条）。
   rclone 对认不出的键**静默忽略**：一次点名 `cacheModee` / `CacheMaxSizee` / `diskSpaceTotal` 的请求**挂载成功**，
@@ -1351,7 +1351,7 @@ B 组还有一条**只在这里出现**的约束：**并发数从 `const` 改为
 
 ### C1–C7. 传输队列
 
-✅ **C1–C7 全部完成**（`C_FEAT_HASH` + `C_TEST_HASH`，见 §2 的 C 组小节）。下表是当初的计划，逐条都照此落了 ——
+✅ **C1–C7 全部完成**（`c5ef1e3` feat + `b767f90` test，见 §2 的 C 组小节）。下表是当初的计划，逐条都照此落了 ——
 与计划的差别只有三处，且都是实证逼出来的：**C1 的作用域实测是「全局」**（所以限速是 daemon 的属性，
 队列负责应用与交还，而不是按 remote 各设一份）；**C2 的 `Order` 必须同时驱动列表与取槽**（只换一个就会出现
 「列表说 A 在前、队列跑 B」）；**C5 的时段是队列自己停**（`--bwlimit` 的时间表写法实测答的是另一句话，
@@ -1370,7 +1370,7 @@ B 组还有一条**只在这里出现**的约束：**并发数从 `const` 改为
 
 ### D1–D6. 挂载
 
-✅ **D1–D6 全部完成**（`D_FEAT_HASH` + `D_TEST_HASH`，见 §2 的 D 组小节）。下表是当初的计划，逐条都照此落了 ——
+✅ **D1–D6 全部完成**（`c5ef1e3` feat + `b767f90` test，见 §2 的 D 组小节）。下表是当初的计划，逐条都照此落了 ——
 差别只有三处：**D3 的容量只在挂载那一刻读**（配额变化后不更新，端点不报就**不写该键**，绝不写 0）；
 **D6 的实证答复是「接受，但不照做」** —— rclone 收下 UNC 的 `mountPoint` 并回**Windows 分配的盘符**
 （`\\localhost\nonexistent-share-xyz\mnt` → `{"mountPoint":"Z:"}`），所以 UNC 是**支持**的，
