@@ -1,7 +1,7 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **99** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
+> 分支：`dev`（领先 `origin/dev` **103** 个已提交 —— 数字含本文最后一次更新，未 push）。工作区**干净**（仅剩未跟踪的 `.arts/`）。
 > 最后更新：2026-10-05。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
@@ -15,9 +15,9 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）、**B3**（属性 / 详情：`operations/stat` + 按需校验值）、**B4**（分享链接：`operations/publiclink` + 先确认再生成）、**B5**（回收站：端点根下的 `.fengsync-trash` + 还原，清空复用**同一条**删除门槛）、**B6**（键盘快捷键：一张纯表把按键映射成命令，命令一律调按钮已有的方法）、**B7**（网格视图 / 缩略图 / 内置预览：**同一份行集合的第二种画法** + 13 个具名预览结果 + 只在 converter 里查缓存、拉字节走可取消的一轮）、**B8**（收藏 / 最近访问：**两条不同的承诺** —— 收藏的顺序归用户且永不修剪，最近访问是应用写的有界队列；规则一个纯类 + 一个只存地名不存凭据的文件 + 同一批行的两个下拉；端点重命名从此一起搬**四**份文件）。**B9**（文件夹大小：**属性面板上那一个按钮**是唯一发起递归统计的地方 —— 目录必须写在 `fs` 里（多发的 `remote` 字段被**静默忽略**，而答复是整个端点的字节数），这一次读取**发出去就收不回**（`job/stop` 答 `{}`、遍历照跑），所以措辞只能说「不再等」；统计到的数字**永不缓存**，下一次开面板还是 未统计；统计**不打** `operations/list`，因此不记一次最近访问）。**B10**（拖出整个文件夹：一句「请先进入文件夹」的拒绝换成了**一棵树要么给、要么不给** —— Explorer 在放下那一刻复制磁盘上现有的东西、并且两种情况都报成功，所以闸门是「每个目录都在、每个文件都在且长度对得上」；一棵树由**一次递归读取**得到，空目录靠 `CreateDirectories` 才能活着到达拖放目标；一个手势等不完的文件夹继续下载、下完才 reveal。**顺带抓到一个静默取错文件的产品缺陷**：下载的 staging 名是文件的**裸名**，源端点挂在端点根上就等于去**上一层**找同名对象 —— 实测 `docs/a.txt` 读了 `[nas:/]/team/a.txt`，而上一层的同名文件存在时它被取回来并发布成功，于是整目录拖出会把树里每个文件都这样下错一遍）。**B11**（版本历史：实证结论是 rclone **不暴露版本列表**，所以这一项按计划**降级** —— 菜单项叫「在网页端查看历史版本…」，名字说的是它真做的事（打开网盘自己的控制台），理由挂在 ToolTip 与状态行上，没有控制台的端点什么都不打开；`CloudVersionHistory` 一个纯类出「给谁 / 去哪儿 / 为什么」三样东西）。**A 组与 B 组全部收尾。**见 §2。 |
-| **下一步** | **C 组（传输队列，C1–C7）**（§5）。B1 打通了「一条剪贴板行 → `EnqueueCopy` 的五个参数」，B2 把「同名冲突怎么答」抽成上传与粘贴共用的纯规则，B3 又加了一条**读单个对象**的路（`StatAsync` → `CloudItemDetails` 定行 → 代码搭的面板），B4 加了**第一个会对外发出权限的动作**（确认走 `ConfirmShare`、剪贴板走 `CopyLink`，都是接缝），B5 加了**第一个「删掉但还能回来」的动作**（规则全在 `CloudRecycleBin`，移动照 §4 实测的两条腿走，「清空回收站」问的还是 `CloudDeleteSafety` 那**一道**门槛），B6 把键盘接上了**同一批方法**（`CloudBrowserShortcuts.Resolve` 只做路由，新加的 `PromptRename` 是重命名问题的接缝），B7 加了**同一份行集合的第二种画法**（`ApplyBrowserView` 只换 `View`/`ItemTemplate`/`ItemsPanel`，`ItemsSource` 仍是那一份 `_entries`）和**读字节的那条有界路**（`54eb6f5` 的 `ReadAsync` → 13 个具名结果的 `CloudBrowserPreview`，缩略图 converter 只查缓存、拉字节走 `RestartTileRound` 那一轮可取消的）。B8 加了**两条不同的承诺**（`CloudBrowserBookmarks` 一个纯类分别管「收藏的顺序归用户、永不为容量修剪」和「最近访问是应用写的有界队列」，`CloudBrowserBookmarkStore` 落一份**只存地名、一个凭据字段都没有**的 `cloud-bookmarks.json`，窗口那两个下拉与「收藏此目录」按钮读的还是同一批行），并把端点重命名从三份文件扩到**四**份。**B9 加了「按目录走的那一次读取」**（`CloudFolderSize` 定这个按钮叫什么、怎么警告、五种答复各说什么话；哪一行还欠一次统计由 `CloudItemDetails.OffersSize` 决定；读取挂在属性面板**唯一那个动作按钮**上，一块面板**最多只有一个**动作）。**B10 把「请先进入文件夹」那句拒绝换成了整目录拖出**（`CloudFolderDrag` 定「一棵树要么给、要么不给」，`ListTreeAsync` 一次读完整棵树，空目录靠 `CreateDirectories` 才活得到拖放目标，一个手势等不完的继续下载、下完才 reveal；拖动手势本身造不出来，所以 `DragOutAsync` / `DragOutHandoff` / `Reveal` / `DragBudget` / `SurfaceTransfers` 是接缝），**并顺带修掉一个静默取错文件的下载缺陷**（`CloudTransferQueue.DownloadSourceUri`）。样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗／对外副作用的决定走接缝 + 需要落点或答案形状才上真 rclone**。⚠️ **B11 的实证结论是「rclone 不暴露版本列表」**：`rc/list` 的**全部 101 个方法**里唯一带 version 的是 `core/version`（rclone 自己的版本号），`operations/versions` / `operations/history` / `backend/versions` 一律 404 `couldn't find method`，`operations/fsinfo` 的 `Features` 没有版本标志，而 `operations/list` 的 `opt` 只是**列表选项**（不是 backend 配置覆盖）—— 所以 `--s3-versions` 这类只能写进 `rclone.conf`，而它会**改写列表的命名空间**，因此不打开。**B11 已按这个结论落成降级**（菜单项「在网页端查看历史版本…」+ `CloudVersionHistory` 纯规则 + `WebConsoleUrl`；完整答复见 §6 第 5 条）。全量门禁 2026-10-05 再跑，`Failed: 0`（**Core 442 / UI 545**，UI 2m50s；Core 的 +10 是 B10 前置那 10 条递归列表事实，UI 的 +47 = B10 的 32 条 + B11 的 15 条）。 |
-| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；**`operations/stat` 里「校验值」只有把名字列进 `opt.hashTypes` 才会给**，而 `opt.hashes`（位域）与 `opt.HashTypes`（大小写）都被**静默忽略或报错** —— 拼错读起来就跟「这个后端没有校验值」一模一样；**`operations/publiclink` 里多写的字段同样被静默忽略**，而它那句「不支持公开链接」的 500 会被共用分类器读成**临时连接中断**（先读文字再看 category）；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）；**接缝返回 `null` 是「用户取消」，不是「没装接缝」**——用 `??` 兜到真弹窗会在测试里打开一个无人可答的对话框，并且 `Window.Owner` 指向一个从未 `Show()` 过的窗口时直接抛（B2 撞到过一次测试宿主崩溃）；**`operations/movefile` 对已存在的目标名是覆盖**、`sync/move` 落到已存在的目录是**合并并把源留成一个空壳**，而 `operations/rmdir` 打**已不存在**的路径答 HTTP 500、被共用分类器读成 `Temporary`（于是 `RemoveIfEmptyAsync` 先 `stat`，不拿 rmdir 的报错当「目录没有了」）（B5）；**键盘的坑是「两处写」而不是「按不动」**：快捷键一旦自己写一遍拒绝语或确认，就和按钮分岔（B6 的做法是命令只调按钮已有的方法）；`TextBox` 会**自己吃掉** Del 与 Ctrl+A、却**不吃** F2，所以 typing 闸门只对 F2 这类键真正起作用；`Keyboard.Modifiers` 读的是**物理**键盘，合成事件改不了它（见 §4 的 WPF 表）；**网格视图必须 `ClearValue` 复原，不能写 `ItemsPanel = null`** —— 本地 null 让**一行都不呈现**而集合完整，进程内的 `Assert.Null` 会把这个 bug 读成正确（B7）；**桌面场景跑的是 `tests/FengSync.UiTests/bin/` 里那份 `FengSync.exe`**，只建 `src/FengSync` 会让场景**绿在它本该检查的那个改动上**（B7 排查时踩过一次）；**跳转必须「接管」端点，不能只「跟随选中」** —— 跟随会先为目标端点列一次它自己的根，一次跨端点跳转因此打**两**次 `operations/list`（B8 的 `SwitchEndpoint` 直接把那一行采纳成当前端点，并有一条断言数死列表调用的次数）；**收藏文件的路径在 store 构造时就定下来**（`AppDataPaths.Root` 本身每次都认 `FENGSYNC_DATA_DIR`，但一个提前建好的 store 之后不受它影响），所以驱动窗口的测试必须**在建窗口之前**把 `FENGSYNC_DATA_DIR` 换进临时目录并在 `finally` 还原 —— 否则窗口会继续往用户真实的 app data 里写、并在下一次运行读回来；**进程级文件锁里的 await 若回到调用方的调度器，锁就再也解不开** —— 一次没被接应的书签写入能让之后每一条写书签的窗口测试各卡 90 秒（B8 实测：`save held` 之后没有 `save release`；单跑一条又全绿，最容易误判成「别处的 flake」），所以 gate 区间一律 `ConfigureAwait(false)`，并按第 8 条测试的写法「发出写入就退出的线程」去证它真的会 fire；**一份用户选择可以有第三份表示** —— 磁盘上的文件、纯规则类、以及窗口内存里那份列表；B8 唯一的产品缺口（重命名搬对了磁盘那份，窗口却拿旧名字的下一次 listing 把文件写回旧名）就是**只有真实外壳**抓到的，32 + 18 条进程内测试全绿。改动任何一份持久表示时，先问「谁还内存着同一份」；**`operations/size` 要把目录写进 `fs`** —— 这个载荷里的 `remote` 字段**静默忽略**，于是「一个文件夹的大小」实际答回**整个端点**的字节数，而且是个看起来完全正常的数字（B9 用一条**原始 `CallAsync`** 的事实测试钉住，`RcloneRcClient.SizeAsync` 因此根本不接受 `remote` 参数）；**云盘下载的 staging 名是文件的「裸名」而不是它的远端相对路径** —— 于是把源端点挂在**端点根**上就等于让 rclone 去**上一层**找同名对象（实测：`RemotePath` 为 `docs/a.txt` 的任务读了 `[nas:/]/team/a.txt`），而上一层的同名文件存在时它**被取回来并发布成功、一句错都不报**，所以源端点必须根到**文件自己所在的目录**（`CloudTransferQueue.DownloadSourceUri`）；这条坑只在给整目录拖出打探针时才露头，因为那会把树里每一个文件都这样下一遍（B10）；**递归统计没有取消**（`job/stop` 返回 `{}` 而遍历继续，`job/abort`、`core/commands`、`core/list` 是 404），所以关掉面板只能说**不再等**，任何「已停止统计」的说法都是假承诺；**统计数字不缓存** —— 把上一次走树的总数留在内存里，等于宣称知道一个不确定时刻的事实，所以新鲜的面板就该是 未统计 并把按钮再给一遍（B9）；**改桌面场景要改 `tests/` 下那份 `Invoke-UiScenario.ps1`** —— `dotnet test` 每次 build 都把脚本复制进 `bin/`，探针打在 `bin/` 那份上会得到一次**毫无意义的 Passed**（B9 先这样误判过一次，重打源文件才看到那条断言真的会 fail）。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0**（队列泛化：远端→远端复制）、**B1**（浏览器复制/剪切/粘贴 + 跨端点复制）、**B2**（上传/粘贴冲突：`KeepBoth` 与逐文件询问）、**B3**（属性 / 详情：`operations/stat` + 按需校验值）、**B4**（分享链接：`operations/publiclink` + 先确认再生成）、**B5**（回收站：端点根下的 `.fengsync-trash` + 还原，清空复用**同一条**删除门槛）、**B6**（键盘快捷键：一张纯表把按键映射成命令，命令一律调按钮已有的方法）、**B7**（网格视图 / 缩略图 / 内置预览：**同一份行集合的第二种画法** + 13 个具名预览结果 + 只在 converter 里查缓存、拉字节走可取消的一轮）、**B8**（收藏 / 最近访问：**两条不同的承诺** —— 收藏的顺序归用户且永不修剪，最近访问是应用写的有界队列；规则一个纯类 + 一个只存地名不存凭据的文件 + 同一批行的两个下拉；端点重命名从此一起搬**四**份文件）。**B9**（文件夹大小：**属性面板上那一个按钮**是唯一发起递归统计的地方 —— 目录必须写在 `fs` 里（多发的 `remote` 字段被**静默忽略**，而答复是整个端点的字节数），这一次读取**发出去就收不回**（`job/stop` 答 `{}`、遍历照跑），所以措辞只能说「不再等」；统计到的数字**永不缓存**，下一次开面板还是 未统计；统计**不打** `operations/list`，因此不记一次最近访问）。**B10**（拖出整个文件夹：一句「请先进入文件夹」的拒绝换成了**一棵树要么给、要么不给** —— Explorer 在放下那一刻复制磁盘上现有的东西、并且两种情况都报成功，所以闸门是「每个目录都在、每个文件都在且长度对得上」；一棵树由**一次递归读取**得到，空目录靠 `CreateDirectories` 才能活着到达拖放目标；一个手势等不完的文件夹继续下载、下完才 reveal。**顺带抓到一个静默取错文件的产品缺陷**：下载的 staging 名是文件的**裸名**，源端点挂在端点根上就等于去**上一层**找同名对象 —— 实测 `docs/a.txt` 读了 `[nas:/]/team/a.txt`，而上一层的同名文件存在时它被取回来并发布成功，于是整目录拖出会把树里每个文件都这样下错一遍）。**B11**（版本历史：实证结论是 rclone **不暴露版本列表**，所以这一项按计划**降级** —— 菜单项叫「在网页端查看历史版本…」，名字说的是它真做的事（打开网盘自己的控制台），理由挂在 ToolTip 与状态行上，没有控制台的端点什么都不打开；`CloudVersionHistory` 一个纯类出「给谁 / 去哪儿 / 为什么」三样东西）。**C 组（传输队列 C1–C7）**：`core/bwlimit` 实证是**全局**的（per-fs 写法被拒、时间表写法答的是**另一句**错），所以限速是 daemon 的属性，队列在批次排空时必须**交还** `off`，而**从没设过限速的队列一个字节都不该推**（`"off"` 本身也是一次写）；速率只有一种拼法（每个数字都带 `B`、`upload:download` 按这个顺序、`off` 读回 -1）。排序是**一个数字**：`CloudTransferTask.Order` 既是队列取槽的顺序也是列表画出来的顺序，所以 上移 / 下移 调的是同一份（并**修掉一个真 bug**：手加的传输走 `RunAsync` 绕过了 `Start` 的批次登记，于是 `BatchCompleted`、限速交还、完成后动作**对它全都不触发**）。「仅在此时间段传输」是**队列自己停**而不是系统调度器，等值端点意味着**整天**而不是自相矛盾（那种拒绝归 `ConfigurationValidator`，`Parse` 不许再判一次）。清除已完成**先归档再删行**（`CloudTransferHistoryRepository`，append-only、最新在前、有上限、坏文件读成空历史），因为 journal 在任务成功那一刻就把条目丢了 —— 不归档就等于「文件搬走了却没有任何痕迹」。完成后动作**只在整个批次全部成功**时执行、每次都问，并且**归窗口所有**（一个没人能答的确认等于把机器交出去），没装接缝就什么都不做；关机那句会说出 `shutdown /a`。复制详情 / 查看日志复用队列**本来就有**的东西：详情第一行必须先说清「这是什么任务」，日志读不到就**说读不到**而不是说空。**D 组（挂载 D1–D6）**：这一组唯一的防线是**键名** —— rclone 对认不出的键**静默忽略**（挂载照常成功），所以「键名是真的」与「拼错是静的」两条都必须能被断言；实测的判别器是**真键配一个不可读的值会在 JSON 解码期被拒**（`Reshape failed to Unmarshal`，发生在任何挂载之前，所以这条事实**既不需要 WinFsp 也不需要挂载点**），而**同一个值换个拼错的键就被收下**。`readOnly` 在 **`vfsOpt`**（`ReadOnly`）、`volumeName`/`networkMode` 在 **`mountOpt`**，四个 Windows 不支持的名字（`umask`/`allowNonEmpty`/`allowOther`/`defaultPermissions`）一律不发；缓存上限为 0 时**省略键**而不是写 0（rclone 的「未指定」哨兵是 -1）；轮询间隔大于目录缓存时间只**警告**（rclone 收下且不执行，编一个拒绝就是在假称一条不存在的约束）。恢复是**一串记录 + 一个循环**，两者都**故意不需要 WinFsp**（`MountRecordStore` 不存凭据、`AutoMount` **默认关**、`RememberAsync` 从旧记录里把 `AutoMount`/`CreatedUtc` 合并回来，恢复走 `IMountStarter` 而不是真服务）；容量只在挂载那一刻读、之后**固定**，端点不报就**不写该键**；自动重连是**提示 + 按钮**而不是静默后台重挂；缓存是 daemon 级的（`--cache-dir`），包含性判断要挡兄弟前缀。**UNC 的实测答复**：rclone **接受** `\\host\share\…` 并回**Windows 分配的那个盘符**（实测 `\\localhost\nonexistent-share-xyz\mnt` → `{"mountPoint":"Z:"}`），所以状态行报的是**它答复的**那个点、请求的那个只作为「没有采用」出现（`MountStatusLine`）。**C 组与 D 组全部收尾。**见 §2。 |
+| **下一步** | **E 组（联动、设置与诊断，E1–E5）**（§5）。B1 打通了「一条剪贴板行 → `EnqueueCopy` 的五个参数」，B2 把「同名冲突怎么答」抽成上传与粘贴共用的纯规则，B3 又加了一条**读单个对象**的路（`StatAsync` → `CloudItemDetails` 定行 → 代码搭的面板），B4 加了**第一个会对外发出权限的动作**（确认走 `ConfirmShare`、剪贴板走 `CopyLink`，都是接缝），B5 加了**第一个「删掉但还能回来」的动作**（规则全在 `CloudRecycleBin`，移动照 §4 实测的两条腿走，「清空回收站」问的还是 `CloudDeleteSafety` 那**一道**门槛），B6 把键盘接上了**同一批方法**（`CloudBrowserShortcuts.Resolve` 只做路由，新加的 `PromptRename` 是重命名问题的接缝），B7 加了**同一份行集合的第二种画法**（`ApplyBrowserView` 只换 `View`/`ItemTemplate`/`ItemsPanel`，`ItemsSource` 仍是那一份 `_entries`）和**读字节的那条有界路**（`54eb6f5` 的 `ReadAsync` → 13 个具名结果的 `CloudBrowserPreview`，缩略图 converter 只查缓存、拉字节走 `RestartTileRound` 那一轮可取消的）。B8 加了**两条不同的承诺**（`CloudBrowserBookmarks` 一个纯类分别管「收藏的顺序归用户、永不为容量修剪」和「最近访问是应用写的有界队列」，`CloudBrowserBookmarkStore` 落一份**只存地名、一个凭据字段都没有**的 `cloud-bookmarks.json`，窗口那两个下拉与「收藏此目录」按钮读的还是同一批行），并把端点重命名从三份文件扩到**四**份。**B9 加了「按目录走的那一次读取」**（`CloudFolderSize` 定这个按钮叫什么、怎么警告、五种答复各说什么话；哪一行还欠一次统计由 `CloudItemDetails.OffersSize` 决定；读取挂在属性面板**唯一那个动作按钮**上，一块面板**最多只有一个**动作）。**B10 把「请先进入文件夹」那句拒绝换成了整目录拖出**（`CloudFolderDrag` 定「一棵树要么给、要么不给」，`ListTreeAsync` 一次读完整棵树，空目录靠 `CreateDirectories` 才活得到拖放目标，一个手势等不完的继续下载、下完才 reveal；拖动手势本身造不出来，所以 `DragOutAsync` / `DragOutHandoff` / `Reveal` / `DragBudget` / `SurfaceTransfers` 是接缝），**并顺带修掉一个静默取错文件的下载缺陷**（`CloudTransferQueue.DownloadSourceUri`）。样板就此是：**纯函数定规则 + 假 RC 驱动真窗口 + 需要弹窗／对外副作用的决定走接缝 + 需要落点或答案形状才上真 rclone**。⚠️ **B11 的实证结论是「rclone 不暴露版本列表」**：`rc/list` 的**全部 101 个方法**里唯一带 version 的是 `core/version`（rclone 自己的版本号），`operations/versions` / `operations/history` / `backend/versions` 一律 404 `couldn't find method`，`operations/fsinfo` 的 `Features` 没有版本标志，而 `operations/list` 的 `opt` 只是**列表选项**（不是 backend 配置覆盖）—— 所以 `--s3-versions` 这类只能写进 `rclone.conf`，而它会**改写列表的命名空间**，因此不打开。**B11 已按这个结论落成降级**（菜单项「在网页端查看历史版本…」+ `CloudVersionHistory` 纯规则 + `WebConsoleUrl`；完整答复见 §6 第 5 条）。**C 组加了「一次对 daemon 的全局设置」**（`CloudTransferLimits` 定速率/时段的**全部**规则，`CloudTransferPolicy` 是唯一把设置搬到队列上的地方，队列自己负责在批次开始时应用、排空时交还 —— 而没设过限速的队列**一次都不许开口**）；**并把「排队顺序」变成一份真实状态**（`CloudTransferTask.Order` 同时被 `AcquireSlotAsync` 和列表读，`Move`/`Neighbour` 让上移/下移只跟**等待中**的行换位，手加的传输改走 `Start` 从而**回到它自己的批次里**）；**还把「删除一行」升级成「先留档再删」**（`CloudTransferHistoryRepository` + `CloudTransferHistorySummary`，`ClearFinished` 的 `RaiseSummary()` **即使什么都没清也要跑** —— 那是队列唯一的「列表变了，重读我的数字」调用，加一句 `if (count == 0) return` 看着像白捡的优化，实际是静默改契约）。**D 组把「挂载」从一次调用变成一份可恢复的状态**（`MountOptionsSettings` → RC 载荷的键名断言、`MountRecordStore` 的 `mounts.json`、`MountRecovery.Plan` 的三种分支、`IMountStarter` 让恢复循环**不需要驱动**），并且**用解码期拒绝而不是挂载期行为**回答了整个 D 组最要紧的问题：「这个键名是不是真的」。全量门禁 2026-10-05 再跑，`Failed: 0`（**Core 566 / UI 595**，Build 2s / Core 1m6s / UI 2m49s；Core 的 +124 是 `MountOptionsPayloadTests` 14 + `MountOptionKeyFactTests` 15（含 14 条 `[Theory]` 不可读值 + 那条「同一个值换个拼错的键就被收下」）+ `MountRecordStoreTests` 24 + `MountCapacityAndCacheTests` 12 + `MountPointInspectorTests` +4 + `CloudTransferLimitTests` + `RcloneBandwidthFactTests`；UI 的 +50 是 `CloudTransferQueuePolicyTests` 20 + `CloudTransferRowDiagnosticsTests` 30）。 |
+| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；**`operations/stat` 里「校验值」只有把名字列进 `opt.hashTypes` 才会给**，而 `opt.hashes`（位域）与 `opt.HashTypes`（大小写）都被**静默忽略或报错** —— 拼错读起来就跟「这个后端没有校验值」一模一样；**`operations/publiclink` 里多写的字段同样被静默忽略**，而它那句「不支持公开链接」的 500 会被共用分类器读成**临时连接中断**（先读文字再看 category）；重建 WPF 列表会抛一次「无选中」事件（见 §3 的设计要点）；**进程里只能有一个 WPF `Application`，且只有创建它的线程看得见它**（见 §4 的 WPF 表 —— B1 的异步窗口测试就是在这里反复失败的）；**接缝返回 `null` 是「用户取消」，不是「没装接缝」**——用 `??` 兜到真弹窗会在测试里打开一个无人可答的对话框，并且 `Window.Owner` 指向一个从未 `Show()` 过的窗口时直接抛（B2 撞到过一次测试宿主崩溃）；**`operations/movefile` 对已存在的目标名是覆盖**、`sync/move` 落到已存在的目录是**合并并把源留成一个空壳**，而 `operations/rmdir` 打**已不存在**的路径答 HTTP 500、被共用分类器读成 `Temporary`（于是 `RemoveIfEmptyAsync` 先 `stat`，不拿 rmdir 的报错当「目录没有了」）（B5）；**键盘的坑是「两处写」而不是「按不动」**：快捷键一旦自己写一遍拒绝语或确认，就和按钮分岔（B6 的做法是命令只调按钮已有的方法）；`TextBox` 会**自己吃掉** Del 与 Ctrl+A、却**不吃** F2，所以 typing 闸门只对 F2 这类键真正起作用；`Keyboard.Modifiers` 读的是**物理**键盘，合成事件改不了它（见 §4 的 WPF 表）；**网格视图必须 `ClearValue` 复原，不能写 `ItemsPanel = null`** —— 本地 null 让**一行都不呈现**而集合完整，进程内的 `Assert.Null` 会把这个 bug 读成正确（B7）；**桌面场景跑的是 `tests/FengSync.UiTests/bin/` 里那份 `FengSync.exe`**，只建 `src/FengSync` 会让场景**绿在它本该检查的那个改动上**（B7 排查时踩过一次）；**跳转必须「接管」端点，不能只「跟随选中」** —— 跟随会先为目标端点列一次它自己的根，一次跨端点跳转因此打**两**次 `operations/list`（B8 的 `SwitchEndpoint` 直接把那一行采纳成当前端点，并有一条断言数死列表调用的次数）；**收藏文件的路径在 store 构造时就定下来**（`AppDataPaths.Root` 本身每次都认 `FENGSYNC_DATA_DIR`，但一个提前建好的 store 之后不受它影响），所以驱动窗口的测试必须**在建窗口之前**把 `FENGSYNC_DATA_DIR` 换进临时目录并在 `finally` 还原 —— 否则窗口会继续往用户真实的 app data 里写、并在下一次运行读回来；**进程级文件锁里的 await 若回到调用方的调度器，锁就再也解不开** —— 一次没被接应的书签写入能让之后每一条写书签的窗口测试各卡 90 秒（B8 实测：`save held` 之后没有 `save release`；单跑一条又全绿，最容易误判成「别处的 flake」），所以 gate 区间一律 `ConfigureAwait(false)`，并按第 8 条测试的写法「发出写入就退出的线程」去证它真的会 fire；**一份用户选择可以有第三份表示** —— 磁盘上的文件、纯规则类、以及窗口内存里那份列表；B8 唯一的产品缺口（重命名搬对了磁盘那份，窗口却拿旧名字的下一次 listing 把文件写回旧名）就是**只有真实外壳**抓到的，32 + 18 条进程内测试全绿。改动任何一份持久表示时，先问「谁还内存着同一份」；**`operations/size` 要把目录写进 `fs`** —— 这个载荷里的 `remote` 字段**静默忽略**，于是「一个文件夹的大小」实际答回**整个端点**的字节数，而且是个看起来完全正常的数字（B9 用一条**原始 `CallAsync`** 的事实测试钉住，`RcloneRcClient.SizeAsync` 因此根本不接受 `remote` 参数）；**云盘下载的 staging 名是文件的「裸名」而不是它的远端相对路径** —— 于是把源端点挂在**端点根**上就等于让 rclone 去**上一层**找同名对象（实测：`RemotePath` 为 `docs/a.txt` 的任务读了 `[nas:/]/team/a.txt`），而上一层的同名文件存在时它**被取回来并发布成功、一句错都不报**，所以源端点必须根到**文件自己所在的目录**（`CloudTransferQueue.DownloadSourceUri`）；这条坑只在给整目录拖出打探针时才露头，因为那会把树里每一个文件都这样下一遍（B10）；**递归统计没有取消**（`job/stop` 返回 `{}` 而遍历继续，`job/abort`、`core/commands`、`core/list` 是 404），所以关掉面板只能说**不再等**，任何「已停止统计」的说法都是假承诺；**统计数字不缓存** —— 把上一次走树的总数留在内存里，等于宣称知道一个不确定时刻的事实，所以新鲜的面板就该是 未统计 并把按钮再给一遍（B9）；**改桌面场景要改 `tests/` 下那份 `Invoke-UiScenario.ps1`** —— `dotnet test` 每次 build 都把脚本复制进 `bin/`，探针打在 `bin/` 那份上会得到一次**毫无意义的 Passed**（B9 先这样误判过一次，重打源文件才看到那条断言真的会 fail）；**`core/bwlimit` 是全局的，per-fs 写法只会换来一句错**（`nas:1M` → `bad bwlimit: bad suffix 's'`，`:100k`/`100k:` → `empty string`，时间表写法 `08:00,1M 18:00,off` → `need exactly 1 bandwidth setting` —— 那是**另一句话**，别把它读成「格式没写对」）；**`512` 不是 512 字节而是 512Ki、`1048576` 是 1Gi** —— 只有带 `B` 的数字才是字节；**`1M:100k` 是「先上传后下载」**（`bytesPerSecondTx` 才是上传侧），顺序反了不会报错，只会限错方向；**`mount/mount` 的 `mountPoint` 传 UNC 是「接受」而不是「照做」** —— 它回的是 Windows 分配的盘符（`\\localhost\nonexistent-share-xyz\mnt` → `"Z:"`），所以拿请求的路径去说「已挂载到那里」是在描述一个不存在的挂载点；**挂载选项的「键名对不对」可以完全绕开 WinFsp 来证**：真键配不可读的值会在 **JSON 解码期**被拒（`key "vfsOpt": Reshape failed to Unmarshal: …`），同一个值换个拼错的键就被**收下**（这就是 D 组唯一防线的可执行形态，见 §6 第 6 条）；**rclone 的默认值会骗人**：`vfs.cacheMode` 的 `DefaultStr` 是 `off` 而 `cacheMaxSize` 的 `off` 等于 **-1**，所以「写 0」不是「用默认」而是「要一个零字节缓存」—— 上限为 0 必须**省略键**；**`pollInterval` 大于 `dirCacheTime` 是文档规则而不是强制** —— 实测 `PollInterval=600s` 配 `DirCacheTime=60s` 两边原样落地，所以这条只能是**警告**，写成拒绝就是在假称一条 rclone 不执行的约束；**同一挂载点反复挂/卸会留下空目录**，下一次挂载因此答 `failed to mount FUSE fs: mountpoint path already exists`，而 RC 的挂载/卸载是**同步**调用 —— 探针必须 `unmount-all` 并**等 `listmounts` 真的空**再挂下一个；**`vfs/stats` 要 `fs` 参数**（就是 `listmounts` 里那条 `Fs`），有多个挂载时不给就答 `more than one VFS active - need "fs" parameter`、给错就答 `no VFS found with name "…"`；**`ClearFinished` 的 `RaiseSummary()` 是队列唯一的「列表变了」调用** —— 给它加一句「没有已完成任务就 `return 0`」看着像白捡的优化，实际静默改掉了契约，`DriveHubEntryPointTests` 就是靠它驱动进度条的（C 组自己踩到过）。 |
 
 ---
 
@@ -88,6 +88,25 @@ UI 的 +22 = `CloudBrowserDetailsTests` 9 条真窗口 + `CloudFeatureBehaviorTe
 **B11 收尾再跑：`Failed: 0`，Core 442 / UI 545**（Build 4s / Core 23s / UI 2m50s）—— Core 与 B10 **一字不差**（B11 只动 UI 侧），
 UI 的 +15 = `CloudVersionHistoryTests` 11 条纯规则 + `CloudBrowserDetailsTests` 4 条真窗口。这一轮**没有**再撞上孤儿 daemon；
 「前台调用被工具自动转成后台」这个形状又出现了一次（这次是真跑完了），所以照旧**以 UiTests 那行的 `Passed!` 为准**再读日志。
+**C 组 + D 组收尾：`Failed: 0`，Core 566 / UI 595**（Build 2s / Core 1m6s / UI 2m49s）—— Core 的 +124 与 UI 的 +50 见 §0 的「下一步」那一格。
+⚠️ **这一轮把 §1 ① 里那条老坑又踩了一次，而且踩得更清楚**：第一次全量门禁（Core 566 / UI 595）在 **UI 阶段红了一条**
+`DriveHubEntryPointTests.The_cloud_manager_window_uses_the_installed_shell_services_instead_of_App`（`Expected: 40 / Actual: 0`），
+根因是 C 组给 `ClearFinished` 加的 `if (finished.Count == 0) return 0;` —— 那句看着像白捡的优化，实际把
+`RaiseSummary()`（队列唯一的「列表变了，重读我的数字」调用）也一起砍掉了，而这条**既有**测试正是靠它驱动进度条的。
+修法是**去掉早退**（并在 `CloudTransferQueuePolicyTests` 里补一条断言把这个契约钉住），不是改测试。**探针不必重打**：
+这条 fail 自带 `Expected/Actual`，一眼就能读成「产品改了契约」。
+⚠️ **这一轮还把这个「shell 不放」的形状连撞了三次**（§1 ① 里记着它的两种成因，这次两种都出现了）：
+① 第一次后台跑，日志里 `Failed!` 与三段摘要**早就打完了**，shell 却显示 running **18m30s** ——
+   `Get-CimInstance Win32_Process` 查到两个 `rclone.exe`：一个是 §6 探测留下的
+   `rclone rcd --rc-user=u --rc-pass=p --log-file=C:/Users/feng/fs-probe/rcd.log`（**探测自己没收拾干净**），
+   一个是 UiTests 那份 `bin/.../Assets/rclone/rclone.exe rcd --use-json-log … --rc-serve`（测试 daemon 泄漏）。
+② 修完那条 fail 之后连着两次：一次**后台 shell 在 UI 阶段跑到一半自己死了**（日志停在「匹配到一个测试文件」之后、
+   没有任何汇总行 —— §1 ① 记的就是这个形状），一次**前台跑被工具自动转成后台**（跑满了 600 s）。
+   后者的日志**其实是完整的**（`Passed! - Failed: 0` 两行都在、`=== Test summary ===` 三段全 Passed），
+   只是收尾又漏了一个 `rclone rcd … --rc-addr 127.0.0.1:65270` 握着管道。
+**规则（写进 §7）**：看到「日志已完整但任务还 running / failed」，先 `Get-CimInstance Win32_Process -Filter "Name='rclone.exe'"`
+读**命令行**再动手 —— 命令行里**有** `mount` 子命令的是用户的挂载，**不要**杀；只有 `rcd …` 的才是本进程的。
+**最终读数以 `=== Test summary ===` 三段全 `Passed` 与两行 `Passed!  - Failed: 0` 为准。**
 
 - 约 **3m30s**（UI 阶段占大头）。调用工具时**超时必须给 600000ms**，否则会被掐断在半路。
 - 判定标准：日志里出现 **`Passed!  - Failed: 0` 汇总行**。只看日志尾部会误判 —— 被超时掐断时日志正好停在
@@ -103,7 +122,7 @@ UI 的 +15 = `CloudVersionHistoryTests` 11 条纯规则 + `CloudBrowserDetailsTe
   结束前一个字都不落盘，看着像卡死。写成 `> "$TEMP/x.log" 2>&1` 再 `tail`。B1 用的过滤器
   `--filter "FullyQualifiedName~CloudBrowserPaste|FullyQualifiedName~CloudTransferWindowBehavior"`（19 条）**1 秒**跑完。
 
-### ② A7、B0、B1、B2、B3、B4、B5、B6、B7、B8、B9、B10、B11 已实现并提交 ✅
+### ② A7、B0–B11、C1–C7、D1–D6 已实现并提交 ✅
 
 A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）。A1 的桌面场景缺口在进 B 组前补上
 （`fd12512`，见 §3 遗留缺口）。B0 队列泛化同样三层：`af6fc4c` feat / `85160a9` test / `6be98b9` docs
@@ -131,7 +150,15 @@ A7 按 `feat`/`test`/`docs` 三层提交（`60733ae` / `d58cd4a` / `344d3cd`）�
 **B9 文件夹大小**照旧三层：`57007b3` feat（Core 的 `SizeAsync` + `RcloneFolderSize`、`CloudFolderSize`、`CloudItemDetails` 的 offer 规则、
 面板的唯一动作按钮、窗口的读取接缝）/ `f172bd7` test（Core 7 条事实 + UI 9 条真窗口 + 13 条纯规则 + `sftp-ui` 那一段）/
 `6ace64e` docs（AGENTS.md 的不变式 + 本文件）。本节的这条 hash 行与 §2 表末行是 `6ace64e` 之后回填的。
-**A 组 + B0 + B1 + B2 + B3 + B4 + B5 + B6 + B7 + B8 + B9 至此收尾。**
+**C 组 + D 组**照旧三层：`c5ef1e3` feat / `b767f90` test / `CD_DOCS_HASH` docs
+（本节的这条 hash 行与 §2 两节标题里的 hash 是最后那条 docs 之后回填的）。
+⚠️ **feat 只有一条，不是两条** —— C 组与 D 组**共用五个文件**：`ApplicationSettings`、`ConfigurationValidator`
+（限速/时段/完成后动作与挂载缓存上限在同一处）、`App.xaml.cs` 与 `DriveHub/App.xaml.cs`（同一个 `OnStartup`
+里既接线传输队列的归档、又接线挂载恢复）、`SettingsWindow.xaml.cs`（同一页里既有「传输速率与时段」又有「挂载」）。
+把它们按批切开需要逐 hunk 手术，而**一条说真话的 feat 比一次假装干净但消息与内容不符的拆分**更好；test 同样一条，
+docs 一条同时收 `AGENTS.md` 与本文。
+**A 组 + B0–B11 + C1–C7 + D1–D6 至此收尾。**
+**剩下 E 组（联动、设置与诊断，E1–E5）**（§5）。
 
 ### ③ 提交粒度（一直照这个走）
 
@@ -964,6 +991,135 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 
 ---
 
+### C1–C7 —— 传输队列（**已提交**：`c5ef1e3` feat / `b767f90` test / `CD_DOCS_HASH` docs）
+
+- **C1 限速 —— 先实证作用域，答案是「全局」**（§6 第 6 条）。`core/bwlimit` **没有** `fs` 参数：
+  per-remote 写法 `nas:1M` 被拒（`bad bwlimit: bad suffix 's'`），`:100k` 与 `100k:` 被拒（`bad bwlimit: empty string`），
+  负数被拒，而**时间表写法** `08:00,1M 18:00,off` 答的是**另一句话**（`need exactly 1 bandwidth setting`）——
+  把它读成「格式没写对」就错过了「这条路本来就不存在」。多发的 `fs` 字段被**静默忽略**，限速照旧是全局的。
+  所以限速是 **daemon 的属性**而不是某个端点的属性：`CloudTransferLimit`（纯）是**唯一的拼法**，`Rate(upload, download)`
+  保证每个数字都带 `B`（裸数字不是字节 —— `512` 是 512Ki、`1048576` 是 1Gi）、两侧顺序是 `upload:download`
+  （`1M:100k` 实测 `bytesPerSecondTx=1048576` / `bytesPerSecondRx=102400`，反了不报错只限错方向）、`off` 读回 -1。
+  `CloudTransferPolicy.Apply` 是唯一把设置搬到队列上的地方（并发、重试、限速、时段），队列自己负责
+  **批次开始时应用、排空时交还**；`EnsureLimitAppliedAsync` 还多一条：**从没设过限速的队列一个字节都不许推** ——
+  `"off"` 本身也是一次对 daemon 的写，默认安装从来不做这件事（这条是这一批**自己抓出来的**：第一版给每个默认安装多发了一次 `off`）。
+- **C2 优先级 —— 排序就是「列表画出来的那个顺序」**。`CloudTransferTask.Order` 同时被 `AcquireSlotAsync`（取槽）
+  和列表（画行）读，所以 `Move` 必须**同时**换 `Order` 和 `Tasks` 里的位置：只换一个，要么列表宣称一个队列不用的顺序，
+  要么队列跑的是用户已经挪下去的那一行。`Neighbour` 只跟**等待中（Pending）**的行换位 —— 用户想插到谁前面，
+  指的是下一个**还没开始**的行，而不是恰好画在上面那一行。`Enqueue` 也因此**改走 `Start`**：
+  `Start` 才是做 `lock (_batchGate) _batchIds.Add(task.Id)` 的地方，而原先 `Enqueue` 直接 `_ = RunAsync(task)`
+  绕过它，于是**手加的传输不属于任何批次**，`BatchCompleted`（以及限速交还、完成后动作）**对它永远不触发** ——
+  这是这一批修掉的一个**既有真 bug**，不是新功能。
+- **C3 传输历史 —— 删之前先留档**。`ClearFinished` 先把要删的行写进 `CloudTransferHistoryRepository`
+  （照 `RunHistoryRepository`：append-only、最新在前、有上限 500、按路径上写锁、`ConfigureAwait(false)`、
+  坏/空/缺失文件一律读成空历史）**再**删行；归档写入**不 await**，因为那是一件已经发生过的事情的记录，
+  写不进去不该让行卡在屏幕上。存在的理由很具体：队列的 journal 在任务成功那一刻就把条目删了，
+  所以「清除已完成」曾经是这个文件**唯一**的去处 —— 清完就没有任何痕迹证明文件被搬走过。
+  `CloudTransferHistorySummary` 是措辞规则（成功/失败分开数、`Attempt > 1` 才提「第 N 次尝试」）。
+  ⚠️ **`ClearFinished` 的 `RaiseSummary()` 是契约，不是顺手**：它是队列唯一的「列表变了，重读我的数字」调用，
+  两个调用方（窗口的 清除已完成、`DriveHubEntryPointTests`）都靠它。给它加一句 `if (finished.Count == 0) return 0;`
+  看着像白捡的优化，实际把契约静默改掉 —— 这一批就踩到了，修法是**去掉早退**并在
+  `CloudTransferQueuePolicyTests` 里补一条断言钉住，而不是改那条既有测试。
+- **C4 失败诊断 —— 复用队列本来就有、但从没显示过的东西**。journal 从队列写出来那天起就带着
+  `ErrorDetail`（操作、分类、HTTP/RC 状态、诊断 ID），而没有任何界面读过它。`CloudTransferDiagnostics.DetailFor`
+  的第一行**必须**先说清「这是什么任务」（方向、路径、状态、尝试次数、错误）—— 一份没有主语、只有一段堆栈的诊断
+  用户没法把它附到任何东西上。`ReadLog` 读的是 `RcloneFailureLog` 真写的那个文件（每天一个 JSONL、已脱敏），
+  并且**把「文件不在」与「日志是空的」分成两句不同的话**，因为「这里什么都没有」和「我没看成」是两个不同的答复、
+  只有第二个是用户能行动的；读不懂的行**原样透出**而不是丢掉。`CloudTransferRowMenu` 把这些做成规则而不是事件处理器：
+  每个菜单项要么**可用且没有理由**，要么**不可用且给出理由** —— 一个灰掉却不解释的项就是用户报的「点了没反应」。
+- **C5 计划传输 —— 队列自己停，不是系统调度器**。`CloudTransferTimeWindow` 半开区间、跨午夜、等值端点 = 整天；
+  `Contains`/`DelayUntilOpen`/`Describe` 都在一个纯类里。窗口外到达的任务**等待**，而唤醒它的是**队列自己的一次性定时器**
+  （测试因此不能显式调 `EvaluateSchedule()`，否则证明的是测试在推而不是队列会醒）。等值端点**故意不在 `Parse` 里拒**
+  —— 一个谁也进不去的窗口是配置问题，`ConfigurationValidator` 才是能把它说清楚的地方，`Parse` 再判一次就多了一份判断。
+  停在哪里的证据是那句 `等待传输时段 22:00–06:00`，因为那是用户唯一看得见的东西。
+- **C6 完成后动作 —— 只在整个批次全部成功时执行，且每次都问**。`CloudPostTransferAction` 的闸门是
+  `Action != None && Total > 0 && Completed == Total`：**半个批次失败时关机就是把唯一一次看清问题的机会拿走**，
+  这条规则比便利重要。它**归传输窗所有**而不是归应用：确认必须有人能答，一个应用级实例在没窗口时触发，
+  要么永远阻塞、要么更糟 —— 未经确认就执行；**没装 `Confirm` 接缝就什么都不做**。关机那句会说出 `shutdown /a`，
+  因为「还能叫停的关机」和「不能叫停的关机」是两件很不一样的事（`PerformDefault` 也用 `shutdown /s /t 60`，
+  留一分钟给人敲那行命令）。
+- **C7 队列右键菜单 —— 复用 B4 已经落好的两个接缝**。「打开所在文件夹」开的是 Explorer 为**同一个文件**会开的那一层
+  （`LocalFolderOf` 取 `LocalPath` 的目录；复制任务**没有**本地目录，因为字节由 rclone 在两端之间移动、本机不落盘 ——
+  这一条要**明说**）；「复制分享链接」复用 `CloudShareLinks` 与 B4 的 `PublicLinkAsync`，**没有**在 C 组再摸一次系统剪贴板。
+  传输还在 Pending/Running 时不给链接并**说清是两种状态里的哪一种**（云端可能根本还没有这个对象）。
+- 测试：**Core 侧 0 条**（C 组的规则全是 UI 侧的服务与窗口）＋**UI 50 条** —— `CloudTransferQueuePolicyTests` 20
+  （顺序/`MoveUp`/`CanMove*`/非等待行被拒；**队列真按列表显示的顺序跑**（用 `Concurrency = 1` + 一个 hold 住的假 RC 钉死，
+  断言 `["a.bin","c.bin","b.bin"]`）；限速先推 `1048576B:off` 再推 `off`；**没设过限速就零次推送**；
+  推失败 → `LimitError` 且传输照常完成；窗口停住并**由队列自己的一次性唤醒**开工；整天窗口不停；
+  `ClearFinished` 先归档 / 失败行留下 / 没有归档也能用 / **什么都没清也照样刷新**；归档往返、最新在前 + 上限、坏/空/旧 JSON；
+  `CloudTransferPolicy.Apply`）＋ `CloudTransferRowDiagnosticsTests` 30（行菜单的可用性与理由、`DetailFor` 的形状、
+  `DescribeCopy`、`LogPath` 按 **UTC** 定日期、`ReadLog` 缺失/空/渲染/原样透出坏行/尾部截断、归档总结与行的措辞、
+  以及完成后动作的全部闸门：`None` 什么都不做 / **半失败的批次只报告不执行** / 拒绝要报告 / 没有 `Confirm` 就什么都不做 /
+  空批次不算理由 / 确认后执行恰好一次且不额外公告 / `Dispose`）。
+- ⚠️ **本批没有证明的事**：① **限速对真实慢后端的实际效果没测过** —— 只证明了「推给 rclone 的字符串对、顺序对、
+  `off` 读回 -1」；② **完成后动作的 `PerformDefault` 三个分支（退出/休眠/关机）一次都没真的执行过**
+  （测试走的是 `Perform` 接缝），所以「`shutdown /s /t 60` 真的会关」这一步只有代码在担保；
+  ③ **传输时段跨午夜的真实长跑没测**（只测了纯规则与一次性唤醒）。
+
+### D1–D6 —— 挂载（**已提交**：`c5ef1e3` feat / `b767f90` test / `CD_DOCS_HASH` docs）
+
+- **D 组唯一的防线是键名，而这一批找到了一个不需要 WinFsp 就能验它的判别器**（§6 第 4 条）。
+  rclone 对认不出的键**静默忽略**：一次点名 `cacheModee` / `CacheMaxSizee` / `diskSpaceTotal` 的请求**挂载成功**，
+  而 `vfs/stats.opt` 停在默认值上 —— 没有错误、没有警告。**实测的判别器**：**真键配一个不可读的值会在 JSON 解码期被拒**
+  （`key "vfsOpt": Reshape failed to Unmarshal: …`），而**同一个值换个拼错的键就被收下**。
+  拒绝发生在**任何挂载之前**，所以「这个键名是真的」与「拼错是静的」两条能在一个**没有挂载驱动**的门禁里同时断言 ——
+  这比「挂载完再读回 `vfs/stats.opt`」强，因为后者需要 WinFsp。`MountOptionKeyFactTests` 就用这个：
+  应用发出去的每个名字都必须出现在 `options/info` 自己那份 `FieldName` 集合里。
+- **两个块不能互换**：`read_only` 的 `FieldName` 是 **`ReadOnly`**（不是 `ReadOnlyd`）且属于 **`vfsOpt`**；
+  `volumeName`/`networkMode` 属于 **`mountOpt`**。`Umask`/`AllowNonEmpty`/`AllowOther`/`DefaultPermissions`
+  的帮助文本写着 **"not supported on Windows"**，所以**一律不发**（测试断言的正是「不发的恰好是帮助文本说 Windows 不支持的那四个」）。
+- **D1 高级选项 —— 默认值会骗人**。`MountOptionsSettings` 是一个全 nullable 的覆盖记录，`IsDefault` 决定
+  「跟历史载荷一模一样」；`MountOptions.CreateVfsOptions(settings)` + 新增的 `CreateMountOptions(settings)` 各自成块。
+  两个坑：① `vfs.cacheMode` 的 `DefaultStr` 是 **`off`**，而 `cacheMaxSize` 的 `off` 等于 **-1** —— 所以「写 0」
+  不是「用默认」而是「要一个零字节缓存」，上限为 0 必须**省略键**（`if (cacheMaxSize > 0) options["CacheMaxSize"] = …`）；
+  ② 轮询间隔大于目录缓存时间是**文档规则而不是强制** —— 实测 `PollInterval=600s` 配 `DirCacheTime=60s` 两边原样落地，
+  所以 `MountOptions.Warnings` 只给**警告**。**没有任何选项的挂载必须继续发出历史载荷**，一个字都不变。
+- **D1b `MountTarget` 不动**：它是 picker 构造、被四个既有测试断言的 record，加宽它为省一个参数要动四处。
+  新增 `MountRequest(MountTarget Target, MountOptionsSettings? Options = null)` 包一层，`MountAsync(MountRequest)` 是新重载，
+  旧签名转发。这一条从计划的「建议」变成了实际落法，因为它确实零波及。
+- **D2 开机自动挂载 —— 默认只提示，`AutoMount` 默认关**。`MountRecordStore` 写 `AppDataPaths.Root/mounts.json`
+  （`RemoteName`/`Provider`/`MountPoint`/`Kind`/`RootPath`/`Options`/`AutoMount`/`CreatedUtc`，**一个凭据字段都没有**，
+  测试连「文件里不出现任何禁用词」都断言了）。默认关的理由是三条同时成立：自动挂载拖慢启动、WinFsp 可能没装、
+  网络可能不通 —— 而静默失败比一次提示更难排查。`RememberAsync` 会从**已有记录**里把 `AutoMount` 与 `CreatedUtc`
+  合并回来：一次重挂（先卸后挂）否则会把用户选过的自动挂载悄悄关掉，那正是**任何调用方都不该有机会忘掉**的事，
+  所以它被压进 store 而不是留给调用方。
+- **恢复流程故意不需要 WinFsp**：`MountRestore.RunAsync(IMountStarter, plan, automaticOnly, ct)` 走的是
+  **`IMountStarter` 而不是 `RcloneMountService`** —— 一个真服务在挂任何东西之前都要求驱动存在，而这里值得钉住的
+  只是**循环里的决定**（一条失败时其余的怎么办、`automaticOnly` 只挑标了自动的那些）。`MountRecovery.Plan` 出三种分支
+  （活的跳过 / WinFsp 没装 / 标为自动），`MountRestoreOutcome.Describe()` 说清恢复了几个、哪几个没成。
+  钩子挂在 `App.OnStartup` 与 DriveHub 入口**两处** —— 两个 exe 各自独立 daemon，都要能恢复。
+- **D3 真实容量 —— 只在挂载那一刻读，之后固定**。`MountCapacity.TotalBytes` 只认答复里**真的存在且为正**的 `total`
+  （rclone 的「未指定」哨兵是 -1，写 0 会让 Windows 画一个满盘）；端点不报就**不写该键**。局限写进 UI 的两处措辞：
+  `DescribeUpcoming()` 是挂载**之前**的承诺，`Describe(total)` 是拿到数字/拿不到数字的两种答复。
+- **D4 自动重连 —— 提示 + 按钮，不是静默后台重挂**。`MountReconnect.NeedsReconnect` 只挑**本程序创建**且已经不健康的挂载
+  （`MountOrigin.FengSyncManaged` + 不可用），外部挂载一律不碰；`ReconnectMount_Click` 用
+  `UnmountAsync(info, forget: false)` —— **卸载但不忘记**，否则重挂的第一步就把记录删了，恢复能力当场消失。
+- **D5 缓存管理 —— 缓存是 daemon 级的**（见 §4 那条 `--cache-dir`）：`MountCacheInspector.Measure` 统计占用、
+  `Clear` 清理，而它的**包含性判断要挡兄弟前缀**（`cache` 不许认领 `cache-old`）。`CacheMaxSizeBytes` 从写死的 10GB
+  变成可配，配合 D1 的「0 省略键」。
+- **D6 UNC —— 先实证，答复是「接受，但不照做」**（§6 第 4 条）。`mount/mount` 传
+  `mountPoint: "\\localhost\nonexistent-share-xyz\mnt"` **成功**，答复是 `{"mountPoint": "Z:"}`；传 `*` 答复 `"Y:"`。
+  所以一个 UNC 请求**不会**产生它请求的那个路径 —— Windows 分配盘符。产品后果只有一个，但它必须说出来：
+  `MountStatusLine.Describe` 报的是 **rclone 答复的那个点**，请求的那个只作为「请求的是 …，Windows 改用了 …」出现
+  （完全相同、忽略大小写时才是干净的那句）。这条规则**故意放在 Core 的纯类里而不是窗口里**，因为它是 D6 唯一可见的后果，
+  而窗口里的 private 方法没有测试能碰到。`MountPickerDialog` 因此有第三个模式页签（盘符 / 目录 / 网络共享），
+  而 `MountPointInspector` 对 UNC 只做形状校验 —— **一个已被占用的挂载点不构成拒绝网络共享的理由**
+  （Windows 会分配一个新盘符，不会去用那个被占的）。
+- 测试：**Core 124 条** —— `MountOptionsPayloadTests` 14（历史载荷一字不变、空 `mountOpt`、每个覆盖落在正确的块、
+  `ReadOnly` 在 `vfsOpt` 而不是 `mountOpt`、0 上限被省略、未设的大小永不写 0、空卷标被丢掉、四个 Windows 不支持的名字永不发送、
+  缓存模式词表、`Seconds` 格式、轮询间隔警告）＋ `MountOptionKeyFactTests` 15（**真 rclone**：每个发出的名字都在
+  `options/info` 自己的 `FieldName` 集合里；14 组不可读值被 `Reshape failed to Unmarshal` 点名块拒绝；
+  **同一个值换个拼错的键就被收下** —— 静默忽略的证明；不发的四个恰好是帮助文本写「not supported on Windows」的那四个）
+  ＋ `MountRecordStoreTests` 24（往返含 options、**JSON 里没有凭据字段也没有禁用词**、大小写不敏感 upsert/remove、
+  `RememberAsync` 保住 `AutoMount` + `CreatedUtc`、坏/缺/空文件读成空、`MountRecovery.Plan` 三种分支、
+  `DescribePending`/`DescribeOutcome` 不过度声称、`MountRestore.RunAsync` 的 0/部分/全失败/带选项/仅自动）
+  ＋ `MountCapacityAndCacheTests` 12（`TotalBytes` 只认真正存在的正数、两种 `Describe` + `DescribeUpcoming`、
+  缓存测量/清理/兄弟前缀守卫、缓存那行措辞、`MountReconnect.NeedsReconnect` 只挑自己的不健康挂载、`Describe`/`Explain`、
+  **`MountStatusLine` 的答复点与容量只在有时才提**）＋ `MountPointInspectorTests` +4（UNC 形状校验、路由、
+  被占用的点不挡网络共享）；**UI 0 条**（D 组的规则全在 Core，窗口只接线）。
+
+---
+
 ## 3. A3/A4 的设计要点与遗留缺口
 
 代码已提交，文件与测试清单见 §2 的 A3+A4。这里只留**日后改这块必须知道的三件事**和**一处尚未补的缺口**。
@@ -1045,6 +1201,17 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | 本机计时：30 万对象 **0.48 s**；`C:\Windows` 的 **205,034 对象 / 49,688,615,745 字节 12.4 s**，且走树期间 daemon 照常应答其他调用 | 「一次点击只问一屏」够用的**唯一**依据是本地数字 —— 慢后端要等多久**没测**（见 §2 的 B9 那条「没有证明」），所以按钮必须带着代价说明、并且**绝不缓存**结果 |
 | **递归列表**（`operations/list` + `opt.recurse:true`）的每条路径**已经是相对 remote 根**的（问 `top` 答 `top/sub/b.txt`，带着被浏览的那一段），**被浏览的目录自己不在列表里**；目录带 `IsDir`，目录的 `Size` 恒为 `0`；缺失目录是 404 那句原话而不是空列表 | B10 的地基：镜像的本地路径只能由**端点相对路径**拼出来，把被浏览的前缀再拼一次会把整棵树多嵌一层（`…\cloud-cache\nas\docs\docs\…`）—— B10 第一版五条窗口测试全红就是这个原因（`RcloneRecursiveListFactTests` 10 条，含一条**原始 `CallAsync`** 钉住「路径里带着被浏览的前缀」） |
 | **下载的 staging 名是文件的「裸名」**（目标目录下的 `<name>.fengsync.partial`），所以下载的**源端点必须根到文件自己所在的目录** | B10 修掉的**静默取错文件**缺陷：源端点挂在端点根上时，`RemotePath` 为 `docs/a.txt` 的任务去读了 `[nas:/]/team/a.txt` —— **上一层目录**的同名对象；那个对象存在时它被取回来并**发布成功、一句错都不报**。所以 `CloudTransferQueue.DownloadSourceUri` 是这条唯一的规定动作（`CloudDownloadPathFactTests` 在 alias 根上放一个同名诱饵钉住） |
+| **`core/bwlimit` 是全局的，没有 `fs` 参数**：`{fs:"nas:",rate:"1M"}` 照常成功且限速全局生效；per-remote 写法 `nas:1M` → 500 `bad bwlimit: bad suffix 's'`；`:100k` 与 `100k:` → 500 `bad bwlimit: empty string`；`-1` → 500 `bad bwlimit: size can't be negative`；`abc` → 500 `bad bwlimit: bad suffix 'c'` | C1 的地基：限速是 **daemon 的属性**，不是端点的属性 —— 所以队列只能「应用一次、排空时交还」，而不能按 remote 各设一份（`RcloneBandwidthFactTests`） |
+| **`--bwlimit` 的时间表写法走的是另一条路**：`08:00,1M 18:00,off` 答 500 **`need exactly 1 bandwidth setting`** | 那不是「格式写错了」，是**这条路不存在**（RC 的 `core/bwlimit` 只吃一个速率）。把它读成格式错会让人一直试下去；C5 的时段因此是**队列自己停**，不是把时间表交给 rclone |
+| **裸数字不是字节**：`512` → 512Ki、`1048576` → 1Gi；只有带 `B` 的才是字节；`1.5M` 被接受 | `CloudTransferLimit.Rate` 因此**永远**给数字加 `B` 后缀。一个「1024 想表达 1KB」的调用会静默限成 1MiB/s，差三个数量级 |
+| **`1M:100k` 是「先上传后下载」**：`bytesPerSecondTx=1048576`、`bytesPerSecondRx=102400`；`off` 两侧都读回 **-1** | 两侧写反不会报错，只会限错方向（用户以为限了上传、其实限了下载）。所以参数名是 `Rate(upload, download)` 而不是两个 `string` |
+| **`mount/mount` 的 `mountPoint` 传 UNC 会「接受」但不会「照做」**：`mountPoint: "\\localhost\nonexistent-share-xyz\mnt"` **成功**并答 `{"mountPoint": "Z:"}`；传 `*` 答 `"Y:"` | D6 的答复，也是 §6 第 4 条：请求的路径**不是**最终存在的挂载点，Windows 分配盘符。所以状态行必须报**答复的那个点**（`MountStatusLine`），而 picker 的 UNC 页签校验只做形状、不因挂载点被占而拒绝 |
+| **挂载选项的「键名对不对」有一个不需要 WinFsp 的判别器**：真键配一个不可读的值 → 请求在 **JSON 解码期**被拒（`key "vfsOpt": Reshape failed to Unmarshal: …`，`mount/mount` 根本不会开始挂）；**同一个值换个拼错的键 → 被收下**（`cacheModee` / `CacheMaxSizee` / `diskSpaceTotal` 都挂载成功而 `vfs/stats.opt` 停在默认值） | D 组唯一防线的**可执行形态**：拒绝发生在任何挂载之前，所以「名字是真的」与「拼错是静的」两条能在一个没有挂载驱动的门禁里同时断言（`MountOptionKeyFactTests` 14 组不可读值 + 一条反证）。比「挂载后读回 `vfs/stats.opt`」强，因为后者需要驱动 |
+| `options/info` 的分组是 `dlna/filter/ftp/http/log/main/mount/proxy/rc/restic/s3/sftp/vfs/webdav`，条目带 `Name`（CLI 写法）/ **`FieldName`（PascalCase，也就是嵌套块里的拼法）**/`Type`/`Default`/`DefaultStr`/`Help`；`vfs` 33 条、`mount` 22 条 | 应用发出的每个键名都能对回 `options/info` 的 `FieldName`，这就是 `MountOptionKeyFactTests` 的第一条断言。`read_only` 的 `FieldName` 是 **`ReadOnly`**（不是 `ReadOnlyd`）且属于 **`vfs`**；`volumeName`/`networkMode` 属于 **`mount`**；`Umask`/`AllowNonEmpty`/`AllowOther`/`DefaultPermissions` 的 `Help` 写着 **"not supported on Windows"** |
+| **rclone 的默认值会骗人**：`vfs.cacheMode` 的 `DefaultStr` 是 **`off`**，而 `cacheMaxSize` 的 `off` 等于 **-1**（"unspecified"）；`cacheMaxAge` 1h、`writeBack` 5s、`dirCacheTime` 5m、`pollInterval` 1m | 「写 0」不是「用默认」，而是「要一个零字节缓存」→ 上限为 0 必须**省略键**。而 `pollInterval` 的 Help 写着 "must be smaller than dir-cache-time" |
+| **`pollInterval > dirCacheTime` 是文档规则而不是强制**：`PollInterval=600s` 配 `DirCacheTime=60s` 被**原样收下**、两边都落在 `vfs/stats.opt` 里 | 所以这条只能是**警告**（`MountOptions.Warnings`）。把它写成拒绝就是在假称一条 rclone 根本不执行的约束 —— 那种「更严格」看着安全，实际是在阻止用户做一件 rclone 允许的事 |
+| **同一挂载点反复挂/卸会留下那个空目录**，下一次挂载因此答 `failed to mount FUSE fs: mountpoint path already exists`；而 `mount/mount` 与 `mount/unmount` 都是**同步**调用 | 探针必须 `unmount-all` 并**等 `listmounts` 真的空**再挂下一个（本轮为这个写了 `probe3.py` 的 `reset()`：`unmount-all` → 等空 → `rmtree` 挂载点）。应用侧同理：`MountPointInspector` 不许把「目录已存在」当成「可以挂」 |
+| `vfs/stats` 要 `fs` 参数（就是 `listmounts` 里那条 `Fs` 字符串）：有多个挂载时不给就答 `more than one VFS active - need "fs" parameter`，给错就答 `no VFS found with name "…"` | 读回 `vfs/stats.opt` 之前必须先 `listmounts` 拿 `Fs`；本轮有两次误读都是没带 `fs` |
 
 ### WPF / 测试
 
@@ -1079,12 +1246,15 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 | **进程级文件锁里的 await 默认回到调用方的 `DispatcherSynchronizationContext`**：那个线程一旦停止 pumping，`finally { Gate.Release(); }` 就永远不跑，锁**再也没人解**（实测：`save held` 之后没有 `save release`，后面每条会写书签的窗口测试各卡 90 秒） | `CloudBrowserBookmarkStore` 的 gate 区间因此全部 `ConfigureAwait(false)`（`CloudThumbnailStore` 同规则），并由 `A_write_whose_thread_stopped_pumping_still_frees_the_file_for_the_next_reader` 钉住 —— 撤掉其中一处立刻 fail（10 秒内，不是挂死）。**同一形状未改**：`CloudEndpointMetadataStore` / `CloudEndpointRename` / `Filtering` 的写锁，因为没有测试能证明它们卡住。生产侧的对应风险是「应用正在关闭时的一次写入」与「任何在 UI 线程上 block 的调用」 |
 | **`FileBrowser_KeyDown` 的 `e.Handled = true` 写在 `await HandleKeyAsync(...)` 之后**，所以 raise-event 之后**同步**读 `args.Handled` 读到的一定是 `false` | B6 的 F2 断言原来靠 `WaitUntil(FileMoves == 1)` 顺手等完剩下的轮次，B8 给 listing 末尾多加一次书签写入就把它打回红（断言踩在时序上，不是产品坏）。规则：**断言「按键被认领」必须等命令整体跑完**（`WaitUntil(() => args.Handled, …)`），而断言「没被认领」可以同步读 |
 | **一份用户选择可以有第三份表示：磁盘上的文件、纯规则类、以及窗口内存里那份列表**。前两份有测试，第三份只在真实外壳里暴露 | B8 的 `sftp-ui` fail 就是这么来的：`RenameRemoteAsync` 改对了磁盘那份，而窗口仍然拿着旧名字，紧随其后的那次 listing 记一次访问、把文件写回旧端点名，重命名原地作废（修法是重命名后**先重读再刷新**）。教训不是「再补一条单测」，而是**任何改动一份持久表示的写路径，都要问谁还内存着同一份**；进程内的动作测试（"这次调用改了什么"）结构上看不见它，只有走完整状态的场景看得见。**未堵**：同一进程里第二个已打开的窗口照旧会拿自己的旧副本覆写 |
+| **`UiConsistencyGuardrailTests` 的「符号字形」清单包含 `UnicodeCategory.MathSymbol`，而 `=` 就是 MathSymbol** | 一个 `Text="… 留空 = 沿用默认 …"` 的标签会 fail（`Text or Content contains a symbol glyph that is not in the temporary migration inventory`）。**中文里的等号要用「填 0 表示不限」这种说法绕开**，或者把那个用法登记进 `ApprovedSymbolUses`。C 组这一批撞到过一次（`MountPickerDialog.xaml` 的缓存上限那行），改成文字表述即可 —— 别急着往 allowlist 里加，那条清单是**迁移清单**不是白名单 |
 
 ---
 
 ## 5. 剩余路线图（B1 → E）
 
-> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0–B11 已完成**（见 §2），本节的 A5/A6/A7/B0/B1 只留设计与规则的留档。
+> 这一节同时是那份 307 行改进计划的替代。**A0–A7、B0–B11、C1–C7、D1–D6 已完成**（见 §2），
+> 本节的 A5/A6/A7/B0/B1/C1–C7/D1–D6 只留设计与规则的留档（每条上面都标了「✅ 已完成」与实际做法的差别）。
+> **只剩 E 组（E1–E5）**。
 > **剩余项的顺序与依赖**：B 与 C 共享「队列泛化」，所以 **B0 必须在 B 的跨端点复制之前落**（已落）；
 > D 与 A/B/C 完全解耦；E 是收尾集成。**B 组就此全部完成，下一批是 C 组（C1–C7，见 §2 之后那张表）。**
 
@@ -1181,6 +1351,13 @@ B 组还有一条**只在这里出现**的约束：**并发数从 `const` 改为
 
 ### C1–C7. 传输队列
 
+✅ **C1–C7 全部完成**（`C_FEAT_HASH` + `C_TEST_HASH`，见 §2 的 C 组小节）。下表是当初的计划，逐条都照此落了 ——
+与计划的差别只有三处，且都是实证逼出来的：**C1 的作用域实测是「全局」**（所以限速是 daemon 的属性，
+队列负责应用与交还，而不是按 remote 各设一份）；**C2 的 `Order` 必须同时驱动列表与取槽**（只换一个就会出现
+「列表说 A 在前、队列跑 B」）；**C5 的时段是队列自己停**（`--bwlimit` 的时间表写法实测答的是另一句话，
+那条路根本不存在）。另外顺手修掉一个**既有真 bug**：手加的传输绕过了 `Start` 的批次登记，
+于是 `BatchCompleted`（限速交还、完成后动作）对它从不触发。
+
 | # | 内容 | 关键改动 |
 | --- | --- | --- |
 | C1 | 限速（C5） | 用 RC `core/bwlimit`（已实证存在）设全局速率；设置页加「上传/下载限速」；队列在任务开始/结束时应用。**先实证作用域是全局还是 per-fs** |
@@ -1192,6 +1369,14 @@ B 组还有一条**只在这里出现**的约束：**并发数从 `const` 改为
 | C7 | 队列右键菜单（C13） | 「打开所在文件夹」「复制链接」—— B4 的 `PublicLinkAsync` 与 `CopyLink` 接缝已落，直接复用，**不要**在 C 组再摸一次系统剪贴板 |
 
 ### D1–D6. 挂载
+
+✅ **D1–D6 全部完成**（`D_FEAT_HASH` + `D_TEST_HASH`，见 §2 的 D 组小节）。下表是当初的计划，逐条都照此落了 ——
+差别只有三处：**D3 的容量只在挂载那一刻读**（配额变化后不更新，端点不报就**不写该键**，绝不写 0）；
+**D6 的实证答复是「接受，但不照做」** —— rclone 收下 UNC 的 `mountPoint` 并回**Windows 分配的盘符**
+（`\\localhost\nonexistent-share-xyz\mnt` → `{"mountPoint":"Z:"}`），所以 UNC 是**支持**的，
+但「已挂载到请求的那个路径」是一句错话（`MountStatusLine` 报的是答复的那个点）；
+**键名断言的判别器换成了「解码期拒绝」** —— 真键配不可读的值会在任何挂载之前被拒，而同一个值换个拼错的键就被收下，
+于是「名字是真的」与「拼错是静的」两条能在**没有 WinFsp** 的门禁里同时断言（比读回 `vfs/stats.opt` 强）。
 
 **先记住这串键名 —— 拼错会被静默忽略，这是 D 组唯一的防线：**
 
@@ -1248,7 +1433,7 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `SettingsWindow` 的 AutomationId switch 漏注册 → 静默不保存 | 每个新设置项都跑 UI 场景：改值 → OK → 重开断言已持久化；对照五处清单（见 §7） |
 | 新设置字段漏加 `ConfigurationValidator` 规则 → 不被夹取 | 加规则 + 单测：越界值应被拒绝 |
 | 新增 `<Button>` 撞样式白名单 | 跑 `UiConsistencyGuardrailTests`；需要新样式就先加进 `DesignTokens.xaml` 并同步白名单 |
-| **挂载选项键名拼错被 rclone 静默忽略** | 唯一手段：断言发往 `mount/mount` 的 JSON 键名；关键项（`readOnly`/`diskSpaceTotalSize`）加「负值应报错」探针 |
+| **挂载选项键名拼错被 rclone 静默忽略** | ✅ **已核（D 组）**：手段比原计划更强 —— 不是只断言发出去的 JSON 键名，而是用**解码期拒绝**当判别器：真键配一个不可读的值会在**任何挂载之前**被拒（`Reshape failed to Unmarshal`），同一个值换个拼错的键就被**收下**。于是「名字是真的」（对回 `options/info` 的 `FieldName`）与「拼错是静的」两条能在**没有 WinFsp** 的门禁里同时断言（`MountOptionKeyFactTests` 15 条，见 §4 与 §6 第 4 条） |
 | ✅ **已核（B0）**：服务端复制无 staging，失败留半成品 | 实证过（见 §4：`operations/copyfile` 中途只有 rclone 自己的 `.partial`，`job/stop` 后目标目录为空，成功才有目标名）；`ServerSideCopyTests` 用真 rclone 钉住「失败 / 源不存在时目标为空」，`CloudTransferCopyTests` 用假 RC 钉住「失败时没有 publish、没有 deletefile、载荷里不出现 staging 名」。残余：daemon 被硬杀会留下 rclone 自己的 `.partial`，Feng Sync 清不掉 —— B1 的复制 UI 不要把「目标目录有个不认识的 .partial」当成本程序的 bug |
 | 端点重命名迁移中途失败 | 单测覆盖每步注入失败，断言 conf 与两个 JSON 回到原状；S3 场景断言 `<old>_s3` 不残留 |
 | 跨端点 move 的 delete 失败 → 重复文件 | ✅ **已覆盖（B1）**：`A_cut_whose_delete_was_refused_reports_the_duplicate_instead_of_a_success` 用假 RC 拒绝 `operations/deletefile`，断言状态行是「已复制但源未删除」+ 原因，而不是「已剪切」 |
@@ -1281,7 +1466,29 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
    所以接一个新 backend 不需要补矩阵。结论已进 `AGENTS.md` 与上面 §4 的 rclone 表。
    手法备忘：`rclone serve s3 <dir> --addr 127.0.0.1:<port> --auth-key AK,SK`（**不是** `--access-key-id`，bucket 就是子目录），
    RC 路径**没有** `/rc/` 前缀（上次把每个方法都写成 `/rc/<method>`，于是**连 `operations/stat` 都 404**，一度误判成方法不存在）。
-4. rclone `mountPoint` 是否接受 UNC 路径（**D6**）。
+4. ✅ **已实证（D 组，2026-10-05，bundled v1.75.0 + loopback `rclone rcd --rc-user/--rc-pass`，手工 curl）**：问题
+   「rclone `mountPoint` 是否接受 UNC 路径」的答复是 **接受，但不照做** —— `mount/mount` 传
+   `mountPoint: "\\localhost\nonexistent-share-xyz\mnt"` **成功**，答复是 **`{"mountPoint": "Z:"}`**；传 `*` 答复 `"Y:"`。
+   所以一个 UNC 请求**不会**产生它请求的那个路径，Windows 分配一个盘符。**产品后果只有一条，但它必须被说出来**：
+   状态行报的是 rclone **答复的**那个挂载点，请求的那个只作为「请求的是 …，Windows 改用了 …」出现
+   （忽略大小写完全相同才是干净的那句）—— 这就是 `MountStatusLine`（Core 的纯类，所以窗口里没有一段没人测得到的
+   private 逻辑）。**顺带一起钉住的**：`mount/mount` 与 `mount/unmount` 是**同步**调用；同一挂载点反复挂/卸会留下那个
+   空目录，下一次挂载因此答 `failed to mount FUSE fs: mountpoint path already exists`（所以探针必须 `unmount-all`
+   并**等 `listmounts` 真的空**再挂下一个）；`vfs/stats` 要 `fs` 参数，多个挂载时不给答
+   `more than one VFS active - need "fs" parameter`、给错答 `no VFS found with name "…"`。
+   **顺带把 D 组真正的地基问清楚了**（原计划没列，但它比 UNC 重要得多）：**「键名对不对」有一个不需要 WinFsp 的判别器** ——
+   真键配一个不可读的值，请求在 **JSON 解码期**就被拒（`key "vfsOpt": Reshape failed to Unmarshal: …`，`mount/mount`
+   根本不会开始挂），而**同一个值换个拼错的键就被收下**。于是「这个键名是真的」与「拼错是静默的」两条能在一个
+   **没有挂载驱动**的门禁里同时断言 —— 这比「挂载完再读回 `vfs/stats.opt`」强，因为后者需要 WinFsp 而门禁没有。
+   `MountOptionKeyFactTests` 就用它（14 组不可读值 + 一条反证）。同批还读全了 `options/info`：
+   `vfs` 33 条 / `mount` 22 条，条目带 `Name`（CLI 拼法）与 **`FieldName`（嵌套块里的 PascalCase 拼法）**；
+   `read_only` 的 `FieldName` 是 **`ReadOnly`**（不是 `ReadOnlyd`）且在 **`vfs`**；`volumeName`/`networkMode` 在 **`mount`**；
+   `Umask`/`AllowNonEmpty`/`AllowOther`/`DefaultPermissions` 的 `Help` 写着 **"not supported on Windows"**（所以永不发送）。
+   默认值也是坑：`vfs.cacheMode` 的 `DefaultStr` 是 **`off`**，而 `cacheMaxSize` 的 `off` 等于 **-1**（"unspecified"）——
+   「写 0」不是「用默认」而是「要一个零字节缓存」。而 `pollInterval` 那句 "must be smaller than dir-cache-time"
+   **是文档规则不是强制**：`PollInterval=600s` 配 `DirCacheTime=60s` 被原样收下，所以它只能是**警告**。
+   **未实测**：UNC 目标上真的挂载并读写（需要一个真 SMB 共享，本机没有）；`FENGSYNC_TEST_REAL_MOUNT=1` 那条
+   真 WinFsp 集成测试仍只覆盖**目录**挂载。
 5. ✅ **已实证（B10 收尾，2026-10-05，bundled v1.75.0 + loopback `rclone rcd --rc-no-auth`，手工 curl）**：问题「rclone 是否暴露版本列表」的答复是**不暴露**。
    ① **`rc/list` 存在**（`POST rc/list` 答 `{"commands":[{Path,Title,NoAuth,Help}…]}`，**`core/commands` 是 404**），
    它给出**全部 101 个**已注册方法；其中名字里唯一带 version 的是 **`core/version`** —— 那是 rclone **自己的版本号**，
@@ -1301,7 +1508,16 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
    ⚠️ **未实测**：`--s3-versions` 打开后列表**长什么样**（旧版本对象的名字、能不能下载）需要一个真的开了版本控制的桶，
    本轮没有凭据 —— 但结论不依赖它：那是一个**改写命名空间**的列表开关（旧版本以对象形式进入列表），
    会污染文件浏览器、并破坏「列表里的名字 = 云端真实的对象」这个前提。**降级做法见 §5 的「明确降级」那一行**。
-6. `core/bwlimit` 的作用域是全局还是 per-fs（**C1**）。
+6. ✅ **已实证（C1，2026-10-05，bundled v1.75.0 + loopback `rclone rcd --rc-user/--rc-pass`，手工 curl + `RcloneBandwidthFactTests`）**：
+   作用域是**全局**，没有 per-fs 这条路。`{fs:"nas:",rate:"1M"}` 照常成功、限速全局生效；多发的 `fs` 字段
+   **被静默忽略**；per-remote 写法 `nas:1M` → 500 `bad bwlimit: bad suffix 's'`；`:100k` 与 `100k:` → 500
+   `bad bwlimit: empty string`；`-1` → 500 `bad bwlimit: size can't be negative`；`abc` → 500 `bad bwlimit: bad suffix 'c'`。
+   ⚠️ **时间表写法走的是另一条路**：`08:00,1M 18:00,off` 答 500 **`need exactly 1 bandwidth setting`** ——
+   那是**另一句话**，不是「格式写错了」；把它读成格式错会让人一直试下去，而 C5 的时段因此是**队列自己停**，
+   不是把时间表交给 rclone。另外三条形态：**裸数字不是字节**（`512` → 512Ki、`1048576` → 1Gi，只有带 `B` 的才是字节，
+   `1.5M` 被接受）；**`1M:100k` 是「先上传后下载」**（`bytesPerSecondTx=1048576` / `bytesPerSecondRx=102400`，
+   写反不报错只限错方向）；**`off` 两侧都读回 -1**。结论已进 `AGENTS.md` 与上面 §4 的 rclone 表，
+   实现与测试见 §2 的 C 组。
 
 7. ✅ **已实证（B0，2026-10-04）**：跨端点 `operations/copyfile` **不会**留下可续传的中途状态 —— 作业运行中目标只有
    rclone 自己的 `<name>.<id>.partial`，目标名要等作业成功才出现；`job/stop` 之后目标目录为空
@@ -1352,8 +1568,15 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 
 - 每个子批次结束后跑 `pwsh -NoProfile -File .\scripts\Test-All.ps1 -Level UiOffline`
   （约 2m30s，**工具超时给 600000ms**）；必须看到 `Passed!  - Failed: 0` 汇总行。
+- ⚠️ **日志打完了但任务还 running 时，先查孤儿 `rclone.exe`**：一次泄漏的测试 daemon（或探针自己留下的 `rclone rcd`）
+  会握着重定向的管道，让那个后台 shell 一直不结束（实测 **18m30s**，而 `Failed!` 与三段摘要早就写完了）。
+  先 `Get-CimInstance Win32_Process -Filter "Name='rclone.exe'"` 读**命令行**再动手 —— 命令行里**有** `mount` 子命令的
+  是用户的挂载，**不要**杀；只有 `rcd …` 的那种才是本进程的（C/D 组这一轮清掉两个）。
+- ⚠️ **改一处「看起来免费」的早退前，先搜谁依赖它**：`ClearFinished` 的 `RaiseSummary()` 就是这种契约（见 §2 的 C3）。
 - 提交粒度按层次（`feat` / `test` / `docs`），**用显式路径 `git add`**，每个子批次 1–2 个 commit，**只提交不 push**。
 - `AGENTS.md` / `README.md` 随行为变化同步更新。
+- 页面 XAML 里的**符号字形**（含 `=`，它是 `MathSymbol`）会被 `UiConsistencyGuardrailTests` 拦下 —— 文案要绕开，
+  别急着往 `ApprovedSymbolUses` 里加（那是**迁移清单**，不是白名单）。
 
 ### UI 护栏（`UiConsistencyGuardrailTests`）
 
@@ -1422,10 +1645,26 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `src/FengSync.Core/Rclone/Lifecycle/RcloneLifecycleHost.cs` | `ProxyOptionsProvider`：启动锁内、子进程创建前只读一次代理（批次 A5） |
 | `src/FengSync/Services/CloudEndpointStatusService.cs` | 端点体检：`ProbeAsync` / `Classify` / `RunBoundedAsync` / `FormatBytes` |
 | `src/FengSync/Services/CloudEndpointService.cs` | 端点 CRUD 与 URI 构造的门面（转发到 catalog + schemes） |
-| `src/FengSync/Views/RemoteEndpointManagerWindow.xaml(.cs)` | **三合一**窗口：端点管理 + 挂载管理 + 文件浏览器。凡是「要问用户」或「碰系统状态」的决定都在这里以 internal 接缝露出：`AskConflict`（B2）、`DetailsAsync` / `BuildRowMenu`（B3）、`ConfirmShare` / `CopyLink` / `ShareLinkAsync` / `ShareAsync`（B4）、`ConfirmRecycle` / `ConfirmDelete` / `RecycleAsync` / `RestoreAsync` / `EmptyTrashAsync` / `OpenTrashAsync`（B5 —— 后者是「清空回收站问的那句话」，所以默认路径仍是真 `TextPrompt.Confirm`）、`PromptRename` / `HandleKeyAsync`（B6 —— 前者是重命名的问题，后者是键盘的入口：把修饰键与「正在输入」当参数接进来，测试因此不必伪造物理键盘也能走真表真派发）、`DragOutAsync` / `DragOutHandoff` / `DragBudget` / `SurfaceTransfers` / `Reveal`（B10 —— 拖动本身造不出来：WPF 拿**真实指针**做命中测试，所以「一次手势交给 Explorer 什么路径」「这个手势等多久」「下完把谁推到用户面前」都走接缝）、`OpenExternal`（B11 —— 开浏览器是机器级副作用；而它的 URL 就是**全部**的决定，因为历史版本那条路上一次 RC 都不发） |
+| `src/FengSync/Views/RemoteEndpointManagerWindow.xaml(.cs)` | **三合一**窗口：端点管理 + 挂载管理 + 文件浏览器。凡是「要问用户」或「碰系统状态」的决定都在这里以 internal 接缝露出：`AskConflict`（B2）、`DetailsAsync` / `BuildRowMenu`（B3）、`ConfirmShare` / `CopyLink` / `ShareLinkAsync` / `ShareAsync`（B4）、`ConfirmRecycle` / `ConfirmDelete` / `RecycleAsync` / `RestoreAsync` / `EmptyTrashAsync` / `OpenTrashAsync`（B5 —— 后者是「清空回收站问的那句话」，所以默认路径仍是真 `TextPrompt.Confirm`）、`PromptRename` / `HandleKeyAsync`（B6 —— 前者是重命名的问题，后者是键盘的入口：把修饰键与「正在输入」当参数接进来，测试因此不必伪造物理键盘也能走真表真派发）、`DragOutAsync` / `DragOutHandoff` / `DragBudget` / `SurfaceTransfers` / `Reveal`（B10 —— 拖动本身造不出来：WPF 拿**真实指针**做命中测试，所以「一次手势交给 Explorer 什么路径」「这个手势等多久」「下完把谁推到用户面前」都走接缝）、`OpenExternal`（B11 —— 开浏览器是机器级副作用；而它的 URL 就是**全部**的决定，因为历史版本那条路上一次 RC 都不发）、`RestoreMounts_Click` / `ReconnectMount_Click`（用 `UnmountAsync(info, forget: false)` —— **卸载但不忘记**，否则重挂第一步就把记录删了）/ `ClearMountCache_Click` / `AutoMount_Changed`（D 组 —— 恢复、重连、缓存、自动挂载四个动作都在这里接线，规则全在 Core 的纯类里） |
+| `src/FengSync/Views/MountPickerDialog.xaml(.cs)` | 挂载点选择（D1/D6）：三个模式页签（**盘符 / 目录 / 网络共享** —— UNC 只做形状校验，**一个已被占用的挂载点不构成拒绝网络共享的理由**，因为 Windows 会分配一个新盘符）、一个「高级选项」折叠区（每个覆盖项 + 一行「将发送：…」摘要 + `MountOptions.Warnings`）、以及**任何一个值读不懂就让确定按钮变暗**（`DescribeAdvancedProblem`）。缓存上限那行文案**不能出现 `=`**（`MathSymbol` 会被 UI 护栏拦下，见 §4 的 WPF 表） |
 | `src/FengSync/Views/CloudEndpointEditorWindow.xaml(.cs)` | 新建/编辑端点表单（按 descriptor 生成，非 S3 部分无手写面板） |
 | `src/FengSync.Core/Execution/EndpointTransfer.cs` | **唯一的** staging-aware 传输原语（同步引擎与云盘浏览器共用）。`CopyToStagingAsync`+`PublishAsync` 是可续传的上传/下载腿；`CopyServerSideAsync` 是两端都远端、**不 staging 不 publish** 的复制腿（B0） |
-| `src/FengSync/Services/CloudTransferQueue.cs` | 云盘传输队列（staging / resume / journal / 并发 / 重试 / **远端→远端复制 `EnqueueCopy`**）；构造参数里的可选 RC 客户端工厂是「不起 daemon 也能断言载荷」的接缝。`DownloadSourceUri`（B10，`internal static`，纯）是「下载的源端点要根到**文件自己所在的目录**」这条唯一的规定动作 —— 少了它，嵌套下载会静默取到上一层目录的同名文件（见 §4） |
+| `src/FengSync/Services/CloudTransferQueue.cs` | 云盘传输队列（staging / resume / journal / 并发 / 重试 / **远端→远端复制 `EnqueueCopy`**）；构造参数里的可选 RC 客户端工厂是「不起 daemon 也能断言载荷」的接缝。`DownloadSourceUri`（B10，`internal static`，纯）是「下载的源端点要根到**文件自己所在的目录**」这条唯一的规定动作 —— 少了它，嵌套下载会静默取到上一层目录的同名文件（见 §4）。**C 组又加了四件**：`Order`（同时被 `AcquireSlotAsync` 与列表读 —— 见 §2 的 C2）、限速的**应用与交还**（`EnsureLimitAppliedAsync` / `ReleaseLimitAsync` / `internal ApplyLimit`，且**没设过限速就零次推送**）、时段停靠（`TimeWindow` / `WaitingForWindow` / `ScheduleWindowRecheck` / `internal EvaluateSchedule`）与 `ClearFinished` 的**先归档再删行**（返回清掉几条；`RaiseSummary()` 是契约不是顺手，见 §2 的 C3）。`Clock` 是一个可替换的时间源，`internal` 成员由 `InternalsVisibleTo("FengSync.UiTests")` 露出 |
+| `src/FengSync.Core/Configuration/CloudTransferLimits.cs` | 限速与传输时段的**全部规则**（C1/C5，纯）：`CloudTransferLimit`（`Unlimited` / `Off` / `IsLimited` / `Rate(upload, download)` —— **唯一**的拼法，每个数字带 `B`、两侧是 `upload:download`、`off` 就是 `off` / `Describe`）、`CloudTransferTimeWindow`（半开、跨午夜、等值端点=整天、`Contains` / `DelayUntilOpen` / `Describe` / `Parse`）、`CloudAfterTransferAction`（**只能追加**，按数字持久化）。类注释记着每一条实测的 bwlimit 事实（见 §4） |
+| `src/FengSync/Services/CloudTransferPolicy.cs` | 把 `ApplicationSettings` 搬到队列上的**唯一**地方（C 组）：并发、重试、限速、时段；**故意不碰**完成后动作（那个归窗口） |
+| `src/FengSync/Services/CloudTransferHistory.cs` | 传输归档（C3）：`CloudTransferHistoryEntry`（+ `From` / `Succeeded`）+ `CloudTransferHistoryRepository`（append-only、最新在前、上限、按路径上写锁、`ConfigureAwait(false)`、坏/空/缺文件读成空历史 —— 照 `RunHistoryRepository`）+ `CloudTransferHistorySummary`（`Describe` / `DescribeAll`，措辞纯函数） |
+| `src/FengSync/Services/CloudTransferDiagnostics.cs` | 失败诊断（C4）：`OffersDetail` / `DetailFor`（第一行必须说清「这是什么任务」）/ `DescribeCopy` / `LogPath(now)`（按 **UTC** 定日期，因为 `RcloneFailureLog` 就是这么命名文件的）/ `ReadLog(path, maxLines)`（**文件不在**与**日志是空的**是两句不同的话；读不懂的行原样透出） |
+| `src/FengSync/Services/CloudTransferRowMenu.cs` | 传输行的菜单（C7，纯）：`CloudTransferRowCommand` / `CloudTransferRowMenuItem(Command, Label, Enabled, Hint, SeparatorBefore)` / `CloudTransferRowContext(CanMoveUp, CanMoveDown)` / `Build` / `LocalFolderOf` / `OffersLink`。**每个不可用项都带着理由** —— 一个灰掉却不解释的项就是用户报的「点了没反应」；`复制链接` 复用 B4 的接缝，**没有**在 C 组再摸一次剪贴板 |
+| `src/FengSync/Services/CloudPostTransferAction.cs` | 完成后动作（C6）：只在整个批次**全部成功**时执行、每次都问；**归传输窗所有**（没人能答的确认等于把机器交出去，`Confirm` 没装就什么都不做）；`Report` 与 `Confirm` / `Perform` 都是 internal 接缝，所以「半个批次失败」这条规则能在不关机的前提下断言 |
+| `src/FengSync/Views/CloudTransferHistoryWindow.cs` | 传输归档的查看窗（C3，代码搭，同 `TextPrompt` 一路） |
+| `src/FengSync.Core/Mount/MountOptionsSettings.cs` | 可序列化的挂载高级选项（D1）：`MountCacheMode`（**只能追加**）/ `IsDefault` / 每个覆盖都 nullable（null = 跟历史默认）。`CacheMaxSizeBytes` 的 `null` 是「历史默认」而 **0 是「不限」**（表达方式是**省略键**） |
+| `src/FengSync.Core/Mount/MountOptions.cs` | 挂载参数（D 组的改造对象）：`CreateVfsOptions(settings)` / `CreateMountOptions(settings)` 各自成块，`Warnings(settings)` 给**警告**（轮询间隔大于目录缓存时间 —— rclone 收下且不执行，所以只能警告）。**没有任何选项时发出的载荷必须与历史一字不差** |
+| `src/FengSync.Core/Mount/MountRequest.cs` | `MountRequest(MountTarget, MountOptionsSettings?)`（D1b：包一层而不是加宽 `MountTarget`）+ `MountResult(MountPoint, DiskSpaceTotalSize)`（**答复的**挂载点，可能不是请求的那个）+ `IMountStarter`（恢复循环只依赖这一个方法，所以它**不需要驱动**） |
+| `src/FengSync.Core/Mount/MountRecordStore.cs` | 挂载记录（D2）：`MountRecord`（**一个凭据字段都没有**）/ `MountRecordStore`（`mounts.json`、`RememberAsync` 从旧记录里合并 `AutoMount` 与 `CreatedUtc`）/ `MountRecovery.Plan`（活的跳过 / WinFsp 没装 / 标为自动）/ `MountRestoreOutcome` + `MountRestore.RunAsync(IMountStarter, plan, automaticOnly, ct)` |
+| `src/FengSync.Core/Mount/MountCapacity.cs` | 端点容量（D3）：`TotalBytes` 只认真正存在且为正的 `total`；`Describe(total)` 两种答复；`DescribeUpcoming()` 是挂载**之前**的承诺（配额变化后不更新） |
+| `src/FengSync.Core/Mount/MountCacheInspector.cs` | 缓存占用与清理（D5）：`Measure` / `Clear` / `IsInside`（**挡兄弟前缀**：`cache` 不许认领 `cache-old`）+ 那行措辞 |
+| `src/FengSync.Core/Mount/MountReconnect.cs` | 重连（D4）：`NeedsReconnect` 只挑**本程序创建**且不健康的挂载；`Describe` / `Explain`。**是提示 + 按钮，不是静默后台重挂** |
+| `src/FengSync.Core/Mount/MountStatusLine.cs` | 挂载后那行状态（D6，纯）：报的是 rclone **答复的**挂载点，请求的那个只作为「请求的是 …，Windows 改用了 …」出现 —— UNC 实测答复是**盘符**（见 §4 与 §6 第 4 条）。**故意放 Core**，因为它是 D6 唯一可见的后果，而窗口里的 private 方法没有测试碰得到 |
 | `src/FengSync.Core/Endpoints.cs` | `RcloneRcClient`（RC 调用的唯一出口，路径**没有** `/rc/` 前缀）：B3 加的 `StatAsync(fs, remote, hashTypes)` 与 B4 加的 `PublicLinkAsync(fs, remote)`（只认应答里的 `url`，缺了给 `null` 而不是编一个空链接） |
 | `src/FengSync/Services/CloudRecycleBin.cs` | 回收站的**全部规则**（B5）：`FolderName` / `RootOf` / `IsRoot` / `IsInside` / `IsTrashView` / `LandingDirectory` / `OriginalPath` / `OriginalDirectory` / `PlacementsFor`（撞名让位，文件与目录都算进「已被占用」）/ `SelectForMove` / `SelectForRestore` / `ConfirmFor` / `Explain`；`CloudRecycleOutcome` 七态 + `CloudRecyclePlacement` + `CloudRecycleResult`。类文档写了「为什么只能是应用自己的文件夹」和四条实测隐患 |
 | `src/FengSync/Services/CloudFileManagerService.cs` | 文件浏览器服务层（列表/搜索/重命名/删除/**同端点移动 `MoveAsync`**/新建目录/**单对象 `StatAsync` → `CloudItemStat`**/**`PublicLinkAsync`**/**`MoveIntoAsync(path, path, isDirectory)` —— B5 的两条腿：文件 `movefile`、文件夹 `sync/move` + 只清还留着的壳（`RemoveIfEmptyAsync` 先 `stat`）/**`SizeAsync(remote, path)` —— B9：目录**拼进 `fs`** 发 `operations/size`，签名里**没有** `remote` 参数，因为那个字段会被静默忽略而答回整个端点**（B9）**/ **`ListTreeAsync(remote, path)` —— B10：一次递归读取拿到整棵树（路径形状见 §4），目录也在答案里，所以空目录不会丢** / `NamesAsync` / `ListOrEmptyAsync`**）；`RelativeToEndpoint` 是「剥的是**自己**端点的根、只剥一次」的唯一体（B1）；`SizeDisplay` 到这一步才格式化成 `CloudItemDetails.HumanSize`，列与属性面板因此同一套单位（B3） |
@@ -1439,7 +1678,6 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `src/FengSync/Services/CloudBrowserShortcuts.cs` | 浏览器键盘的**唯一一张表**（B6）：`CloudBrowserShortcut` 八态（`Refresh / Recycle / DeleteForever / Rename / SelectAll / Copy / Cut / Paste`）+ `Resolve(key, ctrl, shift, typing)`。**只有映射，没有动作**，所以「一键一命令」「Del 的三种拼法」「文本框只放行 F5」在不开窗口的前提下就可断言 |
 | `src/FengSync/Services/CloudFolderDrag.cs` | 整目录拖出的**全部规则**（B10，纯，除 `IsMirrorReady` 只问磁盘它已经命名的东西）：`MaxFilesPerDrag`（= `CloudFileManagerService.SearchResultLimit`，复用而不是另发明）、`Item(RemotePath, LocalPath, Size)`、`Plan(FolderLocalPath, DirectoryLocalPaths, Files, TotalBytes, Refusal)`、`Build(account, folder, listing)`（两套坐标同时算出来；`..`／Windows 保留字符／S3 允许的「同名文件与目录」／超过上限一律**整棵树拒绝**）、`IsReady`（**故意不复用 `CloudDragCache.IsUsable`**：0 字节的云端对象是真的空）、`IsMirrorReady`、`CreateDirectories`（空目录活到拖放目标的唯一原因）、`Describe`（状态行说清是空文件夹还是 N 个文件 · 多大） |
 | `src/FengSync/Services/CloudVersionHistory.cs` | 历史版本的**全部答案**（B11，纯）：`MenuLabel`（「在网页端查看历史版本…」——名字说的是它真做的事）、`Title`、`Offer(Provider, Explanation, Url)`（`CanOpen` / `OpenLabel`）、`Offers(entry)`（**只给文件**）、`For(rcloneType, provider)`（控制台来自 `CloudProviderDescriptor.WebConsoleUrl`，SFTP / WebDAV / S3 是 `null`）、`Explain(provider, hasConsole)`（三句话：rclone 不提供版本列表、那个开关为什么不打开、去哪儿看）、`StatusFor(offer)`。类文档写着**为什么**这条路只能是这一条（实测的 101 个方法、被静默忽略的 `opt`、以及那个会改写命名空间的 `rclone.conf` 开关） |
-| `src/FengSync.Core/Mount/MountOptions.cs` | 挂载参数（D 组的改造对象） |
 | `src/FengSync.Core/Rclone/Transport/RcloneProxyConfiguration.cs` | 代理（A5 的现成机制） |
 | `src/FengSync/Services/AppServices.cs` | `IAppServiceHost` / `AppServices.Install`（**两个 exe 共用服务宿主**） |
 | `src/FengSync.DriveHub/` | 第二个入口 `DriveHub.exe`（独立 daemon） |
@@ -1459,6 +1697,14 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 | `tests/FengSync.UiTests/CloudBrowserFolderDragTests.cs` | 两个类，B10 的 UI 侧：`CloudFolderDragRulesTests` 14 条**纯规则**（镜像的每条路径、空目录活着、目录的大小不算内容、强制前缀的 S3 端点不重复根、`..` 与 Windows 保留字符、S3 的同名文件/目录、500/501 边界、不是本文件夹的列表是调用方错误、长度对不上就不 ready、0 字节对象算 ready、缺目录就不 ready、被拒的计划什么都不建、状态行文案）＋ `CloudBrowserFolderDragTests` 14 条**真窗口**（镜像已在就只交文件夹本身、只问缺的文件且从不问目录、空目录真的被建出来、等不完就 reveal、有文件失败就报出来、**每个文件从它自己所在的目录读**、云端已没有这个文件夹、空文件夹是拖出去的不是被拒的、被拒就什么都不建什么都不问、缓存文件仍只交那一个、缺缓存的文件进队列、**拖不动就说「再拖一次」而不是假装拖成了**（文件夹与文件各一条）、**镜像没下完就报出来而不是把 正在下载 留在屏上**）。`DragBudget`／`DragOutHandoff`／`SurfaceTransfers`／`Reveal` 四个接缝都在这里用上 |
 | `tests/FengSync.UiTests/CloudDownloadPathTests.cs` | B10 修掉的那个**静默取错文件**缺陷：`CloudDownloadSourceUriTests` 3 条纯规则（嵌套下载的源端点根到文件的目录、端点根的下载原样不动、本地 URI 不碰）＋ `CloudDownloadPathFactTests` 1 条真 bundled rclone 事实 —— `alias` remote 的**根上放一个同名诱饵** `b.txt`，断言嵌套对象的字节落地、诱饵没被取走、且没有 `.fengsync.partial` 残留 |
 | `tests/FengSync.UiTests/CloudVersionHistoryTests.cs` | B11 的**纯规则** 11 条：只给文件；4 个有控制台的 provider 各一条 URL（`drive` / `onedrive` / `dropbox` / `box`）；SFTP / WebDAV / S3 没有控制台且句子说「去自己的控制台」；解释里必须出现 `rclone`、`不提供版本列表`、`旧版本列进目录`（最后一条是给**下一个想打开那个开关的人**看的）；两种状态行各自带着理由；provider 名缺失时仍给得出答案。`CloudBrowserDetailsTests` 另加 4 条真窗口（菜单项只在一个文件上、文件夹与多选都没有、ToolTip 带着理由、点了就开那个 URL 且状态行说出原因、没有控制台就什么都不开并说出来、文件夹被告知「版本是针对单个文件的」），它的 harness 为此加了一行 **drive 端点**与一个 `select` 参数 |
+| `tests/FengSync.Tests/Mount/MountOptionsPayloadTests.cs` | C/D 组里 D 组的**键名契约**（14 条）：历史载荷一字不变、空 `mountOpt`、每个覆盖落在**正确的块**（含 `ReadOnly` 在 `vfsOpt` 而不是 `mountOpt`）、0 上限被**省略**、未设的大小永不写 0、空卷标被丢掉、四个 Windows 不支持的名字**永不发送**、缓存模式词表、`Seconds` 格式、轮询间隔警告 |
+| `tests/FengSync.Tests/Mount/MountOptionKeyFactTests.cs` | 真 bundled rclone（15 条）：应用发出的**每个**名字都在 `options/info` 自己的 `FieldName` 集合里；14 组不可读值被 `key "vfsOpt": Reshape failed to Unmarshal` **点名块**拒绝；**同一个值换个拼错的键就被收下** —— 这就是「静默忽略」的可执行证明。**不需要 WinFsp、不需要挂载点**，因为拒绝发生在 JSON 解码期（见 §6 第 4 条） |
+| `tests/FengSync.Tests/Mount/MountRecordStoreTests.cs` | 恢复的**全部规则**（24 条）：`mounts.json` 往返含 options、**JSON 里没有凭据字段也没有禁用词**、大小写不敏感 upsert/remove、`RememberAsync` 保住 `AutoMount` + `CreatedUtc`、坏/缺/空文件读成空、`MountRecovery.Plan` 三种分支（活的跳过 / WinFsp 没装 / 标为自动）、`DescribePending` / `DescribeOutcome` 不过度声称、`MountRestore.RunAsync` 的 0 / 部分失败 / 全失败 / 带选项 / 仅自动。**恢复循环走 `IMountStarter`，所以整套都不需要驱动** |
+| `tests/FengSync.Tests/Mount/MountCapacityAndCacheTests.cs` | 挂载之外的三件事实（12 条）：`TotalBytes` 只认真正存在且为正的 `total`、`Describe` 两种答复 + `DescribeUpcoming`、缓存测量/清理 + **兄弟前缀守卫**、缓存那行措辞、`MountReconnect.NeedsReconnect` 只挑自己的不健康挂载、`Describe` / `Explain`、**`MountStatusLine` 报答复的点**（含 UNC 那条与忽略大小写的相等）且容量只在真有时才提 |
+| `tests/FengSync.Tests/CloudTransferLimitTests.cs` | 限速与时段的**纯规则**：`off`、永远带 `B`、上传在前、`off:` 这种不对称、窗口的跨午夜 / 半开 / 等值=整天 / `DelayUntilOpen` / `Describe` / `Parse`（等值端点**被解析而不是被拒**）、`ConfigurationValidator` 的拒绝、`CloudAfterTransferAction` 的**只能追加**数字 |
+| `tests/FengSync.Tests/RcloneBandwidthFactTests.cs` | 真 bundled rclone 钉住 C1 的全部前提：二进制倍数（`512` → 512Ki、`1048576` → 1Gi）、`1.5M` 被接受、`1M:100k` 的 Tx/Rx **顺序**、`off` → 两侧 -1 且能读回、五种被拒形态各自**自己的**错误文字（时间表那句是 `need exactly 1 bandwidth setting`，**另一句话**）、多发的 `fs` 被忽略而限速照旧全局、限速一直有效直到被替换 |
+| `tests/FengSync.UiTests/CloudTransferQueuePolicyTests.cs` | 队列的**真行为**（20 条，`InternalsVisibleTo` 让 `ApplyLimit` / `EvaluateSchedule` 可测）：顺序 / `MoveUp` / `CanMove*` / 非等待行被拒；**队列真按列表显示的顺序跑**（`Concurrency = 1` + 一个 hold 住的假 RC，断言 `["a.bin","c.bin","b.bin"]`）；限速先推 `1048576B:off` 再推 `off`；**没设过限速就零次推送**；推失败 → `LimitError` 且传输照常完成；窗口停住并**由队列自己的一次性唤醒**开工；整天窗口不停；`ClearFinished` 先归档 / 失败行留下 / 没有归档也能用 / **什么都没清也照样刷新**；归档往返、最新在前 + 上限、坏/空/旧 JSON；`CloudTransferPolicy.Apply` |
+| `tests/FengSync.UiTests/CloudTransferRowDiagnosticsTests.cs` | 停止后的行能交出什么、以及完成后动作怎么对待一个排空的批次（30 条）：行菜单的可用性与**理由**（复制任务没有本地文件夹且说得出为什么；还在跑的不给链接并说清是哪一态；只有 Pending 能换位；有错误才有详情）、`DetailFor` 的第一行是「这是什么任务」、`DescribeCopy`、`LogPath` 按 **UTC** 定日期、`ReadLog` 的缺失 / 空 / 渲染 / 原样透出坏行 / 尾部截断、归档总结与行的措辞、以及完成后动作的全部闸门（`None` 什么都不做 / **半失败只报告不执行** / 拒绝要报告 / 没有 `Confirm` 就什么都不做 / 空批次不算理由 / 确认后恰好执行一次且不额外公告 / `Dispose`） |
 | `tests/FengSync.Tests/` | Core 层 + 需要真 rclone 的测试（门禁里的 Core 阶段） |
 | `tests/FengSync.UiTests/` | in-process WPF 行为测试 + 桌面场景（`UiAcceptanceTests` + `Scripts/Invoke-UiScenario.ps1`） |
 | `scripts/Test-All.ps1` | 门禁入口（`-Level Core|UiOffline|Online`，`-ShowOnScreen`） |
