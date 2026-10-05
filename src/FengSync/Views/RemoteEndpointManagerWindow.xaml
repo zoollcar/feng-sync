@@ -111,11 +111,23 @@
             <GroupBox Grid.Row="3" Header="挂载管理" Margin="0,14,0,0">
                 <StackPanel Margin="4">
                     <ListBox x:Name="MountsList" AutomationProperties.Name="当前挂载列表" Height="110" SelectionChanged="MountsList_SelectionChanged" DisplayMemberPath="Display" />
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <WrapPanel Margin="0,8,0,0">
                         <Button x:Name="RefreshMountsButton" AutomationProperties.Name="刷新挂载列表" Content="刷新" Click="RefreshMounts_Click" Style="{StaticResource TertiaryButtonStyle}" />
                         <Button x:Name="MountSelectedEndpointButton" AutomationProperties.Name="挂载所选云盘端点" Content="挂载选中端点…" Click="MountSelectedEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
                         <Button x:Name="UnmountMountButton" AutomationProperties.Name="取消所选挂载" Content="取消挂载" Click="UnmountMount_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-                    </StackPanel>
+                        <Button x:Name="RestoreMountsButton" AutomationProperties.AutomationId="RestoreCloudMounts" AutomationProperties.Name="恢复上次的挂载" Content="一键恢复" Click="RestoreMounts_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button x:Name="ReconnectMountButton" AutomationProperties.AutomationId="ReconnectCloudMount" AutomationProperties.Name="重新挂载所选失效挂载" Content="重新挂载" Click="ReconnectMount_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button x:Name="ClearMountCacheButton" AutomationProperties.AutomationId="ClearCloudMountCache" AutomationProperties.Name="清理挂载缓存" Content="清理缓存" Click="ClearMountCache_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                    </WrapPanel>
+                    <CheckBox x:Name="AutoMountBox"
+                              AutomationProperties.AutomationId="CloudMountAutoMount"
+                              AutomationProperties.Name="所选挂载随应用启动自动挂载"
+                              Content="所选挂载在下次启动时自动挂载"
+                              Margin="0,8,0,0"
+                              Checked="AutoMount_Changed"
+                              Unchecked="AutoMount_Changed" />
+                    <TextBlock x:Name="MountPendingText" AutomationProperties.AutomationId="CloudMountPending" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                    <TextBlock x:Name="MountCacheText" AutomationProperties.AutomationId="CloudMountCache" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
                     <TextBlock x:Name="MountStatus" AutomationProperties.AutomationId="CloudMountStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
                 </StackPanel>
             </GroupBox>

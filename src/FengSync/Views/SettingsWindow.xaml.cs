@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using FengSync.Core;
 using FengSync.Core.Configuration;
+using FengSync.Services;
 using Microsoft.Win32;
 
 namespace FengSync.Views;
@@ -195,6 +196,45 @@ public partial class SettingsWindow : Window
             Margin = new Thickness(0, 4, 0, 0)
         });
 
+        sp.Children.Add(NewHeader("传输速率与时段", section));
+        sp.Children.Add(NewLabeledRow("上传限速", NewTextBox("SettingsCloudUploadLimit",
+            _initial.CloudUploadLimitBytesPerSecond > 0 ? ByteSize.Format(_initial.CloudUploadLimitBytesPerSecond) : ""), caption));
+        sp.Children.Add(NewLabeledRow("下载限速", NewTextBox("SettingsCloudDownloadLimit",
+            _initial.CloudDownloadLimitBytesPerSecond > 0 ? ByteSize.Format(_initial.CloudDownloadLimitBytesPerSecond) : ""), caption));
+        sp.Children.Add(new TextBlock
+        {
+            Text = "留空或填 0 表示不限速；支持 500K、2M 这类写法。限速是 rclone 的进程级设置——"
+                 + "实测它不接受按端点分别限速（core/bwlimit 只收一个速率），所以这里设的值对云端浏览、上传、下载一视同仁，"
+                 + "并且只在有传输进行时生效，传输结束就恢复不限速。",
+            Style = caption,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+        sp.Children.Add(NewLabeledRow("仅在此时间段传输（开始）", NewTextBox("SettingsCloudWindowStart",
+            _initial.CloudTransferTimeWindow?.Start.ToString("HH\\:mm") ?? ""), caption));
+        sp.Children.Add(NewLabeledRow("仅在此时间段传输（结束）", NewTextBox("SettingsCloudWindowEnd",
+            _initial.CloudTransferTimeWindow?.End.ToString("HH\\:mm") ?? ""), caption));
+        sp.Children.Add(new TextBlock
+        {
+            Text = "格式 HH:mm，留空表示任何时间都可以传输。时段外排队中的传输会一直等待，不会被取消；"
+                 + "跨午夜（如 22:00–06:00）按一整段处理。实测 rclone 的限速时间表只能改速率、不能让传输停下来，"
+                 + "所以这一项由本程序在队列上实现。",
+            Style = caption,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+        var afterTransfer = NewComboBox("SettingsCloudAfterTransfer", 220, (int)_initial.CloudAfterTransfer,
+            [.. Enum.GetValues<CloudAfterTransferAction>().Select(CloudPostTransferAction.Describe)]);
+        sp.Children.Add(NewLabeledRow("全部传输成功后", afterTransfer, caption));
+        sp.Children.Add(new TextBlock
+        {
+            Text = "只在整批传输全部成功时才触发；有任何一项失败就只报告，不会关机。执行前会再确认一次，"
+                 + "因此需要保持传输窗口打开——没有人能应答的确认框不应该变成一次关机。",
+            Style = caption,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+
         sp.Children.Add(NewHeader("网络代理", section));
         sp.Children.Add(NewLabeledRow("代理服务器", NewTextBox("SettingsCloudProxy", _initial.RcloneProxy ?? ""), caption));
         sp.Children.Add(new TextBlock
@@ -236,6 +276,19 @@ public partial class SettingsWindow : Window
         sp.Children.Add(NewHeader("行为", section));
         sp.Children.Add(NewCheckbox("SettingsCloudNotify", "云盘传输完成时显示通知", _initial.CloudNotifyOnCompletion));
         sp.Children.Add(NewCheckbox("SettingsCloudResumeOnStartup", "启动时恢复上次未完成的云盘传输", _initial.CloudResumeOnStartup));
+
+        sp.Children.Add(NewHeader("挂载", section));
+        sp.Children.Add(NewLabeledRow("VFS 缓存上限", NewTextBox("SettingsMountCacheLimit",
+            _initial.MountCacheMaxSizeBytes > 0 ? ByteSize.Format(_initial.MountCacheMaxSizeBytes) : ""), caption));
+        sp.Children.Add(new TextBlock
+        {
+            Text = "留空或填 0 表示不限制缓存大小（rclone 的默认值），缓存会一直增长到磁盘占满。"
+                 + "这里是新建挂载的默认值，单个挂载可以在挂载对话框的“高级选项”里单独覆盖。"
+                 + "缓存目录与占用大小在云盘管理窗口的挂载区域可以查看和清理。",
+            Style = caption,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
 
         ContentHost.Children.Add(sp);
     }
@@ -399,12 +452,40 @@ public partial class SettingsWindow : Window
                             : new VersioningPolicy(FengSync.Core.VersioningMode.None, value.DefaultVersioning.ArchiveDirectory, value.DefaultVersioning.KeepDays)
                     },
                     "SettingsCloudConflict" => value with { CloudUploadConflict = ConflictPolicy(co.SelectedIndex) },
+                    "SettingsCloudAfterTransfer" => value with { CloudAfterTransfer = AfterTransferPolicy(co.SelectedIndex) },
                     _ => value
                 };
+        // The transfer window is parsed as a pair rather than as two independent boxes: half a window is not a
+        // window, and reading them separately would let 09:00 + (empty) become "any time" silently.
+        value = ApplyTransferWindow(value);
         var errors = ConfigurationValidator.Validate(value);
         if (errors.Count > 0) throw new InvalidOperationException(string.Join(Environment.NewLine, errors));
         return value;
     }
+
+    /// <summary>
+    /// Reads the two time boxes. Both empty means "any time"; one empty or an unreadable value is an error the
+    /// user has to fix, rather than a window quietly reinterpreted as something they did not ask for.
+    /// </summary>
+    private ApplicationSettings ApplyTransferWindow(ApplicationSettings value)
+    {
+        var start = FindText("SettingsCloudWindowStart")?.Trim() ?? "";
+        var end = FindText("SettingsCloudWindowEnd")?.Trim() ?? "";
+        if (start.Length == 0 && end.Length == 0) return value with { CloudTransferTimeWindow = null };
+        var window = CloudTransferTimeWindow.Parse(start, end);
+        if (window is null) throw new InvalidOperationException("传输时段的时间格式应为 HH:mm，例如 22:00 与 06:00；两边都留空表示任何时间都可以传输。");
+        return value with { CloudTransferTimeWindow = window };
+    }
+
+    private string? FindText(string id)
+    {
+        foreach (var box in FindVisualChildren<TextBox>(ContentHost))
+            if (box.GetValue(AutomationProperties.AutomationIdProperty) is string found && found == id) return box.Text;
+        return null;
+    }
+
+    internal static CloudAfterTransferAction AfterTransferPolicy(int index) =>
+        Enum.IsDefined(typeof(CloudAfterTransferAction), index) ? (CloudAfterTransferAction)index : CloudAfterTransferAction.None;
 
     private ApplicationSettings ApplyTextValue(ApplicationSettings value, string id, string text)
     {
@@ -423,6 +504,11 @@ public partial class SettingsWindow : Window
                 "SettingsCloudConcurrency" => int.TryParse(text, out var cloudCopies) ? value with { CloudMaxConcurrentTransfers = cloudCopies } : value,
                 "SettingsCloudRetry" => int.TryParse(text, out var cloudRetries) ? value with { CloudRetryCount = cloudRetries } : value,
                 "SettingsCloudDownloadDirectory" => value with { CloudDownloadDirectory = text.Trim() },
+                // An empty box means "no limit", which is not the same as an unreadable one: only the latter
+                // becomes the sentinel the validator reports.
+                "SettingsCloudUploadLimit" => value with { CloudUploadLimitBytesPerSecond = ParseLimit(text) },
+                "SettingsCloudDownloadLimit" => value with { CloudDownloadLimitBytesPerSecond = ParseLimit(text) },
+                "SettingsMountCacheLimit" => value with { MountCacheMaxSizeBytes = ParseLimit(text) },
                 "SettingsCloudProxy" => value with { RcloneProxy = text.Trim() },
                 "SettingsIncludeRules" => value with { DefaultFilter = value.DefaultFilter with { Include = Lines(text) } },
                 "SettingsExcludeRules" => value with { DefaultFilter = value.DefaultFilter with { Exclude = Lines(text) } },
@@ -434,6 +520,18 @@ public partial class SettingsWindow : Window
     }
 
     private static IReadOnlyList<string> Lines(string text) => text.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>
+    /// Reads a byte-rate or byte-size box. Empty, "0" and "off" all mean no limit; anything unreadable becomes
+    /// -1 so <see cref="ConfigurationValidator"/> reports it instead of the box showing one thing and the file
+    /// holding another.
+    /// </summary>
+    internal static long ParseLimit(string? text)
+    {
+        var value = (text ?? "").Trim();
+        if (value.Length == 0 || value == "0" || value.Equals("off", StringComparison.OrdinalIgnoreCase)) return 0;
+        return ByteSize.TryParse(value, out var bytes) ? bytes : -1;
+    }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject
     {

@@ -14,6 +14,14 @@ public static class ConfigurationValidator
         if (settings.CloudMaxConcurrentTransfers is < 1 or > 16) errors.Add("云盘同时传输数必须介于 1 和 16 之间。");
         if (settings.CloudRetryCount is < 0 or > 10) errors.Add("云盘自动重试次数必须介于 0 和 10 之间。");
         if (!Enum.IsDefined(settings.CloudBrowserView)) errors.Add("文件视图设置无效。");
+        if (settings.CloudUploadLimitBytesPerSecond is < 0 or > 1L << 50) errors.Add("云盘上传限速必须介于 0 和 1 PB/s 之间（0 表示不限速）。");
+        if (settings.CloudDownloadLimitBytesPerSecond is < 0 or > 1L << 50) errors.Add("云盘下载限速必须介于 0 和 1 PB/s 之间（0 表示不限速）。");
+        // Two equal ends would read as "the whole day" to CloudTransferTimeWindow.Contains, which is never
+        // what someone typing 09:00–09:00 means; refusing it here keeps the queue from silently never parking.
+        if (settings.CloudTransferTimeWindow is { } window && window.Start == window.End)
+            errors.Add("传输时段的开始与结束不能相同，否则将变成全天可传输。");
+        if (!Enum.IsDefined(settings.CloudAfterTransfer)) errors.Add("传输完成后动作设置无效。");
+        if (settings.MountCacheMaxSizeBytes is < 0 or > 1L << 50) errors.Add("挂载缓存上限必须介于 0 和 1 PB 之间（0 表示不限）。");
         if (!TryValidateProxy(settings.RcloneProxy, out var proxyError)) errors.Add(proxyError);
         if (double.IsNaN(settings.MainWindowSidebarWidth) || double.IsInfinity(settings.MainWindowSidebarWidth) || settings.MainWindowSidebarWidth is < 220 or > 320) errors.Add("主窗口侧栏宽度必须介于 220 和 320 之间。");
         if (!string.IsNullOrWhiteSpace(settings.SkippedUpdateVersion) && !Updates.ReleaseVersion.TryParse(settings.SkippedUpdateVersion, out _)) errors.Add("忽略的更新版本无效。");

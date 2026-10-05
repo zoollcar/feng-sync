@@ -41,8 +41,14 @@ public static class CloudShareLinks
     public const string ConfirmationTitle = "生成分享链接";
 
     /// <summary>The question asked before anything is created, naming exactly what is being handed over.</summary>
-    public static string ConfirmationFor(CloudFileEntry entry) =>
-        $"“{entry.Name}”会获得一个公开链接：任何拿到这个链接的人都能读取该文件，无需登录你的账号。\n\n"
+    public static string ConfirmationFor(CloudFileEntry entry) => ConfirmationFor(entry.Name);
+
+    /// <summary>
+    /// The same question for a caller that has a name but no browser row — the transfer window's queue holds
+    /// paths, not <see cref="CloudFileEntry"/> values, and the wording of a grant must not exist twice.
+    /// </summary>
+    public static string ConfirmationFor(string name) =>
+        $"“{name}”会获得一个公开链接：任何拿到这个链接的人都能读取该文件，无需登录你的账号。\n\n"
         + "链接的有效期和它能否撤回都由云端决定（内置 rclone 实测：S3 给的是约一周后自动失效的签名地址），"
         + "本应用只负责把结果复制到剪贴板。\n\n确定生成？";
 

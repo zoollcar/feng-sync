@@ -29,7 +29,8 @@
             <Button x:Name="ResumeButton" AutomationProperties.AutomationId="ResumeCloudTransfers" AutomationProperties.Name="断点续传未完成的传输" Content="断点续传" Click="Resume_Click" Style="{StaticResource PrimaryButtonStyle}" />
             <Button x:Name="PauseAllButton" AutomationProperties.AutomationId="PauseAllCloudTransfers" AutomationProperties.Name="暂停全部正在进行的传输" Content="全部暂停" Click="PauseAll_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
             <Button x:Name="CancelAllButton" AutomationProperties.AutomationId="CancelAllCloudTransfers" AutomationProperties.Name="取消全部传输" Content="全部取消" Click="CancelAll_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-            <Button x:Name="ClearButton" AutomationProperties.AutomationId="ClearCloudTransfers" AutomationProperties.Name="清除已完成的传输" Content="清除已完成" Click="Clear_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+            <Button x:Name="ClearButton" AutomationProperties.AutomationId="ClearCloudTransfers" AutomationProperties.Name="清除已完成的传输并归档" Content="清除已完成" Click="Clear_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+            <Button x:Name="HistoryButton" AutomationProperties.AutomationId="CloudTransferHistory" AutomationProperties.Name="查看已归档的传输记录" Content="传输历史…" Click="History_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
             <Button AutomationProperties.AutomationId="CloseCloudTransfers" AutomationProperties.Name="关闭传输窗口" Content="关闭" IsCancel="True" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
         </StackPanel>
 
@@ -37,8 +38,16 @@
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="同时传输数" VerticalAlignment="Center" />
                 <ComboBox x:Name="ConcurrencyBox" AutomationProperties.AutomationId="CloudTransferConcurrency" AutomationProperties.Name="同时进行的传输数量" Width="72" Margin="8,0,0,0" SelectionChanged="Concurrency_Changed" />
+                <TextBlock Text="完成后" VerticalAlignment="Center" Margin="18,0,0,0" />
+                <ComboBox x:Name="AfterTransferBox" AutomationProperties.AutomationId="CloudTransferAfterAction" AutomationProperties.Name="全部传输成功后的动作" Width="170" Margin="8,0,0,0" SelectionChanged="AfterTransfer_Changed" />
                 <TextBlock x:Name="ConcurrencyHint" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap" />
             </StackPanel>
+            <!-- Rate ceiling and transfer window come from the settings page; shown here because they change
+                 what this window is doing and a parked queue has to explain itself where the user is looking. -->
+            <TextBlock x:Name="PolicyText" AutomationProperties.AutomationId="CloudTransferPolicy" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
+            <!-- A ceiling that did not take effect must be visible: silence here is indistinguishable from
+                 a limit that is working. -->
+            <TextBlock x:Name="LimitErrorText" AutomationProperties.AutomationId="CloudTransferLimitError" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
             <!-- The completion message is a line of text rather than a popup: the app has no tray icon, and
                  a topmost toast would take focus away from whatever the user moved on to. -->
             <Border x:Name="CompletionBanner" Background="{DynamicResource SurfaceSubtleBrush}" CornerRadius="{StaticResource RadiusMedium}" Padding="12,8" Margin="0,10,0,0" Visibility="Collapsed">
@@ -46,7 +55,7 @@
             </Border>
         </StackPanel>
 
-        <ListView x:Name="TaskList" Grid.Row="3" AutomationProperties.AutomationId="CloudTransferList" AutomationProperties.Name="传输任务列表" BorderThickness="0">
+        <ListView x:Name="TaskList" Grid.Row="3" AutomationProperties.AutomationId="CloudTransferList" AutomationProperties.Name="传输任务列表" BorderThickness="0" ContextMenuOpening="TaskList_ContextMenuOpening">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="任务" Width="240" DisplayMemberBinding="{Binding Display}" />

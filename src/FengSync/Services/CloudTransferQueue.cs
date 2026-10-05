@@ -126,6 +126,18 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
         internal set { if (!Set(ref _attempt, value)) return; Raise(nameof(StatusText)); }
     }
 
+    /// <summary>
+    /// Where this task sits in the queue. Lower runs first, and the value is what the row's 上移 / 下移 swap —
+    /// the list order the user sees and the order the queue hands out slots are the same order, which is the
+    /// only way "move this one up" can mean anything.
+    /// </summary>
+    public int Order
+    {
+        get => _order;
+        internal set { if (Set(ref _order, value)) Raise(nameof(Order)); }
+    }
+    private int _order;
+
     public double Percentage => TotalBytes <= 0 ? 0 : Math.Min(100, _completedBytes * 100d / TotalBytes);
     /// <summary>A paused transfer is not finished: the user still has to decide what happens to it.</summary>
     public bool IsFinished => State is CloudTransferState.Completed or CloudTransferState.Cancelled or CloudTransferState.Failed;
@@ -192,6 +204,22 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
 }
 
 /// <summary>
+/// The rate ceiling the queue pushes to the daemon while transfers are running. Both values are bytes per
+/// second, and 0 means "no limit" — the state every installation was in before this existed.
+/// </summary>
+public sealed record CloudTransferLimits(long UploadBytesPerSecond = 0, long DownloadBytesPerSecond = 0)
+{
+    public static readonly CloudTransferLimits None = new();
+
+    /// <summary>The string <c>core/bwlimit</c> takes. See <see cref="CloudTransferLimit"/> for why it is not a number.</summary>
+    public string Rate => CloudTransferLimit.Rate(UploadBytesPerSecond, DownloadBytesPerSecond);
+
+    public bool IsLimited => CloudTransferLimit.IsLimited(UploadBytesPerSecond, DownloadBytesPerSecond);
+
+    public string Describe() => CloudTransferLimit.Describe(UploadBytesPerSecond, DownloadBytesPerSecond);
+}
+
+/// <summary>
 /// Serialises cloud uploads, downloads, and remote→remote copies: bounded concurrency, per-task progress,
 /// cancellation and pausing, automatic retries, and a journal so cancelled or failed transfers survive an
 /// application restart and can be continued.
@@ -203,7 +231,19 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     public const int MinimumConcurrency = 1;
     public const int MaximumConcurrency = 16;
 
+    /// <summary>
+    /// One transfer's claim on a slot. The task id travels with the ticket so the pump can order the queue by
+    /// each waiter's <i>current</i> priority: a user who moves a waiting row up while it is already parked has
+    /// to be moved ahead of the others, which a ticket holding a copy of the old order could not express.
+    /// </summary>
+    private sealed class SlotWaiter(Guid taskId)
+    {
+        public Guid TaskId { get; } = taskId;
+        public TaskCompletionSource<bool> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
     private readonly CloudTransferJournalStore _journal;
+    private readonly CloudTransferHistoryRepository? _history;
     /// <summary>
     /// Resolves the RC client lazily, exactly as <see cref="CloudFileManagerService"/> does, so a queue can be
     /// built and its copy branch driven before any shell has started a daemon — which is what lets the
@@ -215,7 +255,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     /// user-adjustable at runtime and a semaphore's capacity cannot be changed after construction.
     /// </summary>
     private readonly object _gate = new();
-    private readonly Queue<TaskCompletionSource<bool>> _waiters = new();
+    private readonly List<SlotWaiter> _waiters = [];
     /// <summary>Ids of the transfers the current batch covers, so a drained queue can report the batch.</summary>
     private readonly object _batchGate = new();
     private readonly HashSet<Guid> _batchIds = [];
@@ -227,12 +267,27 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     private int _concurrency = DefaultConcurrency;
     private int _maxRetries = 2;
     private int _activeCount;
+    private int _nextOrder = 1;
+    private CloudTransferLimits _limits = CloudTransferLimits.None;
+    /// <summary>The rate this queue last pushed, so an unchanged limit is not re-sent before every task.</summary>
+    private string? _appliedRate;
+    private CloudTransferTimeWindow? _timeWindow;
 
-    public CloudTransferQueue(CloudTransferJournalStore? journal = null, Func<CancellationToken, Task<RcloneRcClient>>? client = null)
+    public CloudTransferQueue(
+        CloudTransferJournalStore? journal = null,
+        Func<CancellationToken, Task<RcloneRcClient>>? client = null,
+        CloudTransferHistoryRepository? history = null)
     {
         _journal = journal ?? new CloudTransferJournalStore();
         _client = client ?? (ct => AppServices.Current.RcloneHost.GetClientAsync(ct));
+        _history = history;
     }
+
+    /// <summary>
+    /// Where transfers that leave the list are archived. Absent means 清除已完成 really does discard them, which
+    /// is what the focused queue tests want; both shells supply one.
+    /// </summary>
+    public CloudTransferHistoryRepository? History => _history;
 
     /// <summary>
     /// Files at or above this size keep a resumable staging file, so an interrupted download is
@@ -241,6 +296,134 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     /// load still behaves like a default installation.
     /// </summary>
     public long ResumeMinimumBytes { get; set; } = new ApplicationSettings().DefaultResumeMinimumBytes;
+
+    /// <summary>
+    /// The rate ceiling to hold the daemon to while transfers run. It is applied when a transfer starts and
+    /// released when the queue drains, so a limit never outlives the work that needed it and browsing is never
+    /// throttled by a setting about transfers.
+    /// </summary>
+    public CloudTransferLimits Limits
+    {
+        get => _limits;
+        set
+        {
+            if (_limits == value) return;
+            _limits = value;
+            Raise(nameof(Limits));
+            Raise(nameof(LimitText));
+            Raise(nameof(LimitError));
+        }
+    }
+
+    /// <summary>
+    /// The last failure while pushing the limit. Surfaced rather than swallowed: a limit that silently did not
+    /// take effect is the same class of problem as a misspelled mount option.
+    /// </summary>
+    public string? LimitError { get; private set; }
+
+    public string LimitText => _limits.IsLimited ? "限速 " + _limits.Describe() : "不限速";
+
+    /// <summary>
+    /// Applies a rate to the daemon. A seam so the decision — when a limit is pushed and when it is released —
+    /// is testable without a daemon, while the default goes through <see cref="RcloneRcClient"/>.
+    /// </summary>
+    internal Func<string, CancellationToken, Task>? ApplyLimit { get; set; }
+
+    /// <summary>
+    /// The daily window transfers may run in. <see langword="null"/> means any time. Outside the window the
+    /// queue parks its waiting transfers instead of starting them; nothing is cancelled, so the work resumes
+    /// by itself when the window opens.
+    /// </summary>
+    public CloudTransferTimeWindow? TimeWindow
+    {
+        get => _timeWindow;
+        set
+        {
+            if (_timeWindow == value) return;
+            _timeWindow = value;
+            Raise(nameof(TimeWindow));
+            Raise(nameof(WaitingForWindow));
+            RaiseSummary();
+        }
+    }
+
+    /// <summary>The clock the window is evaluated against. A seam so a test can be at 03:00 without waiting for it.</summary>
+    public Func<DateTimeOffset> Clock { get; set; } = () => DateTimeOffset.Now;
+
+    /// <summary>Whether a waiting transfer is parked because the clock is outside <see cref="TimeWindow"/>.</summary>
+    public bool WaitingForWindow => _timeWindow is { } window && !window.Contains(TimeOnly.FromDateTime(Clock().LocalDateTime));
+
+    /// <summary>
+    /// Re-reads the clock and hands out slots if the window has opened. Called by the queue's own one-shot timer
+    /// and directly by tests, which is why it is not private.
+    /// </summary>
+    internal void EvaluateSchedule()
+    {
+        if (_timeWindow is not null) Raise(nameof(WaitingForWindow));
+        lock (_gate)
+        {
+            if (WaitingForWindow) { ScheduleWindowRecheck(); return; }
+            PumpWaiters();
+        }
+        RaiseSummary();
+    }
+
+    /// <summary>
+    /// Arranges for one re-check when the window next opens. A one-shot delay rather than a periodic timer: it
+    /// cannot outlive the wait that scheduled it, and there is nothing to dispose.
+    /// </summary>
+    private void ScheduleWindowRecheck()
+    {
+        if (_timeWindow is not { } window) return;
+        var delay = window.DelayUntilOpen(TimeOnly.FromDateTime(Clock().LocalDateTime));
+        if (delay <= TimeSpan.Zero) delay = TimeSpan.FromSeconds(1);
+        if (delay > TimeSpan.FromHours(1)) delay = TimeSpan.FromHours(1);
+        _ = Task.Delay(delay).ContinueWith(_ => EvaluateSchedule(), TaskScheduler.Default);
+    }
+
+    private async Task EnsureLimitAppliedAsync(CancellationToken ct)
+    {
+        var rate = _limits.Rate;
+        if (rate == _appliedRate) return;
+        // Nothing to push and nothing to undo: telling a daemon that was never given a rate to go back to "off"
+        // is a round trip that changes nothing, and this is the state of every installation that never sets one.
+        if (rate == CloudTransferLimit.Off && _appliedRate is null) return;
+        try
+        {
+            if (ApplyLimit is { } seam) await seam(rate, ct);
+            else
+            {
+                var client = await _client(ct);
+                await client.SetBandwidthLimitAsync(rate, ct);
+            }
+            _appliedRate = rate;
+            if (LimitError is not null) { LimitError = null; Raise(nameof(LimitError)); }
+        }
+        catch (Exception ex)
+        {
+            // A ceiling is a convenience: failing to set it must not fail the transfer. It is reported instead,
+            // because a limit the user asked for that never took effect would otherwise be invisible.
+            LimitError = "限速未能生效：" + RcloneUiError.Describe(ex, "cloud-transfer-limit");
+            Raise(nameof(LimitError));
+        }
+    }
+
+    /// <summary>Gives the daemon its full bandwidth back once nothing is left to throttle.</summary>
+    private async Task ReleaseLimitAsync()
+    {
+        if (_appliedRate is null || _appliedRate == CloudTransferLimit.Off) return;
+        try
+        {
+            if (ApplyLimit is { } seam) await seam(CloudTransferLimit.Off, CancellationToken.None);
+            else
+            {
+                var client = await _client(CancellationToken.None);
+                await client.SetBandwidthLimitAsync(CloudTransferLimit.Off, CancellationToken.None);
+            }
+            _appliedRate = null;
+        }
+        catch { /* the next batch re-applies whatever it needs */ }
+    }
 
     /// <summary>
     /// How many transfers may run at once. Lowering it never disturbs the transfers already in flight —
@@ -343,6 +526,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             // avoid counting the same task twice in one sentence.
             var resumable = Tasks.Count(task => task.IsResumable && task.State != CloudTransferState.Paused);
             var parts = new List<string>();
+            if (WaitingForWindow) parts.Add($"等待传输时段 {_timeWindow!.Describe()}");
             if (running > 0) parts.Add($"进行中 {running}");
             if (pending > 0) parts.Add($"等待 {pending}");
             if (paused > 0) parts.Add($"已暂停 {paused}");
@@ -365,11 +549,62 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
 
     private CloudTransferTask Enqueue(CloudTransferTask task)
     {
+        // New work goes to the back of the queue, expressed as the largest order so far rather than the count:
+        // after a user reorders rows, "the last one" is no longer the highest index.
+        task.Order = _nextOrder++;
         Track(task);
         Tasks.Add(task);
         RaiseSummary();
-        _ = RunAsync(task);
+        // Through Start rather than straight to RunAsync, because Start is what registers the task with the
+        // current batch. A batch that never learned about its own transfers never reports itself drained, so
+        // 传输完成后动作 would silently never fire for a queue the user filled by hand — the very case it
+        // exists for.
+        Start(task);
         return task;
+    }
+
+    /// <summary>
+    /// Moves a waiting transfer one place earlier, past its nearest neighbour. Only a transfer that has not
+    /// started can be moved: one that already holds a slot is running now, and reordering behind it would
+    /// change nothing the user can observe.
+    /// </summary>
+    public bool MoveUp(CloudTransferTask task) => Move(task, -1);
+
+    /// <summary>Moves a waiting transfer one place later.</summary>
+    public bool MoveDown(CloudTransferTask task) => Move(task, +1);
+
+    public bool CanMoveUp(CloudTransferTask task) => Neighbour(task, -1) is not null;
+
+    public bool CanMoveDown(CloudTransferTask task) => Neighbour(task, +1) is not null;
+
+    private bool Move(CloudTransferTask task, int offset)
+    {
+        var neighbour = Neighbour(task, offset);
+        if (neighbour is null) return false;
+        // The visible list and the priority are two faces of the same thing, so both move together: swapping
+        // only Order would leave the list claiming an order the queue does not use, and swapping only the list
+        // would leave the queue running the row the user moved down.
+        (task.Order, neighbour.Order) = (neighbour.Order, task.Order);
+        var from = Tasks.IndexOf(task);
+        var to = Tasks.IndexOf(neighbour);
+        if (from >= 0 && to >= 0) Tasks.Move(from, to);
+        RaiseSummary();
+        return true;
+    }
+
+    /// <summary>
+    /// The neighbour a move would trade places with, or <see langword="null"/> at the end of the queue. A
+    /// running or finished row is not a neighbour to trade with: the row the user is trying to get ahead of is
+    /// the next <i>waiting</i> one, not whichever row happens to be drawn above it.
+    /// </summary>
+    private CloudTransferTask? Neighbour(CloudTransferTask task, int offset)
+    {
+        if (task.State != CloudTransferState.Pending) return null;
+        var waiting = Tasks.Where(x => x.State == CloudTransferState.Pending).ToList();
+        var index = waiting.IndexOf(task);
+        if (index < 0) return null;
+        var target = index + offset;
+        return target >= 0 && target < waiting.Count ? waiting[target] : null;
     }
 
     /// <summary>
@@ -480,14 +715,38 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         foreach (var task in Tasks.Where(task => task.CanCancel).ToList()) Cancel(task);
     }
 
-    public void ClearFinished()
+    /// <summary>
+    /// Removes the completed rows, filing them in the archive first. The archive write is issued before the row
+    /// goes away and is not awaited: it is a record of something that already happened, so failing to file it
+    /// must not leave the row stuck on screen.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="RaiseSummary"/> runs even when there was nothing to clear, and that is load-bearing rather
+    /// than incidental: this is the queue's one "the list changed, re-read my numbers" call, and both the
+    /// window's 清除已完成 and the entry-point test that checks the progress bar reads the *installed* queue
+    /// rely on it. An early return for an empty list looks like a free optimization and silently drops it.
+    /// </remarks>
+    public int ClearFinished()
     {
-        foreach (var task in Tasks.Where(task => task.State == CloudTransferState.Completed).ToList())
+        var finished = Tasks.Where(task => task.State == CloudTransferState.Completed).ToList();
+        if (_history is not null && finished.Count > 0)
+        {
+            var archived = finished.Select(task => CloudTransferHistoryEntry.From(task, Clock())).ToList();
+            _ = ArchiveAsync(archived);
+        }
+        foreach (var task in finished)
         {
             Tasks.Remove(task);
             _ = _journal.RemoveAsync(task.Id);
         }
         RaiseSummary();
+        return finished.Count;
+    }
+
+    private async Task ArchiveAsync(IReadOnlyList<CloudTransferHistoryEntry> entries)
+    {
+        try { await _history!.AppendAsync(entries); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     /// <summary>Completes when the task leaves the queue's active set. Used by drag-out downloads.</summary>
@@ -578,7 +837,10 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             if (isCopy && (string.IsNullOrWhiteSpace(task.TargetUri) || string.IsNullOrWhiteSpace(destination)))
                 throw new InvalidOperationException("云端复制缺少目标端点或目标路径。");
             Persist(task);
-            await AcquireSlotAsync(ct);
+            // The ceiling is pushed before the slot is taken so it is already in force for the very first
+            // byte, and before the client is resolved so the seam can be replaced without a daemon.
+            await EnsureLimitAppliedAsync(ct);
+            await AcquireSlotAsync(task, ct);
             slotAcquired = true;
             ActiveCount++;
             task.State = CloudTransferState.Running;
@@ -728,19 +990,22 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     /// Takes one transfer slot, waiting for one when the queue is already at its concurrency limit. The wait
     /// is cancellable, and a cancelled wait gives its ticket up in a way the pump understands — otherwise the
     /// pump would hand a slot to a waiter that had already given up, and the queue would slowly starve.
+    /// A transfer parked outside the configured time window is the same kind of wait, and is woken by
+    /// <see cref="EvaluateSchedule"/> instead of by another transfer finishing.
     /// </summary>
-    private async Task AcquireSlotAsync(CancellationToken ct)
+    private async Task AcquireSlotAsync(CloudTransferTask task, CancellationToken ct)
     {
-        TaskCompletionSource<bool> waiter;
+        SlotWaiter waiter;
         lock (_gate)
         {
-            if (_running < _concurrency) { _running++; return; }
-            waiter = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _waiters.Enqueue(waiter);
+            if (_running < _concurrency && !WaitingForWindow) { _running++; return; }
+            waiter = new SlotWaiter(task.Id);
+            _waiters.Add(waiter);
         }
+        if (WaitingForWindow) ScheduleWindowRecheck();
         try
         {
-            await waiter.Task.WaitAsync(ct).ConfigureAwait(false);
+            await waiter.Completion.Task.WaitAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -751,7 +1016,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
                 // slot straight back; either way exactly one of the two paths owns the slot. This transfer
                 // never reached ActiveCount, so its slot has to be returned — and a drain detected — here
                 // rather than in the run loop's finally block.
-                if (!waiter.TrySetCanceled(ct))
+                if (!waiter.Completion.TrySetCanceled(ct))
                 {
                     _running = Math.Max(0, _running - 1);
                     PumpWaiters();
@@ -793,6 +1058,9 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         if (ids.Length == 0) return;
         var batch = Tasks.Where(task => ids.Contains(task.Id)).ToList();
         if (batch.Count == 0) return;
+        // The ceiling belonged to this batch, so it goes away with it. Fired and forgotten: the drain path is
+        // synchronous and a failure to release a limit must not surface as a transfer failure.
+        _ = ReleaseLimitAsync();
         BatchCompleted?.Invoke(this, new CloudTransferBatch(
             batch.Count,
             batch.Count(task => task.State == CloudTransferState.Completed),
@@ -800,15 +1068,31 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             batch.Count(task => task.State is CloudTransferState.Cancelled or CloudTransferState.Paused)));
     }
 
-    /// <summary>Hands slots to waiting transfers. Must be called while holding <see cref="_gate"/>.</summary>
+    /// <summary>
+    /// Hands slots to waiting transfers, lowest <see cref="CloudTransferTask.Order"/> first. Must be called
+    /// while holding <see cref="_gate"/>. The scan picks the first minimum rather than sorting, so waiters with
+    /// equal orders — which is every queue nobody has reordered — are still served in the order they arrived.
+    /// </summary>
     private void PumpWaiters()
     {
         while (_waiters.Count > 0 && _running < _concurrency)
         {
-            var waiter = _waiters.Dequeue();
-            if (waiter.TrySetResult(true)) _running++;
+            if (WaitingForWindow) return;
+            var pick = 0;
+            for (var index = 1; index < _waiters.Count; index++)
+                if (OrderOf(_waiters[index].TaskId) < OrderOf(_waiters[pick].TaskId)) pick = index;
+            var waiter = _waiters[pick];
+            _waiters.RemoveAt(pick);
+            if (waiter.Completion.TrySetResult(true)) _running++;
         }
     }
+
+    /// <summary>
+    /// A waiting task's current priority. Read live rather than captured, because the user may reorder a row
+    /// while it is parked; a task that has since been removed from the list sorts last rather than throwing.
+    /// </summary>
+    private int OrderOf(Guid taskId) =>
+        Tasks.FirstOrDefault(task => task.Id == taskId)?.Order ?? int.MaxValue;
 
     private static Func<CancellationToken, Task> EnsureParentAsync(IEndpoint target, string path) => async ct =>
     {
@@ -843,6 +1127,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         Raise(nameof(HasResumableTasks));
         Raise(nameof(HasPausedTasks));
         Raise(nameof(HasCopyTasks));
+        Raise(nameof(WaitingForWindow));
         Raise(nameof(SummaryText));
         Raise(nameof(OverallPercentage));
     }

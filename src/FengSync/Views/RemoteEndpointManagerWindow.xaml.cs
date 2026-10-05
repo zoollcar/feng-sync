@@ -50,6 +50,18 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <summary>Every endpoint as loaded, before the search box and the sort choice are applied.</summary>
     private readonly List<CloudEndpointRow> _loaded = [];
     private readonly ObservableCollection<MountInfo> _mounts = [];
+    /// <summary>
+    /// The last classification of the remembered mounts: which could be put back, which are already live, and
+    /// why. Kept rather than re-derived per click, because deriving it costs a scan plus a registry probe and
+    /// the 一键恢复 button, the auto-mount box and 重新挂载 all read from the same answer.
+    /// </summary>
+    private IReadOnlyList<MountRestorePlanItem> _restorePlan = [];
+    /// <summary>The cache measurement the last refresh took, so 清理缓存 confirms against the same numbers.</summary>
+    private MountCacheUsage? _cacheUsage;
+    /// <summary>True while the window itself writes the auto-mount box, which raises the event it handles.</summary>
+    private bool _applyingAutoMount;
+    /// <summary>Probed once per window: WinFsp is installed for this session or it is not.</summary>
+    private readonly bool _winFspInstalled = WinFspDetector.Detect().Installed;
     private readonly ObservableCollection<CloudFileEntry> _entries = [];
     /// <summary>The last listing before filtering and ordering, so typing in the search box re-lists nothing.</summary>
     private readonly List<CloudFileEntry> _listed = [];
@@ -222,6 +234,9 @@ public partial class RemoteEndpointManagerWindow : Window
         // chose, rather than being drawn as a list and then re-drawn as tiles.
         _browserView = Enum.IsDefined(_settings.CloudBrowserView) ? _settings.CloudBrowserView : CloudBrowserViewMode.List;
         ApplyBrowserView();
+        // The queue is application-owned, and this window is where transfers are started from, so the rate and
+        // time-window settings have to be in force even if the standalone transfer window is never opened.
+        CloudTransferPolicy.Apply(_transfers, _settings);
         await LoadBookmarksAsync();
         await RefreshAsync();
         // Said last, because a window that opened on an empty 收藏 for a reason the user cannot see has to say so
@@ -354,9 +369,28 @@ public partial class RemoteEndpointManagerWindow : Window
             _mounts.Clear();
             foreach (var mount in mounts) _mounts.Add(mount);
             MountStatus.Text = _mounts.Count == 0 ? "当前系统没有 rclone 挂载。" : $"共发现 {_mounts.Count} 个挂载，其中 {_mounts.Count(m => m.Origin == MountOrigin.FengSyncManaged)} 个由本应用启动。";
+            await RefreshMountRecoveryAsync(mounts);
         }
         catch (Exception ex) { MountStatus.Text = "扫描挂载失败：" + RcloneUiError.Describe(ex, "mount-scan"); }
         UpdateMountButtons();
+    }
+
+    /// <summary>
+    /// Recomputes what could be put back and how much disk the shared VFS cache holds. Both belong to the same
+    /// refresh because both describe state that outlives a single mount: a remembered mount with no live
+    /// process, and a cache directory the daemon owns rather than any one mount owning it.
+    /// </summary>
+    private async Task RefreshMountRecoveryAsync(IReadOnlyList<MountInfo> mounts)
+    {
+        var records = _mountService.Records is null ? [] : await _mountService.Records.LoadAsync();
+        _restorePlan = MountRecovery.Plan(records, mounts.Select(mount => mount.MountPoint).ToList(), _winFspInstalled);
+        MountPendingText.Text = MountRecovery.DescribePending(_restorePlan.Count(item => item.CanRestore));
+
+        // Measured off the UI thread: the cache can hold tens of thousands of files and the list refresh runs
+        // on every endpoint refresh, so a synchronous walk here would show up as a stutter.
+        var usage = await Task.Run(() => MountCacheInspector.Measure(MountOptions.CacheRoot));
+        _cacheUsage = usage;
+        MountCacheText.Text = MountCacheInspector.Describe(usage, _settings.MountCacheMaxSizeBytes);
     }
 
     private void UpdateMountButtons()
@@ -364,6 +398,162 @@ public partial class RemoteEndpointManagerWindow : Window
         MountSelectedEndpointButton.IsEnabled = Selected is not null && !_mountBusy;
         UnmountMountButton.IsEnabled = SelectedMount?.CanUnmount == true && !_mountBusy;
         RefreshMountsButton.IsEnabled = !_mountBusy;
+        RestoreMountsButton.IsEnabled = _restorePlan.Any(item => item.CanRestore) && !_mountBusy;
+        // Only Feng Sync's own mount can be re-created: an external one has no record of the options it was
+        // started with, and re-mounting it under our own daemon would change who owns it.
+        ReconnectMountButton.IsEnabled = SelectedMount is { CanUnmount: true, IsHealthy: false } && !_mountBusy;
+        ClearMountCacheButton.IsEnabled = !_mountBusy;
+        UpdateAutoMountBox();
+    }
+
+    /// <summary>
+    /// Points the auto-mount box at the selected mount's record. A mount with no record — an external one, or
+    /// one started before records existed — cannot be made automatic, and the box says so by being disabled
+    /// rather than by accepting a tick that would go nowhere.
+    /// </summary>
+    private void UpdateAutoMountBox()
+    {
+        _applyingAutoMount = true;
+        try
+        {
+            var mount = SelectedMount;
+            var record = mount is null ? null : FindRecord(mount.MountPoint);
+            AutoMountBox.IsEnabled = record is not null && mount!.CanUnmount && !_mountBusy;
+            AutoMountBox.IsChecked = record?.AutoMount == true;
+            AutoMountBox.ToolTip = mount is not null && record is null
+                ? "这个挂载没有本应用的记录（可能由外部程序启动），因此无法设置自动挂载。"
+                : null;
+        }
+        finally { _applyingAutoMount = false; }
+    }
+
+    private MountRecord? FindRecord(string mountPoint) => _restorePlan
+        .Select(item => item.Record)
+        .FirstOrDefault(record => string.Equals(record.MountPoint, mountPoint, StringComparison.OrdinalIgnoreCase));
+
+    private async void RestoreMounts_Click(object sender, RoutedEventArgs e)
+    {
+        if (_mountBusy) return;
+        var restorable = _restorePlan.Where(item => item.CanRestore).ToList();
+        if (restorable.Count == 0) { MountStatus.Text = "没有需要恢复的挂载。"; return; }
+        var detail = string.Join("\n", restorable.Select(item => $" · {item.Record.RemoteName} → {item.Record.MountPoint}"));
+        if (!TextPrompt.Confirm(this, "恢复挂载", $"将恢复 {restorable.Count} 个上次的挂载：\n{detail}")) return;
+        _mountBusy = true;
+        UpdateMountButtons();
+        MountStatus.Text = $"正在恢复 {restorable.Count} 个挂载…";
+        try
+        {
+            var outcome = await MountRestore.RunAsync(_mountService, _restorePlan);
+            await RefreshMountsAsync();
+            // A partial restore is reported as partial: saying "已恢复" while some endpoints stayed down would
+            // hide exactly the failure the user has to act on.
+            MountStatus.Text = outcome.Failed == 0
+                ? outcome.Describe()
+                : outcome.Describe() + "\n" + string.Join("\n", outcome.Failures.Select(failure => " · " + failure));
+        }
+        catch (Exception ex) { MountStatus.Text = "恢复挂载失败：" + RcloneUiError.Describe(ex, "mount-restore"); }
+        finally { _mountBusy = false; UpdateMountButtons(); }
+    }
+
+    /// <summary>
+    /// Re-creates a mount whose point is no longer usable. Never automatic: a silent background remount would
+    /// hide the outage the user needs to see, and a mount whose network is down would be re-created forever.
+    /// </summary>
+    private async void ReconnectMount_Click(object sender, RoutedEventArgs e)
+    {
+        var mount = SelectedMount;
+        if (mount is null) { MountStatus.Text = "请先选择要重新挂载的挂载点。"; return; }
+        if (_mountBusy) return;
+        if (!mount.CanUnmount)
+        {
+            MessageBox.Show("该挂载由外部程序管理。Feng Sync 只读显示外部挂载，不会结束其进程，也不会代为重新挂载。", "重新挂载", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (mount.IsHealthy) { MountStatus.Text = $"挂载点 {mount.MountPoint} 当前可用，无需重新挂载。"; return; }
+        if (!TextPrompt.Confirm(this, "重新挂载", MountReconnect.Explain(mount) + "\n\n将先取消它，再用同样的设置挂载一次。", danger: true)) return;
+
+        var record = FindRecord(mount.MountPoint);
+        var target = record is null
+            ? new MountTarget(mount.RemoteName, mount.Provider, mount.MountPoint, mount.Kind)
+            : new MountTarget(record.RemoteName, record.Provider, record.MountPoint, record.Kind, record.RootPath);
+        _mountBusy = true;
+        UpdateMountButtons();
+        MountStatus.Text = $"正在重新挂载 {mount.MountPoint}…";
+        try
+        {
+            // forget: false — a reconnect is not the user saying they no longer want this mount, so the record
+            // (and its auto-mount choice) has to survive the unmount half.
+            var stopped = await _mountService.UnmountAsync(mount, forget: false);
+            if (!stopped.AllStopped)
+            {
+                MountStatus.Text = "重新挂载已中止：原挂载未能取消。\n"
+                    + string.Join("\n", stopped.Failures.Select(failure => $" · {failure.MountPoint}：{failure.Reason}"));
+                return;
+            }
+            var result = await _mountService.MountAsync(new MountRequest(target, record?.Options));
+            await RefreshMountsAsync();
+            MountStatus.Text = DescribeMount(target, result);
+        }
+        catch (Exception ex)
+        {
+            var message = RcloneUiError.Describe(ex, "mount-reconnect");
+            MountStatus.Text = "重新挂载失败：" + message;
+            MessageBox.Show(message, "重新挂载", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally { _mountBusy = false; UpdateMountButtons(); }
+    }
+
+    /// <summary>
+    /// Empties the daemon-wide VFS cache. Confirmed first and described as global, because it is: rclone fixes
+    /// its cache root once per process, so "clear the cache" cannot mean "clear this mount's cache", and the
+    /// next read of anything cached re-downloads it.
+    /// </summary>
+    private async void ClearMountCache_Click(object sender, RoutedEventArgs e)
+    {
+        if (_mountBusy) return;
+        var usage = _cacheUsage ?? MountCacheInspector.Measure(MountOptions.CacheRoot);
+        if (usage.IsEmpty) { MountStatus.Text = $"挂载缓存已经是空的（{usage.Root}）。"; return; }
+        if (!TextPrompt.Confirm(this, "清理挂载缓存",
+            $"将删除挂载缓存目录里的 {usage.Files} 个文件（{ByteSize.Format(usage.Bytes)}）：\n{usage.Root}\n\n"
+            + "缓存是所有挂载共用的。正在被挂载占用的文件删不掉，会保留下来。之后读取这些内容会重新从云端下载。",
+            danger: true)) return;
+        _mountBusy = true;
+        UpdateMountButtons();
+        MountStatus.Text = "正在清理挂载缓存…";
+        try
+        {
+            var removed = await Task.Run(() => MountCacheInspector.Clear(usage.Root));
+            await RefreshMountsAsync();
+            MountStatus.Text = removed == usage.Files
+                ? $"已清理挂载缓存：{removed} 个文件。"
+                : $"已清理挂载缓存：{removed} / {usage.Files} 个文件；其余正被挂载占用，已保留。";
+        }
+        catch (Exception ex) { MountStatus.Text = "清理缓存失败：" + RcloneUiError.Describe(ex, "mount-cache-clear"); }
+        finally { _mountBusy = false; UpdateMountButtons(); }
+    }
+
+    private async void AutoMount_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_applyingAutoMount) return;
+        var mount = SelectedMount;
+        if (mount is null) return;
+        if (_mountService.Records is null) { MountStatus.Text = "本进程没有挂载记录存储，无法设置自动挂载。"; return; }
+        var wanted = AutoMountBox.IsChecked == true;
+        try
+        {
+            var saved = await _mountService.Records.SetAutoMountAsync(mount.MountPoint, wanted);
+            MountStatus.Text = saved
+                ? (wanted
+                    ? $"已设置：{mount.MountPoint} 会在下次启动时自动挂载。"
+                    : $"已取消：{mount.MountPoint} 不再随启动自动挂载。")
+                : $"没有找到 {mount.MountPoint} 的挂载记录，无法设置自动挂载。";
+            await RefreshMountRecoveryAsync(_mounts.ToList());
+        }
+        catch (Exception ex)
+        {
+            MountStatus.Text = "保存自动挂载设置失败：" + RcloneUiError.Describe(ex, "mount-auto-mount");
+            UpdateAutoMountBox();
+        }
     }
 
     private async void EndpointList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -743,17 +933,19 @@ public partial class RemoteEndpointManagerWindow : Window
         if (Selected is not CloudEndpointAccount account) { MountStatus.Text = "请先选择要挂载的端点。"; return; }
         if (_mountBusy) return;
         var provider = CloudEndpointService.DisplayName(CloudEndpointService.KindFromRcloneType(account.Type));
-        var dialog = new MountPickerDialog(account.Name, provider, _mounts.Select(m => m.MountPoint).ToList(), account.RootPath, account.Prefix) { Owner = this };
+        var dialog = new MountPickerDialog(
+            account.Name, provider, _mounts.Select(m => m.MountPoint).ToList(),
+            account.RootPath, account.Prefix, _settings.MountCacheMaxSizeBytes) { Owner = this };
         if (dialog.ShowDialog() != true) return;
-        var target = dialog.SelectedTarget!;
+        var request = new MountRequest(dialog.SelectedTarget!, dialog.SelectedOptions);
         _mountBusy = true;
         UpdateMountButtons();
-        MountStatus.Text = $"正在挂载 {account.Name} → {target.MountPoint}…";
+        MountStatus.Text = $"正在挂载 {account.Name} → {request.Target.MountPoint}…";
         try
         {
-            await _mountService.MountAsync(target);
+            var result = await _mountService.MountAsync(request);
             await RefreshMountsAsync();
-            MountStatus.Text = $"已启动挂载：{target.RemoteName} → {target.MountPoint}。";
+            MountStatus.Text = DescribeMount(request.Target, result);
         }
         catch (Exception ex)
         {
@@ -763,6 +955,14 @@ public partial class RemoteEndpointManagerWindow : Window
         }
         finally { _mountBusy = false; UpdateMountButtons(); }
     }
+
+    /// <summary>
+    /// The line shown after a mount. The wording lives in <see cref="MountStatusLine"/> so that the one visible
+    /// consequence of D6 — rclone answering with a mount point other than the one requested — is asserted by a
+    /// test rather than only by reading this method.
+    /// </summary>
+    private static string DescribeMount(MountTarget target, MountResult result) =>
+        MountStatusLine.Describe(target, result);
 
     private async void UnmountMount_Click(object sender, RoutedEventArgs e)
     {
@@ -2298,7 +2498,7 @@ public partial class RemoteEndpointManagerWindow : Window
         var existing = Application.Current?.Windows.OfType<CloudTransferWindow>().FirstOrDefault();
         if (existing is null)
         {
-            new CloudTransferWindow(_transfers).Show();
+            new CloudTransferWindow(_transfers, _files).Show();
             return;
         }
         if (existing.WindowState == WindowState.Minimized) existing.WindowState = WindowState.Normal;

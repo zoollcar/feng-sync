@@ -268,6 +268,32 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     }
 
     /// <summary>
+    /// Sets the process-wide transfer rate through <c>core/bwlimit</c>. The payload is one field because that
+    /// is all the method reads: measured against the bundled v1.75.0, sending an extra <c>fs</c> alongside
+    /// <c>rate</c> sets the <b>global</b> limit and reports success — per-remote specs such as <c>nas:1M</c> are
+    /// refused outright (<c>bad bwlimit: bad suffix 's'</c>), and the <c>--bwlimit</c> time-table form is
+    /// refused too (<c>need exactly 1 bandwidth setting</c>). A per-endpoint limit is therefore not expressible
+    /// and this method must not pretend otherwise. <c>off</c> clears the limit.
+    /// </summary>
+    public async Task<RcloneBandwidthState> SetBandwidthLimitAsync(string rate, CancellationToken ct = default)
+        => ParseBandwidth(await CallAsync("core/bwlimit", new { rate }, ct));
+
+    /// <summary>Reads back the rate rclone is currently applying, so a caller can tell "already set" from "not yet".</summary>
+    public async Task<RcloneBandwidthState> GetBandwidthLimitAsync(CancellationToken ct = default)
+        => ParseBandwidth(await CallAsync("core/bwlimit", new { }, ct));
+
+    /// <summary>
+    /// Reads a <c>core/bwlimit</c> reply. A missing field is reported as -1 (rclone's own "unlimited" value)
+    /// rather than 0, because 0 read as a rate would look like "no bytes per second".
+    /// </summary>
+    private static RcloneBandwidthState ParseBandwidth(JsonElement response)
+    {
+        long Value(string name) => response.TryGetProperty(name, out var value) && value.TryGetInt64(out var parsed) ? parsed : -1;
+        var rate = response.TryGetProperty("rate", out var rateValue) ? rateValue.GetString() ?? "off" : "off";
+        return new(rate, Value("bytesPerSecond"), Value("bytesPerSecondTx"), Value("bytesPerSecondRx"));
+    }
+
+    /// <summary>
     /// Opens one object's bytes from <paramref name="offset"/> onward through the daemon's
     /// <c>--rc-serve</c> endpoint. Returns <c>null</c> when the daemon does not answer with a partial
     /// response, which is the caller's signal that the transfer cannot be continued.
@@ -506,6 +532,16 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
 }
 
 public sealed record RcloneTransferStats(long BytesTransferred, long TotalBytes, double BytesPerSecond);
+
+/// <summary>
+/// What <c>core/bwlimit</c> reports back: the normalised rate string plus the three byte-per-second figures.
+/// <see cref="BytesPerSecondTx"/> is the <b>upload</b> leg and <see cref="BytesPerSecondRx"/> the download leg;
+/// <c>-1</c> is rclone's value for "unlimited", not an error.
+/// </summary>
+public sealed record RcloneBandwidthState(string Rate, long BytesPerSecond, long BytesPerSecondTx, long BytesPerSecondRx)
+{
+    public bool IsUnlimited => BytesPerSecondTx < 0 && BytesPerSecondRx < 0;
+}
 public sealed record RcloneDirectoryEntry(string Path, bool IsDirectory, long Size, DateTimeOffset? ModifiedUtc);
 
 /// <summary>

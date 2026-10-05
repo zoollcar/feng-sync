@@ -18,7 +18,7 @@ public partial class DriveHubApp : Application, IAppServiceHost
 {
     private readonly RcloneLifecycleHost _rcloneLifecycle = new();
     private readonly RcloneMountService _mountService;
-    private readonly CloudTransferQueue _cloudTransfers = new();
+    private readonly CloudTransferQueue _cloudTransfers = new(history: new CloudTransferHistoryRepository());
     private int _shutdownStarted;
 
     public DriveHubApp()
@@ -26,7 +26,9 @@ public partial class DriveHubApp : Application, IAppServiceHost
         // DriveHub owns its own daemon, so it needs its own proxy hook: the main shell's App never runs
         // in this process, and without this the standalone entry would silently ignore the setting.
         _rcloneLifecycle.ProxyOptionsProvider = RcloneProxySettings.LoadAsync;
-        _mountService = new RcloneMountService(_rcloneLifecycle);
+        // DriveHub owns its own daemon, so it needs its own record store: a mount started here is remembered
+        // here, and this entry point has to be able to put its own mounts back without the main shell running.
+        _mountService = new RcloneMountService(_rcloneLifecycle, records: new MountRecordStore());
         // Before OnStartup: the window reads AppServices.Current while its own constructor runs.
         AppServices.Install(this);
         // The window coordinates asynchronous cleanup before the dispatcher is torn down.
@@ -45,6 +47,27 @@ public partial class DriveHubApp : Application, IAppServiceHost
         MainWindow = window;
         window.Closed += async (_, _) => { await CleanupAsync(); Shutdown(); };
         window.Show();
+        _ = RestoreAutoMountsAsync();
+    }
+
+    /// <summary>
+    /// Puts back the mounts the user marked for automatic restore. Only those: the rest are offered by the
+    /// mount list, because mounting everything at startup would slow it down and a failure here is invisible.
+    /// </summary>
+    private async Task RestoreAutoMountsAsync()
+    {
+        try
+        {
+            var records = await _mountService.Records!.LoadAsync();
+            if (records.Count == 0) return;
+            var live = await _mountService.ScanAsync();
+            var plan = MountRecovery.Plan(records, live.Select(mount => mount.MountPoint).ToList(), WinFspDetector.Detect().Installed);
+            var outcome = await MountRestore.RunAsync(_mountService, plan, automaticOnly: true);
+            if (outcome.Restored > 0 || outcome.Failed > 0)
+                Trace.TraceInformation("DriveHub restored {0} auto-mount(s), {1} failed.", outcome.Restored, outcome.Failed);
+            foreach (var failure in outcome.Failures) Trace.TraceWarning("Auto-mount failed: {0}", failure);
+        }
+        catch (Exception ex) { Trace.TraceError("Unable to restore remembered mounts: " + ex); }
     }
 
     /// <summary>

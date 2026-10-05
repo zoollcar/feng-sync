@@ -2,10 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="挂载到…"
-        Width="540"
-        Height="420"
-        MinWidth="420"
-        MinHeight="340"
+        Width="600"
+        Height="640"
+        MinWidth="480"
+        MinHeight="420"
         WindowStartupLocation="CenterOwner"
         AutomationProperties.AutomationId="MountPickerDialog"
         AutomationProperties.Name="选择挂载位置">
@@ -13,6 +13,8 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -58,9 +60,75 @@
                     <TextBlock Grid.Row="1" x:Name="DirectoryHint" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,8,0,0" />
                 </Grid>
             </TabItem>
+            <!-- Measured: rclone accepts a UNC mount point and answers with the drive letter Windows allocated
+                 for it, so the path the user types is not the mount point that ends up existing. The hint says
+                 so rather than promising the path back. -->
+            <TabItem Header="网络共享" AutomationProperties.AutomationId="MountPickerUncTab" AutomationProperties.Name="选择网络共享挂载位置">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBox x:Name="UncPathBox"
+                             AutomationProperties.AutomationId="MountPickerUncPath"
+                             AutomationProperties.Name="网络共享路径"
+                             TextChanged="UncPathBox_TextChanged" />
+                    <TextBlock Grid.Row="1" x:Name="UncHint" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                </Grid>
+            </TabItem>
         </TabControl>
 
-        <DockPanel Grid.Row="2" Margin="0,14,0,0">
+        <!-- Dynamic text, so it carries an AutomationId rather than a static accessible name. -->
+        <TextBlock x:Name="CapacityHint"
+                   Grid.Row="2"
+                   AutomationProperties.AutomationId="MountPickerCapacityHint"
+                   Style="{StaticResource CaptionTextStyle}"
+                   TextWrapping="Wrap"
+                   Margin="0,10,0,0" />
+
+        <Expander x:Name="AdvancedExpander"
+                  Grid.Row="3"
+                  Header="高级选项"
+                  Margin="0,12,0,0"
+                  AutomationProperties.AutomationId="MountPickerAdvanced"
+                  AutomationProperties.Name="挂载高级选项">
+            <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="4,8,4,4">
+                    <TextBlock Text="卷标（Windows 显示的名称）" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="VolumeNameBox" AutomationProperties.AutomationId="MountPickerVolumeName" AutomationProperties.Name="卷标" Margin="0,4,0,10" />
+
+                    <TextBlock Text="缓存模式" Style="{StaticResource CaptionTextStyle}" />
+                    <ComboBox x:Name="CacheModeBox" AutomationProperties.AutomationId="MountPickerCacheMode" AutomationProperties.Name="VFS 缓存模式" Width="220" HorizontalAlignment="Left" Margin="0,4,0,4" SelectionChanged="Advanced_Changed" />
+                    <TextBlock x:Name="CacheModeHint" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                    <TextBlock Text="缓存上限（如 10G；留空沿用设置里的默认上限；填 0 表示不限）" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="CacheMaxSizeBox" AutomationProperties.AutomationId="MountPickerCacheMaxSize" AutomationProperties.Name="缓存上限" Margin="0,4,0,10" />
+
+                    <TextBlock Text="缓存保留时间（秒，0 表示用默认 1 小时）" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="CacheMaxAgeBox" AutomationProperties.AutomationId="MountPickerCacheMaxAge" AutomationProperties.Name="缓存保留时间" Margin="0,4,0,10" />
+
+                    <TextBlock Text="写入回写延迟（秒，0 表示用默认 5 秒）" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="WriteBackBox" AutomationProperties.AutomationId="MountPickerWriteBack" AutomationProperties.Name="写回延迟" Margin="0,4,0,10" />
+
+                    <TextBlock Text="目录缓存时间（秒，0 表示用默认 5 分钟）" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="DirCacheTimeBox" AutomationProperties.AutomationId="MountPickerDirCacheTime" AutomationProperties.Name="目录缓存时间" Margin="0,4,0,10" />
+
+                    <TextBlock Text="轮询间隔（秒，0 表示用默认 1 分钟；须小于目录缓存时间）" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="PollIntervalBox" AutomationProperties.AutomationId="MountPickerPollInterval" AutomationProperties.Name="轮询间隔" Margin="0,4,0,10" />
+
+                    <CheckBox x:Name="NetworkModeBox" AutomationProperties.AutomationId="MountPickerNetworkMode" AutomationProperties.Name="作为网络驱动器挂载" Content="作为网络驱动器挂载（而不是固定磁盘）" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
+                    <CheckBox x:Name="ReadOnlyBox" AutomationProperties.AutomationId="MountPickerReadOnly" AutomationProperties.Name="只读挂载" Content="只读挂载（拒绝一切写入）" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
+                    <CheckBox x:Name="NoChecksumBox" AutomationProperties.AutomationId="MountPickerNoChecksum" AutomationProperties.Name="不比较校验值" Content="不比较校验值（默认开启）" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
+                    <CheckBox x:Name="NoModTimeBox" AutomationProperties.AutomationId="MountPickerNoModTime" AutomationProperties.Name="不读写修改时间" Content="不读写修改时间（默认开启）" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
+                    <CheckBox x:Name="NoSeekBox" AutomationProperties.AutomationId="MountPickerNoSeek" AutomationProperties.Name="禁止文件内定位" Content="禁止文件内定位（部分后端处理不好）" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
+
+                    <!-- No static AutomationProperties.Name: this line *is* the summary of what will be sent. -->
+                    <TextBlock x:Name="AdvancedSummary" AutomationProperties.AutomationId="MountPickerAdvancedSummary" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                </StackPanel>
+            </ScrollViewer>
+        </Expander>
+
+        <DockPanel Grid.Row="4" Margin="0,14,0,0">
             <TextBlock x:Name="StatusText"
                        AutomationProperties.AutomationId="MountPickerStatus"
                        Style="{StaticResource CaptionTextStyle}"

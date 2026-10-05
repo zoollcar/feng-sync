@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using FengSync.Core.Rclone.Lifecycle;
@@ -18,18 +19,27 @@ public sealed record MountStopFailure(string MountPoint, int Pid, string Reason)
 /// Feng Sync mounts. WMI is retained only to show externally-owned mounts and is never used to stop one.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class RcloneMountService
+public sealed class RcloneMountService : IMountStarter
 {
     private static readonly TimeSpan MountStateTimeout = TimeSpan.FromSeconds(8);
     private readonly IRcloneLifecycleClient _rc;
     private readonly IProcessEnumerator _externalEnumerator;
+    private readonly MountRecordStore? _records;
     private readonly Dictionary<string, ManagedMountMetadata> _managed = new(StringComparer.OrdinalIgnoreCase);
 
-    public RcloneMountService(IRcloneLifecycleClient rc, IProcessEnumerator? externalEnumerator = null)
+    /// <param name="records">
+    /// Optional memory of the mounts this application starts. Absent means mounts are not remembered at all,
+    /// which is what the focused unit tests and the real-WinFsp integration test want.
+    /// </param>
+    public RcloneMountService(IRcloneLifecycleClient rc, IProcessEnumerator? externalEnumerator = null, MountRecordStore? records = null)
     {
         _rc = rc;
         _externalEnumerator = externalEnumerator ?? new WmiProcessEnumerator();
+        _records = records;
     }
+
+    /// <summary>Where the mounts this application starts are remembered, or <see langword="null"/> when not.</summary>
+    public MountRecordStore? Records => _records;
 
     public async Task<IReadOnlyList<MountInfo>> ScanAsync(CancellationToken ct = default)
     {
@@ -86,11 +96,20 @@ public sealed class RcloneMountService
     }
 
     public async Task MountAsync(MountTarget target, CancellationToken ct = default)
+        => await MountAsync(new MountRequest(target), ct).ConfigureAwait(false);
+    /// <summary>
+    /// Mounts a remote with this mount's own options. The target is validated first, the endpoint is asked how
+    /// big it is, and the record of the mount is written only after rclone confirms the mount point exists —
+    /// a mount that failed must not come back on the next launch.
+    /// </summary>
+    public async Task<MountResult> MountAsync(MountRequest request, CancellationToken ct = default)
     {
+        var target = request.Target;
         await ValidateAsync(target, ct).ConfigureAwait(false);
         var mountTypes = await _rc.CallAsync("mount/types", new { }, ct).ConfigureAwait(false);
         var mountType = SelectMountImplementation(mountTypes)
             ?? throw new InvalidOperationException("当前 rclone 运行时没有可用的 mount 实现。");
+        var options = await WithCapacityAsync(request, ct).ConfigureAwait(false);
         // No _config here: the VFS cache root belongs to the daemon (see RcloneDaemon.BuildArguments), and a
         // per-call CacheDir override is silently ignored by rclone.
         var response = await _rc.CallAsync("mount/mount", new
@@ -98,8 +117,8 @@ public sealed class RcloneMountService
             fs = target.RemoteName + ":" + target.RootPath.Trim('/'),
             mountPoint = target.MountPoint,
             mountType,
-            mountOpt = new { },
-            vfsOpt = MountOptions.CreateVfsOptions()
+            mountOpt = MountOptions.CreateMountOptions(options),
+            vfsOpt = MountOptions.CreateVfsOptions(options)
         }, ct).ConfigureAwait(false);
 
         var actualPoint = response.TryGetProperty("mountPoint", out var pointValue)
@@ -114,9 +133,59 @@ public sealed class RcloneMountService
             catch { /* preserve the original structured failure */ }
             throw new InvalidOperationException($"rclone 已接受挂载请求，但挂载点“{actualPoint}”未在预期时间内就绪。");
         }
+        await RecordAsync(request, actualPoint, ct).ConfigureAwait(false);
+        // The reported mount point is not always the requested one (a UNC request comes back as the drive
+        // letter Windows allocated), so the caller has to be told what actually exists rather than assume.
+        return new MountResult(actualPoint, options?.DiskSpaceTotalSize);
     }
 
-    public async Task<MountStopResult> UnmountAsync(MountInfo info, CancellationToken ct = default)
+    /// <summary>
+    /// Adds the endpoint's own reported size when the caller did not choose one, so the mounted volume shows
+    /// real numbers instead of a fabricated one. A backend that cannot answer leaves the key out entirely —
+    /// see <see cref="MountCapacity"/> for why writing 0 would be worse than writing nothing.
+    /// </summary>
+    private async Task<MountOptionsSettings?> WithCapacityAsync(MountRequest request, CancellationToken ct)
+    {
+        if (request.Options?.DiskSpaceTotalSize is not null) return request.Options;
+        long? total;
+        try
+        {
+            var fs = request.Target.RemoteName + ":" + request.Target.RootPath.Trim('/');
+            total = MountCapacity.TotalBytes(await _rc.CallAsync("operations/about", new { fs }, ct).ConfigureAwait(false));
+        }
+        catch (Exception ex) { Trace.TraceInformation("Mount capacity unavailable: {0}", ex.Message); return request.Options; }
+        if (total is null) return request.Options;
+        return (request.Options ?? new MountOptionsSettings()) with { DiskSpaceTotalSize = total };
+    }
+
+    /// <summary>
+    /// Remembers a successful mount. Recorded against the <b>actual</b> mount point rclone answered with, which
+    /// is not always the requested one: a UNC request comes back as the drive letter Windows allocated.
+    /// </summary>
+    private async Task RecordAsync(MountRequest request, string actualPoint, CancellationToken ct)
+    {
+        if (_records is null) return;
+        try
+        {
+            // RememberAsync keeps an existing record's AutoMount choice and creation time: mounting the same
+            // point again — a reconnect, or a mount the list restored — must not quietly turn auto-mount off.
+            await _records.RememberAsync(new MountRecord(
+                request.Target.RemoteName, request.Target.Provider, actualPoint, request.Target.Kind,
+                request.Target.RootPath, request.Options), ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Losing the memory of a mount is a convenience failure, not a mount failure.
+            Trace.TraceWarning("Unable to record the mount: {0}", ex.Message);
+        }
+    }
+
+    /// <param name="forget">
+    /// Whether the unmount also deletes the record of the mount. True for the unmount the user asked for — that
+    /// is a decision to forget — and false for the unmount a reconnect does on its way to mounting it again,
+    /// which must leave the record (and its auto-mount choice) intact.
+    /// </param>
+    public async Task<MountStopResult> UnmountAsync(MountInfo info, bool forget = true, CancellationToken ct = default)
     {
         if (!info.CanUnmount)
             return new([new MountStopFailure(info.MountPoint, info.Pid ?? -1, "该挂载由外部程序管理；Feng Sync 仅显示它，不会结束或卸载它。")]);
@@ -129,6 +198,17 @@ public sealed class RcloneMountService
             // The VFS cache is daemon-wide, so unmounting one mount must not clear it; a later mount of the
             // same remote would otherwise re-download everything.
             _managed.Remove(NormalizeMountPoint(info.MountPoint));
+            // An unmount the user asked for is also a decision to forget the mount. The shutdown path below
+            // deliberately does not do this: stopping everything while exiting is not the same as the user
+            // saying they no longer want it back.
+            if (forget && _records is not null)
+            {
+                try { await _records.RemoveAsync(info.MountPoint, ct).ConfigureAwait(false); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Trace.TraceWarning("Unable to forget the unmounted mount: {0}", ex.Message);
+                }
+            }
             return new([]);
         }
         catch (Exception ex)
@@ -137,6 +217,11 @@ public sealed class RcloneMountService
         }
     }
 
+    /// <summary>
+    /// Stops every mount this process owns. Called while shutting down, so it deliberately <b>keeps</b> the
+    /// remembered records: everything Feng Sync starts is unmounted on exit, and forgetting them here would
+    /// mean a mount the user set up never comes back and never gets offered either.
+    /// </summary>
     public async Task<MountStopResult> StopAllFengSyncMountsAsync(CancellationToken ct = default)
     {
         var failures = new List<MountStopFailure>();

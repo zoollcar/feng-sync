@@ -11,7 +11,7 @@ public partial class App : System.Windows.Application, IAppServiceHost
     private readonly RcloneLifecycleHost _rcloneLifecycle = new();
     private readonly SftpServerHostedService _sftpService;
     private readonly RcloneMountService _mountService;
-    private readonly CloudTransferQueue _cloudTransfers = new();
+    private readonly CloudTransferQueue _cloudTransfers = new(history: new CloudTransferHistoryRepository());
     private int _shutdownStarted;
 
     public App()
@@ -20,7 +20,10 @@ public partial class App : System.Windows.Application, IAppServiceHost
         // read from disk exactly once per process — at the moment rclone can still be told about it.
         _rcloneLifecycle.ProxyOptionsProvider = RcloneProxySettings.LoadAsync;
         _sftpService = new SftpServerHostedService(_rcloneLifecycle);
-        _mountService = new RcloneMountService(_rcloneLifecycle);
+        // The record store is what makes a mount survive a restart: it remembers what was mounted, and the
+        // mount list offers to put it back. Records deliberately outlive a normal exit, because shutting down
+        // unmounts everything this process owns.
+        _mountService = new RcloneMountService(_rcloneLifecycle, records: new MountRecordStore());
         // Installed here, not in OnStartup: StartupUri windows are created after the constructor, and
         // windows read AppServices.Current while their own constructors run.
         AppServices.Install(this);
@@ -53,6 +56,7 @@ public partial class App : System.Windows.Application, IAppServiceHost
         UpdatedFromVersion = e.Args.SkipWhile(x => x != "--updated-from").Skip(1).FirstOrDefault();
         UpdateTaskDirectory = e.Args.SkipWhile(x => x != "--update-task").Skip(1).FirstOrDefault();
         _ = StartConfiguredSftpAsync();
+        _ = RestoreAutoMountsAsync();
     }
 
     public string? UpdatedFromVersion { get; private set; }
@@ -94,6 +98,31 @@ public partial class App : System.Windows.Application, IAppServiceHost
             if (options.Enabled && options.StartWithApplication) await _sftpService.StartAsync(options);
         }
         catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to start configured SFTP server: " + ex); }
+    }
+
+    /// <summary>
+    /// Puts back the mounts the user marked for automatic restore, and only those. Everything else is offered
+    /// by the mount list instead: mounting the lot at startup would slow it down, and a mount that fails here
+    /// is a failure nobody can see. Failures are traced rather than shown — a modal dialog before the main
+    /// window has drawn is not a place anyone can act on one.
+    /// </summary>
+    private async Task RestoreAutoMountsAsync()
+    {
+        try
+        {
+            var store = _mountService.Records;
+            if (store is null) return;
+            var records = await store.LoadAsync();
+            if (records.Count == 0) return;
+            var live = await _mountService.ScanAsync();
+            var plan = MountRecovery.Plan(records, live.Select(mount => mount.MountPoint).ToList(), WinFspDetector.Detect().Installed);
+            var outcome = await MountRestore.RunAsync(_mountService, plan, automaticOnly: true);
+            if (outcome.Restored > 0 || outcome.Failed > 0)
+                System.Diagnostics.Trace.TraceInformation("Restored {0} auto-mount(s), {1} failed.", outcome.Restored, outcome.Failed);
+            foreach (var failure in outcome.Failures)
+                System.Diagnostics.Trace.TraceWarning("Auto-mount failed: {0}", failure);
+        }
+        catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to restore remembered mounts: " + ex); }
     }
 
     protected override void OnExit(System.Windows.ExitEventArgs e)

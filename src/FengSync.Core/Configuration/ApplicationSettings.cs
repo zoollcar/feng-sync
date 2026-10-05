@@ -72,6 +72,37 @@ public sealed record ApplicationSettings
     public bool CloudResumeOnStartup { get; init; } = true;
 
     /// <summary>
+    /// Upload ceiling for cloud transfers, in bytes per second. 0 means no limit, which is what every
+    /// installation had before this setting existed. Applied through <c>core/bwlimit</c>, which is a
+    /// <b>process-wide</b> rate: rclone refuses per-remote specs there, so this cannot be narrowed to one
+    /// endpoint (see <see cref="CloudTransferLimit"/>).
+    /// </summary>
+    public long CloudUploadLimitBytesPerSecond { get; init; }
+
+    /// <summary>Download ceiling for cloud transfers, in bytes per second. 0 means no limit.</summary>
+    public long CloudDownloadLimitBytesPerSecond { get; init; }
+
+    /// <summary>
+    /// The daily window cloud transfers may run in. <see langword="null"/> means any time, which is the
+    /// behaviour every installation had before this setting existed.
+    /// </summary>
+    public CloudTransferTimeWindow? CloudTransferTimeWindow { get; init; }
+
+    /// <summary>
+    /// What to do once a batch of cloud transfers has drained with nothing failed. Defaults to doing
+    /// nothing, because the other three take the machine away from the user; whichever is chosen is
+    /// confirmed before it happens.
+    /// </summary>
+    public CloudAfterTransferAction CloudAfterTransfer { get; init; } = CloudAfterTransferAction.None;
+
+    /// <summary>
+    /// Ceiling for the mount VFS cache under <see cref="AppDataPaths.MountCache"/>. It is the default a new
+    /// mount starts from; a single mount can override it in the mount picker. 0 means unlimited, which is
+    /// rclone's own default and is a real choice — the cache then grows until the disk fills.
+    /// </summary>
+    public long MountCacheMaxSizeBytes { get; init; } = 10L * 1024 * 1024 * 1024;
+
+    /// <summary>
     /// Fixed proxy for the rclone processes this application starts, for example <c>proxy.corp:8080</c> or
     /// <c>socks5://127.0.0.1:1080</c>. Empty inherits the environment variables and then the Windows
     /// Internet Settings.
