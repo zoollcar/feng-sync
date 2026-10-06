@@ -206,7 +206,7 @@
         </Border>
         <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
         <TextBlock x:Name="LeftEndpointTitle" AutomationProperties.AutomationId="LeftEndpointTitle" Text="{Binding [Main.NoEndpoint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" LineHeight="16"/>
-        <TextBox x:Name="LeftPath" AutomationProperties.AutomationId="LeftPath" AutomationProperties.Name="{Binding [Main.LeftEndpointPath], Source={l:Lang}}" Background="Transparent" BorderThickness="0" Padding="0" MinHeight="0" Height="22" VerticalContentAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="{Binding [Main.ChooseEndpoint], Source={l:Lang}}" TextChanged="EndpointPath_TextChanged" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        <TextBox x:Name="LeftPath" AutomationProperties.AutomationId="LeftPath" AutomationProperties.Name="{Binding [Main.LeftEndpointPath], Source={l:Lang}}" Background="Transparent" BorderThickness="0" Padding="0" MinHeight="0" Height="22" VerticalContentAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="{Binding [Main.ChooseEndpoint], Source={l:Lang}, Mode=OneWay}" TextChanged="EndpointPath_TextChanged" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
        </StackPanel>
        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
         <Button AutomationProperties.AutomationId="AddLeftLocalEndpoint" AutomationProperties.Name="{Binding [Main.PickLeftLocal], Source={l:Lang}}" Content="{Binding [Main.Local], Source={l:Lang}}" Click="BrowseLeft_Click" Style="{StaticResource TertiaryButtonStyle}"/>
@@ -237,7 +237,7 @@
         </Border>
         <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
         <TextBlock x:Name="RightEndpointTitle" AutomationProperties.AutomationId="RightEndpointTitle" Text="{Binding [Main.NoEndpoint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" LineHeight="16"/>
-        <TextBox x:Name="RightPath" AutomationProperties.AutomationId="RightPath" AutomationProperties.Name="{Binding [Main.RightEndpointPath], Source={l:Lang}}" Background="Transparent" BorderThickness="0" Padding="0" MinHeight="0" Height="22" VerticalContentAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="{Binding [Main.ChooseEndpoint], Source={l:Lang}}" TextChanged="EndpointPath_TextChanged" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        <TextBox x:Name="RightPath" AutomationProperties.AutomationId="RightPath" AutomationProperties.Name="{Binding [Main.RightEndpointPath], Source={l:Lang}}" Background="Transparent" BorderThickness="0" Padding="0" MinHeight="0" Height="22" VerticalContentAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="{Binding [Main.ChooseEndpoint], Source={l:Lang}, Mode=OneWay}" TextChanged="EndpointPath_TextChanged" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
        </StackPanel>
        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
         <Button AutomationProperties.AutomationId="AddRightLocalEndpoint" AutomationProperties.Name="{Binding [Main.PickRightLocal], Source={l:Lang}}" Content="{Binding [Main.Local], Source={l:Lang}}" Click="BrowseRight_Click" Style="{StaticResource TertiaryButtonStyle}"/>
