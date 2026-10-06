@@ -18,11 +18,17 @@ public static class AppLanguageStartup
     /// worse bug than a few milliseconds of startup, and the file being read is one small local JSON.
     /// A damaged or absent file leaves the default in place.
     /// </summary>
+    /// <remarks>
+    /// This runs on the dispatcher thread, inside the frame that would also have to run a task continuation, so
+    /// the read has to be the blocking one. Blocking here on <see cref="SettingsStore.LoadAsync"/> parks that
+    /// thread on a continuation posted back to itself: the process stays alive with no window and no CPU, which
+    /// is what a user with a settings file on disk saw.
+    /// </remarks>
     public static void ApplySavedLanguage()
     {
         try
         {
-            var settings = new SettingsStore().LoadAsync().GetAwaiter().GetResult().Settings;
+            var settings = new SettingsStore().Load().Settings;
             AppLanguageContext.Current.Apply(settings.Language);
         }
         catch (Exception ex)

@@ -209,6 +209,53 @@ public sealed class AppLanguageTests
         }
     }
 
+    /// <summary>
+    /// The startup read happens on the UI thread, inside the dispatcher frame, with a
+    /// <see cref="DispatcherSynchronizationContext"/> installed — which is the only thread that cannot afford
+    /// to block on a task whose continuation is posted back to it. This is the shape a real user hit: with a
+    /// settings file on disk the process stayed alive with no window and no CPU, because the dispatcher thread
+    /// was parked on a read whose continuation could never run. It is asserted with a watchdog rather than a
+    /// timeout so the failure is a failing assertion instead of a hung suite.
+    /// </summary>
+    [Fact]
+    public async Task The_startup_language_read_returns_on_a_thread_that_owns_a_dispatcher()
+    {
+        using var scope = new LanguageScope();
+        var directory = NewDirectory();
+        var previousDataDir = Environment.GetEnvironmentVariable("FENGSYNC_DATA_DIR");
+        try
+        {
+            await new SettingsStore(Path.Combine(directory, "FengSync.local.json"))
+                .SaveAsync(new ApplicationSettings { Language = AppLanguage.English });
+            Environment.SetEnvironmentVariable("FENGSYNC_DATA_DIR", directory);
+
+            var returned = new ManualResetEventSlim();
+            var thread = new Thread(() =>
+            {
+                // A dispatcher thread that is not pumping: exactly what App.OnStartup runs on.
+                var dispatcher = Dispatcher.CurrentDispatcher;
+                SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
+                AppLanguageStartup.ApplySavedLanguage();
+                returned.Set();
+            });
+            thread.IsBackground = true;
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            try
+            {
+                Assert.True(returned.Wait(TimeSpan.FromSeconds(15)),
+                    "ApplySavedLanguage never returned on a dispatcher thread: the settings read deadlocked.");
+            }
+            finally { thread.Join(TimeSpan.FromSeconds(5)); }
+            Assert.Equal(AppLanguage.English, AppLanguageContext.Current.Language);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FENGSYNC_DATA_DIR", previousDataDir);
+            TryDelete(directory);
+        }
+    }
+
     [Fact]
     public void An_absent_or_unreadable_settings_file_leaves_the_default_language_in_place()
     {
