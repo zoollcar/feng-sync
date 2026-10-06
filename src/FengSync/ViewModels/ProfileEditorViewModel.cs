@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using FengSync.Core;
 using FengSync.Core.Capabilities;
 using FengSync.Core.Configuration;
+using FengSync.Localization;
 
 namespace FengSync.ViewModels;
 
@@ -15,7 +16,16 @@ public sealed class ProfileEditorViewModel : INotifyPropertyChanged
     public SyncProfile Profile { get => _profile; private set { _profile = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsDirty)); RefreshCompatibility(); } }
     public bool IsDirty => !Equals(Profile, _original);
     public ProfileCompatibilityResult Compatibility { get; private set; } = new([], []);
-    public IReadOnlyList<ProfileSectionViewModel> Sections { get; } = [new("常规", "general"), new("比较", "comparison"), new("过滤器", "filter"), new("同步", "sync"), new("版本管理", "versioning"), new("性能与可靠性", "performance")];
+    // The second element of each pair is the section's stable id — never translated; the first is only the label.
+    public IReadOnlyList<ProfileSectionViewModel> Sections { get; } =
+    [
+        new(Tr.F("ProfileEditor.SectionGeneral"), "general"),
+        new(Tr.F("ProfileEditor.SectionComparison"), "comparison"),
+        new(Tr.F("ProfileEditor.SectionFilter"), "filter"),
+        new(Tr.F("ProfileEditor.SectionSync"), "sync"),
+        new(Tr.F("ProfileEditor.SectionVersioning"), "versioning"),
+        new(Tr.F("ProfileEditor.SectionPerformance"), "performance")
+    ];
     public void Update(Func<SyncProfile, SyncProfile> update) => Profile = update(Profile);
     public SyncProfile SaveAsNew() => Profile with { Id = Guid.NewGuid().ToString("N") };
     private void RefreshCompatibility() { Compatibility = new FeatureCapabilityService().Evaluate(Profile); OnPropertyChanged(nameof(Compatibility)); }
