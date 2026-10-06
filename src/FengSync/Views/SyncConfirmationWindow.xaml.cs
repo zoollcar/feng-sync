@@ -1,5 +1,6 @@
 using System.Windows;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Views;
 
@@ -11,18 +12,18 @@ public partial class SyncConfirmationWindow : Window
     public SyncConfirmationWindow(SyncRiskSummary summary, SafetyValidationResult safety, string profileName, long requiredBytes = 0)
     {
         InitializeComponent(); _profileName = profileName; _requiresProfileName = SyncConfirmationPolicy.CanOverrideWithProfileName(safety);
-        TitleText.Text = _requiresProfileName ? "删除阈值超限：需要明确确认" : "同步包含覆盖或删除操作";
-        CopyText.Text = $"复制：{summary.Copies} 项"; OverwriteText.Text = $"覆盖：{summary.Overwrites} 项";
-        DeleteText.Text = $"删除：{summary.Deletes} 项"; TransferText.Text = $"传输：{FormatBytes(summary.TransferBytes)}";
-        SpaceText.Text = requiredBytes > 0 ? $"估算目标空间需求：{FormatBytes(requiredBytes)}" : "空间检查：已按本地目标可用空间验证。";
+        TitleText.Text = _requiresProfileName ? Tr.F("Sync.ThresholdExceeded") : Tr.F("Sync.HasOverwriteOrDelete");
+        CopyText.Text = Tr.Format("Sync.Copies", summary.Copies); OverwriteText.Text = Tr.Format("Sync.Overwrites", summary.Overwrites);
+        DeleteText.Text = Tr.Format("Sync.Deletes", summary.Deletes); TransferText.Text = Tr.Format("Sync.Transfer", FormatBytes(summary.TransferBytes));
+        SpaceText.Text = requiredBytes > 0 ? Tr.Format("Sync.SpaceRequired", FormatBytes(requiredBytes)) : Tr.F("Sync.SpaceVerified");
         IssuesText.Text = string.Join(Environment.NewLine, safety.Issues.Select(x => x.Message));
         IssuesCallout.Visibility = safety.Issues.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (_requiresProfileName) { ProfileConfirmationPanel.Visibility = Visibility.Visible; ProfileConfirmationPrompt.Text = $"要一次性放行删除阈值，请输入 Profile 名称“{profileName}”。"; }
+        if (_requiresProfileName) { ProfileConfirmationPanel.Visibility = Visibility.Visible; ProfileConfirmationPrompt.Text = Tr.Format("Sync.TypeProfileName", profileName); }
     }
     private void Confirm_Click(object sender, RoutedEventArgs e)
     {
         if (_requiresProfileName && !string.Equals(ProfileNameInput.Text.Trim(), _profileName, StringComparison.Ordinal))
-        { MessageBox.Show("输入的 Profile 名称不匹配，未执行同步。", "确认同步", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        { MessageBox.Show(Tr.F("Sync.NameMismatch"), Tr.F("Sync.WindowTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         DialogResult = true;
     }
     private static string FormatBytes(long value) => value < 1024 ? $"{value:N0} B" : value < 1024 * 1024 ? $"{value / 1024d:N1} KB" : $"{value / 1024d / 1024:N1} MB";

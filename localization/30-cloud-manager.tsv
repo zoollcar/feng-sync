@@ -1,0 +1,233 @@
+# ---- Cloud manager: endpoint list, file browser, mounts (E1/E2/E3 entries included) ----
+Mgr.AddressBarName	远程路径地址栏	Remote path address bar
+Mgr.Ascending	升序	Ascending
+Mgr.AutoMount	所选挂载在下次启动时自动挂载	Mount the selected mount automatically at the next start
+Mgr.AutoMountName	所选挂载随应用启动自动挂载	Mount the selected mount automatically when the application starts
+Mgr.AutoMountNoRecord	这个挂载没有本应用的记录（可能由外部程序启动），因此无法设置自动挂载。	This mount has no record from this application (it may have been started by another program), so automatic mounting cannot be set up.
+Mgr.AutoMountNoRecordFor	没有找到 {0} 的挂载记录，无法设置自动挂载。	No mount record was found for {0}, so automatic mounting cannot be set up.
+Mgr.AutoMountOff	已取消：{0} 不再随启动自动挂载。	Cancelled: {0} is no longer mounted automatically at start.
+Mgr.AutoMountOn	已设置：{0} 会在下次启动时自动挂载。	Set: {0} will be mounted automatically at the next start.
+Mgr.AutoMountSaveFailed	保存自动挂载设置失败：{0}	Saving the automatic mount setting failed: {0}
+Mgr.Back	后退	Back
+Mgr.BookmarksCorruptBackup	收藏文件读不出来，已备份为 {0}，收藏与最近访问从空列表开始。	The favorites file could not be read; it was backed up as {0}, and favorites and recent items start from an empty list.
+Mgr.BookmarksLoadFailed	无法读取收藏与最近访问：{0}	The favorites and recent items could not be read: {0}
+Mgr.BrowserTitle	文件浏览器	File browser
+Mgr.BulletField	 · {0}：{1}	 · {0}: {1}
+Mgr.BusyCreate	正在新建…	Creating…
+Mgr.BusyLogin	正在登录…	Signing in…
+Mgr.BusyNew	正在新建…	Creating…
+Mgr.BusyOpen	正在打开…	Opening…
+Mgr.BusyRefresh	正在刷新…	Refreshing…
+Mgr.CacheAlreadyEmpty	挂载缓存已经是空的（{0}）。	The mount cache is already empty ({0}).
+Mgr.CacheClearFailed	清理缓存失败：{0}	Clearing the cache failed: {0}
+Mgr.CacheCleared	已清理挂载缓存：{0} 个文件。	Cleared the mount cache: {0} files.
+Mgr.CacheClearedPartial	已清理挂载缓存：{0} / {1} 个文件；其余正被挂载占用，已保留。	Cleared the mount cache: {0} / {1} files; the rest are in use by a mount and were kept.
+Mgr.CannotCreateSyncTask	无法创建同步任务。	The sync job could not be created.
+Mgr.CannotReconnectProvider	只有需要浏览器授权的端点可以重新登录；{0} 请直接编辑端点参数。	Only endpoints that need browser authorization can be signed in again; for {0}, edit the endpoint parameters directly.
+Mgr.CheckEndpoint	检查连接	Check connection
+Mgr.CheckEndpointName	检查所选云盘端点的连接与容量	Check the connection and capacity of the selected cloud endpoint
+Mgr.Clear	清除	Clear
+Mgr.ClearCache	清理缓存	Clear cache
+Mgr.ClearCacheName	清理挂载缓存	Clear the mount cache
+Mgr.ClearCachePrompt	将删除挂载缓存目录里的 {0} 个文件（{1}）：\n{2}\n\n	This will delete {0} files in the mount cache folder ({1}):\n{2}\n\n
+Mgr.ClearCacheTitle	清理挂载缓存	Clear the mount cache
+Mgr.ClearSearchName	清除搜索条件	Clear the search terms
+Mgr.ClearingCache	正在清理挂载缓存…	Clearing the mount cache…
+Mgr.ColumnModified	修改时间	Modified
+Mgr.ColumnName	名称	Name
+Mgr.ColumnSize	大小	Size
+Mgr.ColumnType	类型	Type
+Mgr.CreateSyncTask	创建同步任务	Create sync job
+Mgr.CreateSyncTaskName	从所选云盘端点创建同步任务	Create a sync job from the selected cloud endpoint
+Mgr.Delete	删除	Delete
+Mgr.DeleteEndpointName	删除所选云盘端点	Delete the selected cloud endpoint
+Mgr.DeleteItemsName	删除所选项目	Delete the selected items
+Mgr.Descending	降序	Descending
+Mgr.Download	下载	Download
+Mgr.DownloadName	下载所选文件	Download the selected files
+Mgr.DropToUpload	松开鼠标即可上传	Release the mouse to upload
+Mgr.EditEndpoint	编辑端点	Edit endpoint
+Mgr.EditEndpointName	编辑所选云盘端点	Edit the selected cloud endpoint
+Mgr.EmptyTrash	清空回收站	Empty recycle bin
+Mgr.EmptyTrashName	永久删除回收站里的全部内容	Permanently delete everything in the recycle bin
+Mgr.EndpointCount	共 {0} 个云端端点。	{0} cloud endpoints.
+Mgr.EndpointCreated	已创建端点：{0}。	Created the endpoint: {0}.
+Mgr.EndpointListFailed	无法读取云端端点：{0}	The cloud endpoints could not be read: {0}
+Mgr.EndpointListName	云盘端点列表	Cloud endpoint list
+Mgr.EndpointSortByName	云盘端点排序依据	Cloud endpoint sort order
+Mgr.EndpointSortHealth	状态	Status
+Mgr.EndpointSortName	名称	Name
+Mgr.EndpointSortProvider	类型	Type
+Mgr.EndpointUpdated	已更新端点：{0}。	Updated the endpoint: {0}.
+Mgr.EndpointsFiltered	已按“{0}”过滤，显示 {1} / {2} 个端点。	Filtered by "{0}", showing {1} / {2} endpoints.
+Mgr.EndpointsGroup	云盘端点	Cloud endpoints
+Mgr.Export	导出…	Export…
+Mgr.ExportAllName	导出全部云盘端点的非敏感配置	Export the non-sensitive settings of every cloud endpoint
+Mgr.ExportDiagnostics	导出诊断…	Export diagnostics…
+Mgr.ExportDiagnosticsName	导出一份不含凭据的诊断报告	Export a diagnostic report that contains no credentials
+Mgr.ExternalMountNotice	该挂载由外部程序管理。Feng Sync 只读显示外部挂载，不会结束其进程，也不会代为重新挂载。	This mount is managed by another program. Feng Sync shows external mounts read-only; it will not end their process or mount them again on their behalf.
+Mgr.FavoriteJumpName	跳到收藏的目录	Jump to a favorite folder
+Mgr.FavoriteThisDirectory	收藏此目录	Add this folder to favorites
+Mgr.FileListName	当前目录中的文件	Files in the current folder
+Mgr.Forward	前进	Forward
+Mgr.Go	转到	Go
+Mgr.GoToName	转到输入的路径	Go to the path you typed
+Mgr.GridView	网格视图	Grid view
+Mgr.GuideSeenSaveFailed	无法记住引导状态：{0}	The guide state could not be remembered: {0}
+Mgr.HistoryBackName	后退到上一个访问过的目录	Go back to the previous folder you visited
+Mgr.HistoryForwardName	前进到下一个访问过的目录	Go forward to the next folder you visited
+Mgr.Import	导入…	Import…
+Mgr.ImportName	从导出文件导入云盘端点	Import cloud endpoints from an exported file
+Mgr.IncludeSubfolders	包含子目录	Include subfolders
+Mgr.Jump	跳转	Jump
+Mgr.LoadingEndpointParams	正在读取端点参数…	Reading the endpoint parameters…
+Mgr.LoadingEndpoints	正在读取云端端点列表…	Reading the list of cloud endpoints…
+Mgr.MountCount	共发现 {0} 个挂载，其中 {1} 个由本应用启动。	Found {0} mounts, {1} of them started by this application.
+Mgr.MountEndpoint	挂载选中端点…	Mount the selected endpoint…
+Mgr.MountEndpointName	挂载所选云盘端点	Mount the selected cloud endpoint
+Mgr.MountHealthy	挂载点 {0} 当前可用，无需重新挂载。	The mount point {0} is working, so it does not need to be mounted again.
+Mgr.MountListName	当前挂载列表	Current mount list
+Mgr.MountReconnectFailed	重新挂载失败：{0}	Remounting failed: {0}
+Mgr.MountRestoreFailed	恢复挂载失败：{0}	Restoring the mounts failed: {0}
+Mgr.MountScanFailed	扫描挂载失败：{0}	Scanning the mounts failed: {0}
+Mgr.MountsGroup	挂载管理	Mount management
+Mgr.MoveToTrash	移到回收站	Move to recycle bin
+Mgr.NewEndpoint	新建端点	New endpoint
+Mgr.NewEndpointName	新建云盘端点	Create a cloud endpoint
+Mgr.NewFolder	新建文件夹	New folder
+Mgr.NewFolderName	在当前目录新建文件夹	Create a new folder in the current folder
+Mgr.NoEndpoints	尚无云端端点。点击“新建端点”创建一个。	There is no cloud endpoint yet. Click "New endpoint" to create one.
+Mgr.NoMountRecordStore	本进程没有挂载记录存储，无法设置自动挂载。	This process has no mount record store, so automatic mounting cannot be set up.
+Mgr.NoMounts	当前系统没有 rclone 挂载。	The system currently has no rclone mounts.
+Mgr.NoMountsToRestore	没有需要恢复的挂载。	There are no mounts to restore.
+Mgr.OpenTransfersName	打开云盘传输窗口	Open the cloud transfer window
+Mgr.OpenTrashName	打开该端点的回收站文件夹	Open the recycle bin folder of this endpoint
+Mgr.OpeningNewEndpointWindow	正在打开新建端点窗口…	Opening the new endpoint window…
+Mgr.OpeningSyncWizard	正在打开同步向导…	Opening the sync wizard…
+Mgr.OrganizeEndpoint	分组与标签…	Groups and tags…
+Mgr.OrganizeEndpointName	设置所选云盘端点的分组与标签	Set the group and tags of the selected cloud endpoint
+Mgr.Paste	粘贴	Paste
+Mgr.PasteName	把剪贴板中的项目粘贴到当前目录	Paste the items on the clipboard into the current folder
+Mgr.PathNavigationName	当前路径导航	Current path navigation
+Mgr.PathWithPrefix	{0}:/{1}    （前缀 /{2}，由 rclone 强制，无法越界）	{0}:/{1}    (prefix /{2}, enforced by rclone, cannot be stepped outside)
+Mgr.PickEndpoint	请先选择一个端点。	Select an endpoint first.
+Mgr.PickEndpointForSyncTask	请先选择要创建同步任务的端点。	Select the endpoint to create the sync task from first.
+Mgr.PickEndpointToEdit	请先选择要编辑的端点。	Select the endpoint to edit first.
+Mgr.PickMountToReconnect	请先选择要重新挂载的挂载点。	Select the mount point to remount first.
+Mgr.PreparingSyncTask	正在准备同步任务…	Preparing the sync job…
+Mgr.RecentJumpName	跳到最近访问的目录	Jump to a recently visited folder
+Mgr.ReconnectAborted	重新挂载已中止：原挂载未能取消。\n	Remounting was stopped: the original mount could not be cancelled.\n
+Mgr.ReconnectEndpoint	重新登录	Sign in again
+Mgr.ReconnectEndpointName	重新登录所选云盘端点	Sign in to the selected cloud endpoint again
+Mgr.ReconnectMount	重新挂载	Remount
+Mgr.ReconnectMountName	重新挂载所选失效挂载	Remount the selected failed mount
+Mgr.ReconnectMountTail	\n\n将先取消它，再用同样的设置挂载一次。	\n\nIt will be cancelled first and then mounted once more with the same settings.
+Mgr.ReconnectMountTitle	重新挂载	Remount
+Mgr.Reconnected	“{0}”已重新登录。	"{0}" has been signed in again.
+Mgr.ReconnectingInBrowser	正在重新登录，请在浏览器完成授权…	Signing in again; please finish the authorization in your browser…
+Mgr.ReconnectingMount	正在重新挂载 {0}…	Remounting {0}…
+Mgr.RecycleItemName	把所选项目移入该端点的回收站	Move the selected items into this endpoint's recycle bin
+Mgr.Refresh	刷新	Refresh
+Mgr.RefreshDirectoryName	刷新当前目录	Refresh the current folder
+Mgr.RefreshList	刷新列表	Refresh list
+Mgr.RefreshListName	刷新云盘端点列表	Refresh the cloud endpoint list
+Mgr.RefreshMountsName	刷新挂载列表	Refresh the mount list
+Mgr.Rename	重命名	Rename
+Mgr.RenameEndpointName	重命名所选云盘端点	Rename the selected cloud endpoint
+Mgr.RenameItemName	重命名所选项目	Rename the selected item
+Mgr.Restore	还原	Restore
+Mgr.RestoreItemsName	把所选的回收站项目还原到原目录	Restore the selected recycle bin items to their original folder
+Mgr.RestoreMounts	一键恢复	Restore all
+Mgr.RestoreMountsName	恢复上次的挂载	Restore the mounts from last time
+Mgr.RestoreMountsPrompt	将恢复 {0} 个上次的挂载：\n{1}	This will restore {0} mounts from last time:\n{1}
+Mgr.RestoreMountsTitle	恢复挂载	Restore mounts
+Mgr.RestoringMounts	正在恢复 {0} 个挂载…	Restoring {0} mounts…
+Mgr.ScanningMounts	正在扫描系统全部 rclone 挂载…	Scanning every rclone mount on the system…
+Mgr.Search	搜索	Search
+Mgr.SearchBoxName	按名称或路径搜索	Search by name or path
+Mgr.SearchEndpointName	在整个端点内搜索	Search within the whole endpoint
+Mgr.SearchEndpointsName	按名称、类型或前缀搜索云盘端点	Search cloud endpoints by name, type or prefix
+Mgr.SearchRecursiveName	搜索包含子目录	Search including subfolders
+Mgr.SettingsLoadFailed	无法读取设置：{0}	The settings could not be read: {0}
+Mgr.Sort	排序	Sort
+Mgr.SortByName	排序依据	Sort by
+Mgr.StatusConnectedNoQuota	“{0}”连接正常；该服务不提供容量信息。	"{0}" is connected; this service does not provide capacity information.
+Mgr.StatusConnectedWithQuota	“{0}”连接正常，{1}。	"{0}" is connected, {1}.
+Mgr.StatusFailed	“{0}”{1}：{2}	"{0}" {1}: {2}
+Mgr.Subtitle	管理云盘端点与挂载，并浏览和传输文件。	Manage cloud endpoints and mounts, and browse and transfer files.
+Mgr.SyncTaskCancelled	已取消创建同步任务。	Creating the sync job was cancelled.
+Mgr.SyncTaskCreated	已创建同步任务“{0}”：{1} → {2}	Created the sync job "{0}": {1} -> {2}
+Mgr.SyncTaskListFailed	无法读取同步任务列表：{0}	The sync job list could not be read: {0}
+Mgr.SyncWizard	同步向导	Sync wizard
+Mgr.SyncWizardName	打开一键双向同步向导	Open the one-tap two-way sync wizard
+Mgr.SyncWizardTaskCreated	已创建双向同步任务“{0}”：{1} ↔ {2}	Created the two-way sync job "{0}": {1} ↔ {2}
+Mgr.TestAll	测试全部	Test all
+Mgr.TestAllName	检查全部云盘端点的连接与容量	Check the connection and capacity of every cloud endpoint
+Mgr.ToggleEndpointSortDirectionName	切换云盘端点列表的升降序	Switch the cloud endpoint list between ascending and descending order
+Mgr.ToggleSortDirectionName	切换升序或降序	Switch between ascending and descending order
+Mgr.ToggleViewName	在列表视图与网格视图之间切换	Switch between the list view and the grid view
+Mgr.TransferProgressName	文件传输进度	File transfer progress
+Mgr.Trash	回收站	Recycle bin
+Mgr.Unmount	取消挂载	Unmount
+Mgr.UnmountName	取消所选挂载	Unmount the selected mount
+Mgr.UpLevel	上一级	Up one level
+Mgr.UpLevelName	返回上一级目录	Go up to the parent folder
+Mgr.UploadFiles	上传文件	Upload files
+Mgr.UploadFilesName	上传文件到当前目录	Upload files to the current folder
+Mgr.UploadFolder	上传文件夹	Upload folder
+Mgr.UploadFolderName	上传文件夹到当前目录	Upload a folder to the current folder
+Mgr.ViewTransfers	查看传输	View transfers
+Mgr.WindowName	云盘端点与文件管理	Cloud endpoint and file management
+Mgr.WindowTitle	云盘管理	Cloud management
+
+# ---- Per-endpoint recycle bin ----
+Recycle.AndMore	 等	 and more
+Recycle.ConfirmFolders	其中文件夹 {0} 个会连同里面的全部内容一起移动。	Of these, {0} folders will move along with everything inside them.
+Recycle.ConfirmFreeSpace	要真正释放空间，就得再进 {0} 用「删除」，或直接用「清空回收站」。	To actually free the space, go back into {0} and use "Delete", or use "Empty recycle bin" directly.
+Recycle.ConfirmHeader	把 {0} 项移入该端点的回收站？	Move {0} items into this endpoint's recycle bin?
+Recycle.ConfirmHowToRestore	之后可在 {0} 里选中它按「还原」，回到原来的目录；	You can later select it in {0} and click "Restore" to return it to its original folder;
+Recycle.ConfirmMovesTo	项目会被搬到 {0} 下面，仍然留在这个端点里，所以这一步不会释放空间。	The items will be moved under {0}, still inside this endpoint, so this step frees no space.
+Recycle.Declined	已取消，云端没有任何东西被移动。	Cancelled; nothing was moved in the cloud.
+Recycle.Failed	回收站操作没有完成。	The recycle bin operation did not complete.
+Recycle.InsideTrash	这些项目已经在回收站里了，要彻底删掉请用「删除」。	These items are already in the recycle bin; to delete them for good, use "Delete".
+Recycle.IsTrashFolder	回收站文件夹本身不能移进回收站。	The recycle bin folder itself cannot be moved into the recycle bin.
+Recycle.Moved	已把 {0} 项移入 {1}（项目仍在云端，空间未释放；还原请进入该文件夹）。	Moved {0} items into {1} (the items are still in the cloud and no space was freed; enter that folder to restore them).
+Recycle.NotInTrash	这一项不在回收站里，没有可还原的来源。	This item is not in the recycle bin, so there is no source to restore from.
+Recycle.RenamedOnMove	其中 {0} 项在回收站里已有同名项目，改存为 {1}。	{0} of them already had a same-named item in the recycle bin and were saved as {1}.
+Recycle.RenamedOnRestore	其中 {0} 项原名仍被占用，还原为 {1}。	{0} of them still had their original name taken and were restored as {1}.
+Recycle.Restored	已还原 {0} 项。	Restored {0} items.
+Recycle.RestoredTo	已回到 {0}。	Restored to {0}.
+Recycle.SomeFailed	 {0} 项没有成功：{1}	 {0} items did not succeed: {1}
+
+# ---- Share link ----
+Share.Confirmation	“{0}”会获得一个公开链接：任何拿到这个链接的人都能读取该文件，无需登录你的账号。\n\n链接的有效期和它能否撤回都由云端决定（内置 rclone 实测：S3 给的是约一周后自动失效的签名地址），本应用只负责把结果复制到剪贴板。\n\n确定生成？	"{0}" will get a public link: anyone who has this link can read the file without signing in to your account.\n\nHow long the link lasts and whether it can be revoked are decided by the cloud (as measured with the built-in rclone, S3 returns a signed address that expires by itself after about a week), and this app only copies the result to the clipboard.\n\nCreate it?
+Share.ConfirmationTitle	生成分享链接	Create a share link
+Share.Copied	分享链接已复制到剪贴板：拿到链接的人无需登录即可读取该文件，有效期由云端决定。	The share link was copied to the clipboard: anyone with the link can read the file without signing in, and the cloud decides how long it lasts.
+Share.CopiedNotStored	云端已经生成链接，但没能放进剪贴板，请从下方内容里自己复制。	The cloud generated the link, but it could not be put on the clipboard; copy it yourself from the text below.
+Share.Declined	已取消，云端没有生成链接。	Cancelled; the cloud generated no link.
+Share.Failed	没有取到分享链接。	No share link was obtained.
+Share.Missing	云端已没有这个文件，请刷新目录。	The cloud no longer has this file; refresh the folder.
+Share.NoContent	云端没有返回链接内容。	The cloud returned no link content.
+Share.NotAFile	文件夹没有可分享的链接，只能分享单个文件。	A folder has no link to share; only a single file can be shared.
+Share.Unsupported	此端点不支持分享链接，云端没有生成任何东西。	This endpoint does not support share links; the cloud generated nothing.
+
+# ---- Dragging a cloud item out to Explorer ----
+Drag.BadLocalName	“{0}”这个云端名字在本地不是合法的文件名。	The cloud name "{0}" is not a valid file name locally.
+Drag.BadSegment	云端的路径里有一段“{0}”，本地不能这样放。	The cloud path has a segment "{0}" that cannot be placed that way locally.
+Drag.Describe	{0} · {1} 个文件 · {2}	{0} · {1} files · {2}
+Drag.DescribeEmpty	{0}（空文件夹）	{0} (empty folder)
+Drag.EscapesFolder	云端给出的名字会落到这个文件夹外面，没有拖出它。	The name the cloud gives would land outside this folder, so it was not dragged out.
+Drag.FileFolderNameClash	云端有同名的文件与文件夹（“{0}”），本地放不进同一个名字。	The cloud has a file and a folder with the same name ("{0}"), and both cannot fit under one name locally.
+Drag.ListingOutsideFolder	递归列表给出的“{0}”不在被拖出的文件夹里。	The recursive listing returned "{0}", which is not inside the folder being dragged out.
+Drag.TooManyFiles	这个文件夹有 {0} 个文件，一次最多拖出 {1} 个，请进入子文件夹分批拖出。	This folder has {0} files and at most {1} can be dragged out at once; open a subfolder and drag them out in batches.
+
+# ---- Cloud manager service layer (CloudBrowserClipboard, CloudFileManagerService) ----
+Mgr.PasteFoldersSkipped	{0} 个文件夹没有被复制：粘贴的单位是文件，请先进入文件夹再选择其中的文件。	{0} folders were not copied: a paste works on files, so open a folder first and select the files inside it.
+Mgr.PasteSameName	“{0}”已经在目标目录里。	"{0}" is already in the destination folder.
+Mgr.TypeFile	文件	File
+Mgr.TypeFolder	文件夹	Folder
+
+# ---- Recycle bin service layer (CloudRecycleBin) ----
+Recycle.ConfirmProceed	确定移动？	Move them?
+Recycle.ConfirmRename	原名已被占用时会自动改成“名称 (1)”而不是盖掉那一份。	If the original name is taken, it is changed to "name (1)" instead of overwriting that copy.
+Recycle.NameSeparator	、	, 

@@ -1,0 +1,57 @@
+# ---- E3 support report ----
+Diagnostics.Bitness32	32 位	32-bit
+Diagnostics.Bitness64	64 位	64-bit
+Diagnostics.GeneratedUtc	生成时间（UTC）：{0}	Generated (UTC): {0}
+Diagnostics.Installed	已安装	Installed
+Diagnostics.LogFile	日志文件：{0}	Log file: {0}
+Diagnostics.NoCredentials	本报告不含凭据：既不含 rclone.conf，也不含任何端点的参数值。	This report contains no credentials: it includes neither rclone.conf nor any endpoint parameter values.
+Diagnostics.NotInstalled	未安装	Not installed
+Diagnostics.NotSet	未设置	not set
+Diagnostics.Row.AppVersion	应用版本	Application version
+Diagnostics.Row.Bitness	进程位数	Process bitness
+Diagnostics.Row.Os	操作系统	Operating system
+Diagnostics.Row.RclonePath	rclone 路径	rclone path
+Diagnostics.Row.RcloneVersion	rclone 版本	rclone version
+Diagnostics.Row.WinFspDetail	WinFsp 详情	WinFsp details
+Diagnostics.Section.Endpoints	端点	Endpoints
+Diagnostics.Section.Environment	环境	Environment
+Diagnostics.Section.LogTail	日志末尾	Log tail
+Diagnostics.Section.Settings	设置	Settings
+Diagnostics.Section.TransferHistory	传输历史	Transfer history
+Diagnostics.Setting.AfterTransfer	传输完成后	After transfers finish
+Diagnostics.Setting.Concurrency	云盘并发传输数	Concurrent cloud transfers
+Diagnostics.Setting.Conflict	同名文件冲突	File name conflict
+Diagnostics.Setting.DefaultConcurrency	默认并发复制数	Default concurrent copies
+Diagnostics.Setting.DownloadDirectory	下载目录	Download folder
+Diagnostics.Setting.DownloadLimit	下载限速	Download limit
+Diagnostics.Setting.FileView	文件视图	File view
+Diagnostics.Setting.Language	界面语言	Interface language
+Diagnostics.Setting.MountCache	挂载缓存上限	Mount cache limit
+Diagnostics.Setting.Proxy	rclone 代理	rclone proxy
+Diagnostics.Setting.ResumeThreshold	断点续传阈值	Resume threshold
+Diagnostics.Setting.Retries	云盘重试次数	Cloud retry count
+Diagnostics.Setting.TimeTolerance	时间容差（秒）	Time tolerance (seconds)
+Diagnostics.Setting.TimeWindow	传输时间窗	Transfer time window
+Diagnostics.Setting.UploadLimit	上传限速	Upload limit
+Diagnostics.Setting.VerifyCopies	复制后校验	Verify files after copying
+Diagnostics.Title	Feng Sync 诊断报告	Feng Sync diagnostics report
+Diagnostics.Unavailable	未能获取	unavailable
+
+# ---- Endpoint export/import file validation ----
+Export.BadParameterName	端点“{0}”的参数名“{1}”非法，已跳过。	Endpoint "{0}" has an invalid parameter name "{1}"; it was skipped.
+Export.DuplicateName	导出文件里端点名“{0}”重复，已跳过。	The endpoint name "{0}" is duplicated in the export file; it was skipped.
+Export.EmptyOrUnrecognized	文件为空或格式无法识别。	The file is empty or its format is not recognized.
+Export.NameBadCharacter	端点名称“{0}”包含不允许的字符“{1}”。	The endpoint name "{0}" contains a disallowed character "{1}".
+Export.NameEmpty	端点名称不能为空。	The endpoint name cannot be empty.
+Export.NameStartsWithDot	端点名称“{0}”不能以“.”开头。	The endpoint name "{0}" cannot start with ".".
+Export.NameSurroundingSpace	端点名称“{0}”前后不能有空白。	The endpoint name "{0}" cannot have leading or trailing whitespace.
+Export.NameTooLong	端点名称“{0}”过长（最多 64 个字符）。	The endpoint name "{0}" is too long (at most 64 characters).
+Export.NotValidExport	文件不是有效的端点导出：{0}	The file is not a valid endpoint export: {0}
+Export.ParameterNameInvalid	参数名“{0}”不合法。	The parameter name "{0}" is not valid.
+Export.UnknownType	端点“{0}”的类型“{1}”无法识别，已跳过。	Endpoint "{0}" has an unrecognized type "{1}"; it was skipped.
+Export.UnsupportedVersion	不支持的导出文件版本 {0}；本版本只认识 {1}。	Unsupported export file version {0}; this version only recognizes {1}.
+
+# ---- Shared one-word answers ----
+Common.No	否	no
+Common.None	无	none
+Common.Yes	是	yes

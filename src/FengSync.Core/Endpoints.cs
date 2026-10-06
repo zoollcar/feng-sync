@@ -170,6 +170,25 @@ public sealed class RcloneRcClient(HttpClient http, Uri baseUri, string user, st
     }
 
     /// <summary>
+    /// The bundled rclone's own build, through <c>core/version</c> — the only version-named method the RC
+    /// registers (measured: <c>rc/list</c> reports 101 methods and the rest are 404), so it is also the only
+    /// place a support report can learn which rclone answered. Returns just the first line: v1.75.0 answers a
+    /// multi-line <c>version</c> string whose later lines are the build host, the Go version and the libcurl
+    /// it was linked against, and a diagnostic file does not need the build machine's name in it.
+    /// <see langword="null"/> when the answer carries no version string, which is a shape this build has not
+    /// seen rather than a version to display.
+    /// </summary>
+    public async Task<string?> RcloneVersionAsync(CancellationToken ct = default)
+    {
+        var response = await CallAsync("core/version", new { }, ct);
+        if (!response.TryGetProperty("version", out var version) || version.ValueKind != JsonValueKind.String) return null;
+        var text = (version.GetString() ?? "").Trim();
+        if (text.Length == 0) return null;
+        var newline = text.IndexOf('\n');
+        return (newline < 0 ? text : text[..newline]).Trim();
+    }
+
+    /// <summary>
     /// Lists one directory level for file-manager style views.  Unlike <see cref="ListAsync"/>, this must never recurse.
     /// </summary>
     public async Task<IReadOnlyList<RcloneDirectoryEntry>> ListDirectoryAsync(string fs, string remote, CancellationToken ct = default)

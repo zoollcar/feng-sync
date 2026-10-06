@@ -1,0 +1,4069 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="About.CannotOpen" xml:space="preserve">
+    <value>Cannot open the link: {0}</value>
+  </data>
+  <data name="About.CheckUpdates" xml:space="preserve">
+    <value>Check for updates</value>
+  </data>
+  <data name="About.CheckUpdatesName" xml:space="preserve">
+    <value>Check for Feng Sync updates</value>
+  </data>
+  <data name="About.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="About.CloseName" xml:space="preserve">
+    <value>Close the About Feng Sync window</value>
+  </data>
+  <data name="About.Description" xml:space="preserve">
+    <value>Compares and synchronizes files on local disks, over SFTP, on Google Drive and on S3.</value>
+  </data>
+  <data name="About.Licenses" xml:space="preserve">
+    <value>Third-party licenses</value>
+  </data>
+  <data name="About.LicensesName" xml:space="preserve">
+    <value>View the third-party licenses</value>
+  </data>
+  <data name="About.LicensesNotice" xml:space="preserve">
+    <value>Microsoft.Data.Sqlite / SQLitePCLRaw: MIT License
+Rclone: MIT License</value>
+  </data>
+  <data name="About.Repository" xml:space="preserve">
+    <value>GitHub repository</value>
+  </data>
+  <data name="About.RepositoryName" xml:space="preserve">
+    <value>Open the Feng Sync GitHub repository in your browser</value>
+  </data>
+  <data name="About.Tagline" xml:space="preserve">
+    <value>A workspace for file synchronization</value>
+  </data>
+  <data name="About.Version" xml:space="preserve">
+    <value>Version {0}</value>
+  </data>
+  <data name="About.WindowTitle" xml:space="preserve">
+    <value>About Feng Sync</value>
+  </data>
+  <data name="AfterTransfer.Cancelled" xml:space="preserve">
+    <value>"{0}" was cancelled.</value>
+  </data>
+  <data name="AfterTransfer.ConfirmExit" xml:space="preserve">
+    <value>Every transfer has finished. Exit Feng Sync now?</value>
+  </data>
+  <data name="AfterTransfer.ConfirmShutdown" xml:space="preserve">
+    <value>Every transfer has finished. Shut down the computer now?
+
+Shutdown starts in 60 seconds; run shutdown /a on the command line to call it off.</value>
+  </data>
+  <data name="AfterTransfer.ConfirmSleep" xml:space="preserve">
+    <value>Every transfer has finished. Sleep the computer now?</value>
+  </data>
+  <data name="AfterTransfer.DescribeExit" xml:space="preserve">
+    <value>Exit Feng Sync when the transfers finish</value>
+  </data>
+  <data name="AfterTransfer.DescribeNone" xml:space="preserve">
+    <value>Do nothing</value>
+  </data>
+  <data name="AfterTransfer.DescribeShutdown" xml:space="preserve">
+    <value>Shut down the computer when the transfers finish</value>
+  </data>
+  <data name="AfterTransfer.DescribeSleep" xml:space="preserve">
+    <value>Sleep the computer when the transfers finish</value>
+  </data>
+  <data name="AfterTransfer.Skipped" xml:space="preserve">
+    <value>{0} transfers did not succeed, so "{1}" was skipped; check the failures first.</value>
+  </data>
+  <data name="Batch.Finished" xml:space="preserve">
+    <value>Finished: {0} succeeded, {1} failed.</value>
+  </data>
+  <data name="Batch.ProfileListName" xml:space="preserve">
+    <value>Batch Profile list</value>
+  </data>
+  <data name="Batch.Running" xml:space="preserve">
+    <value>Queue running (up to {0} items)…</value>
+  </data>
+  <data name="Batch.Start" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="Batch.StartName" xml:space="preserve">
+    <value>Start the batch run</value>
+  </data>
+  <data name="Batch.StateFailed" xml:space="preserve">
+    <value>Failed: {0}</value>
+  </data>
+  <data name="Batch.StateRunning" xml:space="preserve">
+    <value>Running</value>
+  </data>
+  <data name="Batch.StateSucceeded" xml:space="preserve">
+    <value>Succeeded</value>
+  </data>
+  <data name="Batch.StateWaiting" xml:space="preserve">
+    <value>Waiting</value>
+  </data>
+  <data name="Batch.StopName" xml:space="preserve">
+    <value>Stop the batch queue</value>
+  </data>
+  <data name="Batch.StopQueue" xml:space="preserve">
+    <value>Stop queue</value>
+  </data>
+  <data name="Batch.WindowTitle" xml:space="preserve">
+    <value>Batch run</value>
+  </data>
+  <data name="Bookmark.LabelRoot" xml:space="preserve">
+    <value>{0}  ·  root folder</value>
+  </data>
+  <data name="Bookmark.UnreadableFile" xml:space="preserve">
+    <value>Unrecognized bookmarks file.</value>
+  </data>
+  <data name="Common.No" xml:space="preserve">
+    <value>no</value>
+  </data>
+  <data name="Common.None" xml:space="preserve">
+    <value>none</value>
+  </data>
+  <data name="Common.Yes" xml:space="preserve">
+    <value>yes</value>
+  </data>
+  <data name="Conflict.ApplyToRest" xml:space="preserve">
+    <value>Apply this answer to the other {0} files of the same name</value>
+  </data>
+  <data name="Conflict.ApplyToRestLast" xml:space="preserve">
+    <value>Apply this answer to the remaining files of the same name</value>
+  </data>
+  <data name="Conflict.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Conflict.Exists" xml:space="preserve">
+    <value>“{0}” is already in the destination folder.</value>
+  </data>
+  <data name="Conflict.KeepBoth" xml:space="preserve">
+    <value>Keep both (save as “{0}”)</value>
+  </data>
+  <data name="Conflict.LastOne" xml:space="preserve">
+    <value>This is the last file of the same name.</value>
+  </data>
+  <data name="Conflict.MoreRemaining" xml:space="preserve">
+    <value>{0} more files of the same name still need an answer.</value>
+  </data>
+  <data name="Conflict.Overwrite" xml:space="preserve">
+    <value>Overwrite</value>
+  </data>
+  <data name="Conflict.Skip" xml:space="preserve">
+    <value>Skip</value>
+  </data>
+  <data name="Conflict.Target" xml:space="preserve">
+    <value>Destination: {0}</value>
+  </data>
+  <data name="Conflict.Title" xml:space="preserve">
+    <value>The destination already has a file of this name</value>
+  </data>
+  <data name="Details.BackendNoHash" xml:space="preserve">
+    <value>This backend provides no checksum</value>
+  </data>
+  <data name="Details.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Details.Endpoint" xml:space="preserve">
+    <value>Endpoint</value>
+  </data>
+  <data name="Details.EndpointRoot" xml:space="preserve">
+    <value>Endpoint root</value>
+  </data>
+  <data name="Details.File" xml:space="preserve">
+    <value>File</value>
+  </data>
+  <data name="Details.FileCount" xml:space="preserve">
+    <value>{0} files</value>
+  </data>
+  <data name="Details.Folder" xml:space="preserve">
+    <value>Folder</value>
+  </data>
+  <data name="Details.FolderCount" xml:space="preserve">
+    <value>{0} folders (size not counted)</value>
+  </data>
+  <data name="Details.FolderNoHash" xml:space="preserve">
+    <value>A folder has no checksum</value>
+  </data>
+  <data name="Details.Gone" xml:space="preserve">
+    <value>The cloud no longer has this {0}; refresh the folder.</value>
+  </data>
+  <data name="Details.Hash" xml:space="preserve">
+    <value>Checksum</value>
+  </data>
+  <data name="Details.HashActionHint" xml:space="preserve">
+    <value>A checksum reads the whole file; a cloud object is downloaded in full to answer, so be patient with a large file.</value>
+  </data>
+  <data name="Details.HashActionLabel" xml:space="preserve">
+    <value>Compute checksum</value>
+  </data>
+  <data name="Details.HashNotComputed" xml:space="preserve">
+    <value>Not computed</value>
+  </data>
+  <data name="Details.HashWithType" xml:space="preserve">
+    <value>Checksum ({0})</value>
+  </data>
+  <data name="Details.LastModified" xml:space="preserve">
+    <value>Last modified</value>
+  </data>
+  <data name="Details.MimeType" xml:space="preserve">
+    <value>MIME type</value>
+  </data>
+  <data name="Details.Modified" xml:space="preserve">
+    <value>Modified</value>
+  </data>
+  <data name="Details.Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Details.NoFiles" xml:space="preserve">
+    <value>No files</value>
+  </data>
+  <data name="Details.Path" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="Details.PrefixEnforced" xml:space="preserve">
+    <value>(enforced by rclone, cannot be escaped)</value>
+  </data>
+  <data name="Details.Selection" xml:space="preserve">
+    <value>Selection</value>
+  </data>
+  <data name="Details.SelectionCount" xml:space="preserve">
+    <value>{0} items</value>
+  </data>
+  <data name="Details.Size" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Details.SizeValue" xml:space="preserve">
+    <value>{0} ({1} bytes)</value>
+  </data>
+  <data name="Details.Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Details.Type" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="Details.Unknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="Diagnostics.Bitness32" xml:space="preserve">
+    <value>32-bit</value>
+  </data>
+  <data name="Diagnostics.Bitness64" xml:space="preserve">
+    <value>64-bit</value>
+  </data>
+  <data name="Diagnostics.GeneratedUtc" xml:space="preserve">
+    <value>Generated (UTC): {0}</value>
+  </data>
+  <data name="Diagnostics.Installed" xml:space="preserve">
+    <value>Installed</value>
+  </data>
+  <data name="Diagnostics.LogFile" xml:space="preserve">
+    <value>Log file: {0}</value>
+  </data>
+  <data name="Diagnostics.NoCredentials" xml:space="preserve">
+    <value>This report contains no credentials: it includes neither rclone.conf nor any endpoint parameter values.</value>
+  </data>
+  <data name="Diagnostics.NotInstalled" xml:space="preserve">
+    <value>Not installed</value>
+  </data>
+  <data name="Diagnostics.NotSet" xml:space="preserve">
+    <value>not set</value>
+  </data>
+  <data name="Diagnostics.Row.AppVersion" xml:space="preserve">
+    <value>Application version</value>
+  </data>
+  <data name="Diagnostics.Row.Bitness" xml:space="preserve">
+    <value>Process bitness</value>
+  </data>
+  <data name="Diagnostics.Row.Os" xml:space="preserve">
+    <value>Operating system</value>
+  </data>
+  <data name="Diagnostics.Row.RclonePath" xml:space="preserve">
+    <value>rclone path</value>
+  </data>
+  <data name="Diagnostics.Row.RcloneVersion" xml:space="preserve">
+    <value>rclone version</value>
+  </data>
+  <data name="Diagnostics.Row.WinFspDetail" xml:space="preserve">
+    <value>WinFsp details</value>
+  </data>
+  <data name="Diagnostics.Section.Endpoints" xml:space="preserve">
+    <value>Endpoints</value>
+  </data>
+  <data name="Diagnostics.Section.Environment" xml:space="preserve">
+    <value>Environment</value>
+  </data>
+  <data name="Diagnostics.Section.LogTail" xml:space="preserve">
+    <value>Log tail</value>
+  </data>
+  <data name="Diagnostics.Section.Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Diagnostics.Section.TransferHistory" xml:space="preserve">
+    <value>Transfer history</value>
+  </data>
+  <data name="Diagnostics.Setting.AfterTransfer" xml:space="preserve">
+    <value>After transfers finish</value>
+  </data>
+  <data name="Diagnostics.Setting.Concurrency" xml:space="preserve">
+    <value>Concurrent cloud transfers</value>
+  </data>
+  <data name="Diagnostics.Setting.Conflict" xml:space="preserve">
+    <value>File name conflict</value>
+  </data>
+  <data name="Diagnostics.Setting.DefaultConcurrency" xml:space="preserve">
+    <value>Default concurrent copies</value>
+  </data>
+  <data name="Diagnostics.Setting.DownloadDirectory" xml:space="preserve">
+    <value>Download folder</value>
+  </data>
+  <data name="Diagnostics.Setting.DownloadLimit" xml:space="preserve">
+    <value>Download limit</value>
+  </data>
+  <data name="Diagnostics.Setting.FileView" xml:space="preserve">
+    <value>File view</value>
+  </data>
+  <data name="Diagnostics.Setting.Language" xml:space="preserve">
+    <value>Interface language</value>
+  </data>
+  <data name="Diagnostics.Setting.MountCache" xml:space="preserve">
+    <value>Mount cache limit</value>
+  </data>
+  <data name="Diagnostics.Setting.Proxy" xml:space="preserve">
+    <value>rclone proxy</value>
+  </data>
+  <data name="Diagnostics.Setting.ResumeThreshold" xml:space="preserve">
+    <value>Resume threshold</value>
+  </data>
+  <data name="Diagnostics.Setting.Retries" xml:space="preserve">
+    <value>Cloud retry count</value>
+  </data>
+  <data name="Diagnostics.Setting.TimeTolerance" xml:space="preserve">
+    <value>Time tolerance (seconds)</value>
+  </data>
+  <data name="Diagnostics.Setting.TimeWindow" xml:space="preserve">
+    <value>Transfer time window</value>
+  </data>
+  <data name="Diagnostics.Setting.UploadLimit" xml:space="preserve">
+    <value>Upload limit</value>
+  </data>
+  <data name="Diagnostics.Setting.VerifyCopies" xml:space="preserve">
+    <value>Verify files after copying</value>
+  </data>
+  <data name="Diagnostics.Title" xml:space="preserve">
+    <value>Feng Sync diagnostics report</value>
+  </data>
+  <data name="Diagnostics.Unavailable" xml:space="preserve">
+    <value>unavailable</value>
+  </data>
+  <data name="Drag.BadLocalName" xml:space="preserve">
+    <value>The cloud name "{0}" is not a valid file name locally.</value>
+  </data>
+  <data name="Drag.BadSegment" xml:space="preserve">
+    <value>The cloud path has a segment "{0}" that cannot be placed that way locally.</value>
+  </data>
+  <data name="Drag.Describe" xml:space="preserve">
+    <value>{0} · {1} files · {2}</value>
+  </data>
+  <data name="Drag.DescribeEmpty" xml:space="preserve">
+    <value>{0} (empty folder)</value>
+  </data>
+  <data name="Drag.EscapesFolder" xml:space="preserve">
+    <value>The name the cloud gives would land outside this folder, so it was not dragged out.</value>
+  </data>
+  <data name="Drag.FileFolderNameClash" xml:space="preserve">
+    <value>The cloud has a file and a folder with the same name ("{0}"), and both cannot fit under one name locally.</value>
+  </data>
+  <data name="Drag.ListingOutsideFolder" xml:space="preserve">
+    <value>The recursive listing returned "{0}", which is not inside the folder being dragged out.</value>
+  </data>
+  <data name="Drag.TooManyFiles" xml:space="preserve">
+    <value>This folder has {0} files and at most {1} can be dragged out at once; open a subfolder and drag them out in batches.</value>
+  </data>
+  <data name="Endpoint.AliasLabel" xml:space="preserve">
+    <value>Alias</value>
+  </data>
+  <data name="Endpoint.Back" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="Endpoint.BackingNameTaken" xml:space="preserve">
+    <value>The internal name "{0}" is already taken; change the display name.</value>
+  </data>
+  <data name="Endpoint.BrowseDirectory" xml:space="preserve">
+    <value>Browse the folder</value>
+  </data>
+  <data name="Endpoint.BrowserOpenFailed" xml:space="preserve">
+    <value>The default browser could not be opened. Authorization URL: {0}</value>
+  </data>
+  <data name="Endpoint.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Endpoint.ChooseService" xml:space="preserve">
+    <value>Choose the cloud service to connect to</value>
+  </data>
+  <data name="Endpoint.ChooseServiceHint" xml:space="preserve">
+    <value>The next step shows only the connection details this service needs.</value>
+  </data>
+  <data name="Endpoint.ClearedOrganization" xml:space="preserve">
+    <value>Cleared the group and tags of the endpoint "{0}".</value>
+  </data>
+  <data name="Endpoint.ConnectionFor" xml:space="preserve">
+    <value>{0} connection</value>
+  </data>
+  <data name="Endpoint.DisplayName" xml:space="preserve">
+    <value>Display name</value>
+  </data>
+  <data name="Endpoint.DisplayNoRoot" xml:space="preserve">
+    <value>{0}  ·  no default root folder set</value>
+  </data>
+  <data name="Endpoint.DuplicateName" xml:space="preserve">
+    <value>An endpoint called "{0}" already exists.
+
+Yes: replace the existing configuration. No: go back and change the display name.</value>
+  </data>
+  <data name="Endpoint.DuplicateNameTitle" xml:space="preserve">
+    <value>Duplicate endpoint name</value>
+  </data>
+  <data name="Endpoint.EditCaption" xml:space="preserve">
+    <value>Editing endpoint · {0} · the name and the type cannot be changed</value>
+  </data>
+  <data name="Endpoint.EditTitle" xml:space="preserve">
+    <value>Edit cloud endpoint</value>
+  </data>
+  <data name="Endpoint.ErrDisplayName" xml:space="preserve">
+    <value>Enter a display name.</value>
+  </data>
+  <data name="Endpoint.ErrNumberRange" xml:space="preserve">
+    <value>{0} must be between 1 and 65535.</value>
+  </data>
+  <data name="Endpoint.ErrRequiredField" xml:space="preserve">
+    <value>Enter {0}.</value>
+  </data>
+  <data name="Endpoint.GroupSet" xml:space="preserve">
+    <value>The endpoint "{0}" is now in the group "{1}".</value>
+  </data>
+  <data name="Endpoint.HealthChecking" xml:space="preserve">
+    <value>Checking…</value>
+  </data>
+  <data name="Endpoint.HealthConnected" xml:space="preserve">
+    <value>Connected</value>
+  </data>
+  <data name="Endpoint.HealthNeedsLogin" xml:space="preserve">
+    <value>Needs signing in again</value>
+  </data>
+  <data name="Endpoint.HealthUnknown" xml:space="preserve">
+    <value>Not checked</value>
+  </data>
+  <data name="Endpoint.HealthUnreachable" xml:space="preserve">
+    <value>Cannot connect</value>
+  </data>
+  <data name="Endpoint.ImportCaption" xml:space="preserve">
+    <value>Importing endpoint · {0} · fill in the credentials and save</value>
+  </data>
+  <data name="Endpoint.ImportTitle" xml:space="preserve">
+    <value>Import cloud endpoint</value>
+  </data>
+  <data name="Endpoint.LoadingProviders" xml:space="preserve">
+    <value>Reading the providers rclone supports…</value>
+  </data>
+  <data name="Endpoint.NameExists" xml:space="preserve">
+    <value>An endpoint named "{0}" already exists; change the display name.</value>
+  </data>
+  <data name="Endpoint.NeedsInteractiveOption" xml:space="preserve">
+    <value>The {0} configuration could not be completed automatically; rclone needs an answer to the option "{1}".</value>
+  </data>
+  <data name="Endpoint.Next" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Endpoint.NoOAuthNeeded" xml:space="preserve">
+    <value>{0} does not need browser authorization; edit the endpoint settings directly.</value>
+  </data>
+  <data name="Endpoint.NoSubdirectories" xml:space="preserve">
+    <value>(this folder has no subfolders)</value>
+  </data>
+  <data name="Endpoint.OrganizationUpdated" xml:space="preserve">
+    <value>Updated the group and tags of the endpoint "{0}".</value>
+  </data>
+  <data name="Endpoint.PickProvider" xml:space="preserve">
+    <value>Choose one of the providers rclone supports from the list.</value>
+  </data>
+  <data name="Endpoint.PickProviderFromList" xml:space="preserve">
+    <value>Choose an S3 provider from the list.</value>
+  </data>
+  <data name="Endpoint.Prefix" xml:space="preserve">
+    <value>Prefix (optional)</value>
+  </data>
+  <data name="Endpoint.PrefixHint" xml:space="preserve">
+    <value>S3 has no directory levels, so this is a key prefix. Once the endpoint is saved it can only reach what is under this prefix; rclone enforces that and it cannot be stepped outside.</value>
+  </data>
+  <data name="Endpoint.ProbePrefix" xml:space="preserve">
+    <value>Read successfully: /{0}. Once saved, rclone enforces this prefix and the endpoint can only reach what is under it. Write access is not verified.</value>
+  </data>
+  <data name="Endpoint.ProbeResultTitle" xml:space="preserve">
+    <value>Test read result</value>
+  </data>
+  <data name="Endpoint.ProbeRoot" xml:space="preserve">
+    <value>Read successfully: the root of this bucket. The endpoint will only be able to reach this bucket. Write access is not verified.</value>
+  </data>
+  <data name="Endpoint.ProviderReadFailed" xml:space="preserve">
+    <value>The provider list could not be read: {0}</value>
+  </data>
+  <data name="Endpoint.QuotaUsed" xml:space="preserve">
+    <value>Used {0} / {1}</value>
+  </data>
+  <data name="Endpoint.ReadingDirectory" xml:space="preserve">
+    <value>Reading the chosen folder…</value>
+  </data>
+  <data name="Endpoint.RegionCustomHint" xml:space="preserve">
+    <value>Type the region the service provider requires.</value>
+  </data>
+  <data name="Endpoint.RegionSuggestHint" xml:space="preserve">
+    <value>Pick one of the suggestions, or type a custom region.</value>
+  </data>
+  <data name="Endpoint.RenameAliasTargetWrong" xml:space="preserve">
+    <value>After the rename, the alias "{0}" does not point at the new internal storage (expected {1}, actual {2})</value>
+  </data>
+  <data name="Endpoint.RenameBackingTaken" xml:space="preserve">
+    <value>The internal name "{0}" is already taken; pick another name.</value>
+  </data>
+  <data name="Endpoint.RenameConfigMismatch" xml:space="preserve">
+    <value>After the rename, the rclone configuration read for "{0}" did not match what it was before the rename; it was reverted.</value>
+  </data>
+  <data name="Endpoint.RenameNameTaken" xml:space="preserve">
+    <value>An endpoint or internal record named "{0}" already exists; pick another name.</value>
+  </data>
+  <data name="Endpoint.RenameNeedName" xml:space="preserve">
+    <value>Enter a new endpoint name.</value>
+  </data>
+  <data name="Endpoint.RenameNotInRclone" xml:space="preserve">
+    <value>rclone has no configuration for the endpoint "{0}"; refresh the endpoint list first.</value>
+  </data>
+  <data name="Endpoint.RenameNotReadable" xml:space="preserve">
+    <value>rclone could not read the renamed endpoint "{0}"; it was reverted.</value>
+  </data>
+  <data name="Endpoint.RenameSameName" xml:space="preserve">
+    <value>The new name is the same as the current one; there is nothing to rename.</value>
+  </data>
+  <data name="Endpoint.RenameStillMounted" xml:space="preserve">
+    <value>The endpoint "{0}" still has mounts; unmount it before renaming.</value>
+  </data>
+  <data name="Endpoint.RootPath" xml:space="preserve">
+    <value>Remote root folder (optional)</value>
+  </data>
+  <data name="Endpoint.S3Connection" xml:space="preserve">
+    <value>S3 connection</value>
+  </data>
+  <data name="Endpoint.S3ConnectionNamed" xml:space="preserve">
+    <value>{0} S3 connection</value>
+  </data>
+  <data name="Endpoint.Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Endpoint.SaveUntestedPrompt" xml:space="preserve">
+    <value>The current settings have not passed a read test. Once saved, browsing, uploading or syncing may not work.
+
+Save anyway?</value>
+  </data>
+  <data name="Endpoint.SaveUntestedTitle" xml:space="preserve">
+    <value>Save an untested S3 endpoint</value>
+  </data>
+  <data name="Endpoint.Saving" xml:space="preserve">
+    <value>Saving…</value>
+  </data>
+  <data name="Endpoint.Service" xml:space="preserve">
+    <value>Service</value>
+  </data>
+  <data name="Endpoint.ServiceType" xml:space="preserve">
+    <value>Cloud service type</value>
+  </data>
+  <data name="Endpoint.Show" xml:space="preserve">
+    <value>Show</value>
+  </data>
+  <data name="Endpoint.Step1" xml:space="preserve">
+    <value>Step 1 of 2 · Choose a service</value>
+  </data>
+  <data name="Endpoint.Step2" xml:space="preserve">
+    <value>Step 2 of 2 · Set up the connection</value>
+  </data>
+  <data name="Endpoint.TagsSet" xml:space="preserve">
+    <value>Set {1} tags on the endpoint "{0}".</value>
+  </data>
+  <data name="Endpoint.TestConnection" xml:space="preserve">
+    <value>Test the connection</value>
+  </data>
+  <data name="Endpoint.ToggleSecret" xml:space="preserve">
+    <value>Show or hide the Secret Access Key</value>
+  </data>
+  <data name="Endpoint.UngroupedLabel" xml:space="preserve">
+    <value>Ungrouped</value>
+  </data>
+  <data name="Endpoint.VerifySuccess" xml:space="preserve">
+    <value>The connection verified successfully.</value>
+  </data>
+  <data name="Endpoint.Verifying" xml:space="preserve">
+    <value>Verifying the connection…</value>
+  </data>
+  <data name="Endpoint.WaitingForAuth" xml:space="preserve">
+    <value>Waiting for the browser authorization…</value>
+  </data>
+  <data name="Endpoint.WindowTitle" xml:space="preserve">
+    <value>New cloud endpoint</value>
+  </data>
+  <data name="Export.BadParameterName" xml:space="preserve">
+    <value>Endpoint "{0}" has an invalid parameter name "{1}"; it was skipped.</value>
+  </data>
+  <data name="Export.DuplicateName" xml:space="preserve">
+    <value>The endpoint name "{0}" is duplicated in the export file; it was skipped.</value>
+  </data>
+  <data name="Export.EmptyOrUnrecognized" xml:space="preserve">
+    <value>The file is empty or its format is not recognized.</value>
+  </data>
+  <data name="Export.NameBadCharacter" xml:space="preserve">
+    <value>The endpoint name "{0}" contains a disallowed character "{1}".</value>
+  </data>
+  <data name="Export.NameEmpty" xml:space="preserve">
+    <value>The endpoint name cannot be empty.</value>
+  </data>
+  <data name="Export.NameStartsWithDot" xml:space="preserve">
+    <value>The endpoint name "{0}" cannot start with ".".</value>
+  </data>
+  <data name="Export.NameSurroundingSpace" xml:space="preserve">
+    <value>The endpoint name "{0}" cannot have leading or trailing whitespace.</value>
+  </data>
+  <data name="Export.NameTooLong" xml:space="preserve">
+    <value>The endpoint name "{0}" is too long (at most 64 characters).</value>
+  </data>
+  <data name="Export.NotValidExport" xml:space="preserve">
+    <value>The file is not a valid endpoint export: {0}</value>
+  </data>
+  <data name="Export.ParameterNameInvalid" xml:space="preserve">
+    <value>The parameter name "{0}" is not valid.</value>
+  </data>
+  <data name="Export.UnknownType" xml:space="preserve">
+    <value>Endpoint "{0}" has an unrecognized type "{1}"; it was skipped.</value>
+  </data>
+  <data name="Export.UnsupportedVersion" xml:space="preserve">
+    <value>Unsupported export file version {0}; this version only recognizes {1}.</value>
+  </data>
+  <data name="Guide.Intro" xml:space="preserve">
+    <value>Cloud management can connect to cloud drives, browse and transfer files, and mount a cloud folder as a Windows drive. Connecting your first drive takes three steps.</value>
+  </data>
+  <data name="Guide.Later" xml:space="preserve">
+    <value>Later</value>
+  </data>
+  <data name="Guide.NeverAgain" xml:space="preserve">
+    <value>Do not show this guide again</value>
+  </data>
+  <data name="Guide.Start" xml:space="preserve">
+    <value>New endpoint</value>
+  </data>
+  <data name="Guide.StatusLater" xml:space="preserve">
+    <value>Guide closed; it will ask again the next time you open cloud management.</value>
+  </data>
+  <data name="Guide.StatusNever" xml:space="preserve">
+    <value>Noted: this guide will not show again.</value>
+  </data>
+  <data name="Guide.StatusStart" xml:space="preserve">
+    <value>The new-endpoint editor is open.</value>
+  </data>
+  <data name="Guide.Step1Detail" xml:space="preserve">
+    <value>Click "New endpoint" and pick Google Drive from the list.</value>
+  </data>
+  <data name="Guide.Step1Title" xml:space="preserve">
+    <value>New endpoint</value>
+  </data>
+  <data name="Guide.Step2Detail" xml:space="preserve">
+    <value>After you click "Create" a browser opens: sign in to your Google account and grant access. Google does that step; Feng Sync never sees your password.</value>
+  </data>
+  <data name="Guide.Step2Title" xml:space="preserve">
+    <value>Authorize in the browser</value>
+  </data>
+  <data name="Guide.Step3Detail" xml:space="preserve">
+    <value>Back in this window, click "Check connection". A green line means it is connected; a red line says which step failed.</value>
+  </data>
+  <data name="Guide.Step3Title" xml:space="preserve">
+    <value>Come back and check the connection</value>
+  </data>
+  <data name="Guide.Step4Detail" xml:space="preserve">
+    <value>Browse files on the right and drag them to upload or download; if you want a drive letter, mount one under "Mounts" at the bottom left.</value>
+  </data>
+  <data name="Guide.Step4Title" xml:space="preserve">
+    <value>Browse or mount</value>
+  </data>
+  <data name="Guide.Title" xml:space="preserve">
+    <value>Getting started with cloud management</value>
+  </data>
+  <data name="History.AttemptSuffix" xml:space="preserve">
+    <value>(attempt {0})</value>
+  </data>
+  <data name="History.Cancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
+  <data name="History.Completed" xml:space="preserve">
+    <value>Completed</value>
+  </data>
+  <data name="History.Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="History.Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="History.Empty" xml:space="preserve">
+    <value>No transfers are archived yet. Clearing the finished ones files them here.</value>
+  </data>
+  <data name="History.Failed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="History.Paused" xml:space="preserve">
+    <value>Paused</value>
+  </data>
+  <data name="History.Summary" xml:space="preserve">
+    <value>{0} archived records, of which {1} succeeded and {2} failed.</value>
+  </data>
+  <data name="History.Upload" xml:space="preserve">
+    <value>Upload</value>
+  </data>
+  <data name="Main.About" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="Main.Action" xml:space="preserve">
+    <value>Action</value>
+  </data>
+  <data name="Main.Batch" xml:space="preserve">
+    <value>Batch</value>
+  </data>
+  <data name="Main.ChangeActionMenu" xml:space="preserve">
+    <value>Change action menu</value>
+  </data>
+  <data name="Main.ChooseEndpoint" xml:space="preserve">
+    <value>Choose an endpoint</value>
+  </data>
+  <data name="Main.Cloud" xml:space="preserve">
+    <value>Cloud</value>
+  </data>
+  <data name="Main.CloudManagement" xml:space="preserve">
+    <value>Cloud management</value>
+  </data>
+  <data name="Main.Compare" xml:space="preserve">
+    <value>Compare</value>
+  </data>
+  <data name="Main.ConflictSummaryEmpty" xml:space="preserve">
+    <value>0 conflicts</value>
+  </data>
+  <data name="Main.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Main.DeleteSummaryEmpty" xml:space="preserve">
+    <value>0 deletions</value>
+  </data>
+  <data name="Main.DownloadSummaryEmpty" xml:space="preserve">
+    <value>0 downloads</value>
+  </data>
+  <data name="Main.Duplicate" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Main.EditProfile" xml:space="preserve">
+    <value>Edit Profile…</value>
+  </data>
+  <data name="Main.EditProfileTooltip" xml:space="preserve">
+    <value>Edit Profile</value>
+  </data>
+  <data name="Main.EmptyPickEndpoints" xml:space="preserve">
+    <value>Choose two endpoints, then click Compare</value>
+  </data>
+  <data name="Main.EnableFile" xml:space="preserve">
+    <value>Re-enable this file</value>
+  </data>
+  <data name="Main.Export" xml:space="preserve">
+    <value>Export…</value>
+  </data>
+  <data name="Main.FilterConflicts" xml:space="preserve">
+    <value>Filter conflicts</value>
+  </data>
+  <data name="Main.FilterDeletes" xml:space="preserve">
+    <value>Filter deletions</value>
+  </data>
+  <data name="Main.FilterDownloads" xml:space="preserve">
+    <value>Filter downloads</value>
+  </data>
+  <data name="Main.FilterUploads" xml:space="preserve">
+    <value>Filter uploads</value>
+  </data>
+  <data name="Main.IgnoreFile" xml:space="preserve">
+    <value>Ignore this file</value>
+  </data>
+  <data name="Main.Import" xml:space="preserve">
+    <value>Import…</value>
+  </data>
+  <data name="Main.ItemCountEmpty" xml:space="preserve">
+    <value>0 items</value>
+  </data>
+  <data name="Main.KeepLeft" xml:space="preserve">
+    <value>Left overwrites right</value>
+  </data>
+  <data name="Main.KeepRight" xml:space="preserve">
+    <value>Right overwrites left</value>
+  </data>
+  <data name="Main.LeftEndpointPath" xml:space="preserve">
+    <value>Left endpoint path</value>
+  </data>
+  <data name="Main.LeftRelativePath" xml:space="preserve">
+    <value>Left relative path</value>
+  </data>
+  <data name="Main.LoadingSettings" xml:space="preserve">
+    <value>Loading settings…</value>
+  </data>
+  <data name="Main.Local" xml:space="preserve">
+    <value>Local</value>
+  </data>
+  <data name="Main.ModeMirror" xml:space="preserve">
+    <value>Mirror to the right</value>
+  </data>
+  <data name="Main.ModeTwoWay" xml:space="preserve">
+    <value>Two-way sync</value>
+  </data>
+  <data name="Main.ModeUpdate" xml:space="preserve">
+    <value>Update to the right</value>
+  </data>
+  <data name="Main.NewSync" xml:space="preserve">
+    <value>New sync</value>
+  </data>
+  <data name="Main.NoEndpoint" xml:space="preserve">
+    <value>No endpoint selected</value>
+  </data>
+  <data name="Main.NoProfileSelected" xml:space="preserve">
+    <value>No Profile selected</value>
+  </data>
+  <data name="Main.PickEndpointsToCompare" xml:space="preserve">
+    <value>Choose the left and right endpoints to compare</value>
+  </data>
+  <data name="Main.PickLeftCloud" xml:space="preserve">
+    <value>Choose the left cloud endpoint</value>
+  </data>
+  <data name="Main.PickLeftLocal" xml:space="preserve">
+    <value>Choose the left local endpoint</value>
+  </data>
+  <data name="Main.PickRightCloud" xml:space="preserve">
+    <value>Choose the right cloud endpoint</value>
+  </data>
+  <data name="Main.PickRightLocal" xml:space="preserve">
+    <value>Choose the right local endpoint</value>
+  </data>
+  <data name="Main.ProfileRefreshFailed" xml:space="preserve">
+    <value>Refreshing the Profile list failed: {0}</value>
+  </data>
+  <data name="Main.ProfileSyncedFromCloud" xml:space="preserve">
+    <value>Synced Profile "{0}".</value>
+  </data>
+  <data name="Main.ProfileWorkspace" xml:space="preserve">
+    <value>Profile workspace</value>
+  </data>
+  <data name="Main.RightEndpointPath" xml:space="preserve">
+    <value>Right endpoint path</value>
+  </data>
+  <data name="Main.RightRelativePath" xml:space="preserve">
+    <value>Right relative path</value>
+  </data>
+  <data name="Main.SaveAsBatchJob" xml:space="preserve">
+    <value>Save as a batch job…</value>
+  </data>
+  <data name="Main.ScheduleTasks" xml:space="preserve">
+    <value>Scheduled tasks</value>
+  </data>
+  <data name="Main.SelectedPrefix" xml:space="preserve">
+    <value>Selected </value>
+  </data>
+  <data name="Main.SelectedSuffix" xml:space="preserve">
+    <value> items  ·  concurrent </value>
+  </data>
+  <data name="Main.Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Main.SettingsApplied" xml:space="preserve">
+    <value>Application settings applied.</value>
+  </data>
+  <data name="Main.ShowAllChanges" xml:space="preserve">
+    <value>Show all changes</value>
+  </data>
+  <data name="Main.Size" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Main.StartSync" xml:space="preserve">
+    <value>Start sync</value>
+  </data>
+  <data name="Main.SwapEndpoints" xml:space="preserve">
+    <value>Swap the two endpoints</value>
+  </data>
+  <data name="Main.SyncProfiles" xml:space="preserve">
+    <value>Sync profiles</value>
+  </data>
+  <data name="Main.ThisRunChanges" xml:space="preserve">
+    <value>Changes in this run</value>
+  </data>
+  <data name="Main.TotalPending" xml:space="preserve">
+    <value>Total (pending transfer)</value>
+  </data>
+  <data name="Main.UploadSummaryEmpty" xml:space="preserve">
+    <value>0 uploads</value>
+  </data>
+  <data name="Mgr.AddressBarName" xml:space="preserve">
+    <value>Remote path address bar</value>
+  </data>
+  <data name="Mgr.Ascending" xml:space="preserve">
+    <value>Ascending</value>
+  </data>
+  <data name="Mgr.AutoMount" xml:space="preserve">
+    <value>Mount the selected mount automatically at the next start</value>
+  </data>
+  <data name="Mgr.AutoMountName" xml:space="preserve">
+    <value>Mount the selected mount automatically when the application starts</value>
+  </data>
+  <data name="Mgr.AutoMountNoRecord" xml:space="preserve">
+    <value>This mount has no record from this application (it may have been started by another program), so automatic mounting cannot be set up.</value>
+  </data>
+  <data name="Mgr.AutoMountNoRecordFor" xml:space="preserve">
+    <value>No mount record was found for {0}, so automatic mounting cannot be set up.</value>
+  </data>
+  <data name="Mgr.AutoMountOff" xml:space="preserve">
+    <value>Cancelled: {0} is no longer mounted automatically at start.</value>
+  </data>
+  <data name="Mgr.AutoMountOn" xml:space="preserve">
+    <value>Set: {0} will be mounted automatically at the next start.</value>
+  </data>
+  <data name="Mgr.AutoMountSaveFailed" xml:space="preserve">
+    <value>Saving the automatic mount setting failed: {0}</value>
+  </data>
+  <data name="Mgr.Back" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="Mgr.BookmarksCorruptBackup" xml:space="preserve">
+    <value>The favorites file could not be read; it was backed up as {0}, and favorites and recent items start from an empty list.</value>
+  </data>
+  <data name="Mgr.BookmarksLoadFailed" xml:space="preserve">
+    <value>The favorites and recent items could not be read: {0}</value>
+  </data>
+  <data name="Mgr.BrowserTitle" xml:space="preserve">
+    <value>File browser</value>
+  </data>
+  <data name="Mgr.BulletField" xml:space="preserve">
+    <value> · {0}: {1}</value>
+  </data>
+  <data name="Mgr.BusyCreate" xml:space="preserve">
+    <value>Creating…</value>
+  </data>
+  <data name="Mgr.BusyLogin" xml:space="preserve">
+    <value>Signing in…</value>
+  </data>
+  <data name="Mgr.BusyNew" xml:space="preserve">
+    <value>Creating…</value>
+  </data>
+  <data name="Mgr.BusyOpen" xml:space="preserve">
+    <value>Opening…</value>
+  </data>
+  <data name="Mgr.BusyRefresh" xml:space="preserve">
+    <value>Refreshing…</value>
+  </data>
+  <data name="Mgr.CacheAlreadyEmpty" xml:space="preserve">
+    <value>The mount cache is already empty ({0}).</value>
+  </data>
+  <data name="Mgr.CacheClearFailed" xml:space="preserve">
+    <value>Clearing the cache failed: {0}</value>
+  </data>
+  <data name="Mgr.CacheCleared" xml:space="preserve">
+    <value>Cleared the mount cache: {0} files.</value>
+  </data>
+  <data name="Mgr.CacheClearedPartial" xml:space="preserve">
+    <value>Cleared the mount cache: {0} / {1} files; the rest are in use by a mount and were kept.</value>
+  </data>
+  <data name="Mgr.CannotCreateSyncTask" xml:space="preserve">
+    <value>The sync job could not be created.</value>
+  </data>
+  <data name="Mgr.CannotReconnectProvider" xml:space="preserve">
+    <value>Only endpoints that need browser authorization can be signed in again; for {0}, edit the endpoint parameters directly.</value>
+  </data>
+  <data name="Mgr.CheckEndpoint" xml:space="preserve">
+    <value>Check connection</value>
+  </data>
+  <data name="Mgr.CheckEndpointName" xml:space="preserve">
+    <value>Check the connection and capacity of the selected cloud endpoint</value>
+  </data>
+  <data name="Mgr.Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Mgr.ClearCache" xml:space="preserve">
+    <value>Clear cache</value>
+  </data>
+  <data name="Mgr.ClearCacheName" xml:space="preserve">
+    <value>Clear the mount cache</value>
+  </data>
+  <data name="Mgr.ClearCachePrompt" xml:space="preserve">
+    <value>This will delete {0} files in the mount cache folder ({1}):
+{2}
+
+</value>
+  </data>
+  <data name="Mgr.ClearCacheTitle" xml:space="preserve">
+    <value>Clear the mount cache</value>
+  </data>
+  <data name="Mgr.ClearSearchName" xml:space="preserve">
+    <value>Clear the search terms</value>
+  </data>
+  <data name="Mgr.ClearingCache" xml:space="preserve">
+    <value>Clearing the mount cache…</value>
+  </data>
+  <data name="Mgr.ColumnModified" xml:space="preserve">
+    <value>Modified</value>
+  </data>
+  <data name="Mgr.ColumnName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Mgr.ColumnSize" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Mgr.ColumnType" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="Mgr.CreateSyncTask" xml:space="preserve">
+    <value>Create sync job</value>
+  </data>
+  <data name="Mgr.CreateSyncTaskName" xml:space="preserve">
+    <value>Create a sync job from the selected cloud endpoint</value>
+  </data>
+  <data name="Mgr.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Mgr.DeleteEndpointName" xml:space="preserve">
+    <value>Delete the selected cloud endpoint</value>
+  </data>
+  <data name="Mgr.DeleteItemsName" xml:space="preserve">
+    <value>Delete the selected items</value>
+  </data>
+  <data name="Mgr.Descending" xml:space="preserve">
+    <value>Descending</value>
+  </data>
+  <data name="Mgr.Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Mgr.DownloadName" xml:space="preserve">
+    <value>Download the selected files</value>
+  </data>
+  <data name="Mgr.DropToUpload" xml:space="preserve">
+    <value>Release the mouse to upload</value>
+  </data>
+  <data name="Mgr.EditEndpoint" xml:space="preserve">
+    <value>Edit endpoint</value>
+  </data>
+  <data name="Mgr.EditEndpointName" xml:space="preserve">
+    <value>Edit the selected cloud endpoint</value>
+  </data>
+  <data name="Mgr.EmptyTrash" xml:space="preserve">
+    <value>Empty recycle bin</value>
+  </data>
+  <data name="Mgr.EmptyTrashName" xml:space="preserve">
+    <value>Permanently delete everything in the recycle bin</value>
+  </data>
+  <data name="Mgr.EndpointCount" xml:space="preserve">
+    <value>{0} cloud endpoints.</value>
+  </data>
+  <data name="Mgr.EndpointCreated" xml:space="preserve">
+    <value>Created the endpoint: {0}.</value>
+  </data>
+  <data name="Mgr.EndpointListFailed" xml:space="preserve">
+    <value>The cloud endpoints could not be read: {0}</value>
+  </data>
+  <data name="Mgr.EndpointListName" xml:space="preserve">
+    <value>Cloud endpoint list</value>
+  </data>
+  <data name="Mgr.EndpointSortByName" xml:space="preserve">
+    <value>Cloud endpoint sort order</value>
+  </data>
+  <data name="Mgr.EndpointSortHealth" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Mgr.EndpointSortName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Mgr.EndpointSortProvider" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="Mgr.EndpointUpdated" xml:space="preserve">
+    <value>Updated the endpoint: {0}.</value>
+  </data>
+  <data name="Mgr.EndpointsFiltered" xml:space="preserve">
+    <value>Filtered by "{0}", showing {1} / {2} endpoints.</value>
+  </data>
+  <data name="Mgr.EndpointsGroup" xml:space="preserve">
+    <value>Cloud endpoints</value>
+  </data>
+  <data name="Mgr.Export" xml:space="preserve">
+    <value>Export…</value>
+  </data>
+  <data name="Mgr.ExportAllName" xml:space="preserve">
+    <value>Export the non-sensitive settings of every cloud endpoint</value>
+  </data>
+  <data name="Mgr.ExportDiagnostics" xml:space="preserve">
+    <value>Export diagnostics…</value>
+  </data>
+  <data name="Mgr.ExportDiagnosticsName" xml:space="preserve">
+    <value>Export a diagnostic report that contains no credentials</value>
+  </data>
+  <data name="Mgr.ExternalMountNotice" xml:space="preserve">
+    <value>This mount is managed by another program. Feng Sync shows external mounts read-only; it will not end their process or mount them again on their behalf.</value>
+  </data>
+  <data name="Mgr.FavoriteJumpName" xml:space="preserve">
+    <value>Jump to a favorite folder</value>
+  </data>
+  <data name="Mgr.FavoriteThisDirectory" xml:space="preserve">
+    <value>Add this folder to favorites</value>
+  </data>
+  <data name="Mgr.FileListName" xml:space="preserve">
+    <value>Files in the current folder</value>
+  </data>
+  <data name="Mgr.Forward" xml:space="preserve">
+    <value>Forward</value>
+  </data>
+  <data name="Mgr.Go" xml:space="preserve">
+    <value>Go</value>
+  </data>
+  <data name="Mgr.GoToName" xml:space="preserve">
+    <value>Go to the path you typed</value>
+  </data>
+  <data name="Mgr.GridView" xml:space="preserve">
+    <value>Grid view</value>
+  </data>
+  <data name="Mgr.GuideSeenSaveFailed" xml:space="preserve">
+    <value>The guide state could not be remembered: {0}</value>
+  </data>
+  <data name="Mgr.HistoryBackName" xml:space="preserve">
+    <value>Go back to the previous folder you visited</value>
+  </data>
+  <data name="Mgr.HistoryForwardName" xml:space="preserve">
+    <value>Go forward to the next folder you visited</value>
+  </data>
+  <data name="Mgr.Import" xml:space="preserve">
+    <value>Import…</value>
+  </data>
+  <data name="Mgr.ImportName" xml:space="preserve">
+    <value>Import cloud endpoints from an exported file</value>
+  </data>
+  <data name="Mgr.IncludeSubfolders" xml:space="preserve">
+    <value>Include subfolders</value>
+  </data>
+  <data name="Mgr.Jump" xml:space="preserve">
+    <value>Jump</value>
+  </data>
+  <data name="Mgr.LoadingEndpointParams" xml:space="preserve">
+    <value>Reading the endpoint parameters…</value>
+  </data>
+  <data name="Mgr.LoadingEndpoints" xml:space="preserve">
+    <value>Reading the list of cloud endpoints…</value>
+  </data>
+  <data name="Mgr.MountCount" xml:space="preserve">
+    <value>Found {0} mounts, {1} of them started by this application.</value>
+  </data>
+  <data name="Mgr.MountEndpoint" xml:space="preserve">
+    <value>Mount the selected endpoint…</value>
+  </data>
+  <data name="Mgr.MountEndpointName" xml:space="preserve">
+    <value>Mount the selected cloud endpoint</value>
+  </data>
+  <data name="Mgr.MountHealthy" xml:space="preserve">
+    <value>The mount point {0} is working, so it does not need to be mounted again.</value>
+  </data>
+  <data name="Mgr.MountListName" xml:space="preserve">
+    <value>Current mount list</value>
+  </data>
+  <data name="Mgr.MountReconnectFailed" xml:space="preserve">
+    <value>Remounting failed: {0}</value>
+  </data>
+  <data name="Mgr.MountRestoreFailed" xml:space="preserve">
+    <value>Restoring the mounts failed: {0}</value>
+  </data>
+  <data name="Mgr.MountScanFailed" xml:space="preserve">
+    <value>Scanning the mounts failed: {0}</value>
+  </data>
+  <data name="Mgr.MountsGroup" xml:space="preserve">
+    <value>Mount management</value>
+  </data>
+  <data name="Mgr.MoveToTrash" xml:space="preserve">
+    <value>Move to recycle bin</value>
+  </data>
+  <data name="Mgr.NewEndpoint" xml:space="preserve">
+    <value>New endpoint</value>
+  </data>
+  <data name="Mgr.NewEndpointName" xml:space="preserve">
+    <value>Create a cloud endpoint</value>
+  </data>
+  <data name="Mgr.NewFolder" xml:space="preserve">
+    <value>New folder</value>
+  </data>
+  <data name="Mgr.NewFolderName" xml:space="preserve">
+    <value>Create a new folder in the current folder</value>
+  </data>
+  <data name="Mgr.NoEndpoints" xml:space="preserve">
+    <value>There is no cloud endpoint yet. Click "New endpoint" to create one.</value>
+  </data>
+  <data name="Mgr.NoMountRecordStore" xml:space="preserve">
+    <value>This process has no mount record store, so automatic mounting cannot be set up.</value>
+  </data>
+  <data name="Mgr.NoMounts" xml:space="preserve">
+    <value>The system currently has no rclone mounts.</value>
+  </data>
+  <data name="Mgr.NoMountsToRestore" xml:space="preserve">
+    <value>There are no mounts to restore.</value>
+  </data>
+  <data name="Mgr.OpenTransfersName" xml:space="preserve">
+    <value>Open the cloud transfer window</value>
+  </data>
+  <data name="Mgr.OpenTrashName" xml:space="preserve">
+    <value>Open the recycle bin folder of this endpoint</value>
+  </data>
+  <data name="Mgr.OpeningNewEndpointWindow" xml:space="preserve">
+    <value>Opening the new endpoint window…</value>
+  </data>
+  <data name="Mgr.OpeningSyncWizard" xml:space="preserve">
+    <value>Opening the sync wizard…</value>
+  </data>
+  <data name="Mgr.OrganizeEndpoint" xml:space="preserve">
+    <value>Groups and tags…</value>
+  </data>
+  <data name="Mgr.OrganizeEndpointName" xml:space="preserve">
+    <value>Set the group and tags of the selected cloud endpoint</value>
+  </data>
+  <data name="Mgr.Paste" xml:space="preserve">
+    <value>Paste</value>
+  </data>
+  <data name="Mgr.PasteFoldersSkipped" xml:space="preserve">
+    <value>{0} folders were not copied: a paste works on files, so open a folder first and select the files inside it.</value>
+  </data>
+  <data name="Mgr.PasteName" xml:space="preserve">
+    <value>Paste the items on the clipboard into the current folder</value>
+  </data>
+  <data name="Mgr.PasteSameName" xml:space="preserve">
+    <value>"{0}" is already in the destination folder.</value>
+  </data>
+  <data name="Mgr.PathNavigationName" xml:space="preserve">
+    <value>Current path navigation</value>
+  </data>
+  <data name="Mgr.PathWithPrefix" xml:space="preserve">
+    <value>{0}:/{1}    (prefix /{2}, enforced by rclone, cannot be stepped outside)</value>
+  </data>
+  <data name="Mgr.PickEndpoint" xml:space="preserve">
+    <value>Select an endpoint first.</value>
+  </data>
+  <data name="Mgr.PickEndpointForSyncTask" xml:space="preserve">
+    <value>Select the endpoint to create the sync task from first.</value>
+  </data>
+  <data name="Mgr.PickEndpointToEdit" xml:space="preserve">
+    <value>Select the endpoint to edit first.</value>
+  </data>
+  <data name="Mgr.PickMountToReconnect" xml:space="preserve">
+    <value>Select the mount point to remount first.</value>
+  </data>
+  <data name="Mgr.PreparingSyncTask" xml:space="preserve">
+    <value>Preparing the sync job…</value>
+  </data>
+  <data name="Mgr.RecentJumpName" xml:space="preserve">
+    <value>Jump to a recently visited folder</value>
+  </data>
+  <data name="Mgr.ReconnectAborted" xml:space="preserve">
+    <value>Remounting was stopped: the original mount could not be cancelled.
+</value>
+  </data>
+  <data name="Mgr.ReconnectEndpoint" xml:space="preserve">
+    <value>Sign in again</value>
+  </data>
+  <data name="Mgr.ReconnectEndpointName" xml:space="preserve">
+    <value>Sign in to the selected cloud endpoint again</value>
+  </data>
+  <data name="Mgr.ReconnectMount" xml:space="preserve">
+    <value>Remount</value>
+  </data>
+  <data name="Mgr.ReconnectMountName" xml:space="preserve">
+    <value>Remount the selected failed mount</value>
+  </data>
+  <data name="Mgr.ReconnectMountTail" xml:space="preserve">
+    <value>
+
+It will be cancelled first and then mounted once more with the same settings.</value>
+  </data>
+  <data name="Mgr.ReconnectMountTitle" xml:space="preserve">
+    <value>Remount</value>
+  </data>
+  <data name="Mgr.Reconnected" xml:space="preserve">
+    <value>"{0}" has been signed in again.</value>
+  </data>
+  <data name="Mgr.ReconnectingInBrowser" xml:space="preserve">
+    <value>Signing in again; please finish the authorization in your browser…</value>
+  </data>
+  <data name="Mgr.ReconnectingMount" xml:space="preserve">
+    <value>Remounting {0}…</value>
+  </data>
+  <data name="Mgr.RecycleItemName" xml:space="preserve">
+    <value>Move the selected items into this endpoint's recycle bin</value>
+  </data>
+  <data name="Mgr.Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Mgr.RefreshDirectoryName" xml:space="preserve">
+    <value>Refresh the current folder</value>
+  </data>
+  <data name="Mgr.RefreshList" xml:space="preserve">
+    <value>Refresh list</value>
+  </data>
+  <data name="Mgr.RefreshListName" xml:space="preserve">
+    <value>Refresh the cloud endpoint list</value>
+  </data>
+  <data name="Mgr.RefreshMountsName" xml:space="preserve">
+    <value>Refresh the mount list</value>
+  </data>
+  <data name="Mgr.Rename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="Mgr.RenameEndpointName" xml:space="preserve">
+    <value>Rename the selected cloud endpoint</value>
+  </data>
+  <data name="Mgr.RenameItemName" xml:space="preserve">
+    <value>Rename the selected item</value>
+  </data>
+  <data name="Mgr.Restore" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="Mgr.RestoreItemsName" xml:space="preserve">
+    <value>Restore the selected recycle bin items to their original folder</value>
+  </data>
+  <data name="Mgr.RestoreMounts" xml:space="preserve">
+    <value>Restore all</value>
+  </data>
+  <data name="Mgr.RestoreMountsName" xml:space="preserve">
+    <value>Restore the mounts from last time</value>
+  </data>
+  <data name="Mgr.RestoreMountsPrompt" xml:space="preserve">
+    <value>This will restore {0} mounts from last time:
+{1}</value>
+  </data>
+  <data name="Mgr.RestoreMountsTitle" xml:space="preserve">
+    <value>Restore mounts</value>
+  </data>
+  <data name="Mgr.RestoringMounts" xml:space="preserve">
+    <value>Restoring {0} mounts…</value>
+  </data>
+  <data name="Mgr.ScanningMounts" xml:space="preserve">
+    <value>Scanning every rclone mount on the system…</value>
+  </data>
+  <data name="Mgr.Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Mgr.SearchBoxName" xml:space="preserve">
+    <value>Search by name or path</value>
+  </data>
+  <data name="Mgr.SearchEndpointName" xml:space="preserve">
+    <value>Search within the whole endpoint</value>
+  </data>
+  <data name="Mgr.SearchEndpointsName" xml:space="preserve">
+    <value>Search cloud endpoints by name, type or prefix</value>
+  </data>
+  <data name="Mgr.SearchRecursiveName" xml:space="preserve">
+    <value>Search including subfolders</value>
+  </data>
+  <data name="Mgr.SettingsLoadFailed" xml:space="preserve">
+    <value>The settings could not be read: {0}</value>
+  </data>
+  <data name="Mgr.Sort" xml:space="preserve">
+    <value>Sort</value>
+  </data>
+  <data name="Mgr.SortByName" xml:space="preserve">
+    <value>Sort by</value>
+  </data>
+  <data name="Mgr.StatusConnectedNoQuota" xml:space="preserve">
+    <value>"{0}" is connected; this service does not provide capacity information.</value>
+  </data>
+  <data name="Mgr.StatusConnectedWithQuota" xml:space="preserve">
+    <value>"{0}" is connected, {1}.</value>
+  </data>
+  <data name="Mgr.StatusFailed" xml:space="preserve">
+    <value>"{0}" {1}: {2}</value>
+  </data>
+  <data name="Mgr.Subtitle" xml:space="preserve">
+    <value>Manage cloud endpoints and mounts, and browse and transfer files.</value>
+  </data>
+  <data name="Mgr.SyncTaskCancelled" xml:space="preserve">
+    <value>Creating the sync job was cancelled.</value>
+  </data>
+  <data name="Mgr.SyncTaskCreated" xml:space="preserve">
+    <value>Created the sync job "{0}": {1} -&gt; {2}</value>
+  </data>
+  <data name="Mgr.SyncTaskListFailed" xml:space="preserve">
+    <value>The sync job list could not be read: {0}</value>
+  </data>
+  <data name="Mgr.SyncWizard" xml:space="preserve">
+    <value>Sync wizard</value>
+  </data>
+  <data name="Mgr.SyncWizardName" xml:space="preserve">
+    <value>Open the one-tap two-way sync wizard</value>
+  </data>
+  <data name="Mgr.SyncWizardTaskCreated" xml:space="preserve">
+    <value>Created the two-way sync job "{0}": {1} ↔ {2}</value>
+  </data>
+  <data name="Mgr.TestAll" xml:space="preserve">
+    <value>Test all</value>
+  </data>
+  <data name="Mgr.TestAllName" xml:space="preserve">
+    <value>Check the connection and capacity of every cloud endpoint</value>
+  </data>
+  <data name="Mgr.ToggleEndpointSortDirectionName" xml:space="preserve">
+    <value>Switch the cloud endpoint list between ascending and descending order</value>
+  </data>
+  <data name="Mgr.ToggleSortDirectionName" xml:space="preserve">
+    <value>Switch between ascending and descending order</value>
+  </data>
+  <data name="Mgr.ToggleViewName" xml:space="preserve">
+    <value>Switch between the list view and the grid view</value>
+  </data>
+  <data name="Mgr.TransferProgressName" xml:space="preserve">
+    <value>File transfer progress</value>
+  </data>
+  <data name="Mgr.Trash" xml:space="preserve">
+    <value>Recycle bin</value>
+  </data>
+  <data name="Mgr.TypeFile" xml:space="preserve">
+    <value>File</value>
+  </data>
+  <data name="Mgr.TypeFolder" xml:space="preserve">
+    <value>Folder</value>
+  </data>
+  <data name="Mgr.Unmount" xml:space="preserve">
+    <value>Unmount</value>
+  </data>
+  <data name="Mgr.UnmountName" xml:space="preserve">
+    <value>Unmount the selected mount</value>
+  </data>
+  <data name="Mgr.UpLevel" xml:space="preserve">
+    <value>Up one level</value>
+  </data>
+  <data name="Mgr.UpLevelName" xml:space="preserve">
+    <value>Go up to the parent folder</value>
+  </data>
+  <data name="Mgr.UploadFiles" xml:space="preserve">
+    <value>Upload files</value>
+  </data>
+  <data name="Mgr.UploadFilesName" xml:space="preserve">
+    <value>Upload files to the current folder</value>
+  </data>
+  <data name="Mgr.UploadFolder" xml:space="preserve">
+    <value>Upload folder</value>
+  </data>
+  <data name="Mgr.UploadFolderName" xml:space="preserve">
+    <value>Upload a folder to the current folder</value>
+  </data>
+  <data name="Mgr.ViewTransfers" xml:space="preserve">
+    <value>View transfers</value>
+  </data>
+  <data name="Mgr.WindowName" xml:space="preserve">
+    <value>Cloud endpoint and file management</value>
+  </data>
+  <data name="Mgr.WindowTitle" xml:space="preserve">
+    <value>Cloud management</value>
+  </data>
+  <data name="Mount.Advanced" xml:space="preserve">
+    <value>Advanced</value>
+  </data>
+  <data name="Mount.AdvancedOptions" xml:space="preserve">
+    <value>Mount advanced options</value>
+  </data>
+  <data name="Mount.AvailableDrives" xml:space="preserve">
+    <value>Available drive letters</value>
+  </data>
+  <data name="Mount.Browse" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="Mount.BrowseAndPickDirectory" xml:space="preserve">
+    <value>Browse for the folder to mount</value>
+  </data>
+  <data name="Mount.CacheMaxAge" xml:space="preserve">
+    <value>Cache retention</value>
+  </data>
+  <data name="Mount.CacheMaxAgeLabel" xml:space="preserve">
+    <value>Cache retention (seconds; 0 uses the 1 hour default)</value>
+  </data>
+  <data name="Mount.CacheMaxSize" xml:space="preserve">
+    <value>Cache limit</value>
+  </data>
+  <data name="Mount.CacheMaxSizeLabel" xml:space="preserve">
+    <value>Cache limit (say 10G; empty keeps the default from settings, 0 means no limit)</value>
+  </data>
+  <data name="Mount.CacheMode" xml:space="preserve">
+    <value>VFS cache mode</value>
+  </data>
+  <data name="Mount.CacheModeFull" xml:space="preserve">
+    <value>Cache everything, including whole files still being written</value>
+  </data>
+  <data name="Mount.CacheModeLabel" xml:space="preserve">
+    <value>Cache mode</value>
+  </data>
+  <data name="Mount.CacheModeMinimal" xml:space="preserve">
+    <value>Cache only what is read</value>
+  </data>
+  <data name="Mount.CacheModeOff" xml:space="preserve">
+    <value>No cache; every read goes over the network</value>
+  </data>
+  <data name="Mount.CacheModeWrites" xml:space="preserve">
+    <value>Cache reads and buffer writes (default)</value>
+  </data>
+  <data name="Mount.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Mount.CancelName" xml:space="preserve">
+    <value>Cancel choosing a mount location</value>
+  </data>
+  <data name="Mount.DialogName" xml:space="preserve">
+    <value>Choose a mount location</value>
+  </data>
+  <data name="Mount.DirCacheTime" xml:space="preserve">
+    <value>Directory cache time</value>
+  </data>
+  <data name="Mount.DirCacheTimeLabel" xml:space="preserve">
+    <value>Directory cache time (seconds; 0 uses the 5 minute default)</value>
+  </data>
+  <data name="Mount.DirectoryHint" xml:space="preserve">
+    <value>The folder must not exist yet (rclone creates it), and its parent must exist. Feng Sync will not create the folder for you.</value>
+  </data>
+  <data name="Mount.DirectoryPath" xml:space="preserve">
+    <value>Mount folder path</value>
+  </data>
+  <data name="Mount.DriveHint" xml:space="preserve">
+    <value>Pick a drive letter Windows is not using and that no existing mount has taken.</value>
+  </data>
+  <data name="Mount.ErrorBadSeconds" xml:space="preserve">
+    <value>Cannot read “{0}”. Enter a whole number of seconds; empty or 0 uses the default.</value>
+  </data>
+  <data name="Mount.ErrorBadSize" xml:space="preserve">
+    <value>Cannot read “{0}”. Enter a size such as 10G or 512M; empty keeps the default limit from settings, and 0 means no limit.</value>
+  </data>
+  <data name="Mount.Header" xml:space="preserve">
+    <value>Mount {0}</value>
+  </data>
+  <data name="Mount.LabelCacheMaxAge" xml:space="preserve">
+    <value>Cache retention</value>
+  </data>
+  <data name="Mount.LabelDirCacheTime" xml:space="preserve">
+    <value>Directory cache time</value>
+  </data>
+  <data name="Mount.LabelPollInterval" xml:space="preserve">
+    <value>Poll interval</value>
+  </data>
+  <data name="Mount.LabelWriteBack" xml:space="preserve">
+    <value>Write-back delay</value>
+  </data>
+  <data name="Mount.LocationType" xml:space="preserve">
+    <value>Mount location type</value>
+  </data>
+  <data name="Mount.NetworkMode" xml:space="preserve">
+    <value>Mount as a network drive (not a fixed disk)</value>
+  </data>
+  <data name="Mount.NetworkModeName" xml:space="preserve">
+    <value>Mount as a network drive</value>
+  </data>
+  <data name="Mount.NoChecksum" xml:space="preserve">
+    <value>Do not compare checksums (on by default)</value>
+  </data>
+  <data name="Mount.NoChecksumName" xml:space="preserve">
+    <value>Do not compare checksums</value>
+  </data>
+  <data name="Mount.NoModTime" xml:space="preserve">
+    <value>Do not read or write modification times (on by default)</value>
+  </data>
+  <data name="Mount.NoModTimeName" xml:space="preserve">
+    <value>Do not read or write modification times</value>
+  </data>
+  <data name="Mount.NoSeek" xml:space="preserve">
+    <value>Forbid seeking within a file (some backends handle it badly)</value>
+  </data>
+  <data name="Mount.NoSeekName" xml:space="preserve">
+    <value>Forbid seeking within a file</value>
+  </data>
+  <data name="Mount.Ok" xml:space="preserve">
+    <value>Mount</value>
+  </data>
+  <data name="Mount.OkName" xml:space="preserve">
+    <value>Mount to the selected location</value>
+  </data>
+  <data name="Mount.PickDirectoryLocation" xml:space="preserve">
+    <value>Choose a folder to mount to</value>
+  </data>
+  <data name="Mount.PickDriveLocation" xml:space="preserve">
+    <value>Choose a drive letter to mount to</value>
+  </data>
+  <data name="Mount.PickParentTitle" xml:space="preserve">
+    <value>Choose the parent folder of the mount point</value>
+  </data>
+  <data name="Mount.PickUncLocation" xml:space="preserve">
+    <value>Choose a network share to mount to</value>
+  </data>
+  <data name="Mount.PollInterval" xml:space="preserve">
+    <value>Poll interval</value>
+  </data>
+  <data name="Mount.PollIntervalLabel" xml:space="preserve">
+    <value>Poll interval (seconds; 0 uses the 1 minute default; must be shorter than the directory cache time)</value>
+  </data>
+  <data name="Mount.ProblemCacheMaxSize" xml:space="preserve">
+    <value>Cache limit: {0}</value>
+  </data>
+  <data name="Mount.ProblemField" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="Mount.ReadOnly" xml:space="preserve">
+    <value>Read-only mount (refuses every write)</value>
+  </data>
+  <data name="Mount.ReadOnlyName" xml:space="preserve">
+    <value>Read-only mount</value>
+  </data>
+  <data name="Mount.StatusDirectoryValid" xml:space="preserve">
+    <value>The folder is usable; rclone will create it when it mounts.</value>
+  </data>
+  <data name="Mount.StatusEnterDirectory" xml:space="preserve">
+    <value>Enter the absolute path of the folder.</value>
+  </data>
+  <data name="Mount.StatusEnterUnc" xml:space="preserve">
+    <value>Enter a network share path, for example \server\share.</value>
+  </data>
+  <data name="Mount.StatusPickDrive" xml:space="preserve">
+    <value>Choose a drive letter.</value>
+  </data>
+  <data name="Mount.StatusUncValid" xml:space="preserve">
+    <value>The path is usable. Once the mount is up the real mount point is the drive letter Windows allocated, and the status line will say so.</value>
+  </data>
+  <data name="Mount.StatusWillMountDrive" xml:space="preserve">
+    <value>Will mount to drive {0}.</value>
+  </data>
+  <data name="Mount.SubHeader" xml:space="preserve">
+    <value>Choose a local drive letter, folder or network share to mount {0}:/{1} somewhere Feng Sync can reach.</value>
+  </data>
+  <data name="Mount.Summary" xml:space="preserve">
+    <value>Will send: {0}.</value>
+  </data>
+  <data name="Mount.SummaryCacheMaxAge" xml:space="preserve">
+    <value>cache retention {0} s</value>
+  </data>
+  <data name="Mount.SummaryCacheMaxSize" xml:space="preserve">
+    <value>cache limit {0}</value>
+  </data>
+  <data name="Mount.SummaryCacheMaxSizeNone" xml:space="preserve">
+    <value>cache limit none</value>
+  </data>
+  <data name="Mount.SummaryCacheMode" xml:space="preserve">
+    <value>cache mode {0}</value>
+  </data>
+  <data name="Mount.SummaryCompareChecksum" xml:space="preserve">
+    <value>compare checksums</value>
+  </data>
+  <data name="Mount.SummaryDirCacheTime" xml:space="preserve">
+    <value>directory cache {0} s</value>
+  </data>
+  <data name="Mount.SummaryModTime" xml:space="preserve">
+    <value>read and write modification times</value>
+  </data>
+  <data name="Mount.SummaryNetworkMode" xml:space="preserve">
+    <value>as a network drive</value>
+  </data>
+  <data name="Mount.SummaryNoSeek" xml:space="preserve">
+    <value>no seeking</value>
+  </data>
+  <data name="Mount.SummaryPollInterval" xml:space="preserve">
+    <value>poll interval {0} s</value>
+  </data>
+  <data name="Mount.SummaryReadOnly" xml:space="preserve">
+    <value>read-only</value>
+  </data>
+  <data name="Mount.SummarySeparator" xml:space="preserve">
+    <value>; </value>
+  </data>
+  <data name="Mount.SummaryVolume" xml:space="preserve">
+    <value>volume label {0}</value>
+  </data>
+  <data name="Mount.SummaryWarning" xml:space="preserve">
+    <value> Note:</value>
+  </data>
+  <data name="Mount.SummaryWriteBack" xml:space="preserve">
+    <value>write-back delay {0} s</value>
+  </data>
+  <data name="Mount.TabDirectory" xml:space="preserve">
+    <value>Folder</value>
+  </data>
+  <data name="Mount.TabDrive" xml:space="preserve">
+    <value>Drive letter</value>
+  </data>
+  <data name="Mount.TabUnc" xml:space="preserve">
+    <value>Network share</value>
+  </data>
+  <data name="Mount.Title" xml:space="preserve">
+    <value>Mount to…</value>
+  </data>
+  <data name="Mount.UncHint" xml:space="preserve">
+    <value>Looks like \server\share. Windows allocates a drive letter for it, so once the mount is up the real mount point is that drive letter, not the path you typed.</value>
+  </data>
+  <data name="Mount.UncPath" xml:space="preserve">
+    <value>Network share path</value>
+  </data>
+  <data name="Mount.VolumeName" xml:space="preserve">
+    <value>Volume label</value>
+  </data>
+  <data name="Mount.VolumeNameLabel" xml:space="preserve">
+    <value>Volume label (the name Windows shows)</value>
+  </data>
+  <data name="Mount.WriteBack" xml:space="preserve">
+    <value>Write-back delay</value>
+  </data>
+  <data name="Mount.WriteBackLabel" xml:space="preserve">
+    <value>Write-back delay (seconds; 0 uses the 5 second default)</value>
+  </data>
+  <data name="Notify.BatchAllDone" xml:space="preserve">
+    <value>Cloud transfer complete: {0} items.</value>
+  </data>
+  <data name="Notify.BatchSummary" xml:space="preserve">
+    <value>Cloud transfer finished: {0}.</value>
+  </data>
+  <data name="Notify.Failed" xml:space="preserve">
+    <value>{0} failed</value>
+  </data>
+  <data name="Notify.ListSeparator" xml:space="preserve">
+    <value>, </value>
+  </data>
+  <data name="Notify.Stopped" xml:space="preserve">
+    <value>{0} stopped</value>
+  </data>
+  <data name="Notify.Succeeded" xml:space="preserve">
+    <value>{0} succeeded</value>
+  </data>
+  <data name="OAuth.BrowserOpened" xml:space="preserve">
+    <value>The browser is open; finish authorizing {0}…</value>
+  </data>
+  <data name="OAuth.NoStructuredControl" xml:space="preserve">
+    <value>The built-in rclone does not support the structured OAuth status interface (config/oauthstatus, config/oauthstop). Upgrade rclone and try again; Feng Sync will not fall back to parsing command-line text.</value>
+  </data>
+  <data name="OAuth.NonLoopbackAuthUri" xml:space="preserve">
+    <value>rclone returned a non-local OAuth authorization address, so it was not opened. Check the integrity of the built-in rclone.</value>
+  </data>
+  <data name="OAuth.StateMissingOption" xml:space="preserve">
+    <value>The rclone OAuth state "{0}" has no option to answer.</value>
+  </data>
+  <data name="OAuth.TooManySteps" xml:space="preserve">
+    <value>The rclone OAuth configuration took too many steps, so it was stopped to avoid an endless loop.</value>
+  </data>
+  <data name="OAuth.UnsupportedQuestion" xml:space="preserve">
+    <value>rclone OAuth asks for an option this application cannot answer automatically: {0}.
+{1}</value>
+  </data>
+  <data name="Organize.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Organize.CancelName" xml:space="preserve">
+    <value>Cancel setting the group and tags</value>
+  </data>
+  <data name="Organize.GroupLabel" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="Organize.GroupName" xml:space="preserve">
+    <value>Group the endpoint belongs to; empty means no group</value>
+  </data>
+  <data name="Organize.GroupSeparator" xml:space="preserve">
+    <value>, </value>
+  </data>
+  <data name="Organize.Header" xml:space="preserve">
+    <value>Groups and tags for “{0}”</value>
+  </data>
+  <data name="Organize.KnownGroups" xml:space="preserve">
+    <value>Existing groups: {0}. Empty takes the endpoint out of its group.</value>
+  </data>
+  <data name="Organize.NoGroupsYet" xml:space="preserve">
+    <value>There are no other groups yet. Type a name to create one; empty takes the endpoint out of its group.</value>
+  </data>
+  <data name="Organize.Note" xml:space="preserve">
+    <value>Groups and tags live only in this program's own records and never reach the rclone config; the search box can find endpoints by them.</value>
+  </data>
+  <data name="Organize.Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Organize.SaveName" xml:space="preserve">
+    <value>Save the group and tags</value>
+  </data>
+  <data name="Organize.SubHeader" xml:space="preserve">
+    <value>The group decides where it sits in the list; the tags are what finds it in the search box.</value>
+  </data>
+  <data name="Organize.TagsLabel" xml:space="preserve">
+    <value>Tags (separated by commas)</value>
+  </data>
+  <data name="Organize.TagsName" xml:space="preserve">
+    <value>Endpoint tags, separated by commas</value>
+  </data>
+  <data name="Organize.WindowName" xml:space="preserve">
+    <value>Set the group and tags of a cloud endpoint</value>
+  </data>
+  <data name="Organize.WindowTitle" xml:space="preserve">
+    <value>Groups and tags</value>
+  </data>
+  <data name="Picker.Add" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="Picker.AddAction" xml:space="preserve">
+    <value>Add the selected cloud endpoint</value>
+  </data>
+  <data name="Picker.AvailableEndpoints" xml:space="preserve">
+    <value>Available cloud endpoints</value>
+  </data>
+  <data name="Picker.Browse" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="Picker.BrowseAction" xml:space="preserve">
+    <value>Browse the remote path</value>
+  </data>
+  <data name="Picker.BrowseFailed" xml:space="preserve">
+    <value>The remote folder could not be browsed: {0}</value>
+  </data>
+  <data name="Picker.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Picker.CancelAction" xml:space="preserve">
+    <value>Cancel adding a cloud endpoint</value>
+  </data>
+  <data name="Picker.ChooseGroup" xml:space="preserve">
+    <value>Choose an endpoint and a remote path</value>
+  </data>
+  <data name="Picker.ChooseIn" xml:space="preserve">
+    <value>Choose a folder in {0}:</value>
+  </data>
+  <data name="Picker.CloudDirectoryTitle" xml:space="preserve">
+    <value>Cloud folder</value>
+  </data>
+  <data name="Picker.Connecting" xml:space="preserve">
+    <value>Connecting to the cloud and reading the root folder…</value>
+  </data>
+  <data name="Picker.Endpoint" xml:space="preserve">
+    <value>Endpoint</value>
+  </data>
+  <data name="Picker.EndpointCount" xml:space="preserve">
+    <value>{0} cloud endpoints.</value>
+  </data>
+  <data name="Picker.ExpandFailed" xml:space="preserve">
+    <value>The subfolders could not be read: {0}</value>
+  </data>
+  <data name="Picker.Header" xml:space="preserve">
+    <value>Add a cloud endpoint → {0}</value>
+  </data>
+  <data name="Picker.LoadFailed" xml:space="preserve">
+    <value>The cloud endpoints could not be read: {0}</value>
+  </data>
+  <data name="Picker.Loading" xml:space="preserve">
+    <value>Reading the list of cloud endpoints…</value>
+  </data>
+  <data name="Picker.LoadingEllipsis" xml:space="preserve">
+    <value>Loading…</value>
+  </data>
+  <data name="Picker.NoEndpoints" xml:space="preserve">
+    <value>There is no cloud endpoint yet; create one under Tools → Remote endpoints.</value>
+  </data>
+  <data name="Picker.PrefixRoot" xml:space="preserve">
+    <value>/ (prefix root {0})</value>
+  </data>
+  <data name="Picker.RemotePath" xml:space="preserve">
+    <value>Remote path</value>
+  </data>
+  <data name="Picker.RootDir" xml:space="preserve">
+    <value>/ (root folder)</value>
+  </data>
+  <data name="Picker.SelectFirst" xml:space="preserve">
+    <value>Select an endpoint first.</value>
+  </data>
+  <data name="Picker.SideLeft" xml:space="preserve">
+    <value>Left</value>
+  </data>
+  <data name="Picker.SideRight" xml:space="preserve">
+    <value>Right</value>
+  </data>
+  <data name="Picker.SubHeader" xml:space="preserve">
+    <value>Pick one of the saved endpoints and then a remote folder; it joins the Profile as its {0} endpoint.</value>
+  </data>
+  <data name="Picker.UseFolder" xml:space="preserve">
+    <value>Use this folder</value>
+  </data>
+  <data name="Picker.WillAdd" xml:space="preserve">
+    <value>Will add: {0}</value>
+  </data>
+  <data name="Picker.WillAddEnforced" xml:space="preserve">
+    <value>Will add: {0} (it can only reach what is under /{1}; rclone enforces this)</value>
+  </data>
+  <data name="Picker.WindowName" xml:space="preserve">
+    <value>Add a cloud endpoint to the sync configuration</value>
+  </data>
+  <data name="Picker.WindowTitle" xml:space="preserve">
+    <value>Add a cloud endpoint</value>
+  </data>
+  <data name="Preview.Binary" xml:space="preserve">
+    <value>"{0}" contains a 0 byte and is not a text file, so a preview would only draw gibberish. Download it and open it with the right program.</value>
+  </data>
+  <data name="Preview.CaptionPicture" xml:space="preserve">
+    <value>{0} · {1} · decoded at {2} pixels</value>
+  </data>
+  <data name="Preview.CaptionText" xml:space="preserve">
+    <value>{0} · {1} · encoding {2}</value>
+  </data>
+  <data name="Preview.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Preview.CloudRefused" xml:space="preserve">
+    <value>The cloud refused this read</value>
+  </data>
+  <data name="Preview.Empty" xml:space="preserve">
+    <value>"{0}" has no bytes to read.</value>
+  </data>
+  <data name="Preview.Failed" xml:space="preserve">
+    <value>Could not read "{0}": {1}</value>
+  </data>
+  <data name="Preview.Folder" xml:space="preserve">
+    <value>"{0}" is a folder. A preview shows a single file; a folder has to be listed before you can see what is inside.</value>
+  </data>
+  <data name="Preview.Missing" xml:space="preserve">
+    <value>The cloud no longer has "{0}"; this row in the list is a snapshot from the last time you browsed.</value>
+  </data>
+  <data name="Preview.NoContent" xml:space="preserve">
+    <value>"{0}" has nothing to preview.</value>
+  </data>
+  <data name="Preview.NoExtension" xml:space="preserve">
+    <value>(no extension)</value>
+  </data>
+  <data name="Preview.NoRenderer" xml:space="preserve">
+    <value>"{0}" is not a format this program can render ({1}). The built-in renderer only handles images and text; download it and open it with the right program.</value>
+  </data>
+  <data name="Preview.NotUtf8" xml:space="preserve">
+    <value>"{0}" is not UTF-8 or UTF-16 text. This program does not guess which code page it is--a wrong guess makes Chinese look like a corrupted file. Download it and open it in an editor.</value>
+  </data>
+  <data name="Preview.PictureWithoutDecoder" xml:space="preserve">
+    <value>"{0}" is a {1} image and this program has no decoder for it. Download it and open it in an image viewer.</value>
+  </data>
+  <data name="Preview.TooLarge" xml:space="preserve">
+    <value>"{0}" is {1}, over the preview limit of {2}. Download it and open it.</value>
+  </data>
+  <data name="Preview.Unavailable" xml:space="preserve">
+    <value>Cannot preview: {0}</value>
+  </data>
+  <data name="Preview.UndecodableBytes" xml:space="preserve">
+    <value>The bytes read from "{0}" are not an image this program can decode; the file is probably corrupted or has the wrong extension.</value>
+  </data>
+  <data name="Preview.Unrecognized" xml:space="preserve">
+    <value>This program does not know what format "{0}"{1} is, so it does not preview it. Download it and open it with the right program.</value>
+  </data>
+  <data name="Profile.AddCommonExcludes" xml:space="preserve">
+    <value>Add the common exclude rules</value>
+  </data>
+  <data name="Profile.AddExclude" xml:space="preserve">
+    <value>Add exclude</value>
+  </data>
+  <data name="Profile.AddExcludeRule" xml:space="preserve">
+    <value>Add an exclude rule</value>
+  </data>
+  <data name="Profile.AddInclude" xml:space="preserve">
+    <value>Add include</value>
+  </data>
+  <data name="Profile.AddIncludeRule" xml:space="preserve">
+    <value>Add an include rule</value>
+  </data>
+  <data name="Profile.ApplyAttributes" xml:space="preserve">
+    <value>Apply attributes</value>
+  </data>
+  <data name="Profile.ApplyRuleAttributes" xml:space="preserve">
+    <value>Apply the rule attributes</value>
+  </data>
+  <data name="Profile.ArchiveDirectory" xml:space="preserve">
+    <value>Version archive folder</value>
+  </data>
+  <data name="Profile.Browse" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="Profile.BrowseLeft" xml:space="preserve">
+    <value>Browse the left endpoint</value>
+  </data>
+  <data name="Profile.BrowseRight" xml:space="preserve">
+    <value>Browse the right endpoint</value>
+  </data>
+  <data name="Profile.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Profile.CancelAction" xml:space="preserve">
+    <value>Cancel editing the Profile</value>
+  </data>
+  <data name="Profile.CannotSave" xml:space="preserve">
+    <value>The Profile cannot be saved.</value>
+  </data>
+  <data name="Profile.CleanItem" xml:space="preserve">
+    <value>{0} ({1})</value>
+  </data>
+  <data name="Profile.CleanListSeparator" xml:space="preserve">
+    <value>; </value>
+  </data>
+  <data name="Profile.CleanedVersions" xml:space="preserve">
+    <value>Removed {0} archived versions.</value>
+  </data>
+  <data name="Profile.Cleaning" xml:space="preserve">
+    <value>Cleaning up…</value>
+  </data>
+  <data name="Profile.CleanupArchiveNow" xml:space="preserve">
+    <value>Clean up the version archive now</value>
+  </data>
+  <data name="Profile.CleanupNow" xml:space="preserve">
+    <value>Clean up now</value>
+  </data>
+  <data name="Profile.CommonExcludes" xml:space="preserve">
+    <value>Common excludes</value>
+  </data>
+  <data name="Profile.CommonExcludesAdded" xml:space="preserve">
+    <value>Added exclude rules for common temporary files, version-control folders and system files.</value>
+  </data>
+  <data name="Profile.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Profile.DeleteRule" xml:space="preserve">
+    <value>Delete the selected rule</value>
+  </data>
+  <data name="Profile.DeleteSafety" xml:space="preserve">
+    <value>Deletion safety thresholds</value>
+  </data>
+  <data name="Profile.DeleteSafetyHint" xml:space="preserve">
+    <value>If either threshold is exceeded, the Profile name must be typed once to confirm before the run starts.</value>
+  </data>
+  <data name="Profile.Description" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="Profile.EditCopyNote" xml:space="preserve">
+    <value>The edited copy takes effect only once it is saved.</value>
+  </data>
+  <data name="Profile.Enabled" xml:space="preserve">
+    <value>Enabled</value>
+  </data>
+  <data name="Profile.EndpointAccessible" xml:space="preserve">
+    <value>The {0} endpoint is reachable: {1}</value>
+  </data>
+  <data name="Profile.EndpointTestFailed" xml:space="preserve">
+    <value>Testing the {0} endpoint failed: {1}</value>
+  </data>
+  <data name="Profile.ErrConcurrency" xml:space="preserve">
+    <value>The maximum number of concurrent copies must be between 1 and 64.</value>
+  </data>
+  <data name="Profile.ErrEndpointEmpty" xml:space="preserve">
+    <value>The endpoint may not be empty.</value>
+  </data>
+  <data name="Profile.ErrLocalMissing" xml:space="preserve">
+    <value>The local folder does not exist or cannot be reached.</value>
+  </data>
+  <data name="Profile.ErrMaxDeleteRatio" xml:space="preserve">
+    <value>The maximum deletion ratio must be between 0 and 1.</value>
+  </data>
+  <data name="Profile.ErrMaxDeletes" xml:space="preserve">
+    <value>The maximum deletion count must be a non-negative whole number.</value>
+  </data>
+  <data name="Profile.ErrMaxTotalMb" xml:space="preserve">
+    <value>The total size in MB must be a non-negative number.</value>
+  </data>
+  <data name="Profile.ErrNonNegativeInt" xml:space="preserve">
+    <value>must be a non-negative whole number.</value>
+  </data>
+  <data name="Profile.ErrOnlySftp" xml:space="preserve">
+    <value>This editor can only test a local folder and SFTP connectivity directly. Check other cloud connections in the main window.</value>
+  </data>
+  <data name="Profile.ErrRemoteInvalid" xml:space="preserve">
+    <value>The remote address or port is not valid.</value>
+  </data>
+  <data name="Profile.ErrResumeMinimum" xml:space="preserve">
+    <value>The smallest resumable file size is not valid; use values like 500M and 2G (0 resumes every file).</value>
+  </data>
+  <data name="Profile.ErrTimeTolerance" xml:space="preserve">
+    <value>The time tolerance must be between 0 and 86400 seconds.</value>
+  </data>
+  <data name="Profile.ErrValidDateTime" xml:space="preserve">
+    <value>must be a valid date and time.</value>
+  </data>
+  <data name="Profile.FilterRules" xml:space="preserve">
+    <value>Filter rules</value>
+  </data>
+  <data name="Profile.FilterRulesHint" xml:space="preserve">
+    <value>Rules are evaluated in list order, and a later match overrides an earlier one. A disabled rule is still saved but takes no part in the scan.</value>
+  </data>
+  <data name="Profile.FilterTester" xml:space="preserve">
+    <value>Rule tester</value>
+  </data>
+  <data name="Profile.Hidden" xml:space="preserve">
+    <value>Hidden</value>
+  </data>
+  <data name="Profile.InvalidRetention" xml:space="preserve">
+    <value>The retention policy is not valid: {0}</value>
+  </data>
+  <data name="Profile.KeepDays" xml:space="preserve">
+    <value>Days to keep</value>
+  </data>
+  <data name="Profile.LeftEndpoint" xml:space="preserve">
+    <value>Left endpoint</value>
+  </data>
+  <data name="Profile.MaxBytes" xml:space="preserve">
+    <value>Maximum size in bytes</value>
+  </data>
+  <data name="Profile.MaxConcurrency" xml:space="preserve">
+    <value>Maximum concurrent copies:</value>
+  </data>
+  <data name="Profile.MaxDeleteRatio" xml:space="preserve">
+    <value>Maximum deletion ratio (0-1)</value>
+  </data>
+  <data name="Profile.MaxDeletes" xml:space="preserve">
+    <value>Maximum deletions</value>
+  </data>
+  <data name="Profile.MaxTotalMb" xml:space="preserve">
+    <value>Total size in MB</value>
+  </data>
+  <data name="Profile.MaxVersions" xml:space="preserve">
+    <value>Versions per file</value>
+  </data>
+  <data name="Profile.MinBytes" xml:space="preserve">
+    <value>Minimum size in bytes</value>
+  </data>
+  <data name="Profile.ModeCustom" xml:space="preserve">
+    <value>Custom (not available yet)</value>
+  </data>
+  <data name="Profile.ModeCustomHint" xml:space="preserve">
+    <value>The custom mode is not implemented yet; it cannot be saved or run.</value>
+  </data>
+  <data name="Profile.ModeMirrorRight" xml:space="preserve">
+    <value>Mirror to the right</value>
+  </data>
+  <data name="Profile.ModeTwoWay" xml:space="preserve">
+    <value>Two-way sync</value>
+  </data>
+  <data name="Profile.ModeUpdateRight" xml:space="preserve">
+    <value>Update to the right</value>
+  </data>
+  <data name="Profile.ModifiedAfter" xml:space="preserve">
+    <value>Modified no earlier than</value>
+  </data>
+  <data name="Profile.ModifiedAfterLimit" xml:space="preserve">
+    <value>Lower bound on the modification time</value>
+  </data>
+  <data name="Profile.ModifiedBefore" xml:space="preserve">
+    <value>Modified no later than</value>
+  </data>
+  <data name="Profile.ModifiedBeforeLimit" xml:space="preserve">
+    <value>Upper bound on the modification time</value>
+  </data>
+  <data name="Profile.MoveDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="Profile.MoveDownRule" xml:space="preserve">
+    <value>Move the selected rule down</value>
+  </data>
+  <data name="Profile.MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="Profile.MoveUpRule" xml:space="preserve">
+    <value>Move the selected rule up</value>
+  </data>
+  <data name="Profile.Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Profile.NeedsFix" xml:space="preserve">
+    <value>Needs fixing: {0}</value>
+  </data>
+  <data name="Profile.NothingToClean" xml:space="preserve">
+    <value>There are no archived versions to clean up.</value>
+  </data>
+  <data name="Profile.OnlyHidden" xml:space="preserve">
+    <value>Hidden files only</value>
+  </data>
+  <data name="Profile.OnlySymlink" xml:space="preserve">
+    <value>Symbolic links only</value>
+  </data>
+  <data name="Profile.PageCompare" xml:space="preserve">
+    <value>Comparison</value>
+  </data>
+  <data name="Profile.PageFilters" xml:space="preserve">
+    <value>Filters</value>
+  </data>
+  <data name="Profile.PageGeneral" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Profile.PagePerformance" xml:space="preserve">
+    <value>Performance and reliability</value>
+  </data>
+  <data name="Profile.PageSync" xml:space="preserve">
+    <value>Sync</value>
+  </data>
+  <data name="Profile.PageVersioning" xml:space="preserve">
+    <value>Versioning</value>
+  </data>
+  <data name="Profile.PreviewArchiveCleanup" xml:space="preserve">
+    <value>Preview the version archive cleanup</value>
+  </data>
+  <data name="Profile.PreviewCleanup" xml:space="preserve">
+    <value>Preview cleanup</value>
+  </data>
+  <data name="Profile.Previewing" xml:space="preserve">
+    <value>Previewing…</value>
+  </data>
+  <data name="Profile.ResultExcluded" xml:space="preserve">
+    <value>Excluded: {0}</value>
+  </data>
+  <data name="Profile.ResultIncluded" xml:space="preserve">
+    <value>Included: {0}</value>
+  </data>
+  <data name="Profile.ResumeMinimum" xml:space="preserve">
+    <value>Smallest file that is resumed rather than restarted:</value>
+  </data>
+  <data name="Profile.ResumeMinimumHint" xml:space="preserve">
+    <value>Files at or above this size are written to xxx.fengsync.partial first and renamed into place when the transfer finishes, so an interrupted download resumes where it stopped. 0 resumes every file; values like 500M and 2G are accepted.</value>
+  </data>
+  <data name="Profile.RightEndpoint" xml:space="preserve">
+    <value>Right endpoint</value>
+  </data>
+  <data name="Profile.RuleAttributes" xml:space="preserve">
+    <value>Attribute conditions for the selected rule (empty means no limit)</value>
+  </data>
+  <data name="Profile.RuleComment" xml:space="preserve">
+    <value>Comment</value>
+  </data>
+  <data name="Profile.RuleEnabled" xml:space="preserve">
+    <value>Enabled</value>
+  </data>
+  <data name="Profile.RuleKind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="Profile.RulePattern" xml:space="preserve">
+    <value>Pattern</value>
+  </data>
+  <data name="Profile.Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Profile.SaveAction" xml:space="preserve">
+    <value>Save the Profile</value>
+  </data>
+  <data name="Profile.SaveAs" xml:space="preserve">
+    <value>Save as a new Profile</value>
+  </data>
+  <data name="Profile.SelectRuleFirst" xml:space="preserve">
+    <value>Select a rule first.</value>
+  </data>
+  <data name="Profile.SftpConnectable" xml:space="preserve">
+    <value>The {0} SFTP host {1}:{2} is reachable. Credentials are checked during an actual sync.</value>
+  </data>
+  <data name="Profile.SideLeft" xml:space="preserve">
+    <value>Left</value>
+  </data>
+  <data name="Profile.SideRight" xml:space="preserve">
+    <value>Right</value>
+  </data>
+  <data name="Profile.SwapEndpoints" xml:space="preserve">
+    <value>Swap the two endpoints</value>
+  </data>
+  <data name="Profile.SymbolicLink" xml:space="preserve">
+    <value>Symbolic link</value>
+  </data>
+  <data name="Profile.SyncMode" xml:space="preserve">
+    <value>Sync mode</value>
+  </data>
+  <data name="Profile.Test" xml:space="preserve">
+    <value>Test</value>
+  </data>
+  <data name="Profile.TestFileSize" xml:space="preserve">
+    <value>Test file size</value>
+  </data>
+  <data name="Profile.TestFilter" xml:space="preserve">
+    <value>Test the filter rules</value>
+  </data>
+  <data name="Profile.TestLeft" xml:space="preserve">
+    <value>Test the left endpoint</value>
+  </data>
+  <data name="Profile.TestPathHint" xml:space="preserve">
+    <value>A relative path, for example cache/draft.tmp</value>
+  </data>
+  <data name="Profile.TestRight" xml:space="preserve">
+    <value>Test the right endpoint</value>
+  </data>
+  <data name="Profile.TestSizeHint" xml:space="preserve">
+    <value>File size in bytes</value>
+  </data>
+  <data name="Profile.Testing" xml:space="preserve">
+    <value>Testing…</value>
+  </data>
+  <data name="Profile.TimeTolerance" xml:space="preserve">
+    <value>Time tolerance (seconds)</value>
+  </data>
+  <data name="Profile.TimeToleranceHint" xml:space="preserve">
+    <value>When content hashes are not in use, files whose modification times differ by no more than this are treated as time-equivalent.</value>
+  </data>
+  <data name="Profile.UseDefaultConcurrency" xml:space="preserve">
+    <value>Use the application default for concurrency</value>
+  </data>
+  <data name="Profile.UseDefaultCopies" xml:space="preserve">
+    <value>Use the application default for copy verification</value>
+  </data>
+  <data name="Profile.UseDefaultResume" xml:space="preserve">
+    <value>Use the application default for the resume threshold</value>
+  </data>
+  <data name="Profile.VerifyCopies" xml:space="preserve">
+    <value>Verify files after copying</value>
+  </data>
+  <data name="Profile.VersioningArchive" xml:space="preserve">
+    <value>Version directory</value>
+  </data>
+  <data name="Profile.VersioningHint" xml:space="preserve">
+    <value>An empty number or size means no limit; once a sync finishes, the archive is cleaned up automatically according to this policy.</value>
+  </data>
+  <data name="Profile.VersioningNone" xml:space="preserve">
+    <value>Delete permanently</value>
+  </data>
+  <data name="Profile.VersioningRecycle" xml:space="preserve">
+    <value>Recycle bin (Windows local endpoints only)</value>
+  </data>
+  <data name="Profile.WillClean" xml:space="preserve">
+    <value>About to clean up {0} items:</value>
+  </data>
+  <data name="Profile.WindowTitle" xml:space="preserve">
+    <value>Profile settings</value>
+  </data>
+  <data name="ProfileEditor.SectionComparison" xml:space="preserve">
+    <value>Comparison</value>
+  </data>
+  <data name="ProfileEditor.SectionFilter" xml:space="preserve">
+    <value>Filters</value>
+  </data>
+  <data name="ProfileEditor.SectionGeneral" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="ProfileEditor.SectionPerformance" xml:space="preserve">
+    <value>Performance and reliability</value>
+  </data>
+  <data name="ProfileEditor.SectionSync" xml:space="preserve">
+    <value>Sync</value>
+  </data>
+  <data name="ProfileEditor.SectionVersioning" xml:space="preserve">
+    <value>Versioning</value>
+  </data>
+  <data name="Progress.AutoClose" xml:space="preserve">
+    <value>Close when finished</value>
+  </data>
+  <data name="Progress.AutoCloseName" xml:space="preserve">
+    <value>Close the window when the sync finishes</value>
+  </data>
+  <data name="Progress.BytesProgressName" xml:space="preserve">
+    <value>Transferred bytes progress</value>
+  </data>
+  <data name="Progress.CancelledReason" xml:space="preserve">
+    <value>The sync was cancelled.</value>
+  </data>
+  <data name="Progress.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Progress.CloseName" xml:space="preserve">
+    <value>Close the sync progress window</value>
+  </data>
+  <data name="Progress.ColErrorAdvice" xml:space="preserve">
+    <value>Error / advice</value>
+  </data>
+  <data name="Progress.ColOperation" xml:space="preserve">
+    <value>Operation</value>
+  </data>
+  <data name="Progress.ColPath" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="Progress.ColStage" xml:space="preserve">
+    <value>Stage</value>
+  </data>
+  <data name="Progress.DoneCancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
+  <data name="Progress.DoneFailed" xml:space="preserve">
+    <value>Sync failed</value>
+  </data>
+  <data name="Progress.DonePartial" xml:space="preserve">
+    <value>Finished (partly succeeded)</value>
+  </data>
+  <data name="Progress.DoneSucceeded" xml:space="preserve">
+    <value>Finished successfully</value>
+  </data>
+  <data name="Progress.EtaSuffix" xml:space="preserve">
+    <value> · {0} remaining</value>
+  </data>
+  <data name="Progress.FileProgressName" xml:space="preserve">
+    <value>Current file transfer progress</value>
+  </data>
+  <data name="Progress.FileTransfersBytes" xml:space="preserve">
+    <value>File transfers / bytes</value>
+  </data>
+  <data name="Progress.FilesDone" xml:space="preserve">
+    <value>Finished {0} / {1} files, {2} / {3}</value>
+  </data>
+  <data name="Progress.FilesDoneInitial" xml:space="preserve">
+    <value>Finished 0 / {0} files, 0 B</value>
+  </data>
+  <data name="Progress.FinishingSync" xml:space="preserve">
+    <value>Finishing the sync</value>
+  </data>
+  <data name="Progress.Initializing" xml:space="preserve">
+    <value>Initializing the sync</value>
+  </data>
+  <data name="Progress.KindBlocked" xml:space="preserve">
+    <value>Blocked</value>
+  </data>
+  <data name="Progress.KindConflict" xml:space="preserve">
+    <value>Conflict</value>
+  </data>
+  <data name="Progress.KindCopyToLeft" xml:space="preserve">
+    <value>Copy to the left</value>
+  </data>
+  <data name="Progress.KindCopyToRight" xml:space="preserve">
+    <value>Copy to the right</value>
+  </data>
+  <data name="Progress.KindCreateLeftDir" xml:space="preserve">
+    <value>Create the left folder</value>
+  </data>
+  <data name="Progress.KindCreateRightDir" xml:space="preserve">
+    <value>Create the right folder</value>
+  </data>
+  <data name="Progress.KindDeleteLeft" xml:space="preserve">
+    <value>Delete on the left</value>
+  </data>
+  <data name="Progress.KindDeleteRight" xml:space="preserve">
+    <value>Delete on the right</value>
+  </data>
+  <data name="Progress.KindMove" xml:space="preserve">
+    <value>Move</value>
+  </data>
+  <data name="Progress.KindMoveConflict" xml:space="preserve">
+    <value>Move conflict</value>
+  </data>
+  <data name="Progress.LiveSummary" xml:space="preserve">
+    <value>Finished {0}, running {1}, waiting {2}, failed {3}</value>
+  </data>
+  <data name="Progress.LogSaved" xml:space="preserve">
+    <value>The run log was saved: {0}</value>
+  </data>
+  <data name="Progress.NoTransfers" xml:space="preserve">
+    <value>No file transfers in this run</value>
+  </data>
+  <data name="Progress.OperationDetails" xml:space="preserve">
+    <value>Operation details</value>
+  </data>
+  <data name="Progress.OperationDetailsName" xml:space="preserve">
+    <value>Sync operation details</value>
+  </data>
+  <data name="Progress.Preparing" xml:space="preserve">
+    <value>Preparing</value>
+  </data>
+  <data name="Progress.PreparingTransfer" xml:space="preserve">
+    <value>Preparing the transfer…</value>
+  </data>
+  <data name="Progress.Progress" xml:space="preserve">
+    <value>Progress</value>
+  </data>
+  <data name="Progress.RetryCancelled" xml:space="preserve">
+    <value>The retry of failed items was cancelled.</value>
+  </data>
+  <data name="Progress.RetryFailed" xml:space="preserve">
+    <value>The retry of failed items failed.</value>
+  </data>
+  <data name="Progress.RetryFailedName" xml:space="preserve">
+    <value>Retry the failed items</value>
+  </data>
+  <data name="Progress.RetryFinished" xml:space="preserve">
+    <value>The retry of failed items finished.</value>
+  </data>
+  <data name="Progress.RetryingCount" xml:space="preserve">
+    <value>Retrying {0} retryable failures.</value>
+  </data>
+  <data name="Progress.RetryingTitle" xml:space="preserve">
+    <value>Retrying failed items</value>
+  </data>
+  <data name="Progress.SaveLog" xml:space="preserve">
+    <value>Save log</value>
+  </data>
+  <data name="Progress.SaveLogName" xml:space="preserve">
+    <value>Save this run's log</value>
+  </data>
+  <data name="Progress.SkippedReason" xml:space="preserve">
+    <value>Not run because another operation failed.</value>
+  </data>
+  <data name="Progress.SpeedElapsed" xml:space="preserve">
+    <value>Speed / elapsed</value>
+  </data>
+  <data name="Progress.SpeedLine" xml:space="preserve">
+    <value>{0}/s · {1} concurrent · {2} elapsed</value>
+  </data>
+  <data name="Progress.StageCancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
+  <data name="Progress.StageCommitted" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="Progress.StageDeleting" xml:space="preserve">
+    <value>Deleting</value>
+  </data>
+  <data name="Progress.StageFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Progress.StagePending" xml:space="preserve">
+    <value>Waiting</value>
+  </data>
+  <data name="Progress.StagePreparing" xml:space="preserve">
+    <value>Preparing</value>
+  </data>
+  <data name="Progress.StageTransferring" xml:space="preserve">
+    <value>Transferring</value>
+  </data>
+  <data name="Progress.StageVerifying" xml:space="preserve">
+    <value>Verifying</value>
+  </data>
+  <data name="Progress.StateIcon" xml:space="preserve">
+    <value>Sync status icon</value>
+  </data>
+  <data name="Progress.Syncing" xml:space="preserve">
+    <value>Syncing</value>
+  </data>
+  <data name="Progress.WaitingForTask" xml:space="preserve">
+    <value>Waiting for a transfer job…</value>
+  </data>
+  <data name="Progress.WaitingTransfer" xml:space="preserve">
+    <value>Waiting to transfer</value>
+  </data>
+  <data name="Progress.WindowTitle" xml:space="preserve">
+    <value>Sync progress</value>
+  </data>
+  <data name="Prompt.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Prompt.Continue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="Prompt.Ok" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Provider.Backblaze.Description" xml:space="preserve">
+    <value>Region must match the region in Endpoint; both can be seen on the Bucket details page in the B2 console.</value>
+  </data>
+  <data name="Provider.NotAProviderType" xml:space="preserve">
+    <value>Not a cloud Provider type.</value>
+  </data>
+  <data name="Provider.OAuthClientId" xml:space="preserve">
+    <value>Client ID (optional)</value>
+  </data>
+  <data name="Provider.OAuthClientSecret" xml:space="preserve">
+    <value>Client Secret (optional)</value>
+  </data>
+  <data name="Provider.OAuthClientSecretEdit" xml:space="preserve">
+    <value>Client Secret (leave empty to keep the current value)</value>
+  </data>
+  <data name="Provider.Sftp.Host" xml:space="preserve">
+    <value>Host</value>
+  </data>
+  <data name="Provider.Sftp.KeyFile" xml:space="preserve">
+    <value>Private key file (optional)</value>
+  </data>
+  <data name="Provider.Sftp.NamePlaceholder" xml:space="preserve">
+    <value>SFTP connection</value>
+  </data>
+  <data name="Provider.Sftp.Password" xml:space="preserve">
+    <value>Password (may be empty when using a key)</value>
+  </data>
+  <data name="Provider.Sftp.PasswordEdit" xml:space="preserve">
+    <value>Password (leave empty to keep the current password)</value>
+  </data>
+  <data name="Provider.Sftp.PasswordOrKeyRequired" xml:space="preserve">
+    <value>SFTP requires a password or a private key file.</value>
+  </data>
+  <data name="Provider.Sftp.Port" xml:space="preserve">
+    <value>Port</value>
+  </data>
+  <data name="Provider.Sftp.User" xml:space="preserve">
+    <value>User name</value>
+  </data>
+  <data name="Provider.WebDav.Password" xml:space="preserve">
+    <value>Password (optional)</value>
+  </data>
+  <data name="Provider.WebDav.PasswordEdit" xml:space="preserve">
+    <value>Password (leave empty to keep the current value)</value>
+  </data>
+  <data name="Provider.WebDav.Url" xml:space="preserve">
+    <value>Server address</value>
+  </data>
+  <data name="Provider.WebDav.UrlHint" xml:space="preserve">
+    <value>For example https://cloud.example.com/remote.php/dav/files/user</value>
+  </data>
+  <data name="Provider.WebDav.User" xml:space="preserve">
+    <value>User name (optional)</value>
+  </data>
+  <data name="Provider.WebDav.Vendor" xml:space="preserve">
+    <value>Vendor (optional)</value>
+  </data>
+  <data name="Provider.WebDav.VendorHint" xml:space="preserve">
+    <value>Leave it empty; a few providers need it set, for example other, nextcloud, sharepoint.</value>
+  </data>
+  <data name="Rclone.Category" xml:space="preserve">
+    <value>Category: {0} (retryable: {1})</value>
+  </data>
+  <data name="Rclone.Context" xml:space="preserve">
+    <value>Context: {0}</value>
+  </data>
+  <data name="Rclone.DiagnosticId" xml:space="preserve">
+    <value>{0} {1} (diagnostic ID: {2})</value>
+  </data>
+  <data name="Rclone.DiagnosticIdOnly" xml:space="preserve">
+    <value>Diagnostic ID: {0}</value>
+  </data>
+  <data name="Rclone.ExceptionType" xml:space="preserve">
+    <value>Exception type: {0}</value>
+  </data>
+  <data name="Rclone.Message" xml:space="preserve">
+    <value>Message: {0}</value>
+  </data>
+  <data name="Rclone.NoStatus" xml:space="preserve">
+    <value>none</value>
+  </data>
+  <data name="Rclone.Operation" xml:space="preserve">
+    <value>Operation: {0}</value>
+  </data>
+  <data name="Rclone.RequestInput" xml:space="preserve">
+    <value>Request input: {0}</value>
+  </data>
+  <data name="Rclone.Statuses" xml:space="preserve">
+    <value>HTTP status: {0} RC status: {1}</value>
+  </data>
+  <data name="Rclone.TechnicalCode" xml:space="preserve">
+    <value>Technical code: {0}</value>
+  </data>
+  <data name="Rclone.TechnicalMessage" xml:space="preserve">
+    <value>Technical message: {0}</value>
+  </data>
+  <data name="Rclone.Unspecified" xml:space="preserve">
+    <value>Unspecified</value>
+  </data>
+  <data name="Recycle.AndMore" xml:space="preserve">
+    <value> and more</value>
+  </data>
+  <data name="Recycle.ConfirmFolders" xml:space="preserve">
+    <value>Of these, {0} folders will move along with everything inside them.</value>
+  </data>
+  <data name="Recycle.ConfirmFreeSpace" xml:space="preserve">
+    <value>To actually free the space, go back into {0} and use "Delete", or use "Empty recycle bin" directly.</value>
+  </data>
+  <data name="Recycle.ConfirmHeader" xml:space="preserve">
+    <value>Move {0} items into this endpoint's recycle bin?</value>
+  </data>
+  <data name="Recycle.ConfirmHowToRestore" xml:space="preserve">
+    <value>You can later select it in {0} and click "Restore" to return it to its original folder;</value>
+  </data>
+  <data name="Recycle.ConfirmMovesTo" xml:space="preserve">
+    <value>The items will be moved under {0}, still inside this endpoint, so this step frees no space.</value>
+  </data>
+  <data name="Recycle.ConfirmProceed" xml:space="preserve">
+    <value>Move them?</value>
+  </data>
+  <data name="Recycle.ConfirmRename" xml:space="preserve">
+    <value>If the original name is taken, it is changed to "name (1)" instead of overwriting that copy.</value>
+  </data>
+  <data name="Recycle.Declined" xml:space="preserve">
+    <value>Cancelled; nothing was moved in the cloud.</value>
+  </data>
+  <data name="Recycle.Failed" xml:space="preserve">
+    <value>The recycle bin operation did not complete.</value>
+  </data>
+  <data name="Recycle.InsideTrash" xml:space="preserve">
+    <value>These items are already in the recycle bin; to delete them for good, use "Delete".</value>
+  </data>
+  <data name="Recycle.IsTrashFolder" xml:space="preserve">
+    <value>The recycle bin folder itself cannot be moved into the recycle bin.</value>
+  </data>
+  <data name="Recycle.Moved" xml:space="preserve">
+    <value>Moved {0} items into {1} (the items are still in the cloud and no space was freed; enter that folder to restore them).</value>
+  </data>
+  <data name="Recycle.NameSeparator" xml:space="preserve">
+    <value>, </value>
+  </data>
+  <data name="Recycle.NotInTrash" xml:space="preserve">
+    <value>This item is not in the recycle bin, so there is no source to restore from.</value>
+  </data>
+  <data name="Recycle.RenamedOnMove" xml:space="preserve">
+    <value>{0} of them already had a same-named item in the recycle bin and were saved as {1}.</value>
+  </data>
+  <data name="Recycle.RenamedOnRestore" xml:space="preserve">
+    <value>{0} of them still had their original name taken and were restored as {1}.</value>
+  </data>
+  <data name="Recycle.Restored" xml:space="preserve">
+    <value>Restored {0} items.</value>
+  </data>
+  <data name="Recycle.RestoredTo" xml:space="preserve">
+    <value>Restored to {0}.</value>
+  </data>
+  <data name="Recycle.SomeFailed" xml:space="preserve">
+    <value> {0} items did not succeed: {1}</value>
+  </data>
+  <data name="Run.All" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Run.ColBytes" xml:space="preserve">
+    <value>Bytes</value>
+  </data>
+  <data name="Run.ColCategory" xml:space="preserve">
+    <value>Category</value>
+  </data>
+  <data name="Run.ColCompleted" xml:space="preserve">
+    <value>Completed</value>
+  </data>
+  <data name="Run.ColCorrelationId" xml:space="preserve">
+    <value>Diagnostic ID</value>
+  </data>
+  <data name="Run.ColDetail" xml:space="preserve">
+    <value>Detail</value>
+  </data>
+  <data name="Run.ColFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Run.ColOutcome" xml:space="preserve">
+    <value>Outcome</value>
+  </data>
+  <data name="Run.ColPlanned" xml:space="preserve">
+    <value>Planned</value>
+  </data>
+  <data name="Run.ColRetryable" xml:space="preserve">
+    <value>Retryable</value>
+  </data>
+  <data name="Run.ColSucceeded" xml:space="preserve">
+    <value>Succeeded</value>
+  </data>
+  <data name="Run.EntryList" xml:space="preserve">
+    <value>Run history</value>
+  </data>
+  <data name="Run.FilterByOutcome" xml:space="preserve">
+    <value>Filter the run history by outcome</value>
+  </data>
+  <data name="Run.FilterByPeriod" xml:space="preserve">
+    <value>Filter the run history by period</value>
+  </data>
+  <data name="Run.Intro" xml:space="preserve">
+    <value>See the outcome of every sync and a summary of its transfers.</value>
+  </data>
+  <data name="Run.Last30Days" xml:space="preserve">
+    <value>Last 30 days</value>
+  </data>
+  <data name="Run.Last7Days" xml:space="preserve">
+    <value>Last 7 days</value>
+  </data>
+  <data name="Run.OutcomeCancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
+  <data name="Run.OutcomeFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Run.OutcomeLabel" xml:space="preserve">
+    <value>Outcome:</value>
+  </data>
+  <data name="Run.OutcomePartial" xml:space="preserve">
+    <value>Partially succeeded</value>
+  </data>
+  <data name="Run.OutcomeSucceeded" xml:space="preserve">
+    <value>Succeeded</value>
+  </data>
+  <data name="Run.RecentLabel" xml:space="preserve">
+    <value>Recent:</value>
+  </data>
+  <data name="Run.Refresh" xml:space="preserve">
+    <value>Refresh the run history</value>
+  </data>
+  <data name="Run.Refreshing" xml:space="preserve">
+    <value>Refreshing…</value>
+  </data>
+  <data name="Run.WindowTitle" xml:space="preserve">
+    <value>Run history</value>
+  </data>
+  <data name="S3.BucketHasNoPrefix" xml:space="preserve">
+    <value>Bucket cannot contain a folder; fill in the prefix separately.</value>
+  </data>
+  <data name="S3.EndpointMustBeAbsolute" xml:space="preserve">
+    <value>Endpoint must be a full HTTP or HTTPS address.</value>
+  </data>
+  <data name="S3.EndpointNoBucket" xml:space="preserve">
+    <value>Endpoint cannot contain a Bucket or a folder.</value>
+  </data>
+  <data name="S3.EndpointRequiredFor" xml:space="preserve">
+    <value>{0} requires an Endpoint, like https://s3.&lt;region&gt;.backblazeb2.com.</value>
+  </data>
+  <data name="S3.NeedAccessKey" xml:space="preserve">
+    <value>Enter the Access Key ID.</value>
+  </data>
+  <data name="S3.NeedBucket" xml:space="preserve">
+    <value>Enter the Bucket.</value>
+  </data>
+  <data name="S3.NeedDisplayName" xml:space="preserve">
+    <value>Enter a display name.</value>
+  </data>
+  <data name="S3.NeedProvider" xml:space="preserve">
+    <value>Choose an S3 Provider that rclone supports.</value>
+  </data>
+  <data name="S3.NeedSecretKey" xml:space="preserve">
+    <value>Enter the Secret Access Key.</value>
+  </data>
+  <data name="S3.PrefixNoDotDot" xml:space="preserve">
+    <value>The prefix cannot contain "..".</value>
+  </data>
+  <data name="S3.PrefixUsesSlash" xml:space="preserve">
+    <value>Use "/" to separate the prefix, not "\".</value>
+  </data>
+  <data name="S3.ProbeCleanupFailed" xml:space="preserve">
+    <value>The S3 connection test temporary folder could not be cleaned up: {0}</value>
+  </data>
+  <data name="Safety.AndMore" xml:space="preserve">
+    <value>  (and {0} more)</value>
+  </data>
+  <data name="Safety.CompositionFilesFolders" xml:space="preserve">
+    <value>{0} folders, {1} files</value>
+  </data>
+  <data name="Safety.CompositionFolders" xml:space="preserve">
+    <value>{0} folders</value>
+  </data>
+  <data name="Safety.CompositionLine" xml:space="preserve">
+    <value>of which {0}; deleting a folder also deletes everything inside it.</value>
+  </data>
+  <data name="Safety.ConfirmDelete" xml:space="preserve">
+    <value>Delete these {0} items?</value>
+  </data>
+  <data name="Safety.InRecycleBin" xml:space="preserve">
+    <value>These items are already in {0}; once deleted, this program's "Restore" cannot help either.</value>
+  </data>
+  <data name="Safety.NameControl" xml:space="preserve">
+    <value>A name cannot contain control characters.</value>
+  </data>
+  <data name="Safety.NameDot" xml:space="preserve">
+    <value>A name cannot be "." or "..".</value>
+  </data>
+  <data name="Safety.NameRequired" xml:space="preserve">
+    <value>Enter a name.</value>
+  </data>
+  <data name="Safety.NameSeparator" xml:space="preserve">
+    <value>A name cannot contain "/" or "\".</value>
+  </data>
+  <data name="Safety.NameTooLong" xml:space="preserve">
+    <value>A name cannot be longer than {0} characters.</value>
+  </data>
+  <data name="Safety.NameWhitespace" xml:space="preserve">
+    <value>A name cannot begin or end with a space.</value>
+  </data>
+  <data name="Safety.NoTrash" xml:space="preserve">
+    <value>This endpoint has no trash, so a delete cannot be undone.</value>
+  </data>
+  <data name="Safety.TrashSupported" xml:space="preserve">
+    <value>This endpoint moves them to the cloud trash first, where the provider's web console can restore them.</value>
+  </data>
+  <data name="Schedule.CliMissing" xml:space="preserve">
+    <value>FengSync.Cli.exe was not found; reinstall the full application.</value>
+  </data>
+  <data name="Schedule.Close" xml:space="preserve">
+    <value>Close the scheduled task window</value>
+  </data>
+  <data name="Schedule.Create" xml:space="preserve">
+    <value>Create or update the scheduled task</value>
+  </data>
+  <data name="Schedule.Created" xml:space="preserve">
+    <value>The scheduled task was created or updated.</value>
+  </data>
+  <data name="Schedule.Creating" xml:space="preserve">
+    <value>Creating…</value>
+  </data>
+  <data name="Schedule.Delete" xml:space="preserve">
+    <value>Delete this scheduled task</value>
+  </data>
+  <data name="Schedule.Deleted" xml:space="preserve">
+    <value>The scheduled task was deleted.</value>
+  </data>
+  <data name="Schedule.Deleting" xml:space="preserve">
+    <value>Deleting…</value>
+  </data>
+  <data name="Schedule.Frequency" xml:space="preserve">
+    <value>Frequency</value>
+  </data>
+  <data name="Schedule.FrequencyField" xml:space="preserve">
+    <value>Scheduled task frequency</value>
+  </data>
+  <data name="Schedule.Hint" xml:space="preserve">
+    <value>It runs unattended in JSON mode. The task stores only the Profile ID; passwords and other credentials are not written into the task arguments. FengSync.Cli.exe must be installed in the same folder as the application.</value>
+  </data>
+  <data name="Schedule.ProfileIntro" xml:space="preserve">
+    <value>Create a Windows scheduled task for Profile "{0}".</value>
+  </data>
+  <data name="Schedule.Requesting" xml:space="preserve">
+    <value>Requesting…</value>
+  </data>
+  <data name="Schedule.TaskName" xml:space="preserve">
+    <value>Task name</value>
+  </data>
+  <data name="Schedule.TaskNameField" xml:space="preserve">
+    <value>Scheduled task name</value>
+  </data>
+  <data name="Schedule.TestRequested" xml:space="preserve">
+    <value>A test run was requested; check the result in the run history.</value>
+  </data>
+  <data name="Schedule.TestRun" xml:space="preserve">
+    <value>Test-run the scheduled task</value>
+  </data>
+  <data name="Schedule.WindowTitle" xml:space="preserve">
+    <value>Scheduled task</value>
+  </data>
+  <data name="Service.NotInstalled" xml:space="preserve">
+    <value>The application services have not been initialized: call AppServices.Install in the Application constructor.</value>
+  </data>
+  <data name="Settings.AfterTransfer" xml:space="preserve">
+    <value>After every transfer has succeeded</value>
+  </data>
+  <data name="Settings.AfterTransferHint" xml:space="preserve">
+    <value>It runs only when the whole batch succeeded; a single failure means the action is just reported and nothing shuts down. It asks once more before running, so keep the transfer window open — a confirmation nobody can answer should not turn into a shutdown.</value>
+  </data>
+  <data name="Settings.Apply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="Settings.ArchiveDirectory" xml:space="preserve">
+    <value>Version directory</value>
+  </data>
+  <data name="Settings.AutoCheckUpdates" xml:space="preserve">
+    <value>Check for updates automatically</value>
+  </data>
+  <data name="Settings.Browse" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="Settings.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Settings.CleanupDone" xml:space="preserve">
+    <value>Removed {0} local temporary files older than 7 days.</value>
+  </data>
+  <data name="Settings.CleanupTemporary" xml:space="preserve">
+    <value>Clean up expired local temporary files</value>
+  </data>
+  <data name="Settings.CloudConcurrency" xml:space="preserve">
+    <value>Transfers at the same time</value>
+  </data>
+  <data name="Settings.CloudConcurrencyHint" xml:space="preserve">
+    <value>The transfer window can change the number of concurrent transfers temporarily; the value here is what each launch starts from. 0 retries means a failure is reported straight away. Whatever you choose, the transfer window can always retry by hand.</value>
+  </data>
+  <data name="Settings.CloudIntro" xml:space="preserve">
+    <value>These settings affect uploads and downloads in cloud management only. They do not change a Profile's sync job.</value>
+  </data>
+  <data name="Settings.CloudNotify" xml:space="preserve">
+    <value>Show a notification when a cloud transfer finishes</value>
+  </data>
+  <data name="Settings.CloudResumeOnStartup" xml:space="preserve">
+    <value>Resume the last unfinished cloud transfers at startup</value>
+  </data>
+  <data name="Settings.CloudRetry" xml:space="preserve">
+    <value>Automatic retries after a failure</value>
+  </data>
+  <data name="Settings.ConflictAsk" xml:space="preserve">
+    <value>Ask every time</value>
+  </data>
+  <data name="Settings.ConflictKeepBoth" xml:space="preserve">
+    <value>Keep both (rename)</value>
+  </data>
+  <data name="Settings.ConflictOverwrite" xml:space="preserve">
+    <value>Overwrite</value>
+  </data>
+  <data name="Settings.ConflictSkip" xml:space="preserve">
+    <value>Skip files of the same name</value>
+  </data>
+  <data name="Settings.ConflictTarget" xml:space="preserve">
+    <value>When the destination already has a file of the same name</value>
+  </data>
+  <data name="Settings.DefaultConcurrency" xml:space="preserve">
+    <value>Default maximum concurrent transfers</value>
+  </data>
+  <data name="Settings.DefaultDownloadDirectory" xml:space="preserve">
+    <value>Default download folder</value>
+  </data>
+  <data name="Settings.DefaultVersioning" xml:space="preserve">
+    <value>Default versioning strategy</value>
+  </data>
+  <data name="Settings.Dirty" xml:space="preserve">
+    <value>There are unapplied changes</value>
+  </data>
+  <data name="Settings.DownloadHint" xml:space="preserve">
+    <value>Empty means every download asks where to save it. With a folder set, a file of the same name is still confirmed before it is overwritten.</value>
+  </data>
+  <data name="Settings.DownloadLimit" xml:space="preserve">
+    <value>Download limit</value>
+  </data>
+  <data name="Settings.ExcludeRules" xml:space="preserve">
+    <value>Default exclude rules (one per line)</value>
+  </data>
+  <data name="Settings.HistoryForProfile" xml:space="preserve">
+    <value>Opens the run history of Profile "{0}".</value>
+  </data>
+  <data name="Settings.HistoryNoProfile" xml:space="preserve">
+    <value>Select a Profile in the main window first.</value>
+  </data>
+  <data name="Settings.HistoryOpenCurrent" xml:space="preserve">
+    <value>Opens the run history of the Profile selected in the main window.</value>
+  </data>
+  <data name="Settings.IncludeRules" xml:space="preserve">
+    <value>Default include rules (one per line)</value>
+  </data>
+  <data name="Settings.KeepDays" xml:space="preserve">
+    <value>Days to keep</value>
+  </data>
+  <data name="Settings.Language" xml:space="preserve">
+    <value>Interface language</value>
+  </data>
+  <data name="Settings.LanguageHint" xml:space="preserve">
+    <value>Takes effect at once: the window's text switches language when you click Apply. File paths, proxy addresses and rclone's own messages are not translated.</value>
+  </data>
+  <data name="Settings.LogEntry" xml:space="preserve">
+    <value>Job {0}
+Started: {1}
+{2}</value>
+  </data>
+  <data name="Settings.LogRetention" xml:space="preserve">
+    <value>Days of logs to keep</value>
+  </data>
+  <data name="Settings.LogTitle" xml:space="preserve">
+    <value>Sync log</value>
+  </data>
+  <data name="Settings.LogsOpenIncomplete" xml:space="preserve">
+    <value>Shows the log of the most recent unfinished sync jobs.</value>
+  </data>
+  <data name="Settings.MaintenanceTitle" xml:space="preserve">
+    <value>Maintenance</value>
+  </data>
+  <data name="Settings.MessageTitle" xml:space="preserve">
+    <value>Application settings</value>
+  </data>
+  <data name="Settings.MountCacheHint" xml:space="preserve">
+    <value>Empty or 0 means the cache is not capped (rclone's own default), and it grows until the disk is full. This is the default for new mounts; an individual mount can override it under "Advanced" in the mount dialog. The cache folder and its size can be inspected and cleared in the mounts area of the cloud manager window.</value>
+  </data>
+  <data name="Settings.MountCacheLimit" xml:space="preserve">
+    <value>VFS cache limit</value>
+  </data>
+  <data name="Settings.NavCaption" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Settings.NetworkRetry" xml:space="preserve">
+    <value>Retries after a network failure</value>
+  </data>
+  <data name="Settings.NoIncompleteLogs" xml:space="preserve">
+    <value>There are no unfinished sync job logs.</value>
+  </data>
+  <data name="Settings.NotifyOnCompletion" xml:space="preserve">
+    <value>Show a notification when a sync finishes</value>
+  </data>
+  <data name="Settings.Ok" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Settings.OpenAction" xml:space="preserve">
+    <value>Open {0}</value>
+  </data>
+  <data name="Settings.PageCloud" xml:space="preserve">
+    <value>Cloud</value>
+  </data>
+  <data name="Settings.PageGeneral" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Settings.PageHistory" xml:space="preserve">
+    <value>Run history</value>
+  </data>
+  <data name="Settings.PageLogs" xml:space="preserve">
+    <value>View logs</value>
+  </data>
+  <data name="Settings.PickDownloadDirectory" xml:space="preserve">
+    <value>Choose the default download folder</value>
+  </data>
+  <data name="Settings.ProxyHint" xml:space="preserve">
+    <value>Empty means automatic: first the HTTP_PROXY/HTTPS_PROXY environment variables, then the Windows Internet options. Enter host:port (for example proxy.corp:8080) or a full address with a scheme (http://proxy.corp:8080, socks5://127.0.0.1:1080). This affects only the rclone processes this program starts — cloud browsing, mounts, the SFTP service and sync jobs all go through it — and never changes the system or another program's proxy settings. The proxy is fixed when rclone starts, so a change takes effect after a restart.</value>
+  </data>
+  <data name="Settings.ProxyServer" xml:space="preserve">
+    <value>Proxy server</value>
+  </data>
+  <data name="Settings.RateLimitHint" xml:space="preserve">
+    <value>Empty or 0 means no limit; values like 500K and 2M are accepted. The limit belongs to the rclone process: measured against rclone, it cannot be set per endpoint (core/bwlimit takes a single rate), so the value here applies equally to browsing, uploading and downloading, and only while a transfer is running — it goes back to unlimited once the transfers finish.</value>
+  </data>
+  <data name="Settings.ResetPage" xml:space="preserve">
+    <value>Restore this page's defaults</value>
+  </data>
+  <data name="Settings.ResumeMinimum" xml:space="preserve">
+    <value>Smallest file that is resumed rather than restarted</value>
+  </data>
+  <data name="Settings.ResumeMinimumHint" xml:space="preserve">
+    <value>Files at or above this size are written to xxx.fengsync.partial first and renamed into place when the transfer finishes, so an interrupted download resumes where it stopped. 0 resumes every file; values like 500M and 2G are accepted. Below the threshold rclone uses multi-stream transfers, which are faster but restart from the beginning.</value>
+  </data>
+  <data name="Settings.SectionAppearance" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="Settings.SectionBehaviour" xml:space="preserve">
+    <value>Behaviour</value>
+  </data>
+  <data name="Settings.SectionDefaults" xml:space="preserve">
+    <value>Defaults</value>
+  </data>
+  <data name="Settings.SectionDownload" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Settings.SectionGeneral" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Settings.SectionMaintenance" xml:space="preserve">
+    <value>Maintenance</value>
+  </data>
+  <data name="Settings.SectionMount" xml:space="preserve">
+    <value>Mounts</value>
+  </data>
+  <data name="Settings.SectionNotifications" xml:space="preserve">
+    <value>Notifications and logs</value>
+  </data>
+  <data name="Settings.SectionProxy" xml:space="preserve">
+    <value>Network proxy</value>
+  </data>
+  <data name="Settings.SectionRateAndWindow" xml:space="preserve">
+    <value>Transfer rate and time window</value>
+  </data>
+  <data name="Settings.SectionUpload" xml:space="preserve">
+    <value>Upload</value>
+  </data>
+  <data name="Settings.SettingsFile" xml:space="preserve">
+    <value>Settings file: {0}</value>
+  </data>
+  <data name="Settings.SftpServer" xml:space="preserve">
+    <value>SFTP server settings…</value>
+  </data>
+  <data name="Settings.ShowCompleted" xml:space="preserve">
+    <value>Keep the progress window open after a sync</value>
+  </data>
+  <data name="Settings.StartWithWindows" xml:space="preserve">
+    <value>Start Feng Sync with Windows</value>
+  </data>
+  <data name="Settings.TimeTolerance" xml:space="preserve">
+    <value>Default time tolerance (seconds)</value>
+  </data>
+  <data name="Settings.TransferWindowFormat" xml:space="preserve">
+    <value>The transfer window's times should be HH:mm, for example 22:00 and 06:00; leaving both empty allows transfers at any time.</value>
+  </data>
+  <data name="Settings.UploadLimit" xml:space="preserve">
+    <value>Upload limit</value>
+  </data>
+  <data name="Settings.VerifyCopies" xml:space="preserve">
+    <value>Verify file size after copying, by default</value>
+  </data>
+  <data name="Settings.VersioningArchive" xml:space="preserve">
+    <value>Version directory</value>
+  </data>
+  <data name="Settings.VersioningNone" xml:space="preserve">
+    <value>Delete permanently</value>
+  </data>
+  <data name="Settings.WindowEnd" xml:space="preserve">
+    <value>Transfer only in this window (end)</value>
+  </data>
+  <data name="Settings.WindowHint" xml:space="preserve">
+    <value>Format HH:mm; empty means transfers may run at any time. Transfers queued outside the window keep waiting and are never cancelled, and a window that crosses midnight (22:00–06:00) is treated as one span. Measured against rclone, its bandwidth schedule can only change the rate, not stop a transfer, so this one is implemented on the queue.</value>
+  </data>
+  <data name="Settings.WindowStart" xml:space="preserve">
+    <value>Transfer only in this window (start)</value>
+  </data>
+  <data name="Settings.WindowTitle" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Sftp.AutoStart" xml:space="preserve">
+    <value>Start with Feng Sync</value>
+  </data>
+  <data name="Sftp.AutoStartName" xml:space="preserve">
+    <value>Start the SFTP service with Feng Sync</value>
+  </data>
+  <data name="Sftp.BuiltInServer" xml:space="preserve">
+    <value>Built-in SFTP server (rclone)</value>
+  </data>
+  <data name="Sftp.CacheSize" xml:space="preserve">
+    <value>SFTP cache size limit, in GiB</value>
+  </data>
+  <data name="Sftp.CacheSizeLabel" xml:space="preserve">
+    <value>Cache limit (GiB)</value>
+  </data>
+  <data name="Sftp.CacheSizeNotInteger" xml:space="preserve">
+    <value>The cache limit must be a whole number of GiB.</value>
+  </data>
+  <data name="Sftp.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Sftp.CloseName" xml:space="preserve">
+    <value>Close the SFTP server settings</value>
+  </data>
+  <data name="Sftp.Diagnose" xml:space="preserve">
+    <value>Diagnose</value>
+  </data>
+  <data name="Sftp.DiagnoseName" xml:space="preserve">
+    <value>Diagnose the SFTP server</value>
+  </data>
+  <data name="Sftp.EnableService" xml:space="preserve">
+    <value>Enable the service</value>
+  </data>
+  <data name="Sftp.EnableServiceName" xml:space="preserve">
+    <value>Enable the built-in SFTP service</value>
+  </data>
+  <data name="Sftp.HostFingerprint" xml:space="preserve">
+    <value>Host fingerprint: {0}</value>
+  </data>
+  <data name="Sftp.LegacyNote" xml:space="preserve">
+    <value>This version offers one read-write shared root folder and one password account; the old multi-account configuration is not migrated.</value>
+  </data>
+  <data name="Sftp.LegacyRemoved" xml:space="preserve">
+    <value>An incompatible older SFTP configuration was cleared out; set the service up again.</value>
+  </data>
+  <data name="Sftp.ListenAddress" xml:space="preserve">
+    <value>SFTP listen address</value>
+  </data>
+  <data name="Sftp.ListenAddressLabel" xml:space="preserve">
+    <value>Listen address / port</value>
+  </data>
+  <data name="Sftp.Listening" xml:space="preserve">
+    <value>The SFTP server is listening on {0}:{1}</value>
+  </data>
+  <data name="Sftp.NotRunning" xml:space="preserve">
+    <value>The SFTP service is not running at the moment.</value>
+  </data>
+  <data name="Sftp.OperationError" xml:space="preserve">
+    <value>{0} {1} (diagnostic ID: {2})</value>
+  </data>
+  <data name="Sftp.PasswordDialogTitle" xml:space="preserve">
+    <value>Set the SFTP password</value>
+  </data>
+  <data name="Sftp.PasswordEmpty" xml:space="preserve">
+    <value>The password cannot be empty.</value>
+  </data>
+  <data name="Sftp.PasswordLabel" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="Sftp.PasswordName" xml:space="preserve">
+    <value>SFTP password</value>
+  </data>
+  <data name="Sftp.PasswordSet" xml:space="preserve">
+    <value>Password: set (protected by your Windows account)</value>
+  </data>
+  <data name="Sftp.PasswordUnset" xml:space="preserve">
+    <value>Password: not set</value>
+  </data>
+  <data name="Sftp.Port" xml:space="preserve">
+    <value>SFTP listen port</value>
+  </data>
+  <data name="Sftp.PortNotInteger" xml:space="preserve">
+    <value>The port must be a whole number.</value>
+  </data>
+  <data name="Sftp.Running" xml:space="preserve">
+    <value>The SFTP service is running.</value>
+  </data>
+  <data name="Sftp.Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Sftp.SaveName" xml:space="preserve">
+    <value>Save the SFTP server settings</value>
+  </data>
+  <data name="Sftp.SavePasswordName" xml:space="preserve">
+    <value>Save the SFTP password</value>
+  </data>
+  <data name="Sftp.Saved" xml:space="preserve">
+    <value>The SFTP settings were saved.</value>
+  </data>
+  <data name="Sftp.Saving" xml:space="preserve">
+    <value>Saving…</value>
+  </data>
+  <data name="Sftp.SetPassword" xml:space="preserve">
+    <value>Set or reset password…</value>
+  </data>
+  <data name="Sftp.SetPasswordName" xml:space="preserve">
+    <value>Set or reset the SFTP password</value>
+  </data>
+  <data name="Sftp.SharedRoot" xml:space="preserve">
+    <value>SFTP shared root folder</value>
+  </data>
+  <data name="Sftp.SharedRootLabel" xml:space="preserve">
+    <value>Shared root folder</value>
+  </data>
+  <data name="Sftp.Start" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="Sftp.StartName" xml:space="preserve">
+    <value>Start the SFTP server</value>
+  </data>
+  <data name="Sftp.Starting" xml:space="preserve">
+    <value>Starting…</value>
+  </data>
+  <data name="Sftp.Stop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="Sftp.StopName" xml:space="preserve">
+    <value>Stop the SFTP server</value>
+  </data>
+  <data name="Sftp.Stopped" xml:space="preserve">
+    <value>The SFTP server has stopped; the port is free.</value>
+  </data>
+  <data name="Sftp.Stopping" xml:space="preserve">
+    <value>Stopping…</value>
+  </data>
+  <data name="Sftp.UserName" xml:space="preserve">
+    <value>SFTP user name</value>
+  </data>
+  <data name="Sftp.UserNameLabel" xml:space="preserve">
+    <value>User name</value>
+  </data>
+  <data name="Sftp.WindowTitle" xml:space="preserve">
+    <value>SFTP server settings</value>
+  </data>
+  <data name="Share.Confirmation" xml:space="preserve">
+    <value>"{0}" will get a public link: anyone who has this link can read the file without signing in to your account.
+
+How long the link lasts and whether it can be revoked are decided by the cloud (as measured with the built-in rclone, S3 returns a signed address that expires by itself after about a week), and this app only copies the result to the clipboard.
+
+Create it?</value>
+  </data>
+  <data name="Share.ConfirmationTitle" xml:space="preserve">
+    <value>Create a share link</value>
+  </data>
+  <data name="Share.Copied" xml:space="preserve">
+    <value>The share link was copied to the clipboard: anyone with the link can read the file without signing in, and the cloud decides how long it lasts.</value>
+  </data>
+  <data name="Share.CopiedNotStored" xml:space="preserve">
+    <value>The cloud generated the link, but it could not be put on the clipboard; copy it yourself from the text below.</value>
+  </data>
+  <data name="Share.Declined" xml:space="preserve">
+    <value>Cancelled; the cloud generated no link.</value>
+  </data>
+  <data name="Share.Failed" xml:space="preserve">
+    <value>No share link was obtained.</value>
+  </data>
+  <data name="Share.Missing" xml:space="preserve">
+    <value>The cloud no longer has this file; refresh the folder.</value>
+  </data>
+  <data name="Share.NoContent" xml:space="preserve">
+    <value>The cloud returned no link content.</value>
+  </data>
+  <data name="Share.NotAFile" xml:space="preserve">
+    <value>A folder has no link to share; only a single file can be shared.</value>
+  </data>
+  <data name="Share.Unsupported" xml:space="preserve">
+    <value>This endpoint does not support share links; the cloud generated nothing.</value>
+  </data>
+  <data name="Size.ActionLabel" xml:space="preserve">
+    <value>Calculate size</value>
+  </data>
+  <data name="Size.CostHint" xml:space="preserve">
+    <value>The calculation walks the whole subfolder tree, so the more objects there are the longer it takes; once it is sent it cannot be taken back, and closing the panel only stops waiting for it.</value>
+  </data>
+  <data name="Size.Counted" xml:space="preserve">
+    <value>{0} ({1} bytes) · {2} objects</value>
+  </data>
+  <data name="Size.Empty" xml:space="preserve">
+    <value>0 objects, empty folder</value>
+  </data>
+  <data name="Size.Failed" xml:space="preserve">
+    <value>Could not calculate</value>
+  </data>
+  <data name="Size.Gone" xml:space="preserve">
+    <value>The cloud no longer has this folder</value>
+  </data>
+  <data name="Size.NoAnswer" xml:space="preserve">
+    <value>The cloud did not return a readable size.</value>
+  </data>
+  <data name="Size.NotADirectory" xml:space="preserve">
+    <value>This is a file, not a folder</value>
+  </data>
+  <data name="Size.NotCounted" xml:space="preserve">
+    <value>Not calculated</value>
+  </data>
+  <data name="Size.SizelessCounted" xml:space="preserve">
+    <value>(of which {0} report no size from the cloud and count as 0)</value>
+  </data>
+  <data name="Sync.BackToSettings" xml:space="preserve">
+    <value>Back to settings</value>
+  </data>
+  <data name="Sync.BackToSettingsName" xml:space="preserve">
+    <value>Cancel the sync and go back to settings</value>
+  </data>
+  <data name="Sync.CannotStartSafely" xml:space="preserve">
+    <value>The sync cannot start safely</value>
+  </data>
+  <data name="Sync.CheckBeforeRun" xml:space="preserve">
+    <value>Check the files it affects, the space it needs and the safety notices before you go on.</value>
+  </data>
+  <data name="Sync.Confirm" xml:space="preserve">
+    <value>Sync</value>
+  </data>
+  <data name="Sync.ConfirmName" xml:space="preserve">
+    <value>Confirm the sync and run the plan</value>
+  </data>
+  <data name="Sync.Copies" xml:space="preserve">
+    <value>Copies: {0}</value>
+  </data>
+  <data name="Sync.Deletes" xml:space="preserve">
+    <value>Deletes: {0}</value>
+  </data>
+  <data name="Sync.HasOverwriteOrDelete" xml:space="preserve">
+    <value>This sync overwrites or deletes files</value>
+  </data>
+  <data name="Sync.IssuesCallout" xml:space="preserve">
+    <value>Problems to settle before syncing</value>
+  </data>
+  <data name="Sync.NameMismatch" xml:space="preserve">
+    <value>The Profile name did not match, so nothing was synced.</value>
+  </data>
+  <data name="Sync.NeedExplicitConfirm" xml:space="preserve">
+    <value>Explicit confirmation needed</value>
+  </data>
+  <data name="Sync.NeedProfileName" xml:space="preserve">
+    <value>The Profile name is needed as confirmation</value>
+  </data>
+  <data name="Sync.Overwrites" xml:space="preserve">
+    <value>Overwrites: {0}</value>
+  </data>
+  <data name="Sync.ProfileNameLabel" xml:space="preserve">
+    <value>Type the Profile name to confirm</value>
+  </data>
+  <data name="Sync.SpaceCheck" xml:space="preserve">
+    <value>Destination space check</value>
+  </data>
+  <data name="Sync.SpaceRequired" xml:space="preserve">
+    <value>Estimated space needed at the destination: {0}</value>
+  </data>
+  <data name="Sync.SpaceVerified" xml:space="preserve">
+    <value>Space check: verified against the free space at the local destination.</value>
+  </data>
+  <data name="Sync.SummaryCallout" xml:space="preserve">
+    <value>Summary of this sync</value>
+  </data>
+  <data name="Sync.SummaryTitle" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="Sync.ThresholdExceeded" xml:space="preserve">
+    <value>The delete threshold is exceeded: explicit confirmation needed</value>
+  </data>
+  <data name="Sync.Transfer" xml:space="preserve">
+    <value>Transfers: {0}</value>
+  </data>
+  <data name="Sync.TypeProfileName" xml:space="preserve">
+    <value>To release the delete threshold in one go, type the Profile name “{0}”.</value>
+  </data>
+  <data name="Sync.WindowTitle" xml:space="preserve">
+    <value>Confirm the sync</value>
+  </data>
+  <data name="SyncWizard.BrowseLocal" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="SyncWizard.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="SyncWizard.CloudEndpoint" xml:space="preserve">
+    <value>Cloud endpoint</value>
+  </data>
+  <data name="SyncWizard.CloudEndpointHint" xml:space="preserve">
+    <value>Pick a connected endpoint from cloud management; you can also type an endpoint URI directly.</value>
+  </data>
+  <data name="SyncWizard.CloudEndpointName" xml:space="preserve">
+    <value>Choose the cloud endpoint to sync</value>
+  </data>
+  <data name="SyncWizard.Create" xml:space="preserve">
+    <value>Create</value>
+  </data>
+  <data name="SyncWizard.CreateFailed" xml:space="preserve">
+    <value>The sync job could not be created.</value>
+  </data>
+  <data name="SyncWizard.Intro" xml:space="preserve">
+    <value>Fill in the two boxes and a two-way sync job is created: a change on either side is synced to the other. Rules, versioning and performance can be adjusted later in the Profile editor in the main window.</value>
+  </data>
+  <data name="SyncWizard.LocalFolder" xml:space="preserve">
+    <value>Local folder</value>
+  </data>
+  <data name="SyncWizard.LocalFolderHint" xml:space="preserve">
+    <value>The local side of the sync. It is a real folder on disk: the sync writes into it, and it deletes the files the other side has deleted.</value>
+  </data>
+  <data name="SyncWizard.LocalFolderName" xml:space="preserve">
+    <value>Choose the local folder to sync</value>
+  </data>
+  <data name="SyncWizard.Name" xml:space="preserve">
+    <value>Sync job name</value>
+  </data>
+  <data name="SyncWizard.NameHeader" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="SyncWizard.NoEndpointPicker" xml:space="preserve">
+    <value>This window has no endpoint picker available.</value>
+  </data>
+  <data name="SyncWizard.PickCloud" xml:space="preserve">
+    <value>Choose…</value>
+  </data>
+  <data name="SyncWizard.WindowName" xml:space="preserve">
+    <value>Create a two-way sync job</value>
+  </data>
+  <data name="SyncWizard.WindowTitle" xml:space="preserve">
+    <value>Two-way sync wizard</value>
+  </data>
+  <data name="Task.SelectEndpointFirst" xml:space="preserve">
+    <value>Select a cloud endpoint first.</value>
+  </data>
+  <data name="Task.SourceInside" xml:space="preserve">
+    <value>{1} in {0}</value>
+  </data>
+  <data name="Task.SourceRoot" xml:space="preserve">
+    <value>the root folder of {0}</value>
+  </data>
+  <data name="Task.SuggestName" xml:space="preserve">
+    <value>{0} sync</value>
+  </data>
+  <data name="Task.WizardBothSidesRemote" xml:space="preserve">
+    <value>Both sides cannot be the same location.</value>
+  </data>
+  <data name="Task.WizardCloudMustBeEndpoint" xml:space="preserve">
+    <value>The cloud side must be a cloud endpoint, like gdrive://name/path.</value>
+  </data>
+  <data name="Task.WizardLocalMustBeFolder" xml:space="preserve">
+    <value>The local side must be a local folder; it cannot be a cloud endpoint.</value>
+  </data>
+  <data name="Task.WizardNeedCloud" xml:space="preserve">
+    <value>Select a cloud endpoint first.</value>
+  </data>
+  <data name="Task.WizardNeedLocal" xml:space="preserve">
+    <value>Select a local folder first.</value>
+  </data>
+  <data name="Thumb.Empty" xml:space="preserve">
+    <value>"{0}" has nothing to read, so no thumbnail is shown.</value>
+  </data>
+  <data name="Thumb.NotWritable" xml:space="preserve">
+    <value>The thumbnail is only for display and is never written back.</value>
+  </data>
+  <data name="Thumb.TooLarge" xml:space="preserve">
+    <value>"{0}" is {1}, over the thumbnail limit of {2}, so only the file icon is shown.</value>
+  </data>
+  <data name="Thumb.Undecodable" xml:space="preserve">
+    <value>"{0}" is a {1} image and this program has no decoder for it, so only the file icon is shown.</value>
+  </data>
+  <data name="Transfer.ActionUnavailable" xml:space="preserve">
+    <value>This action is not available right now.</value>
+  </data>
+  <data name="Transfer.AfterTransfer" xml:space="preserve">
+    <value>When everything finishes</value>
+  </data>
+  <data name="Transfer.AfterTransferChosen" xml:space="preserve">
+    <value>"{0}" is selected: you will be asked only after the whole batch has succeeded,</value>
+  </data>
+  <data name="Transfer.AfterTransferKeepOpen" xml:space="preserve">
+    <value>so keep this window open, because you will be asked once more before it shuts down.</value>
+  </data>
+  <data name="Transfer.AfterTransferName" xml:space="preserve">
+    <value>Action after every transfer has succeeded</value>
+  </data>
+  <data name="Transfer.Attempt" xml:space="preserve">
+    <value>Attempt {0}  ·  {1}</value>
+  </data>
+  <data name="Transfer.AutoRetry" xml:space="preserve">
+    <value>A failure is retried automatically {0} times.</value>
+  </data>
+  <data name="Transfer.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Transfer.CancelAll" xml:space="preserve">
+    <value>Cancel all</value>
+  </data>
+  <data name="Transfer.CancelAllAction" xml:space="preserve">
+    <value>Cancel every transfer</value>
+  </data>
+  <data name="Transfer.CancelOne" xml:space="preserve">
+    <value>Cancel this transfer</value>
+  </data>
+  <data name="Transfer.CancelledReUpload" xml:space="preserve">
+    <value>Cancelled; it can be uploaded again</value>
+  </data>
+  <data name="Transfer.CancelledRestartCopy" xml:space="preserve">
+    <value>Cancelled; copying it again starts over</value>
+  </data>
+  <data name="Transfer.CancelledResumeDownload" xml:space="preserve">
+    <value>Cancelled; the download can be continued</value>
+  </data>
+  <data name="Transfer.ClearAction" xml:space="preserve">
+    <value>Clear the finished transfers and archive them</value>
+  </data>
+  <data name="Transfer.ClearFinished" xml:space="preserve">
+    <value>Clear finished</value>
+  </data>
+  <data name="Transfer.Cleared" xml:space="preserve">
+    <value>Cleared {0} finished records.</value>
+  </data>
+  <data name="Transfer.ClearedArchived" xml:space="preserve">
+    <value>Cleared {0} finished records and archived them to the transfer history.</value>
+  </data>
+  <data name="Transfer.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Transfer.CloseAction" xml:space="preserve">
+    <value>Close the transfer window</value>
+  </data>
+  <data name="Transfer.ColumnActions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Transfer.ColumnProgress" xml:space="preserve">
+    <value>Progress</value>
+  </data>
+  <data name="Transfer.ColumnStatus" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Transfer.ColumnTask" xml:space="preserve">
+    <value>Job</value>
+  </data>
+  <data name="Transfer.Concurrency" xml:space="preserve">
+    <value>Transfers at once</value>
+  </data>
+  <data name="Transfer.ConcurrencyCurrent" xml:space="preserve">
+    <value>Currently {0}; lowering it does not interrupt a transfer in progress, it only stops refilling the queue.</value>
+  </data>
+  <data name="Transfer.ConcurrencyName" xml:space="preserve">
+    <value>Number of transfers running at the same time</value>
+  </data>
+  <data name="Transfer.Continue" xml:space="preserve">
+    <value>Resume</value>
+  </data>
+  <data name="Transfer.CopiedDetail" xml:space="preserve">
+    <value>The details were copied to the clipboard; paste them straight into a bug report.</value>
+  </data>
+  <data name="Transfer.Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Transfer.CopyDetail" xml:space="preserve">
+    <value>Copy details</value>
+  </data>
+  <data name="Transfer.CopyDetailFailed" xml:space="preserve">
+    <value>The clipboard could not be written; copy it from the details window yourself.</value>
+  </data>
+  <data name="Transfer.CopyLink" xml:space="preserve">
+    <value>Copy share link…</value>
+  </data>
+  <data name="Transfer.CopyMissingTarget" xml:space="preserve">
+    <value>The cloud copy is missing its destination endpoint or destination path.</value>
+  </data>
+  <data name="Transfer.CopyNoLocalFolder" xml:space="preserve">
+    <value>A copy has no local folder: rclone moves the bytes between the two ends and they never land on this machine.</value>
+  </data>
+  <data name="Transfer.DetailAttempt" xml:space="preserve">
+    <value>Attempts: {0}</value>
+  </data>
+  <data name="Transfer.DetailDiagnostics" xml:space="preserve">
+    <value>Diagnostics: 
+{0}</value>
+  </data>
+  <data name="Transfer.DetailDirection" xml:space="preserve">
+    <value>Direction: {0}</value>
+  </data>
+  <data name="Transfer.DetailError" xml:space="preserve">
+    <value>Error: {0}</value>
+  </data>
+  <data name="Transfer.DetailNoDiagnostics" xml:space="preserve">
+    <value>Diagnostics: this job recorded no further information.</value>
+  </data>
+  <data name="Transfer.DetailPath" xml:space="preserve">
+    <value>Path: {0}</value>
+  </data>
+  <data name="Transfer.DetailStatus" xml:space="preserve">
+    <value>Status: {0}</value>
+  </data>
+  <data name="Transfer.DetailTask" xml:space="preserve">
+    <value>Job: {0}</value>
+  </data>
+  <data name="Transfer.DetailTitle" xml:space="preserve">
+    <value>Transfer details</value>
+  </data>
+  <data name="Transfer.DiagnosticId" xml:space="preserve">
+    <value>Diagnostic ID {0}</value>
+  </data>
+  <data name="Transfer.Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Transfer.HintContextMenu" xml:space="preserve">
+    <value>Right-click any row to change its place in the waiting order, open its folder, copy a share link, or see why it failed.</value>
+  </data>
+  <data name="Transfer.HintCopy" xml:space="preserve">
+    <value>A copy between two drives is done by rclone at either end and this program never touches the bytes, so after a cancellation or a failure the whole file has to be copied again.</value>
+  </data>
+  <data name="Transfer.HintDragDrop" xml:space="preserve">
+    <value>Drag a local file or folder into the file browser to upload it; drag a cloud file into Explorer to download it.</value>
+  </data>
+  <data name="Transfer.HintResumeDetail" xml:space="preserve">
+    <value>a transfer whose uploaded pieces can be verified continues from where it stopped, while a cloud transfer restarts from the beginning of the file because rclone does not allow anything else.</value>
+  </data>
+  <data name="Transfer.HintResumeMechanism" xml:space="preserve">
+    <value>A cancelled, paused or failed transfer stays in the list and can be resumed or retried at any time. This program reuses the staging and resume mechanism its sync jobs use:</value>
+  </data>
+  <data name="Transfer.History" xml:space="preserve">
+    <value>Transfer history…</value>
+  </data>
+  <data name="Transfer.HistoryAction" xml:space="preserve">
+    <value>View the archived transfers</value>
+  </data>
+  <data name="Transfer.HistoryClear" xml:space="preserve">
+    <value>Clear the history</value>
+  </data>
+  <data name="Transfer.HistoryClearName" xml:space="preserve">
+    <value>Delete every archived record</value>
+  </data>
+  <data name="Transfer.HistoryConfirm" xml:space="preserve">
+    <value>Delete every archived transfer? This cannot be undone.</value>
+  </data>
+  <data name="Transfer.HistoryConfirmTitle" xml:space="preserve">
+    <value>Clear the transfer history</value>
+  </data>
+  <data name="Transfer.HistoryListName" xml:space="preserve">
+    <value>Archived transfers</value>
+  </data>
+  <data name="Transfer.HistoryTitle" xml:space="preserve">
+    <value>Transfer history</value>
+  </data>
+  <data name="Transfer.HistoryWindowName" xml:space="preserve">
+    <value>Archived cloud transfers</value>
+  </data>
+  <data name="Transfer.LimitFailed" xml:space="preserve">
+    <value>The rate limit did not take effect: {0}</value>
+  </data>
+  <data name="Transfer.LinkPending" xml:space="preserve">
+    <value>The transfer has not started, so the cloud may not have this file yet.</value>
+  </data>
+  <data name="Transfer.LinkRunning" xml:space="preserve">
+    <value>The transfer is running; wait for it to stop before making a link.</value>
+  </data>
+  <data name="Transfer.LinkUnavailable" xml:space="preserve">
+    <value>This job has no cloud file to share.</value>
+  </data>
+  <data name="Transfer.LoadResumableFailed" xml:space="preserve">
+    <value>The unfinished transfers from last time could not be read: {0}</value>
+  </data>
+  <data name="Transfer.LocalPathNoDirectory" xml:space="preserve">
+    <value>The local path has no folder: {0}</value>
+  </data>
+  <data name="Transfer.LogEmpty" xml:space="preserve">
+    <value>The failure log is empty: {0}</value>
+  </data>
+  <data name="Transfer.LogMissing" xml:space="preserve">
+    <value>Today's failure log was not found: {0}
+(The file is created only when an rclone failure really happened.)</value>
+  </data>
+  <data name="Transfer.LogReadFailed" xml:space="preserve">
+    <value>The failure log could not be read: {0}</value>
+  </data>
+  <data name="Transfer.LogSummary" xml:space="preserve">
+    <value>{0} records (showing at most {1}): {2}</value>
+  </data>
+  <data name="Transfer.LogTitle" xml:space="preserve">
+    <value>rclone failure log</value>
+  </data>
+  <data name="Transfer.MoveDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="Transfer.MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="Transfer.NoAutoRetry" xml:space="preserve">
+    <value>A failure is not retried automatically.</value>
+  </data>
+  <data name="Transfer.NoCloudService" xml:space="preserve">
+    <value>No cloud service is available in this run.</value>
+  </data>
+  <data name="Transfer.NoCompleted" xml:space="preserve">
+    <value>There is no finished transfer.</value>
+  </data>
+  <data name="Transfer.NoErrorInfo" xml:space="preserve">
+    <value>This job has no error information yet.</value>
+  </data>
+  <data name="Transfer.NoHistoryArchive" xml:space="preserve">
+    <value>Transfer history archiving is not enabled for this run.</value>
+  </data>
+  <data name="Transfer.NoLocalFolder" xml:space="preserve">
+    <value>This job has no local folder to open.</value>
+  </data>
+  <data name="Transfer.NoLocalPath" xml:space="preserve">
+    <value>This job has no local path to open.</value>
+  </data>
+  <data name="Transfer.NoPausable" xml:space="preserve">
+    <value>There is no transfer in progress to pause.</value>
+  </data>
+  <data name="Transfer.NoResumable" xml:space="preserve">
+    <value>There is no transfer that can be resumed.</value>
+  </data>
+  <data name="Transfer.NoTasks" xml:space="preserve">
+    <value>No transfers yet. Drag a file into the file browser to upload it; drag one out to download it.</value>
+  </data>
+  <data name="Transfer.NoWindow" xml:space="preserve">
+    <value>No time limit</value>
+  </data>
+  <data name="Transfer.NotAnEndpoint" xml:space="preserve">
+    <value>This job's destination is not a cloud endpoint.</value>
+  </data>
+  <data name="Transfer.OpenFolder" xml:space="preserve">
+    <value>Open containing folder</value>
+  </data>
+  <data name="Transfer.OpenFolderFailed" xml:space="preserve">
+    <value>The folder could not be opened: {0}</value>
+  </data>
+  <data name="Transfer.Pause" xml:space="preserve">
+    <value>Pause</value>
+  </data>
+  <data name="Transfer.PauseAll" xml:space="preserve">
+    <value>Pause all</value>
+  </data>
+  <data name="Transfer.PauseAllAction" xml:space="preserve">
+    <value>Pause every transfer in progress</value>
+  </data>
+  <data name="Transfer.PauseOne" xml:space="preserve">
+    <value>Pause this transfer</value>
+  </data>
+  <data name="Transfer.PolicyFooter" xml:space="preserve">
+    <value>. It can be changed under Settings → Cloud.</value>
+  </data>
+  <data name="Transfer.RateLimited" xml:space="preserve">
+    <value>Limited to {0}</value>
+  </data>
+  <data name="Transfer.RateUnlimited" xml:space="preserve">
+    <value>No limit</value>
+  </data>
+  <data name="Transfer.ReorderOnlyPending" xml:space="preserve">
+    <value>Only transfers that are still waiting can be reordered.</value>
+  </data>
+  <data name="Transfer.RestartOne" xml:space="preserve">
+    <value>Resume or retry this transfer</value>
+  </data>
+  <data name="Transfer.Resume" xml:space="preserve">
+    <value>Resume</value>
+  </data>
+  <data name="Transfer.ResumeAction" xml:space="preserve">
+    <value>Resume the unfinished transfers</value>
+  </data>
+  <data name="Transfer.Retry" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="Transfer.StatusCompleted" xml:space="preserve">
+    <value>Finished  ·  {0} MB</value>
+  </data>
+  <data name="Transfer.StatusFailed" xml:space="preserve">
+    <value>Failed: {0}</value>
+  </data>
+  <data name="Transfer.StatusPaused" xml:space="preserve">
+    <value>Paused</value>
+  </data>
+  <data name="Transfer.StatusPending" xml:space="preserve">
+    <value>Waiting</value>
+  </data>
+  <data name="Transfer.SummaryCompleted" xml:space="preserve">
+    <value>Finished {0}</value>
+  </data>
+  <data name="Transfer.SummaryPaused" xml:space="preserve">
+    <value>Paused {0}</value>
+  </data>
+  <data name="Transfer.SummaryPending" xml:space="preserve">
+    <value>Waiting {0}</value>
+  </data>
+  <data name="Transfer.SummaryResumable" xml:space="preserve">
+    <value>Resumable {0}</value>
+  </data>
+  <data name="Transfer.SummaryRunning" xml:space="preserve">
+    <value>Running {0}</value>
+  </data>
+  <data name="Transfer.SummaryWaitingWindow" xml:space="preserve">
+    <value>Waiting for the transfer window {0}</value>
+  </data>
+  <data name="Transfer.TaskList" xml:space="preserve">
+    <value>Transfer job list</value>
+  </data>
+  <data name="Transfer.TransferWindow" xml:space="preserve">
+    <value>Transfer window {0}</value>
+  </data>
+  <data name="Transfer.UnknownError" xml:space="preserve">
+    <value>Unknown error</value>
+  </data>
+  <data name="Transfer.Upload" xml:space="preserve">
+    <value>Upload</value>
+  </data>
+  <data name="Transfer.UploadSourceGone" xml:space="preserve">
+    <value>The local file to upload is gone.</value>
+  </data>
+  <data name="Transfer.ViewLog" xml:space="preserve">
+    <value>View log</value>
+  </data>
+  <data name="Transfer.WindowName" xml:space="preserve">
+    <value>Cloud transfer jobs</value>
+  </data>
+  <data name="Transfer.WindowTitle" xml:space="preserve">
+    <value>Transfers</value>
+  </data>
+  <data name="Transfer.WindowWaiting" xml:space="preserve">
+    <value>(currently outside the window, so a waiting transfer will not start)</value>
+  </data>
+  <data name="Update.BusyCannotInstall" xml:space="preserve">
+    <value>An update cannot be installed while a sync or comparison is running.</value>
+  </data>
+  <data name="Update.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Update.CancelDownload" xml:space="preserve">
+    <value>Cancel the download</value>
+  </data>
+  <data name="Update.CancelName" xml:space="preserve">
+    <value>Cancel the update</value>
+  </data>
+  <data name="Update.CannotLocateExe" xml:space="preserve">
+    <value>The real program path could not be determined.</value>
+  </data>
+  <data name="Update.CannotUpdateTitle" xml:space="preserve">
+    <value>The update cannot be installed automatically</value>
+  </data>
+  <data name="Update.CheckCaption" xml:space="preserve">
+    <value>Check for updates</value>
+  </data>
+  <data name="Update.CheckFailed" xml:space="preserve">
+    <value>Checking for updates failed.</value>
+  </data>
+  <data name="Update.CurrentVersion" xml:space="preserve">
+    <value>Current version: {0}</value>
+  </data>
+  <data name="Update.Download" xml:space="preserve">
+    <value>Download and update</value>
+  </data>
+  <data name="Update.DownloadName" xml:space="preserve">
+    <value>Download and install the update</value>
+  </data>
+  <data name="Update.DownloadSize" xml:space="preserve">
+    <value>Download size: {0} MB</value>
+  </data>
+  <data name="Update.Downloading" xml:space="preserve">
+    <value>Downloading: {0} MB</value>
+  </data>
+  <data name="Update.DownloadingPercent" xml:space="preserve">
+    <value>Downloading: {0} MB{1} ({2}%)</value>
+  </data>
+  <data name="Update.ExitingTitle" xml:space="preserve">
+    <value>FengSync - exiting to install the update…</value>
+  </data>
+  <data name="Update.FailedTitle" xml:space="preserve">
+    <value>The update failed</value>
+  </data>
+  <data name="Update.InstallDirInvalid" xml:space="preserve">
+    <value>The installation folder could not be verified.</value>
+  </data>
+  <data name="Update.Later" xml:space="preserve">
+    <value>Remind me later</value>
+  </data>
+  <data name="Update.LaterName" xml:space="preserve">
+    <value>Remind me about the update later</value>
+  </data>
+  <data name="Update.LatestVersion" xml:space="preserve">
+    <value>Latest version: {0}  {1}</value>
+  </data>
+  <data name="Update.ManualDownloadHint" xml:space="preserve">
+    <value>
+Download it manually from the Releases page.</value>
+  </data>
+  <data name="Update.ProgressName" xml:space="preserve">
+    <value>Update download progress</value>
+  </data>
+  <data name="Update.ReleaseNotesLink" xml:space="preserve">
+    <value>Read the full release notes on GitHub</value>
+  </data>
+  <data name="Update.ReleaseNotesLinkName" xml:space="preserve">
+    <value>Read the full release notes on GitHub</value>
+  </data>
+  <data name="Update.ReleaseNotesName" xml:space="preserve">
+    <value>Release notes for this version</value>
+  </data>
+  <data name="Update.Skip" xml:space="preserve">
+    <value>Skip this version</value>
+  </data>
+  <data name="Update.SkipName" xml:space="preserve">
+    <value>Skip this version of the update</value>
+  </data>
+  <data name="Update.Title" xml:space="preserve">
+    <value>An update is available</value>
+  </data>
+  <data name="Update.UpToDate" xml:space="preserve">
+    <value>You are already on the latest version, {0}.</value>
+  </data>
+  <data name="Update.WindowName" xml:space="preserve">
+    <value>An update for Feng Sync is available</value>
+  </data>
+  <data name="Update.WindowTitle" xml:space="preserve">
+    <value>An update is available</value>
+  </data>
+  <data name="Version.ExplainGoToConsole" xml:space="preserve">
+    <value>To see version history, go to {0}'s own web console.</value>
+  </data>
+  <data name="Version.ExplainNoConsole" xml:space="preserve">
+    <value>This endpoint has no web console to open ({0}); look in your provider's own console.</value>
+  </data>
+  <data name="Version.ExplainNoVersions" xml:space="preserve">
+    <value>This program cannot read version history: its only route to the cloud is rclone, and rclone provides no version list.</value>
+  </data>
+  <data name="Version.ExplainSwitchNotUsed" xml:space="preserve">
+    <value>(S3 / B2 / ImageKit have a switch that lists old versions as files, but that mixes names the cloud does not have into the file list, so this program leaves it off.)</value>
+  </data>
+  <data name="Version.MenuLabel" xml:space="preserve">
+    <value>View version history in the web console…</value>
+  </data>
+  <data name="Version.OpenLabel" xml:space="preserve">
+    <value>Open the {0} web console</value>
+  </data>
+  <data name="Version.StatusNoConsole" xml:space="preserve">
+    <value>This program cannot read version history (rclone provides no version list), and {0} has no web console to open.</value>
+  </data>
+  <data name="Version.StatusOpened" xml:space="preserve">
+    <value>Opened the {0} web console in the browser. This program cannot read version history: rclone provides no version list.</value>
+  </data>
+</root>

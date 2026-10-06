@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -88,7 +89,7 @@ public sealed record CloudEndpointAccount(RcloneAccount Remote, CloudEndpointMet
     /// <summary>True when rclone enforces the prefix, so no path can address anything outside it.</summary>
     public bool PrefixIsEnforced => Metadata?.PrefixIsEnforced ?? false;
     public string Display => string.IsNullOrWhiteSpace(Prefix)
-        ? $"{Remote.Display}  ·  未设置默认根目录"
+        ? Tr.Format("Endpoint.DisplayNoRoot", Remote.Display)
         : $"{Remote.Display}  ·  /{Prefix}";
 }
 

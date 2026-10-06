@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using FengSync.Core.Configuration;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -64,11 +65,11 @@ public sealed class CloudPostTransferAction : IDisposable
         if (batch.Total <= 0) return;
         if (batch.Completed != batch.Total)
         {
-            Announce($"有 {batch.Total - batch.Completed} 项传输没有成功，已跳过“{Describe(Action)}”，请先检查失败原因。");
+            Announce(Tr.Format("AfterTransfer.Skipped", batch.Total - batch.Completed, Describe(Action)));
             return;
         }
         if (Confirm is not { } confirm) return;
-        if (!confirm(Action)) { Announce($"已取消“{Describe(Action)}”。"); return; }
+        if (!confirm(Action)) { Announce(Tr.Format("AfterTransfer.Cancelled", Describe(Action))); return; }
         (Perform ?? PerformDefault)(Action);
     }
 
@@ -81,10 +82,10 @@ public sealed class CloudPostTransferAction : IDisposable
     /// <summary>What the choice is called, in the words the settings page and the prompt use.</summary>
     public static string Describe(CloudAfterTransferAction action) => action switch
     {
-        CloudAfterTransferAction.Exit => "传输完成后退出 Feng Sync",
-        CloudAfterTransferAction.Sleep => "传输完成后让计算机休眠",
-        CloudAfterTransferAction.Shutdown => "传输完成后关闭计算机",
-        _ => "不执行任何操作"
+        CloudAfterTransferAction.Exit => Tr.F("AfterTransfer.DescribeExit"),
+        CloudAfterTransferAction.Sleep => Tr.F("AfterTransfer.DescribeSleep"),
+        CloudAfterTransferAction.Shutdown => Tr.F("AfterTransfer.DescribeShutdown"),
+        _ => Tr.F("AfterTransfer.DescribeNone")
     };
 
     /// <summary>
@@ -94,10 +95,9 @@ public sealed class CloudPostTransferAction : IDisposable
     /// </summary>
     public static string ConfirmationFor(CloudAfterTransferAction action) => action switch
     {
-        CloudAfterTransferAction.Exit => "所有传输都已完成。现在退出 Feng Sync？",
-        CloudAfterTransferAction.Sleep => "所有传输都已完成。现在让计算机休眠？",
-        _ => "所有传输都已完成。现在关闭计算机？" + Environment.NewLine
-            + Environment.NewLine + "关闭会在 60 秒后开始，期间可以在命令行执行 shutdown /a 取消。"
+        CloudAfterTransferAction.Exit => Tr.F("AfterTransfer.ConfirmExit"),
+        CloudAfterTransferAction.Sleep => Tr.F("AfterTransfer.ConfirmSleep"),
+        _ => Tr.F("AfterTransfer.ConfirmShutdown")
     };
 
     private static void PerformDefault(CloudAfterTransferAction action)

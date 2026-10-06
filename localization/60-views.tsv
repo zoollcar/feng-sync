@@ -1,0 +1,248 @@
+#	 	各	个	独	立	窗	口	与	代	码	构	建	的	对	话	框	 	·	 	M	o	u	n	t	P	i	c	k	e	r	D	i	a	l	o	g	,	 	S	y	n	c	C	o	n	f	i	r	m	a	t	i	o	n	W	i	n	d	o	w	,
+#	 	S	f	t	p	S	e	r	v	e	r	S	e	t	t	i	n	g	s	W	i	n	d	o	w	,	 	C	l	o	u	d	E	n	d	p	o	i	n	t	O	r	g	a	n	i	z	a	t	i	o	n	W	i	n	d	o	w	,	 	A	b	o	u	t	W	i	n	d	o	w	,	 	U	p	d	a	t	e	W	i	n	d	o	w	,
+#	 	T	e	x	t	P	r	o	m	p	t	,	 	C	l	o	u	d	C	o	n	f	l	i	c	t	P	r	o	m	p	t	,	 	C	l	o	u	d	D	e	t	a	i	l	s	P	r	o	m	p	t	,	 	C	l	o	u	d	P	r	e	v	i	e	w	P	r	o	m	p	t	.
+#	 	T	h	e	 	C	h	i	n	e	s	e	 	c	o	l	u	m	n	 	m	u	s	t	 	s	t	a	y	 	b	y	t	e	-	i	d	e	n	t	i	c	a	l	 	t	o	 	t	h	e	 	l	i	t	e	r	a	l	 	i	t	 	r	e	p	l	a	c	e	d	,	 	s	o	 	t	h	e	 	t	e	s	t	s	 	t	h	a	t
+#	 	a	s	s	e	r	t	 	t	o	d	a	y	'	s	 	w	o	r	d	i	n	g	 	k	e	e	p	 	p	a	s	s	i	n	g	 	w	i	t	h	o	u	t	 	b	e	i	n	g	 	r	e	w	r	i	t	t	e	n	.	 	A	 	U	N	C	 	p	a	t	h	 	i	s	 	w	r	i	t	t	e	n	 	w	i	t	h	 	i	t	s
+#	 	b	a	c	k	s	l	a	s	h	e	s	 	d	o	u	b	l	e	d	 	b	e	c	a	u	s	e	 	t	h	e	 	r	e	s	x	 	g	e	n	e	r	a	t	o	r	 	u	n	e	s	c	a	p	e	s	 	t	h	e	m	.
+Mount.Title	挂载到…	Mount to…
+Mount.DialogName	选择挂载位置	Choose a mount location
+Mount.LocationType	挂载位置类型	Mount location type
+Mount.TabDrive	盘符	Drive letter
+Mount.PickDriveLocation	选择盘符挂载位置	Choose a drive letter to mount to
+Mount.AvailableDrives	可用盘符	Available drive letters
+Mount.TabDirectory	目录	Folder
+Mount.PickDirectoryLocation	选择目录挂载位置	Choose a folder to mount to
+Mount.Browse	浏览…	Browse…
+Mount.BrowseAndPickDirectory	浏览并选择挂载目录	Browse for the folder to mount
+Mount.DirectoryPath	挂载目录路径	Mount folder path
+Mount.TabUnc	网络共享	Network share
+Mount.PickUncLocation	选择网络共享挂载位置	Choose a network share to mount to
+Mount.UncPath	网络共享路径	Network share path
+Mount.Advanced	高级选项	Advanced
+Mount.AdvancedOptions	挂载高级选项	Mount advanced options
+Mount.VolumeNameLabel	卷标（Windows 显示的名称）	Volume label (the name Windows shows)
+Mount.VolumeName	卷标	Volume label
+Mount.CacheModeLabel	缓存模式	Cache mode
+Mount.CacheMode	VFS 缓存模式	VFS cache mode
+Mount.CacheMaxSizeLabel	缓存上限（如 10G；留空沿用设置里的默认上限；填 0 表示不限）	Cache limit (say 10G; empty keeps the default from settings, 0 means no limit)
+Mount.CacheMaxSize	缓存上限	Cache limit
+Mount.CacheMaxAgeLabel	缓存保留时间（秒，0 表示用默认 1 小时）	Cache retention (seconds; 0 uses the 1 hour default)
+Mount.CacheMaxAge	缓存保留时间	Cache retention
+Mount.WriteBackLabel	写入回写延迟（秒，0 表示用默认 5 秒）	Write-back delay (seconds; 0 uses the 5 second default)
+Mount.WriteBack	写回延迟	Write-back delay
+Mount.DirCacheTimeLabel	目录缓存时间（秒，0 表示用默认 5 分钟）	Directory cache time (seconds; 0 uses the 5 minute default)
+Mount.DirCacheTime	目录缓存时间	Directory cache time
+Mount.PollIntervalLabel	轮询间隔（秒，0 表示用默认 1 分钟；须小于目录缓存时间）	Poll interval (seconds; 0 uses the 1 minute default; must be shorter than the directory cache time)
+Mount.PollInterval	轮询间隔	Poll interval
+Mount.NetworkModeName	作为网络驱动器挂载	Mount as a network drive
+Mount.NetworkMode	作为网络驱动器挂载（而不是固定磁盘）	Mount as a network drive (not a fixed disk)
+Mount.ReadOnlyName	只读挂载	Read-only mount
+Mount.ReadOnly	只读挂载（拒绝一切写入）	Read-only mount (refuses every write)
+Mount.NoChecksumName	不比较校验值	Do not compare checksums
+Mount.NoChecksum	不比较校验值（默认开启）	Do not compare checksums (on by default)
+Mount.NoModTimeName	不读写修改时间	Do not read or write modification times
+Mount.NoModTime	不读写修改时间（默认开启）	Do not read or write modification times (on by default)
+Mount.NoSeekName	禁止文件内定位	Forbid seeking within a file
+Mount.NoSeek	禁止文件内定位（部分后端处理不好）	Forbid seeking within a file (some backends handle it badly)
+Mount.OkName	确认挂载到所选位置	Mount to the selected location
+Mount.Ok	挂载	Mount
+Mount.Cancel	取消	Cancel
+Mount.CancelName	取消选择挂载位置	Cancel choosing a mount location
+Mount.Header	挂载 {0}	Mount {0}
+Mount.SubHeader	选择本地盘符、目录或网络共享，将 {0}:/{1} 挂载到 Feng Sync 可访问的位置。	Choose a local drive letter, folder or network share to mount {0}:/{1} somewhere Feng Sync can reach.
+Mount.DriveHint	选一个既未被 Windows 使用、也不被现有挂载占用的盘符。	Pick a drive letter Windows is not using and that no existing mount has taken.
+Mount.DirectoryHint	目录必须尚不存在（rclone 会创建它），父目录必须存在。Feng Sync 不会替你创建目录。	The folder must not exist yet (rclone creates it), and its parent must exist. Feng Sync will not create the folder for you.
+Mount.UncHint	形如 \\\\服务器\共享名。Windows 会为它分配一个盘符，挂载完成后实际挂载点是那个盘符，而不是你输入的路径。	Looks like \\server\share. Windows allocates a drive letter for it, so once the mount is up the real mount point is that drive letter, not the path you typed.
+Mount.PickParentTitle	选择挂载点的父目录	Choose the parent folder of the mount point
+Mount.StatusPickDrive	请选择一个盘符。	Choose a drive letter.
+Mount.StatusWillMountDrive	将挂载到盘符 {0}。	Will mount to drive {0}.
+Mount.StatusEnterDirectory	请输入目录绝对路径。	Enter the absolute path of the folder.
+Mount.StatusDirectoryValid	目录合法，挂载后由 rclone 创建。	The folder is usable; rclone will create it when it mounts.
+Mount.StatusEnterUnc	请输入网络共享路径，例如 \\\\server\share。	Enter a network share path, for example \\server\share.
+Mount.StatusUncValid	路径合法。挂载完成后实际挂载点是 Windows 分配的盘符，会在状态里报告。	The path is usable. Once the mount is up the real mount point is the drive letter Windows allocated, and the status line will say so.
+Mount.CacheModeOff	不缓存，每次读取都走网络	No cache; every read goes over the network
+Mount.CacheModeMinimal	只缓存读到的内容	Cache only what is read
+Mount.CacheModeWrites	缓存读取并缓冲写入（默认）	Cache reads and buffer writes (default)
+Mount.CacheModeFull	全部缓存，含正在写入的整个文件	Cache everything, including whole files still being written
+Mount.SummaryVolume	卷标 {0}	volume label {0}
+Mount.SummaryNetworkMode	作为网络驱动器	as a network drive
+Mount.SummaryCacheMode	缓存模式 {0}	cache mode {0}
+Mount.SummaryCacheMaxSize	缓存上限 {0}	cache limit {0}
+Mount.SummaryCacheMaxSizeNone	缓存上限 不限	cache limit none
+Mount.SummaryCacheMaxAge	缓存保留 {0} 秒	cache retention {0} s
+Mount.SummaryWriteBack	写回延迟 {0} 秒	write-back delay {0} s
+Mount.SummaryDirCacheTime	目录缓存 {0} 秒	directory cache {0} s
+Mount.SummaryPollInterval	轮询间隔 {0} 秒	poll interval {0} s
+Mount.SummaryReadOnly	只读	read-only
+Mount.SummaryCompareChecksum	比较校验值	compare checksums
+Mount.SummaryModTime	读写修改时间	read and write modification times
+Mount.SummaryNoSeek	禁止定位	no seeking
+Mount.SummarySeparator	；	; 
+Mount.Summary	将发送：{0}。	Will send: {0}.
+Mount.SummaryWarning	 注意：	 Note:
+Mount.ProblemCacheMaxSize	缓存上限：{0}	Cache limit: {0}
+Mount.LabelCacheMaxAge	缓存保留时间	Cache retention
+Mount.LabelWriteBack	写回延迟	Write-back delay
+Mount.LabelDirCacheTime	目录缓存时间	Directory cache time
+Mount.LabelPollInterval	轮询间隔	Poll interval
+Mount.ProblemField	{0}：{1}	{0}: {1}
+Mount.ErrorBadSize	无法识别“{0}”。请填写形如 10G、512M 的大小；留空表示沿用设置里的默认上限，0 表示不限。	Cannot read “{0}”. Enter a size such as 10G or 512M; empty keeps the default limit from settings, and 0 means no limit.
+Mount.ErrorBadSeconds	无法识别“{0}”。请填写正整数秒；留空或 0 表示使用默认值。	Cannot read “{0}”. Enter a whole number of seconds; empty or 0 uses the default.
+Sync.WindowTitle	确认同步操作	Confirm the sync
+Sync.CheckBeforeRun	执行前请核对受影响的文件、空间需求和安全提示。	Check the files it affects, the space it needs and the safety notices before you go on.
+Sync.SummaryCallout	本次同步操作摘要	Summary of this sync
+Sync.SummaryTitle	操作摘要	Summary
+Sync.SpaceCheck	目标空间检查	Destination space check
+Sync.IssuesCallout	同步前需要解决的问题	Problems to settle before syncing
+Sync.CannotStartSafely	无法安全开始同步	The sync cannot start safely
+Sync.NeedProfileName	需要输入同步配置名称以确认	The Profile name is needed as confirmation
+Sync.NeedExplicitConfirm	需要明确确认	Explicit confirmation needed
+Sync.ProfileNameLabel	输入同步配置名称以确认	Type the Profile name to confirm
+Sync.BackToSettings	返回设置	Back to settings
+Sync.BackToSettingsName	取消同步并返回设置	Cancel the sync and go back to settings
+Sync.ConfirmName	确认同步并执行计划	Confirm the sync and run the plan
+Sync.Confirm	确认同步	Sync
+Sync.ThresholdExceeded	删除阈值超限：需要明确确认	The delete threshold is exceeded: explicit confirmation needed
+Sync.HasOverwriteOrDelete	同步包含覆盖或删除操作	This sync overwrites or deletes files
+Sync.Copies	复制：{0} 项	Copies: {0}
+Sync.Overwrites	覆盖：{0} 项	Overwrites: {0}
+Sync.Deletes	删除：{0} 项	Deletes: {0}
+Sync.Transfer	传输：{0}	Transfers: {0}
+Sync.SpaceRequired	估算目标空间需求：{0}	Estimated space needed at the destination: {0}
+Sync.SpaceVerified	空间检查：已按本地目标可用空间验证。	Space check: verified against the free space at the local destination.
+Sync.TypeProfileName	要一次性放行删除阈值，请输入 Profile 名称“{0}”。	To release the delete threshold in one go, type the Profile name “{0}”.
+Sync.NameMismatch	输入的 Profile 名称不匹配，未执行同步。	The Profile name did not match, so nothing was synced.
+Sftp.WindowTitle	SFTP 服务器设置	SFTP server settings
+Sftp.BuiltInServer	内置 SFTP 服务器（rclone）	Built-in SFTP server (rclone)
+Sftp.EnableService	启用服务	Enable the service
+Sftp.EnableServiceName	启用内置 SFTP 服务	Enable the built-in SFTP service
+Sftp.AutoStart	随 Feng Sync 自动启动	Start with Feng Sync
+Sftp.AutoStartName	随 Feng Sync 自动启动 SFTP 服务	Start the SFTP service with Feng Sync
+Sftp.ListenAddressLabel	监听地址 / 端口	Listen address / port
+Sftp.ListenAddress	SFTP 监听地址	SFTP listen address
+Sftp.Port	SFTP 监听端口	SFTP listen port
+Sftp.SharedRootLabel	共享根目录	Shared root folder
+Sftp.SharedRoot	SFTP 共享根目录	SFTP shared root folder
+Sftp.UserNameLabel	用户名	User name
+Sftp.UserName	SFTP 用户名	SFTP user name
+Sftp.CacheSizeLabel	缓存上限（GiB）	Cache limit (GiB)
+Sftp.CacheSize	SFTP 缓存容量上限，单位 GiB	SFTP cache size limit, in GiB
+Sftp.SetPasswordName	设置或重置 SFTP 密码	Set or reset the SFTP password
+Sftp.SetPassword	设置或重置密码…	Set or reset password…
+Sftp.LegacyNote	此版本仅提供一个可读写共享根目录和一个密码账号；旧版多账号配置不会迁移。	This version offers one read-write shared root folder and one password account; the old multi-account configuration is not migrated.
+Sftp.CloseName	关闭 SFTP 服务器设置	Close the SFTP server settings
+Sftp.Close	关闭	Close
+Sftp.StopName	停止 SFTP 服务器	Stop the SFTP server
+Sftp.Stop	停止	Stop
+Sftp.DiagnoseName	诊断 SFTP 服务器	Diagnose the SFTP server
+Sftp.Diagnose	诊断	Diagnose
+Sftp.StartName	启动 SFTP 服务器	Start the SFTP server
+Sftp.Start	启动	Start
+Sftp.SaveName	保存 SFTP 服务器设置	Save the SFTP server settings
+Sftp.Save	保存	Save
+Sftp.PasswordSet	密码：已设置（受 Windows 账户保护）	Password: set (protected by your Windows account)
+Sftp.PasswordUnset	密码：未设置	Password: not set
+Sftp.HostFingerprint	主机指纹：{0}	Host fingerprint: {0}
+Sftp.LegacyRemoved	已清除不兼容的旧版 SFTP 配置，请重新设置服务。	An incompatible older SFTP configuration was cleared out; set the service up again.
+Sftp.Running	SFTP 服务运行中。	The SFTP service is running.
+Sftp.NotRunning	SFTP 服务当前未运行。	The SFTP service is not running at the moment.
+Sftp.OperationError	{0} {1}（诊断 ID：{2}）	{0} {1} (diagnostic ID: {2})
+Sftp.PortNotInteger	端口必须为整数。	The port must be a whole number.
+Sftp.CacheSizeNotInteger	缓存上限必须为整数 GiB。	The cache limit must be a whole number of GiB.
+Sftp.Saving	正在保存…	Saving…
+Sftp.Saved	SFTP 设置已保存。	The SFTP settings were saved.
+Sftp.Starting	正在启动…	Starting…
+Sftp.Listening	SFTP 服务器正在监听 {0}:{1}	The SFTP server is listening on {0}:{1}
+Sftp.Stopping	正在停止…	Stopping…
+Sftp.Stopped	SFTP 服务器已停止；端口已释放。	The SFTP server has stopped; the port is free.
+Sftp.PasswordDialogTitle	设置 SFTP 密码	Set the SFTP password
+Sftp.PasswordName	SFTP 密码	SFTP password
+Sftp.SavePasswordName	保存 SFTP 密码	Save the SFTP password
+Sftp.PasswordLabel	密码	Password
+Sftp.PasswordEmpty	密码不能为空。	The password cannot be empty.
+Organize.WindowTitle	分组与标签	Groups and tags
+Organize.WindowName	设置云盘端点的分组与标签	Set the group and tags of a cloud endpoint
+Organize.GroupLabel	分组	Group
+Organize.GroupName	端点所属分组，留空表示不分组	Group the endpoint belongs to; empty means no group
+Organize.TagsLabel	标签（用逗号分隔）	Tags (separated by commas)
+Organize.TagsName	端点标签，多个标签用逗号分隔	Endpoint tags, separated by commas
+Organize.Note	分组与标签只存在于本程序自己的记录里，不会写进 rclone 配置；搜索框可以按它们查找端点。	Groups and tags live only in this program's own records and never reach the rclone config; the search box can find endpoints by them.
+Organize.SaveName	保存分组与标签	Save the group and tags
+Organize.Save	保存	Save
+Organize.Cancel	取消	Cancel
+Organize.CancelName	取消设置分组与标签	Cancel setting the group and tags
+Organize.Header	“{0}”的分组与标签	Groups and tags for “{0}”
+Organize.SubHeader	分组决定它在列表里的位置，标签用来在搜索框里找到它。	The group decides where it sits in the list; the tags are what finds it in the search box.
+Organize.NoGroupsYet	还没有其他分组。填一个名称即可新建分组；留空表示移出分组。	There are no other groups yet. Type a name to create one; empty takes the endpoint out of its group.
+Organize.KnownGroups	已有分组：{0}。留空表示移出分组。	Existing groups: {0}. Empty takes the endpoint out of its group.
+Organize.GroupSeparator	、	, 
+About.WindowTitle	关于 Feng Sync	About Feng Sync
+About.Tagline	文件同步工作区	A workspace for file synchronization
+About.Description	本地、SFTP、Google Drive 与 S3 的文件比较和同步。	Compares and synchronizes files on local disks, over SFTP, on Google Drive and on S3.
+About.Repository	GitHub 仓库	GitHub repository
+About.RepositoryName	在浏览器中打开 Feng Sync 的 GitHub 仓库	Open the Feng Sync GitHub repository in your browser
+About.Licenses	第三方许可	Third-party licenses
+About.LicensesName	查看第三方许可	View the third-party licenses
+About.CheckUpdates	检查更新	Check for updates
+About.CheckUpdatesName	检查 Feng Sync 更新	Check for Feng Sync updates
+About.Close	关闭	Close
+About.CloseName	关闭关于 Feng Sync 窗口	Close the About Feng Sync window
+About.Version	版本 {0}	Version {0}
+About.LicensesNotice	Microsoft.Data.Sqlite / SQLitePCLRaw：MIT License\nRclone：MIT License	Microsoft.Data.Sqlite / SQLitePCLRaw: MIT License\nRclone: MIT License
+About.CannotOpen	无法打开链接：{0}	Cannot open the link: {0}
+Update.WindowTitle	发现更新	An update is available
+Update.WindowName	发现 Feng Sync 更新	An update for Feng Sync is available
+Update.Title	发现更新	An update is available
+Update.ReleaseNotesLink	在 GitHub 查看完整 Release 说明	Read the full release notes on GitHub
+Update.ReleaseNotesLinkName	在 GitHub 查看完整 Release 说明	Read the full release notes on GitHub
+Update.ReleaseNotesName	此版本的更新说明	Release notes for this version
+Update.ProgressName	更新下载进度	Update download progress
+Update.Download	下载并更新	Download and update
+Update.DownloadName	下载并安装更新	Download and install the update
+Update.Later	稍后提醒	Remind me later
+Update.LaterName	稍后提醒更新	Remind me about the update later
+Update.Skip	跳过此版本	Skip this version
+Update.SkipName	跳过此版本更新	Skip this version of the update
+Update.Cancel	取消	Cancel
+Update.CancelName	取消更新操作	Cancel the update
+Update.CurrentVersion	当前版本：{0}	Current version: {0}
+Update.LatestVersion	最新版本：{0}  {1}	Latest version: {0}  {1}
+Update.DownloadSize	下载大小：{0} MB	Download size: {0} MB
+Update.DownloadingPercent	正在下载：{0} MB{1}（{2}%）	Downloading: {0} MB{1} ({2}%)
+Update.Downloading	正在下载：{0} MB	Downloading: {0} MB
+Update.CancelDownload	取消下载	Cancel the download
+Prompt.Ok	确定	OK
+Prompt.Cancel	取消	Cancel
+Prompt.Continue	继续	Continue
+Conflict.Title	目标已有同名文件	The destination already has a file of this name
+Conflict.Exists	“{0}”已经在目标目录里。	“{0}” is already in the destination folder.
+Conflict.MoreRemaining	本次还有 {0} 个同名文件要决定。	{0} more files of the same name still need an answer.
+Conflict.LastOne	这是最后一个同名文件。	This is the last file of the same name.
+Conflict.Target	目标：{0}	Destination: {0}
+Conflict.ApplyToRest	把这次选择应用到其余 {0} 个同名文件	Apply this answer to the other {0} files of the same name
+Conflict.ApplyToRestLast	把这次选择应用到其余同名文件	Apply this answer to the remaining files of the same name
+Conflict.Cancel	取消	Cancel
+Conflict.Overwrite	覆盖	Overwrite
+Conflict.KeepBoth	保留两者（存为“{0}”）	Keep both (save as “{0}”)
+Conflict.Skip	跳过	Skip
+Details.Close	关闭	Close
+Preview.CaptionPicture	{0} · {1} · 已按 {2} 像素解码	{0} · {1} · decoded at {2} pixels
+Preview.CaptionText	{0} · {1} · 编码 {2}	{0} · {1} · encoding {2}
+Preview.Unavailable	不能预览：{0}	Cannot preview: {0}
+Preview.Close	关闭	Close
+
+# ---- In-app file preview (appended) ----
+Preview.Binary	“{0}”里有 0 字节，它不是文本文件，预览画出来的只会是乱码。请下载后用对应的程序打开。	"{0}" contains a 0 byte and is not a text file, so a preview would only draw gibberish. Download it and open it with the right program.
+Preview.CloudRefused	云端拒绝了这次读取	The cloud refused this read
+Preview.Empty	“{0}”没有字节可读。	"{0}" has no bytes to read.
+Preview.Failed	读不到“{0}”：{1}	Could not read "{0}": {1}
+Preview.Folder	“{0}”是文件夹。预览只看一个文件，文件夹要列出来才知道里面有什么。	"{0}" is a folder. A preview shows a single file; a folder has to be listed before you can see what is inside.
+Preview.Missing	云端已没有“{0}”，列表里的这一行是上次浏览时的快照。	The cloud no longer has "{0}"; this row in the list is a snapshot from the last time you browsed.
+Preview.NoContent	“{0}”没有可预览的内容。	"{0}" has nothing to preview.
+Preview.NoExtension	（没有后缀）	(no extension)
+Preview.NoRenderer	“{0}”不是本程序能渲染的格式（{1}）。内置渲染只有图片和文本，请下载后用对应的程序打开。	"{0}" is not a format this program can render ({1}). The built-in renderer only handles images and text; download it and open it with the right program.
+Preview.NotUtf8	“{0}”不是 UTF-8 或 UTF-16 文本。本程序不猜它是哪种代码页——猜错的中文看着像文件损坏。请下载后用编辑器打开。	"{0}" is not UTF-8 or UTF-16 text. This program does not guess which code page it is--a wrong guess makes Chinese look like a corrupted file. Download it and open it in an editor.
+Preview.PictureWithoutDecoder	“{0}”是 {1} 图片，本程序没有它的解码器。请下载后用图片查看器打开。	"{0}" is a {1} image and this program has no decoder for it. Download it and open it in an image viewer.
+Preview.TooLarge	“{0}”有 {1}，超过预览的上限 {2}。请下载后打开。	"{0}" is {1}, over the preview limit of {2}. Download it and open it.
+Preview.UndecodableBytes	“{0}”读到的字节不是本程序能解码的图片，多半是文件损坏或后缀写错了。	The bytes read from "{0}" are not an image this program can decode; the file is probably corrupted or has the wrong extension.
+Preview.Unrecognized	本程序不知道“{0}”{1}是什么格式，所以不预览。请下载后用对应的程序打开。	This program does not know what format "{0}"{1} is, so it does not preview it. Download it and open it with the right program.

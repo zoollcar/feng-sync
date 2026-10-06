@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.IO;
 using FengSync.Core;
 using FengSync.Core.Automation;
+using FengSync.Localization;
 
 namespace FengSync.Views;
 
@@ -21,7 +22,7 @@ public partial class ScheduleWizard : Window
         _scheduler = scheduler ?? new WindowsTaskSchedulerService();
         _cliPath = cliPath ?? Path.Combine(AppContext.BaseDirectory, "FengSync.Cli.exe");
         TaskNameBox.Text = "FengSync-" + profile.Id;
-        ProfileText.Text = $"为 Profile “{profile.Name}”创建 Windows 计划任务。";
+        ProfileText.Text = Tr.Format("Schedule.ProfileIntro", profile.Name);
     }
 
     private string TaskName => TaskNameBox.Text.Trim();
@@ -29,18 +30,18 @@ public partial class ScheduleWizard : Window
 
     private async void Create_Click(object sender, RoutedEventArgs e)
     {
-        if (!File.Exists(_cliPath)) { ResultText.Text = "找不到 FengSync.Cli.exe；请重新安装完整应用。"; return; }
-        await RunBusyAsync((Button)sender, "正在创建…", async () => { await _scheduler.CreateOrReplaceAsync(new ScheduledProfileTask(TaskName, _profile.Id, _cliPath, Schedule)); ResultText.Text = "计划任务已创建或更新。"; });
+        if (!File.Exists(_cliPath)) { ResultText.Text = Tr.F("Schedule.CliMissing"); return; }
+        await RunBusyAsync((Button)sender, Tr.F("Schedule.Creating"), async () => { await _scheduler.CreateOrReplaceAsync(new ScheduledProfileTask(TaskName, _profile.Id, _cliPath, Schedule)); ResultText.Text = Tr.F("Schedule.Created"); });
     }
 
     private async void Test_Click(object sender, RoutedEventArgs e)
     {
-        await RunBusyAsync((Button)sender, "正在请求…", async () => { await _scheduler.TestRunAsync(TaskName); ResultText.Text = "已请求测试运行；请在运行历史中查看结果。"; });
+        await RunBusyAsync((Button)sender, Tr.F("Schedule.Requesting"), async () => { await _scheduler.TestRunAsync(TaskName); ResultText.Text = Tr.F("Schedule.TestRequested"); });
     }
 
     private async void Delete_Click(object sender, RoutedEventArgs e)
     {
-        await RunBusyAsync((Button)sender, "正在删除…", async () => { await _scheduler.DeleteAsync(TaskName); ResultText.Text = "计划任务已删除。"; });
+        await RunBusyAsync((Button)sender, Tr.F("Schedule.Deleting"), async () => { await _scheduler.DeleteAsync(TaskName); ResultText.Text = Tr.F("Schedule.Deleted"); });
     }
     private async Task RunBusyAsync(Button button, string busyText, Func<Task> action)
     {

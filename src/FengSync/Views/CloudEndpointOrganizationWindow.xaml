@@ -1,14 +1,15 @@
 <Window x:Class="FengSync.Views.CloudEndpointOrganizationWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="分组与标签"
+        xmlns:l="clr-namespace:FengSync.Localization"
+        Title="{Binding [Organize.WindowTitle], Source={l:Lang}}"
         Width="480"
         Height="340"
         MinWidth="420"
         MinHeight="300"
         WindowStartupLocation="CenterOwner"
         AutomationProperties.AutomationId="CloudEndpointOrganizationWindow"
-        AutomationProperties.Name="设置云盘端点的分组与标签">
+        AutomationProperties.Name="{Binding [Organize.WindowName], Source={l:Lang}}">
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -24,10 +25,10 @@
         </StackPanel>
 
         <StackPanel Grid.Row="1" Margin="0,16,0,0">
-            <TextBlock Text="分组" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,6" />
+            <TextBlock Text="{Binding [Organize.GroupLabel], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,6" />
             <TextBox x:Name="GroupTextBox"
                      AutomationProperties.AutomationId="EndpointGroupBox"
-                     AutomationProperties.Name="端点所属分组，留空表示不分组" />
+                     AutomationProperties.Name="{Binding [Organize.GroupName], Source={l:Lang}}" />
             <TextBlock x:Name="GroupHint"
                        AutomationProperties.AutomationId="EndpointGroupHint"
                        Style="{StaticResource CaptionTextStyle}"
@@ -36,29 +37,29 @@
         </StackPanel>
 
         <StackPanel Grid.Row="2" Margin="0,14,0,0">
-            <TextBlock Text="标签（用逗号分隔）" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,6" />
+            <TextBlock Text="{Binding [Organize.TagsLabel], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,6" />
             <TextBox x:Name="TagsBox"
                      AutomationProperties.AutomationId="EndpointTagsBox"
-                     AutomationProperties.Name="端点标签，多个标签用逗号分隔" />
+                     AutomationProperties.Name="{Binding [Organize.TagsName], Source={l:Lang}}" />
         </StackPanel>
 
         <TextBlock Grid.Row="3"
                    Style="{StaticResource CaptionTextStyle}"
                    TextWrapping="Wrap"
                    Margin="0,14,0,0"
-                   Text="分组与标签只存在于本程序自己的记录里，不会写进 rclone 配置；搜索框可以按它们查找端点。" />
+                   Text="{Binding [Organize.Note], Source={l:Lang}}" />
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button x:Name="OkButton"
                     AutomationProperties.AutomationId="EndpointOrganizationOk"
-                    AutomationProperties.Name="保存分组与标签"
-                    Content="保存"
+                    AutomationProperties.Name="{Binding [Organize.SaveName], Source={l:Lang}}"
+                    Content="{Binding [Organize.Save], Source={l:Lang}}"
                     IsDefault="True"
                     Click="Ok_Click"
                     Style="{StaticResource PrimaryButtonStyle}" />
-            <Button Content="取消"
+            <Button Content="{Binding [Organize.Cancel], Source={l:Lang}}"
                     AutomationProperties.AutomationId="EndpointOrganizationCancel"
-                    AutomationProperties.Name="取消设置分组与标签"
+                    AutomationProperties.Name="{Binding [Organize.CancelName], Source={l:Lang}}"
                     IsCancel="True"
                     Margin="8,0,0,0"
                     Style="{StaticResource TertiaryButtonStyle}" />

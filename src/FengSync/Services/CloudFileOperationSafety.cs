@@ -1,6 +1,7 @@
 using System.IO;
 using FengSync.Core;
 using FengSync.Core.Configuration;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -17,12 +18,12 @@ public static class CloudFileNames
     public static string? Validate(string? name)
     {
         var value = name ?? "";
-        if (value.Length == 0) return "请输入名称。";
-        if (value != value.Trim()) return "名称首尾不能有空格。";
-        if (value is "." or "..") return "名称不能是“.”或“..”。";
-        if (value.Contains('/') || value.Contains('\\')) return "名称不能包含“/”或“\\”。";
-        if (value.Any(char.IsControl)) return "名称不能包含控制字符。";
-        if (value.Length > MaxLength) return $"名称不能超过 {MaxLength} 个字符。";
+        if (value.Length == 0) return Tr.F("Safety.NameRequired");
+        if (value != value.Trim()) return Tr.F("Safety.NameWhitespace");
+        if (value is "." or "..") return Tr.F("Safety.NameDot");
+        if (value.Contains('/') || value.Contains('\\')) return Tr.F("Safety.NameSeparator");
+        if (value.Any(char.IsControl)) return Tr.F("Safety.NameControl");
+        if (value.Length > MaxLength) return Tr.Format("Safety.NameTooLong", MaxLength);
         return null;
     }
 
@@ -104,9 +105,9 @@ public static class CloudDeleteSafety
     {
         var folders = entries.Count(entry => entry.IsDirectory);
         var files = entries.Count - folders;
-        var lines = new List<string> { $"确定删除以下 {entries.Count} 项？", "" };
+        var lines = new List<string> { Tr.Format("Safety.ConfirmDelete", entries.Count), "" };
         lines.AddRange(entries.Take(PreviewLimit).Select(entry => "  " + entry.Path));
-        if (entries.Count > PreviewLimit) lines.Add($"  （以及另外 {entries.Count - PreviewLimit} 项）");
+        if (entries.Count > PreviewLimit) lines.Add(Tr.Format("Safety.AndMore", entries.Count - PreviewLimit));
         lines.Add("");
 
         // A folder delete purges the folder and everything under it, so the count above is a count of
@@ -114,14 +115,16 @@ public static class CloudDeleteSafety
         // between an informed confirmation and a misleading one.
         if (folders > 0)
         {
-            var composition = files > 0 ? $"文件夹 {folders} 个、文件 {files} 个" : $"文件夹 {folders} 个";
-            lines.Add($"其中{composition}；文件夹会连同其中的全部内容一起删除。");
+            var composition = files > 0
+                ? Tr.Format("Safety.CompositionFilesFolders", folders, files)
+                : Tr.Format("Safety.CompositionFolders", folders);
+            lines.Add(Tr.Format("Safety.CompositionLine", composition));
         }
         if (insideRecycleBin)
-            lines.Add($"这些项目已经在 {CloudRecycleBin.FolderName} 里，删掉以后本应用的「还原」也帮不上了。");
+            lines.Add(Tr.Format("Safety.InRecycleBin", CloudRecycleBin.FolderName));
         lines.Add(supportsTrash
-            ? "该端点会先移入云端回收站，可在服务商的网页端还原。"
-            : "该端点没有回收站，删除后无法恢复。");
+            ? Tr.F("Safety.TrashSupported")
+            : Tr.F("Safety.NoTrash"));
 
         return new(string.Join(Environment.NewLine, lines), entries.Count > BulkThreshold, !supportsTrash);
     }

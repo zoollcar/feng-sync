@@ -1,11 +1,14 @@
 <Window x:Class="FengSync.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="设置中心" Width="900" Height="640" MinWidth="720" MinHeight="520"
+        xmlns:l="clr-namespace:FengSync.Localization"
+        Title="{Binding [Settings.WindowTitle], Source={l:Lang}}" Width="900" Height="640" MinWidth="720" MinHeight="520"
         WindowStartupLocation="CenterOwner" Background="{DynamicResource AppCanvasBrush}"
         FontFamily="{StaticResource DefaultFontFamily}"
         AutomationProperties.AutomationId="SettingsWindow"
-        AutomationProperties.Name="设置中心">
+        AutomationProperties.Name="{Binding [Settings.WindowTitle], Source={l:Lang}}">
+ <!-- Every user-visible string on this page is a key, so the whole window follows the language choice
+      without being rebuilt. The Tag on each nav item is the page's stable id; Content is only the label. -->
  <Grid>
   <Grid.ColumnDefinitions>
    <ColumnDefinition Width="220"/>
@@ -16,17 +19,17 @@
   <!-- 左侧导航 -->
   <Border Grid.Column="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,1,0">
    <StackPanel Margin="8,16">
-    <TextBlock Text="设置" Style="{StaticResource SectionTitleTextStyle}" Margin="12,0,12,16"/>
-     <ListBox x:Name="Navigation" AutomationProperties.AutomationId="SettingsNavigation" AutomationProperties.Name="设置分类" Background="Transparent" BorderThickness="0" SelectionChanged="Navigation_SelectionChanged" SelectedIndex="0">
+    <TextBlock Text="{Binding [Settings.NavCaption], Source={l:Lang}}" Style="{StaticResource SectionTitleTextStyle}" Margin="12,0,12,16"/>
+     <ListBox x:Name="Navigation" AutomationProperties.AutomationId="SettingsNavigation" AutomationProperties.Name="{Binding [Settings.NavCaption], Source={l:Lang}}" Background="Transparent" BorderThickness="0" SelectionChanged="Navigation_SelectionChanged" SelectedIndex="0">
      <ListBox.ItemContainerStyle>
       <Style TargetType="ListBoxItem" BasedOn="{StaticResource ProfileListItemStyle}">
        <Setter Property="Height" Value="40"/>
       </Style>
      </ListBox.ItemContainerStyle>
-     <ListBoxItem AutomationProperties.AutomationId="SettingsGeneralNav" AutomationProperties.Name="常规设置" Content="常规"/>
-     <ListBoxItem AutomationProperties.AutomationId="SettingsCloudNav" AutomationProperties.Name="云盘设置" Content="云盘"/>
-     <ListBoxItem AutomationProperties.AutomationId="RunHistoryNav" AutomationProperties.Name="运行历史" Content="运行历史"/>
-     <ListBoxItem AutomationProperties.AutomationId="LogsNav" AutomationProperties.Name="查看日志" Content="查看日志"/>
+     <ListBoxItem Tag="general" AutomationProperties.AutomationId="SettingsGeneralNav" AutomationProperties.Name="{Binding [Settings.PageGeneral], Source={l:Lang}}" Content="{Binding [Settings.PageGeneral], Source={l:Lang}}"/>
+     <ListBoxItem Tag="cloud" AutomationProperties.AutomationId="SettingsCloudNav" AutomationProperties.Name="{Binding [Settings.PageCloud], Source={l:Lang}}" Content="{Binding [Settings.PageCloud], Source={l:Lang}}"/>
+     <ListBoxItem Tag="history" AutomationProperties.AutomationId="RunHistoryNav" AutomationProperties.Name="{Binding [Settings.PageHistory], Source={l:Lang}}" Content="{Binding [Settings.PageHistory], Source={l:Lang}}"/>
+     <ListBoxItem Tag="logs" AutomationProperties.AutomationId="LogsNav" AutomationProperties.Name="{Binding [Settings.PageLogs], Source={l:Lang}}" Content="{Binding [Settings.PageLogs], Source={l:Lang}}"/>
     </ListBox>
    </StackPanel>
   </Border>
@@ -52,10 +55,10 @@
      </Grid.ColumnDefinitions>
      <TextBlock x:Name="DirtyLabel" AutomationProperties.AutomationId="SettingsDirtyLabel" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center"/>
      <StackPanel Grid.Column="1" Orientation="Horizontal">
-      <Button Content="恢复本页默认值" AutomationProperties.AutomationId="SettingsResetPage" AutomationProperties.Name="恢复当前设置页的默认值" Click="ResetPage_Click" Style="{StaticResource TertiaryButtonStyle}" Margin="0,0,16,0"/>
-      <Button Content="取消" AutomationProperties.AutomationId="SettingsCancel" AutomationProperties.Name="取消设置更改" IsCancel="True" Style="{StaticResource TertiaryButtonStyle}" Margin="0,0,8,0"/>
-      <Button x:Name="ApplyButton" Content="应用" AutomationProperties.AutomationId="SettingsApply" AutomationProperties.Name="应用设置更改" Click="Apply_Click" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"/>
-      <Button x:Name="OkButton" Content="确定" AutomationProperties.AutomationId="SettingsOk" AutomationProperties.Name="保存设置并关闭" IsDefault="True" Click="Ok_Click" Style="{StaticResource PrimaryButtonStyle}"/>
+      <Button Content="{Binding [Settings.ResetPage], Source={l:Lang}}" AutomationProperties.AutomationId="SettingsResetPage" AutomationProperties.Name="{Binding [Settings.ResetPage], Source={l:Lang}}" Click="ResetPage_Click" Style="{StaticResource TertiaryButtonStyle}" Margin="0,0,16,0"/>
+      <Button x:Name="CancelButtonField" Content="{Binding [Settings.Cancel], Source={l:Lang}}" AutomationProperties.AutomationId="SettingsCancel" AutomationProperties.Name="{Binding [Settings.Cancel], Source={l:Lang}}" IsCancel="True" Style="{StaticResource TertiaryButtonStyle}" Margin="0,0,8,0"/>
+      <Button x:Name="ApplyButton" Content="{Binding [Settings.Apply], Source={l:Lang}}" AutomationProperties.AutomationId="SettingsApply" AutomationProperties.Name="{Binding [Settings.Apply], Source={l:Lang}}" Click="Apply_Click" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"/>
+      <Button x:Name="OkButton" Content="{Binding [Settings.Ok], Source={l:Lang}}" AutomationProperties.AutomationId="SettingsOk" AutomationProperties.Name="{Binding [Settings.Ok], Source={l:Lang}}" IsDefault="True" Click="Ok_Click" Style="{StaticResource PrimaryButtonStyle}"/>
      </StackPanel>
     </Grid>
    </Border>

@@ -1,4 +1,5 @@
 using FengSync.Core.Rclone.Diagnostics;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -38,7 +39,7 @@ public static class CloudShareLinks
     /// </summary>
     public static bool OffersLink(CloudFileEntry entry) => !entry.IsDirectory;
 
-    public const string ConfirmationTitle = "生成分享链接";
+    public static string ConfirmationTitle => Tr.F("Share.ConfirmationTitle");
 
     /// <summary>The question asked before anything is created, naming exactly what is being handed over.</summary>
     public static string ConfirmationFor(CloudFileEntry entry) => ConfirmationFor(entry.Name);
@@ -47,28 +48,25 @@ public static class CloudShareLinks
     /// The same question for a caller that has a name but no browser row — the transfer window's queue holds
     /// paths, not <see cref="CloudFileEntry"/> values, and the wording of a grant must not exist twice.
     /// </summary>
-    public static string ConfirmationFor(string name) =>
-        $"“{name}”会获得一个公开链接：任何拿到这个链接的人都能读取该文件，无需登录你的账号。\n\n"
-        + "链接的有效期和它能否撤回都由云端决定（内置 rclone 实测：S3 给的是约一周后自动失效的签名地址），"
-        + "本应用只负责把结果复制到剪贴板。\n\n确定生成？";
+    public static string ConfirmationFor(string name) => Tr.Format("Share.Confirmation", name);
 
     public static string Explain(CloudShareLinkResult result) => result.Outcome switch
     {
-        CloudShareLinkOutcome.Copied => "分享链接已复制到剪贴板：拿到链接的人无需登录即可读取该文件，有效期由云端决定。",
-        CloudShareLinkOutcome.CopiedNotStored => "云端已经生成链接，但没能放进剪贴板，请从下方内容里自己复制。"
+        CloudShareLinkOutcome.Copied => Tr.F("Share.Copied"),
+        CloudShareLinkOutcome.CopiedNotStored => Tr.F("Share.CopiedNotStored")
             + (result.Detail is { Length: > 0 } why ? " " + why : ""),
-        CloudShareLinkOutcome.Declined => "已取消，云端没有生成链接。",
-        CloudShareLinkOutcome.Unsupported => "此端点不支持分享链接，云端没有生成任何东西。",
-        CloudShareLinkOutcome.Missing => "云端已没有这个文件，请刷新目录。",
-        CloudShareLinkOutcome.NotAFile => "文件夹没有可分享的链接，只能分享单个文件。",
-        CloudShareLinkOutcome.Failed => "没有取到分享链接。" + (result.Detail is { Length: > 0 } why ? " " + why : ""),
-        _ => "没有取到分享链接。",
+        CloudShareLinkOutcome.Declined => Tr.F("Share.Declined"),
+        CloudShareLinkOutcome.Unsupported => Tr.F("Share.Unsupported"),
+        CloudShareLinkOutcome.Missing => Tr.F("Share.Missing"),
+        CloudShareLinkOutcome.NotAFile => Tr.F("Share.NotAFile"),
+        CloudShareLinkOutcome.Failed => Tr.F("Share.Failed") + (result.Detail is { Length: > 0 } why ? " " + why : ""),
+        _ => Tr.F("Share.Failed"),
     };
 
     /// <summary>An answer that carries no link is a failure, not an empty success the status line would call a copy.</summary>
     public static CloudShareLinkResult FromAnswer(string? url) =>
         string.IsNullOrWhiteSpace(url)
-            ? new CloudShareLinkResult(CloudShareLinkOutcome.Failed, Detail: "云端没有返回链接内容。")
+            ? new CloudShareLinkResult(CloudShareLinkOutcome.Failed, Detail: Tr.F("Share.NoContent"))
             : new CloudShareLinkResult(CloudShareLinkOutcome.Copied, url);
 
     /// <summary>The three ways a share request fails, told apart because only one of them is worth retrying.</summary>

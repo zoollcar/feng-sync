@@ -3,6 +3,7 @@ using System.Windows;
 using FengSync.Core.Configuration;
 using FengSync.Core.Mount;
 using FengSync.Core.Rclone.Lifecycle;
+using FengSync.Localization;
 using FengSync.Services;
 using FengSync.Views;
 
@@ -42,6 +43,9 @@ public partial class DriveHubApp : Application, IAppServiceHost
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Same two steps as the main shell, and for the same reason: before the window exists.
+        AppLanguageStartup.RegisterWindowLanguage();
+        AppLanguageStartup.ApplySavedLanguage();
         base.OnStartup(e);
         var window = new RemoteEndpointManagerWindow { Title = "DriveHub — 云盘管理" };
         MainWindow = window;

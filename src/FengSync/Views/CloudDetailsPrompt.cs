@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FengSync.Localization;
 using FengSync.Services;
 
 namespace FengSync.Views;
@@ -58,7 +59,7 @@ internal static class CloudDetailsPrompt
             Visibility = Visibility.Collapsed
         };
         AutomationProperties.SetAutomationId(actionButton, "CloudDetailsAction");
-        var close = new Button { Content = "关闭", IsDefault = true, IsCancel = true, Style = TextPrompt.Resource<Style>("TertiaryButtonStyle") };
+        var close = new Button { Content = Tr.F("Details.Close"), IsDefault = true, IsCancel = true, Style = TextPrompt.Resource<Style>("TertiaryButtonStyle") };
         AutomationProperties.SetAutomationId(close, "CloudDetailsClose");
         var buttons = new StackPanel
         {

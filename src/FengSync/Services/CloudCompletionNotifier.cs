@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -66,12 +67,12 @@ public static class CloudTransferSummary
     public static string Describe(CloudTransferBatch batch)
     {
         if (batch.Total <= 0) return "";
-        if (batch.Completed == batch.Total) return $"云盘传输完成：{batch.Total} 项。";
+        if (batch.Completed == batch.Total) return Tr.Format("Notify.BatchAllDone", batch.Total);
         if (batch.Completed == 0 && batch.Failed == 0) return "";
         var parts = new List<string>(3);
-        if (batch.Completed > 0) parts.Add($"{batch.Completed} 项成功");
-        if (batch.Failed > 0) parts.Add($"{batch.Failed} 项失败");
-        if (batch.Stopped > 0) parts.Add($"{batch.Stopped} 项已停止");
-        return $"云盘传输结束：{string.Join("，", parts)}。";
+        if (batch.Completed > 0) parts.Add(Tr.Format("Notify.Succeeded", batch.Completed));
+        if (batch.Failed > 0) parts.Add(Tr.Format("Notify.Failed", batch.Failed));
+        if (batch.Stopped > 0) parts.Add(Tr.Format("Notify.Stopped", batch.Stopped));
+        return Tr.Format("Notify.BatchSummary", string.Join(Tr.F("Notify.ListSeparator"), parts));
     }
 }

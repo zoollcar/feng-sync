@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:FengSync.Views"
         xmlns:fluent="clr-namespace:FluentIcons.Wpf;assembly=FluentIcons.Wpf"
+        xmlns:l="clr-namespace:FengSync.Localization"
         Title="Feng Sync" Height="768" Width="1320"
         MinHeight="680" MinWidth="1120"
         Background="{DynamicResource AppCanvasBrush}"
@@ -49,17 +50,17 @@
     <!-- 新建同步主操作 -->
     <Button x:Name="NewProfileButton" Grid.Row="1"
             AutomationProperties.AutomationId="NewProfileButton"
-            AutomationProperties.Name="新建同步"
+            AutomationProperties.Name="{Binding [Main.NewSync], Source={l:Lang}}"
             Click="NewProfile_Click"
             Style="{StaticResource PrimaryButtonStyle}"
             Margin="20,0,20,16">
      <DockPanel>
        <fluent:FluentIcon DockPanel.Dock="Left" Icon="Add" Width="18" Height="18" FontSize="18" Margin="0,0,8,0" Style="{StaticResource LibraryIconStyle}"/>
-      <TextBlock Text="新建同步" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+      <TextBlock Text="{Binding [Main.NewSync], Source={l:Lang}}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Left"/>
      </DockPanel>
     </Button>
 
-    <TextBlock Grid.Row="2" Text="同步配置" Style="{StaticResource CaptionTextStyle}" Margin="20,4,20,8"/>
+    <TextBlock Grid.Row="2" Text="{Binding [Main.SyncProfiles], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" Margin="20,4,20,8"/>
 
     <!-- Profile 列表 -->
     <ListBox x:Name="ProfileList" AutomationProperties.AutomationId="ProfileList"
@@ -84,13 +85,13 @@
      </ListBox.ItemTemplate>
      <ListBox.ContextMenu>
       <ContextMenu x:Name="ProfileContextMenu" AutomationProperties.AutomationId="ProfileContextMenu">
-       <MenuItem Header="编辑配置…" Click="EditProfile_Click" AutomationProperties.AutomationId="ProfileContextEdit"/>
-       <MenuItem Header="复制" Click="DuplicateProfile_Click" AutomationProperties.AutomationId="ProfileContextDuplicate"/>
-       <MenuItem Header="导入…" Click="OpenProfileFile_Click" AutomationProperties.AutomationId="ProfileContextImport"/>
-       <MenuItem Header="导出…" Click="ExportProfile_Click" AutomationProperties.AutomationId="ProfileContextExport"/>
-       <MenuItem Header="保存为批处理作业…" Click="SaveBatchJob_Click" AutomationProperties.AutomationId="ProfileContextBatch"/>
+       <MenuItem Header="{Binding [Main.EditProfile], Source={l:Lang}}" Click="EditProfile_Click" AutomationProperties.AutomationId="ProfileContextEdit"/>
+       <MenuItem Header="{Binding [Main.Duplicate], Source={l:Lang}}" Click="DuplicateProfile_Click" AutomationProperties.AutomationId="ProfileContextDuplicate"/>
+       <MenuItem Header="{Binding [Main.Import], Source={l:Lang}}" Click="OpenProfileFile_Click" AutomationProperties.AutomationId="ProfileContextImport"/>
+       <MenuItem Header="{Binding [Main.Export], Source={l:Lang}}" Click="ExportProfile_Click" AutomationProperties.AutomationId="ProfileContextExport"/>
+       <MenuItem Header="{Binding [Main.SaveAsBatchJob], Source={l:Lang}}" Click="SaveBatchJob_Click" AutomationProperties.AutomationId="ProfileContextBatch"/>
        <Separator/>
-       <MenuItem Header="删除" Click="DeleteProfile_Click" AutomationProperties.AutomationId="ProfileContextDelete" Foreground="{DynamicResource DangerBrush}"/>
+       <MenuItem Header="{Binding [Main.Delete], Source={l:Lang}}" Click="DeleteProfile_Click" AutomationProperties.AutomationId="ProfileContextDelete" Foreground="{DynamicResource DangerBrush}"/>
       </ContextMenu>
      </ListBox.ContextMenu>
     </ListBox>
@@ -102,7 +103,7 @@
              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
       <DockPanel>
         <fluent:FluentIcon DockPanel.Dock="Left" Icon="Cloud" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Style="{StaticResource LibraryIconStyle}"/>
-       <TextBlock Text="云盘管理" VerticalAlignment="Center"/>
+       <TextBlock Text="{Binding [Main.CloudManagement], Source={l:Lang}}" VerticalAlignment="Center"/>
       </DockPanel>
      </Button>
      <Button x:Name="SchedulesButton" AutomationProperties.AutomationId="SchedulesButton"
@@ -110,7 +111,7 @@
              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,4,0,0">
       <DockPanel>
         <fluent:FluentIcon DockPanel.Dock="Left" Icon="Calendar" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Style="{StaticResource LibraryIconStyle}"/>
-       <TextBlock Text="计划任务" VerticalAlignment="Center"/>
+       <TextBlock Text="{Binding [Main.ScheduleTasks], Source={l:Lang}}" VerticalAlignment="Center"/>
       </DockPanel>
      </Button>
      <Button x:Name="BatchJobsButton" AutomationProperties.AutomationId="BatchJobsButton"
@@ -118,7 +119,7 @@
              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,4,0,0">
       <DockPanel>
         <fluent:FluentIcon DockPanel.Dock="Left" Icon="Play" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Style="{StaticResource LibraryIconStyle}"/>
-       <TextBlock Text="批处理" VerticalAlignment="Center"/>
+       <TextBlock Text="{Binding [Main.Batch], Source={l:Lang}}" VerticalAlignment="Center"/>
       </DockPanel>
      </Button>
      <Separator Margin="0,12,0,8"/>
@@ -127,7 +128,7 @@
              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
       <DockPanel>
         <fluent:FluentIcon DockPanel.Dock="Left" Icon="Settings" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Style="{StaticResource LibraryIconStyle}"/>
-       <TextBlock Text="设置" VerticalAlignment="Center"/>
+       <TextBlock Text="{Binding [Main.Settings], Source={l:Lang}}" VerticalAlignment="Center"/>
       </DockPanel>
      </Button>
      <Button x:Name="HelpButton" AutomationProperties.AutomationId="HelpButton"
@@ -135,7 +136,7 @@
              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,4,0,0">
       <DockPanel>
         <fluent:FluentIcon DockPanel.Dock="Left" Icon="Info" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Style="{StaticResource LibraryIconStyle}"/>
-       <TextBlock Text="关于" VerticalAlignment="Center"/>
+       <TextBlock Text="{Binding [Main.About], Source={l:Lang}}" VerticalAlignment="Center"/>
       </DockPanel>
      </Button>
     </StackPanel>
@@ -164,17 +165,17 @@
     <DockPanel Margin="24,0,16,0" LastChildFill="True">
      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
       <Button x:Name="EditCurrentProfileButton" AutomationProperties.AutomationId="EditCurrentProfileButton"
-              Click="EditProfile_Click" Style="{StaticResource TertiaryButtonStyle}" ToolTip="编辑配置">
+              Click="EditProfile_Click" Style="{StaticResource TertiaryButtonStyle}" ToolTip="{Binding [Main.EditProfileTooltip], Source={l:Lang}}">
        <DockPanel>
          <fluent:FluentIcon DockPanel.Dock="Left" Icon="Edit" Width="18" Height="18" FontSize="18" Margin="0,0,6,0" Style="{StaticResource LibraryIconStyle}"/>
-        <TextBlock Text="编辑配置" VerticalAlignment="Center"/>
+        <TextBlock Text="{Binding [Main.EditProfileTooltip], Source={l:Lang}}" VerticalAlignment="Center"/>
        </DockPanel>
       </Button>
      </StackPanel>
      <StackPanel VerticalAlignment="Center">
       <TextBlock x:Name="CurrentProfileTitle" AutomationProperties.AutomationId="CurrentProfileTitle"
-                 Text="未选择同步配置" Style="{StaticResource DisplayTitleTextStyle}" TextTrimming="CharacterEllipsis"/>
-      <TextBlock x:Name="LastRunStatus" AutomationProperties.AutomationId="LastRunStatus" Style="{StaticResource CaptionTextStyle}" Text="选择左右端点后即可比较"/>
+                 Text="{Binding [Main.NoProfileSelected], Source={l:Lang}}" Style="{StaticResource DisplayTitleTextStyle}" TextTrimming="CharacterEllipsis"/>
+      <TextBlock x:Name="LastRunStatus" AutomationProperties.AutomationId="LastRunStatus" Style="{StaticResource CaptionTextStyle}" Text="{Binding [Main.PickEndpointsToCompare], Source={l:Lang}}"/>
      </StackPanel>
     </DockPanel>
    </Border>
@@ -204,12 +205,12 @@
          <fluent:FluentIcon x:Name="LeftEndpointIcon" Icon="Folder" Width="20" Height="20" FontSize="20" Style="{StaticResource LibraryIconStyle}"/>
         </Border>
         <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="LeftEndpointTitle" AutomationProperties.AutomationId="LeftEndpointTitle" Text="未选择端点" Style="{StaticResource CaptionTextStyle}" LineHeight="16"/>
-        <TextBox x:Name="LeftPath" AutomationProperties.AutomationId="LeftPath" AutomationProperties.Name="左侧端点路径" Background="Transparent" BorderThickness="0" Padding="0" MinHeight="0" Height="22" VerticalContentAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="选择一个端点" TextChanged="EndpointPath_TextChanged" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        <TextBlock x:Name="LeftEndpointTitle" AutomationProperties.AutomationId="LeftEndpointTitle" Text="{Binding [Main.NoEndpoint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" LineHeight="16"/>
+        <TextBox x:Name="LeftPath" AutomationProperties.AutomationId="LeftPath" AutomationProperties.Name="{Binding [Main.LeftEndpointPath], Source={l:Lang}}" Background="Transparent" BorderThickness="0" Padding="0" MinHeight="0" Height="22" VerticalContentAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="{Binding [Main.ChooseEndpoint], Source={l:Lang}}" TextChanged="EndpointPath_TextChanged" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
        </StackPanel>
        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-        <Button AutomationProperties.AutomationId="AddLeftLocalEndpoint" AutomationProperties.Name="选择左侧本地端点" Content="本地" Click="BrowseLeft_Click" Style="{StaticResource TertiaryButtonStyle}"/>
-        <Button AutomationProperties.AutomationId="AddLeftCloudEndpoint" AutomationProperties.Name="选择左侧云端端点" Content="云端" Tag="Left" Click="AddCloudEndpoint_Click" Style="{StaticResource TertiaryButtonStyle}"/>
+        <Button AutomationProperties.AutomationId="AddLeftLocalEndpoint" AutomationProperties.Name="{Binding [Main.PickLeftLocal], Source={l:Lang}}" Content="{Binding [Main.Local], Source={l:Lang}}" Click="BrowseLeft_Click" Style="{StaticResource TertiaryButtonStyle}"/>
+        <Button AutomationProperties.AutomationId="AddLeftCloudEndpoint" AutomationProperties.Name="{Binding [Main.PickLeftCloud], Source={l:Lang}}" Content="{Binding [Main.Cloud], Source={l:Lang}}" Tag="Left" Click="AddCloudEndpoint_Click" Style="{StaticResource TertiaryButtonStyle}"/>
        </StackPanel>
       </Grid>
      </Border>
@@ -217,9 +218,9 @@
      <!-- 交换按钮 -->
      <Button x:Name="SwapEndpointsButton" Grid.Row="0" Grid.Column="1"
              AutomationProperties.AutomationId="SwapEndpointsButton"
-             AutomationProperties.Name="交换左右端点"
+             AutomationProperties.Name="{Binding [Main.SwapEndpoints], Source={l:Lang}}"
              Click="Swap_Click" Style="{StaticResource EndpointSwapButtonStyle}"
-             Margin="0,0,12,0" ToolTip="交换左右端点">
+             Margin="0,0,12,0" ToolTip="{Binding [Main.SwapEndpoints], Source={l:Lang}}">
        <fluent:FluentIcon Icon="ArrowSwap" Width="18" Height="18" FontSize="18" Style="{StaticResource LibraryIconStyle}"/>
      </Button>
 
@@ -235,12 +236,12 @@
          <fluent:FluentIcon x:Name="RightEndpointIcon" Icon="Cloud" Width="20" Height="20" FontSize="20" Style="{StaticResource LibraryIconStyle}"/>
         </Border>
         <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="RightEndpointTitle" AutomationProperties.AutomationId="RightEndpointTitle" Text="未选择端点" Style="{StaticResource CaptionTextStyle}" LineHeight="16"/>
-        <TextBox x:Name="RightPath" AutomationProperties.AutomationId="RightPath" AutomationProperties.Name="右侧端点路径" Background="Transparent" BorderThickness="0" Padding="0" MinHeight="0" Height="22" VerticalContentAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="选择一个端点" TextChanged="EndpointPath_TextChanged" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        <TextBlock x:Name="RightEndpointTitle" AutomationProperties.AutomationId="RightEndpointTitle" Text="{Binding [Main.NoEndpoint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" LineHeight="16"/>
+        <TextBox x:Name="RightPath" AutomationProperties.AutomationId="RightPath" AutomationProperties.Name="{Binding [Main.RightEndpointPath], Source={l:Lang}}" Background="Transparent" BorderThickness="0" Padding="0" MinHeight="0" Height="22" VerticalContentAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="14" FontWeight="SemiBold" Text="{Binding [Main.ChooseEndpoint], Source={l:Lang}}" TextChanged="EndpointPath_TextChanged" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
        </StackPanel>
        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-        <Button AutomationProperties.AutomationId="AddRightLocalEndpoint" AutomationProperties.Name="选择右侧本地端点" Content="本地" Click="BrowseRight_Click" Style="{StaticResource TertiaryButtonStyle}"/>
-        <Button AutomationProperties.AutomationId="AddRightCloudEndpoint" AutomationProperties.Name="选择右侧云端端点" Content="云端" Tag="Right" Click="AddCloudEndpoint_Click" Style="{StaticResource TertiaryButtonStyle}"/>
+        <Button AutomationProperties.AutomationId="AddRightLocalEndpoint" AutomationProperties.Name="{Binding [Main.PickRightLocal], Source={l:Lang}}" Content="{Binding [Main.Local], Source={l:Lang}}" Click="BrowseRight_Click" Style="{StaticResource TertiaryButtonStyle}"/>
+        <Button AutomationProperties.AutomationId="AddRightCloudEndpoint" AutomationProperties.Name="{Binding [Main.PickRightCloud], Source={l:Lang}}" Content="{Binding [Main.Cloud], Source={l:Lang}}" Tag="Right" Click="AddCloudEndpoint_Click" Style="{StaticResource TertiaryButtonStyle}"/>
        </StackPanel>
       </Grid>
      </Border>
@@ -251,33 +252,33 @@
                Width="136" Margin="0,8,0,0" SelectedIndex="0"
                HorizontalAlignment="Left" VerticalContentAlignment="Center"
                SelectionChanged="SyncMode_Changed">
-      <ComboBoxItem Content="双向同步"/>
-      <ComboBoxItem Content="镜像到右侧"/>
-      <ComboBoxItem Content="更新到右侧"/>
+      <ComboBoxItem Content="{Binding [Main.ModeTwoWay], Source={l:Lang}, Mode=OneWay}"/>
+      <ComboBoxItem Content="{Binding [Main.ModeMirror], Source={l:Lang}, Mode=OneWay}"/>
+      <ComboBoxItem Content="{Binding [Main.ModeUpdate], Source={l:Lang}, Mode=OneWay}"/>
      </ComboBox>
 
      <!-- 比较按钮 (次要) -->
      <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
      <Button x:Name="CompareButton"
              AutomationProperties.AutomationId="CompareButton"
-             AutomationProperties.Name="比较" Click="Compare_Click"
+             AutomationProperties.Name="{Binding [Main.Compare], Source={l:Lang}}" Click="Compare_Click"
              Style="{StaticResource SecondaryButtonStyle}"
               MinWidth="100" Margin="0,0,8,0">
        <DockPanel>
         <fluent:FluentIcon DockPanel.Dock="Left" Icon="ArrowsBidirectional" Width="18" Height="18" FontSize="18" Margin="0,0,8,0" Style="{StaticResource LibraryIconStyle}"/>
-        <TextBlock Text="比较" VerticalAlignment="Center"/>
+        <TextBlock Text="{Binding [Main.Compare], Source={l:Lang}}" VerticalAlignment="Center"/>
        </DockPanel>
      </Button>
 
      <!-- 开始同步按钮 (主操作) -->
      <Button x:Name="SyncButton"
              AutomationProperties.AutomationId="SyncButton"
-             AutomationProperties.Name="开始同步" Click="Sync_Click"
+             AutomationProperties.Name="{Binding [Main.StartSync], Source={l:Lang}}" Click="Sync_Click"
              Style="{StaticResource PrimaryButtonStyle}"
               MinWidth="120" IsEnabled="False">
        <DockPanel>
         <fluent:FluentIcon DockPanel.Dock="Left" Icon="ArrowSync" Width="18" Height="18" FontSize="18" Margin="0,0,8,0" Style="{StaticResource LibraryIconStyle}"/>
-        <TextBlock x:Name="SyncButtonLabel" Text="开始同步" VerticalAlignment="Center"/>
+        <TextBlock x:Name="SyncButtonLabel" Text="{Binding [Main.StartSync], Source={l:Lang}}" VerticalAlignment="Center"/>
        </DockPanel>
      </Button>
      </StackPanel>
@@ -298,7 +299,7 @@
                CurrentCellChanged="Comparison_CurrentCellChanged">
       <DataGrid.Columns>
        <DataGridCheckBoxColumn Header="" Binding="{Binding Selected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="38"/>
-       <DataGridTemplateColumn Header="左侧相对路径" Width="*" IsReadOnly="True">
+       <DataGridTemplateColumn Header="{Binding [Main.LeftRelativePath], Source={l:Lang}}" Width="*" IsReadOnly="True">
         <DataGridTemplateColumn.CellTemplate>
          <DataTemplate>
           <Grid Margin="8,0,6,0" ToolTip="{Binding LeftToolTip}">
@@ -315,7 +316,7 @@
          </DataTemplate>
         </DataGridTemplateColumn.CellTemplate>
        </DataGridTemplateColumn>
-       <DataGridTextColumn Header="大小" Binding="{Binding LeftSize}" Width="82" IsReadOnly="True">
+       <DataGridTextColumn Header="{Binding [Main.Size], Source={l:Lang}}" Binding="{Binding LeftSize}" Width="82" IsReadOnly="True">
         <DataGridTextColumn.ElementStyle>
          <Style TargetType="TextBlock">
           <Setter Property="HorizontalAlignment" Value="Right"/>
@@ -325,21 +326,21 @@
          </Style>
         </DataGridTextColumn.ElementStyle>
        </DataGridTextColumn>
-       <DataGridTemplateColumn Header="操作" Width="58" IsReadOnly="True">
+       <DataGridTemplateColumn Header="{Binding [Main.Action], Source={l:Lang}}" Width="58" IsReadOnly="True">
         <DataGridTemplateColumn.CellTemplate>
          <DataTemplate>
           <Border Background="{Binding OperationSeverity, Converter={x:Static views:AppConverters.SeverityBackgroundConverter}}" Margin="1,0">
-           <Button AutomationProperties.AutomationId="ComparisonActionButton" AutomationProperties.Name="变更操作菜单"
+           <Button AutomationProperties.AutomationId="ComparisonActionButton" AutomationProperties.Name="{Binding [Main.ChangeActionMenu], Source={l:Lang}}"
                    AutomationProperties.HelpText="{Binding ActionToolTip}" ToolTip="{Binding ActionToolTip}"
                    ToolTipService.InitialShowDelay="150" ToolTipService.ShowDuration="15000"
                    Click="ComparisonActionButton_Click" Style="{StaticResource TertiaryButtonStyle}">
             <Button.ContextMenu>
              <ContextMenu AutomationProperties.AutomationId="ComparisonActionMenu">
-              <MenuItem Header="左侧覆盖右侧" Click="ActionMenu_KeepLeft_Click"/>
-              <MenuItem Header="右侧覆盖左侧" Click="ActionMenu_KeepRight_Click"/>
+              <MenuItem Header="{Binding [Main.KeepLeft], Source={l:Lang}}" Click="ActionMenu_KeepLeft_Click"/>
+              <MenuItem Header="{Binding [Main.KeepRight], Source={l:Lang}}" Click="ActionMenu_KeepRight_Click"/>
               <Separator/>
-              <MenuItem Header="忽略此文件" Click="ActionMenu_Ignore_Click"/>
-              <MenuItem Header="重新启用此文件" Click="ActionMenu_Enable_Click"/>
+              <MenuItem Header="{Binding [Main.IgnoreFile], Source={l:Lang}}" Click="ActionMenu_Ignore_Click"/>
+              <MenuItem Header="{Binding [Main.EnableFile], Source={l:Lang}}" Click="ActionMenu_Enable_Click"/>
              </ContextMenu>
             </Button.ContextMenu>
             <fluent:FluentIcon Icon="{Binding ActionIcon}" Width="24" Height="24" FontSize="24" Foreground="{Binding ActionBrush}" Style="{StaticResource LibraryIconStyle}"/>
@@ -348,7 +349,7 @@
          </DataTemplate>
         </DataGridTemplateColumn.CellTemplate>
        </DataGridTemplateColumn>
-       <DataGridTemplateColumn Header="右侧相对路径" Width="*" IsReadOnly="True">
+       <DataGridTemplateColumn Header="{Binding [Main.RightRelativePath], Source={l:Lang}}" Width="*" IsReadOnly="True">
         <DataGridTemplateColumn.CellTemplate>
          <DataTemplate>
           <Grid Margin="8,0,6,0" ToolTip="{Binding RightToolTip}">
@@ -365,7 +366,7 @@
          </DataTemplate>
         </DataGridTemplateColumn.CellTemplate>
        </DataGridTemplateColumn>
-       <DataGridTextColumn Header="大小" Binding="{Binding RightSize}" Width="82" IsReadOnly="True">
+       <DataGridTextColumn Header="{Binding [Main.Size], Source={l:Lang}}" Binding="{Binding RightSize}" Width="82" IsReadOnly="True">
         <DataGridTextColumn.ElementStyle>
          <Style TargetType="TextBlock">
           <Setter Property="HorizontalAlignment" Value="Right"/><Setter Property="VerticalAlignment" Value="Center"/>
@@ -383,7 +384,7 @@
       <Border Width="48" Height="48" CornerRadius="{StaticResource RadiusMedium}" Background="{DynamicResource SurfaceSubtleBrush}" HorizontalAlignment="Center">
        <fluent:FluentIcon Icon="ScaleFill" Width="24" Height="24" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Style="{StaticResource LibraryIconStyle}"/>
       </Border>
-      <TextBlock x:Name="ComparisonEmptyStateText" AutomationProperties.AutomationId="ComparisonEmptyStateText" Text="请选择两个端点后点击比较" Style="{StaticResource BodyTextStyle}" Margin="0,16,0,0" HorizontalAlignment="Center"/>
+      <TextBlock x:Name="ComparisonEmptyStateText" AutomationProperties.AutomationId="ComparisonEmptyStateText" Text="{Binding [Main.EmptyPickEndpoints], Source={l:Lang}}" Style="{StaticResource BodyTextStyle}" Margin="0,16,0,0" HorizontalAlignment="Center"/>
      </StackPanel>
     </StackPanel>
    </Grid>
@@ -395,12 +396,12 @@
           BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1,0,0,0">
    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,20">
     <StackPanel>
-     <TextBlock Text="本次变更" Style="{StaticResource SectionTitleTextStyle}" Margin="0,0,0,16"/>
+     <TextBlock Text="{Binding [Main.ThisRunChanges], Source={l:Lang}}" Style="{StaticResource SectionTitleTextStyle}" Margin="0,0,0,16"/>
 
      <StackPanel x:Name="ChangeSummaryPanel" AutomationProperties.AutomationId="ChangeSummaryPanel">
 
       <Button x:Name="UploadFilterButton" Tag="Upload" Click="SummaryFilter_Click"
-              AutomationProperties.AutomationId="UploadFilterButton" AutomationProperties.Name="筛选上传变更"
+              AutomationProperties.AutomationId="UploadFilterButton" AutomationProperties.Name="{Binding [Main.FilterUploads], Source={l:Lang}}"
               Style="{StaticResource ChangeSummaryFilterButtonStyle}" Margin="0,0,0,6">
        <Grid>
        <Grid.ColumnDefinitions>
@@ -411,14 +412,14 @@
         <fluent:FluentIcon Icon="ArrowUpload" Width="18" Height="18" FontSize="18" Foreground="{DynamicResource SuccessBrush}" Style="{StaticResource LibraryIconStyle}"/>
        </Border>
        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="UploadSummary" AutomationProperties.AutomationId="UploadSummary" Style="{StaticResource BodyStrongTextStyle}" Text="上传 0 项"/>
+        <TextBlock x:Name="UploadSummary" AutomationProperties.AutomationId="UploadSummary" Style="{StaticResource BodyStrongTextStyle}" Text="{Binding [Main.UploadSummaryEmpty], Source={l:Lang}}"/>
        <TextBlock x:Name="UploadSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="0 B"/>
        </StackPanel>
        </Grid>
       </Button>
 
       <Button x:Name="DownloadFilterButton" Tag="Download" Click="SummaryFilter_Click"
-              AutomationProperties.AutomationId="DownloadFilterButton" AutomationProperties.Name="筛选下载变更"
+              AutomationProperties.AutomationId="DownloadFilterButton" AutomationProperties.Name="{Binding [Main.FilterDownloads], Source={l:Lang}}"
               Style="{StaticResource ChangeSummaryFilterButtonStyle}" Margin="0,0,0,6">
        <Grid>
        <Grid.ColumnDefinitions>
@@ -429,14 +430,14 @@
         <fluent:FluentIcon Icon="ArrowDownload" Width="18" Height="18" FontSize="18" Foreground="{DynamicResource InfoBrush}" Style="{StaticResource LibraryIconStyle}"/>
        </Border>
        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="DownloadSummary" AutomationProperties.AutomationId="DownloadSummary" Style="{StaticResource BodyStrongTextStyle}" Text="下载 0 项"/>
+        <TextBlock x:Name="DownloadSummary" AutomationProperties.AutomationId="DownloadSummary" Style="{StaticResource BodyStrongTextStyle}" Text="{Binding [Main.DownloadSummaryEmpty], Source={l:Lang}}"/>
        <TextBlock x:Name="DownloadSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="0 B"/>
        </StackPanel>
        </Grid>
       </Button>
 
       <Button x:Name="DeleteFilterButton" Tag="Delete" Click="SummaryFilter_Click"
-              AutomationProperties.AutomationId="DeleteFilterButton" AutomationProperties.Name="筛选删除变更"
+              AutomationProperties.AutomationId="DeleteFilterButton" AutomationProperties.Name="{Binding [Main.FilterDeletes], Source={l:Lang}}"
               Style="{StaticResource ChangeSummaryFilterButtonStyle}" Margin="0,0,0,6">
        <Grid>
        <Grid.ColumnDefinitions>
@@ -447,14 +448,14 @@
         <fluent:FluentIcon Icon="Delete" Width="18" Height="18" FontSize="18" Foreground="{DynamicResource DangerBrush}" Style="{StaticResource LibraryIconStyle}"/>
        </Border>
        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="DeleteSummary" AutomationProperties.AutomationId="DeleteSummary" Style="{StaticResource BodyStrongTextStyle}" Text="删除 0 项"/>
+        <TextBlock x:Name="DeleteSummary" AutomationProperties.AutomationId="DeleteSummary" Style="{StaticResource BodyStrongTextStyle}" Text="{Binding [Main.DeleteSummaryEmpty], Source={l:Lang}}"/>
        <TextBlock x:Name="DeleteSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="—"/>
        </StackPanel>
        </Grid>
       </Button>
 
       <Button x:Name="ConflictFilterButton" Tag="Conflict" Click="SummaryFilter_Click"
-              AutomationProperties.AutomationId="ConflictFilterButton" AutomationProperties.Name="筛选冲突变更"
+              AutomationProperties.AutomationId="ConflictFilterButton" AutomationProperties.Name="{Binding [Main.FilterConflicts], Source={l:Lang}}"
               Style="{StaticResource ChangeSummaryFilterButtonStyle}" Margin="0,0,0,6">
        <Grid>
        <Grid.ColumnDefinitions>
@@ -465,14 +466,14 @@
         <fluent:FluentIcon Icon="Warning" Width="20" Height="20" FontSize="20" Foreground="{DynamicResource WarningBrush}" Style="{StaticResource LibraryIconStyle}"/>
        </Border>
        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="ConflictSummary" AutomationProperties.AutomationId="ConflictSummary" Style="{StaticResource BodyStrongTextStyle}" Text="冲突 0 项"/>
+        <TextBlock x:Name="ConflictSummary" AutomationProperties.AutomationId="ConflictSummary" Style="{StaticResource BodyStrongTextStyle}" Text="{Binding [Main.ConflictSummaryEmpty], Source={l:Lang}}"/>
        <TextBlock x:Name="ConflictSizeSummary" Style="{StaticResource CaptionTextStyle}" Text="0 B"/>
        </StackPanel>
        </Grid>
       </Button>
 
       <Button x:Name="ChangeSummaryTotal" Tag="All" Click="SummaryFilter_Click"
-              AutomationProperties.AutomationId="ChangeSummaryTotal" AutomationProperties.Name="显示全部变更"
+              AutomationProperties.AutomationId="ChangeSummaryTotal" AutomationProperties.Name="{Binding [Main.ShowAllChanges], Source={l:Lang}}"
               Style="{StaticResource ChangeSummaryFilterButtonStyle}" Margin="0,8,0,0">
        <Grid>
         <Grid.ColumnDefinitions>
@@ -480,8 +481,8 @@
          <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
         <StackPanel>
-         <TextBlock Text="总计（待传输）" Style="{StaticResource CaptionTextStyle}"/>
-         <TextBlock x:Name="TotalSummary" AutomationProperties.AutomationId="TotalSummary" Style="{StaticResource MetricTextStyle}" Text="0 项"/>
+         <TextBlock Text="{Binding [Main.TotalPending], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}"/>
+         <TextBlock x:Name="TotalSummary" AutomationProperties.AutomationId="TotalSummary" Style="{StaticResource MetricTextStyle}" Text="{Binding [Main.ItemCountEmpty], Source={l:Lang}}"/>
         </StackPanel>
         <TextBlock x:Name="TotalSizeSummary" Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource BodyStrongTextStyle}" Text="0 B"/>
        </Grid>
@@ -501,12 +502,12 @@
      <ColumnDefinition Width="*"/>
      <ColumnDefinition Width="Auto"/>
     </Grid.ColumnDefinitions>
-    <TextBlock x:Name="ProfileContextStatus" Grid.Column="0" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Text="Profile 工作区"/>
+    <TextBlock x:Name="ProfileContextStatus" Grid.Column="0" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Text="{Binding [Main.ProfileWorkspace], Source={l:Lang}}"/>
     <TextBlock x:Name="Status" AutomationProperties.AutomationId="Status" Grid.Column="1" Style="{StaticResource StatusTextStyle}" VerticalAlignment="Center" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-     <TextBlock Text="已选择 " Style="{StaticResource StatusTextStyle}"/>
+     <TextBlock Text="{Binding [Main.SelectedPrefix], Source={l:Lang}}" Style="{StaticResource StatusTextStyle}"/>
      <TextBlock x:Name="SelectedLabel" Style="{StaticResource StatusTextStyle}" FontWeight="SemiBold" Text="0"/>
-     <TextBlock Text=" 项  ·  并发 " Style="{StaticResource StatusTextStyle}"/>
+     <TextBlock Text="{Binding [Main.SelectedSuffix], Source={l:Lang}}" Style="{StaticResource StatusTextStyle}"/>
      <TextBlock x:Name="ConcurrencyLabel" AutomationProperties.AutomationId="ConcurrencyLabel" Style="{StaticResource StatusTextStyle}" FontWeight="SemiBold"/>
     </StackPanel>
    </Grid>

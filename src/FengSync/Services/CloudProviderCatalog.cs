@@ -1,4 +1,5 @@
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -114,17 +115,25 @@ public sealed record CloudProviderDescriptor(
 /// </summary>
 public static class CloudProviderCatalog
 {
-    private static readonly CloudFormField[] OAuthClientFields =
+    private static CloudFormField[] OAuthClientFields =>
     [
         // client_id is not a secret rclone obscures, so it is pre-filled on an edit form; client_secret is
         // a password field, so it starts empty and the label says what empty means.
-        new("client_id", "Client ID（可选）", AutomationId: "OAuthClientId"),
-        new("client_secret", "Client Secret（可选）", CloudFormFieldKind.Password, AutomationId: "OAuthClientSecret",
-            EditLabel: "Client Secret（留空表示保持原值）")
+        new("client_id", Tr.F("Provider.OAuthClientId"), AutomationId: "OAuthClientId"),
+        new("client_secret", Tr.F("Provider.OAuthClientSecret"), CloudFormFieldKind.Password, AutomationId: "OAuthClientSecret",
+            EditLabel: Tr.F("Provider.OAuthClientSecretEdit"))
     ];
 
-    private static readonly CloudProviderDescriptor[] All =
-    [
+    /// <summary>
+    /// The catalog, rebuilt on every read rather than cached in a static field: the labels are display text, and
+    /// a cached array would freeze the wording of whichever language happened to be chosen first.
+    /// </summary>
+    private static IReadOnlyList<CloudProviderDescriptor> All
+    {
+        get
+        {
+        return
+        [
         new(EndpointType.GoogleDrive, "Google Drive", "GDriveRemoteName", "GDriveRemoteRoot",
             OAuthClientFields, RequiresOAuth: true, SupportsTrash: true, SupportsPublicLink: true,
             ConstantParameters: new Dictionary<string, string> { ["scope"] = "drive" },
@@ -140,31 +149,33 @@ public static class CloudProviderCatalog
             WebConsoleUrl: "https://app.box.com/"),
         new(EndpointType.WebDav, "WebDAV", "WebDavRemoteName", "WebDavRemoteRoot",
         [
-            new("url", "服务器地址", Required: true, AutomationId: "WebDavUrl",
-                Hint: "例如 https://cloud.example.com/remote.php/dav/files/user"),
-            new("vendor", "服务商（可选）", AutomationId: "WebDavVendor",
-                Hint: "留空即可；个别服务商需要指定，例如 other、nextcloud、sharepoint。"),
-            new("user", "用户名（可选）", AutomationId: "WebDavUser"),
-            new("pass", "密码（可选）", CloudFormFieldKind.Password, AutomationId: "WebDavPassword",
-                EditLabel: "密码（留空表示保持原值）")
+            new("url", Tr.F("Provider.WebDav.Url"), Required: true, AutomationId: "WebDavUrl",
+                Hint: Tr.F("Provider.WebDav.UrlHint")),
+            new("vendor", Tr.F("Provider.WebDav.Vendor"), AutomationId: "WebDavVendor",
+                Hint: Tr.F("Provider.WebDav.VendorHint")),
+            new("user", Tr.F("Provider.WebDav.User"), AutomationId: "WebDavUser"),
+            new("pass", Tr.F("Provider.WebDav.Password"), CloudFormFieldKind.Password, AutomationId: "WebDavPassword",
+                EditLabel: Tr.F("Provider.WebDav.PasswordEdit"))
         ], RequiresOAuth: false, SupportsTrash: false, SupportsPublicLink: false),
-        new(EndpointType.Sftp, "SFTP 连接", "SftpRemoteName", "SftpRemoteRoot",
+        new(EndpointType.Sftp, Tr.F("Provider.Sftp.NamePlaceholder"), "SftpRemoteName", "SftpRemoteRoot",
         [
-            new("host", "主机", Required: true, AutomationId: "SftpRemoteHost"),
-            new("port", "端口", CloudFormFieldKind.Number, Required: true, AutomationId: "SftpRemotePort", DefaultValue: "22"),
-            new("user", "用户名", Required: true, AutomationId: "SftpRemoteUser"),
-            new("pass", "密码（使用密钥时可留空）", CloudFormFieldKind.Password, AutomationId: "SftpRemotePassword",
-                EditLabel: "密码（留空表示保持原密码不变）"),
-            new("key_file", "私钥文件（可选）", AutomationId: "SftpRemoteKeyFile")
+            new("host", Tr.F("Provider.Sftp.Host"), Required: true, AutomationId: "SftpRemoteHost"),
+            new("port", Tr.F("Provider.Sftp.Port"), CloudFormFieldKind.Number, Required: true, AutomationId: "SftpRemotePort", DefaultValue: "22"),
+            new("user", Tr.F("Provider.Sftp.User"), Required: true, AutomationId: "SftpRemoteUser"),
+            new("pass", Tr.F("Provider.Sftp.Password"), CloudFormFieldKind.Password, AutomationId: "SftpRemotePassword",
+                EditLabel: Tr.F("Provider.Sftp.PasswordEdit")),
+            new("key_file", Tr.F("Provider.Sftp.KeyFile"), AutomationId: "SftpRemoteKeyFile")
         ], RequiresOAuth: false, SupportsTrash: false, SupportsPublicLink: false,
             CrossFieldRule: static values =>
                 string.IsNullOrWhiteSpace(values.GetValueOrDefault("pass")) && string.IsNullOrWhiteSpace(values.GetValueOrDefault("key_file"))
-                    ? "SFTP 必须填写密码或私钥文件。"
+                    ? Tr.F("Provider.Sftp.PasswordOrKeyRequired")
                     : null),
         // S3's parameters are collected by the bespoke panel, so this descriptor carries no fields.
         new(EndpointType.S3, "S3 Bucket", "S3DisplayName", "S3RemoteRoot",
             [], RequiresOAuth: false, SupportsTrash: false, SupportsPublicLink: true)
-    ];
+        ];
+        }
+    }
 
     /// <summary>Every provider the endpoint editor offers, in the order it lists them.</summary>
     public static IReadOnlyList<CloudProviderDescriptor> Providers => All;
@@ -175,7 +186,7 @@ public static class CloudProviderCatalog
 
     /// <summary>The descriptor for a provider; throws for a type that is not one (including Local).</summary>
     public static CloudProviderDescriptor For(EndpointType kind) => TryFor(kind)
-        ?? throw new ArgumentOutOfRangeException(nameof(kind), kind, "不是云端 Provider 类型。");
+        ?? throw new ArgumentOutOfRangeException(nameof(kind), kind, Tr.F("Provider.NotAProviderType"));
 
     /// <summary>True when this endpoint type is one of the providers the editor can create.</summary>
     public static bool IsProvider(EndpointType kind) => TryFor(kind) is not null;

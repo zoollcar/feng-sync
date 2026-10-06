@@ -8,6 +8,7 @@ using FengSync.Core;
 using FengSync.Core.Configuration;
 using FengSync.Core.Execution;
 using FengSync.Core.Rclone.Diagnostics;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -151,7 +152,7 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
     /// one that stopped on its own is retried: the operation is the same, but the two words are what the user
     /// is actually choosing between — and only a download leaves bytes behind.
     /// </summary>
-    public string RestartText => State == CloudTransferState.Paused && CanContinueFromStaging ? "继续" : "重试";
+    public string RestartText => State == CloudTransferState.Paused && CanContinueFromStaging ? Tr.F("Transfer.Continue") : Tr.F("Transfer.Retry");
     /// <summary>
     /// Whether stopping this transfer leaves bytes a later run can build on. Only a download does, because
     /// only a download has Feng Sync's own staging file to append to; an upload cannot append to a remote
@@ -160,9 +161,9 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
     public bool CanContinueFromStaging => Direction == CloudTransferDirection.Download;
     public string DirectionText => Direction switch
     {
-        CloudTransferDirection.Upload => "上传",
-        CloudTransferDirection.Download => "下载",
-        _ => "复制"
+        CloudTransferDirection.Upload => Tr.F("Transfer.Upload"),
+        CloudTransferDirection.Download => Tr.F("Transfer.Download"),
+        _ => Tr.F("Transfer.Copy")
     };
     public string FileName => Direction == CloudTransferDirection.Upload ? Path.GetFileName(LocalPath) : NameOf(RemotePath);
     public string Display => $"{DirectionText} · {FileName}";
@@ -170,17 +171,17 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
 
     public string StatusText => State switch
     {
-        CloudTransferState.Pending => "等待中",
+        CloudTransferState.Pending => Tr.F("Transfer.StatusPending"),
         CloudTransferState.Running => RunText(),
-        CloudTransferState.Paused => "已暂停",
-        CloudTransferState.Completed => $"已完成  ·  {Megabytes(TotalBytes):N1} MB",
+        CloudTransferState.Paused => Tr.F("Transfer.StatusPaused"),
+        CloudTransferState.Completed => Tr.Format("Transfer.StatusCompleted", Megabytes(TotalBytes).ToString("N1")),
         CloudTransferState.Cancelled => Direction switch
         {
-            CloudTransferDirection.Download => "已取消，可继续下载",
-            CloudTransferDirection.Upload => "已取消，可重新上传",
-            _ => "已取消，重新复制会从头开始"
+            CloudTransferDirection.Download => Tr.F("Transfer.CancelledResumeDownload"),
+            CloudTransferDirection.Upload => Tr.F("Transfer.CancelledReUpload"),
+            _ => Tr.F("Transfer.CancelledRestartCopy")
         },
-        _ => "失败：" + (_error ?? "未知错误")
+        _ => Tr.Format("Transfer.StatusFailed", _error ?? Tr.F("Transfer.UnknownError"))
     };
 
     private string RunText()
@@ -188,7 +189,7 @@ public sealed class CloudTransferTask : INotifyPropertyChanged
         var progress = string.IsNullOrEmpty(SizeText)
             ? $"{Percentage:N1}%"
             : $"{Percentage:N1}%  ·  {SizeText}" + (_bytesPerSecond > 0 ? $"  ·  {Megabytes(_bytesPerSecond):N1} MB/s" : "");
-        return _attempt > 1 ? $"第 {_attempt} 次尝试  ·  {progress}" : progress;
+        return _attempt > 1 ? Tr.Format("Transfer.Attempt", _attempt, progress) : progress;
     }
 
     internal static string NameOf(string path) => path.Trim('/').Split('/').Last();
@@ -321,7 +322,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     /// </summary>
     public string? LimitError { get; private set; }
 
-    public string LimitText => _limits.IsLimited ? "限速 " + _limits.Describe() : "不限速";
+    public string LimitText => _limits.IsLimited ? Tr.Format("Transfer.RateLimited", _limits.Describe()) : Tr.F("Transfer.RateUnlimited");
 
     /// <summary>
     /// Applies a rate to the daemon. A seam so the decision — when a limit is pushed and when it is released —
@@ -403,7 +404,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
         {
             // A ceiling is a convenience: failing to set it must not fail the transfer. It is reported instead,
             // because a limit the user asked for that never took effect would otherwise be invisible.
-            LimitError = "限速未能生效：" + RcloneUiError.Describe(ex, "cloud-transfer-limit");
+            LimitError = Tr.Format("Transfer.LimitFailed", RcloneUiError.Describe(ex, "cloud-transfer-limit"));
             Raise(nameof(LimitError));
         }
     }
@@ -517,7 +518,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
     {
         get
         {
-            if (Tasks.Count == 0) return "暂无传输任务。把文件拖到文件浏览器即可上传，把文件拖出即可下载。";
+            if (Tasks.Count == 0) return Tr.F("Transfer.NoTasks");
             var running = Tasks.Count(task => task.State == CloudTransferState.Running);
             var pending = Tasks.Count(task => task.State == CloudTransferState.Pending);
             var done = Tasks.Count(task => task.State == CloudTransferState.Completed);
@@ -526,12 +527,12 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             // avoid counting the same task twice in one sentence.
             var resumable = Tasks.Count(task => task.IsResumable && task.State != CloudTransferState.Paused);
             var parts = new List<string>();
-            if (WaitingForWindow) parts.Add($"等待传输时段 {_timeWindow!.Describe()}");
-            if (running > 0) parts.Add($"进行中 {running}");
-            if (pending > 0) parts.Add($"等待 {pending}");
-            if (paused > 0) parts.Add($"已暂停 {paused}");
-            if (done > 0) parts.Add($"已完成 {done}");
-            if (resumable > 0) parts.Add($"可续传 {resumable}");
+            if (WaitingForWindow) parts.Add(Tr.Format("Transfer.SummaryWaitingWindow", _timeWindow!.Describe()));
+            if (running > 0) parts.Add(Tr.Format("Transfer.SummaryRunning", running));
+            if (pending > 0) parts.Add(Tr.Format("Transfer.SummaryPending", pending));
+            if (paused > 0) parts.Add(Tr.Format("Transfer.SummaryPaused", paused));
+            if (done > 0) parts.Add(Tr.Format("Transfer.SummaryCompleted", done));
+            if (resumable > 0) parts.Add(Tr.Format("Transfer.SummaryResumable", resumable));
             return string.Join(" · ", parts);
         }
     }
@@ -835,7 +836,7 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             // A task can only arrive here without a destination through a hand-edited journal file, and
             // copying to an empty path would address the target endpoint's root.
             if (isCopy && (string.IsNullOrWhiteSpace(task.TargetUri) || string.IsNullOrWhiteSpace(destination)))
-                throw new InvalidOperationException("云端复制缺少目标端点或目标路径。");
+                throw new InvalidOperationException(Tr.F("Transfer.CopyMissingTarget"));
             Persist(task);
             // The ceiling is pushed before the slot is taken so it is already in force for the very first
             // byte, and before the client is resolved so the seam can be replaced without a daemon.
@@ -854,11 +855,11 @@ public sealed class CloudTransferQueue : INotifyPropertyChanged
             }
             else
             {
-                var localDirectory = Path.GetDirectoryName(task.LocalPath) ?? throw new InvalidOperationException($"本地路径缺少目录：{task.LocalPath}");
+                var localDirectory = Path.GetDirectoryName(task.LocalPath) ?? throw new InvalidOperationException(Tr.Format("Transfer.LocalPathNoDirectory", task.LocalPath));
                 Directory.CreateDirectory(localDirectory);
                 if (task.Direction == CloudTransferDirection.Upload)
                 {
-                    if (!File.Exists(task.LocalPath)) throw new FileNotFoundException("要上传的本地文件已不存在。", task.LocalPath);
+                    if (!File.Exists(task.LocalPath)) throw new FileNotFoundException(Tr.F("Transfer.UploadSourceGone"), task.LocalPath);
                     task.TotalBytes = new FileInfo(task.LocalPath).Length;
                     source = new LocalEndpoint(localDirectory);
                     target = EndpointFactory.CreateWithClient(task.RemoteUri, client);

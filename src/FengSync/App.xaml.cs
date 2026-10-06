@@ -1,6 +1,7 @@
 using FengSync.Core.Configuration;
 using FengSync.Core.Mount;
 using FengSync.Core.Rclone.Lifecycle;
+using FengSync.Localization;
 using FengSync.Core.SftpServer;
 using FengSync.Services;
 using System.IO;
@@ -52,6 +53,11 @@ public partial class App : System.Windows.Application, IAppServiceHost
         // MainWindow coordinates asynchronous cleanup before it explicitly shuts the
         // application down.  Never let WPF tear down the dispatcher first.
         ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
+        // Before base.OnStartup, which is what creates the StartupUri window: a window that renders its
+        // first frame in one language and the rest of itself in another is a worse bug than a few
+        // milliseconds of startup, and the file being read is one small local JSON.
+        AppLanguageStartup.RegisterWindowLanguage();
+        AppLanguageStartup.ApplySavedLanguage();
         base.OnStartup(e);
         UpdatedFromVersion = e.Args.SkipWhile(x => x != "--updated-from").Skip(1).FirstOrDefault();
         UpdateTaskDirectory = e.Args.SkipWhile(x => x != "--update-task").Skip(1).FirstOrDefault();

@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using FengSync.Core;
 using FengSync.Core.Rclone.Configuration;
+using FengSync.Localization;
 using FengSync.Services;
 
 namespace FengSync.Views;
@@ -101,17 +102,18 @@ public partial class CloudEndpointEditorWindow : Window
     /// </summary>
     private void EnterEditMode(CloudEndpointEditTarget edit)
     {
-        Title = "编辑云端端点";
-        AutomationProperties.SetName(this, "编辑云端端点");
-        HeadingText.Text = "编辑云端端点";
+        Title = Tr.F("Endpoint.EditTitle");
+        AutomationProperties.SetName(this, Tr.F("Endpoint.EditTitle"));
+        HeadingText.Text = Tr.F("Endpoint.EditTitle");
 
         var descriptor = CloudProviderCatalog.TryFor(edit.Kind);
         ServiceBox.SelectedItem = ServiceBox.Items.OfType<ComboBoxItem>()
-            .FirstOrDefault(item => ReferenceEquals(item.Tag, descriptor)) ?? ServiceBox.SelectedItem;
+            .FirstOrDefault(item => item.Tag is CloudProviderDescriptor d && d.Kind == descriptor.Kind) ??
+            ServiceBox.SelectedItem;
         ServiceBox.IsEnabled = false;
 
         StepIndicator.Visibility = Visibility.Collapsed;
-        StepCaption.Text = $"编辑端点 · {CloudEndpointService.DisplayName(edit.Kind)} · 名称与类型不可修改";
+        StepCaption.Text = Tr.Format("Endpoint.EditCaption", CloudEndpointService.DisplayName(edit.Kind));
         ChooseServiceStep.Visibility = Visibility.Collapsed;
         ConnectionStep.Visibility = Visibility.Visible;
         BuildProviderFields();
@@ -154,17 +156,18 @@ public partial class CloudEndpointEditorWindow : Window
     /// </summary>
     private void EnterDraftMode(CloudEndpointDraft draft)
     {
-        Title = "导入云端端点";
-        AutomationProperties.SetName(this, "导入云端端点");
-        HeadingText.Text = "导入云端端点";
+        Title = Tr.F("Endpoint.ImportTitle");
+        AutomationProperties.SetName(this, Tr.F("Endpoint.ImportTitle"));
+        HeadingText.Text = Tr.F("Endpoint.ImportTitle");
 
         var descriptor = CloudProviderCatalog.TryFor(draft.Kind);
         ServiceBox.SelectedItem = ServiceBox.Items.OfType<ComboBoxItem>()
-            .FirstOrDefault(item => ReferenceEquals(item.Tag, descriptor)) ?? ServiceBox.SelectedItem;
+            .FirstOrDefault(item => item.Tag is CloudProviderDescriptor d && d.Kind == descriptor.Kind) ??
+            ServiceBox.SelectedItem;
         ServiceBox.IsEnabled = false;
 
         StepIndicator.Visibility = Visibility.Collapsed;
-        StepCaption.Text = $"导入端点 · {CloudEndpointService.DisplayName(draft.Kind)} · 请补填凭据后保存";
+        StepCaption.Text = Tr.Format("Endpoint.ImportCaption", CloudEndpointService.DisplayName(draft.Kind));
         ChooseServiceStep.Visibility = Visibility.Collapsed;
         ConnectionStep.Visibility = Visibility.Visible;
         BuildProviderFields();
@@ -207,7 +210,7 @@ public partial class CloudEndpointEditorWindow : Window
         }
         catch (Exception ex)
         {
-            ProviderDescription.Text = "无法读取 Provider：" + RcloneUiError.Describe(ex, "s3-provider-list");
+            ProviderDescription.Text = Tr.Format("Endpoint.ProviderReadFailed", RcloneUiError.Describe(ex, "s3-provider-list"));
             NextButton.IsEnabled = !SelectedProvider.IsS3Compatible;
         }
     }
@@ -248,26 +251,26 @@ public partial class CloudEndpointEditorWindow : Window
     private void UpdateProviderHelp()
     {
         var provider = _providers.FirstOrDefault(value => value.Name.Equals(ProviderName, StringComparison.Ordinal));
-        ProviderDescription.Text = provider?.Description ?? "从列表中选择 rclone 支持的 Provider。";
+        ProviderDescription.Text = provider?.Description ?? Tr.F("Endpoint.PickProvider");
         // Assigning ItemsSource makes an editable ComboBox drop its text, because the previously selected
         // item no longer exists in the new list. That would wipe the region an edit form had just loaded,
         // so the list is only replaced when it actually changes.
         var suggestions = provider?.RegionSuggestions;
         if (!ReferenceEquals(S3RegionBox.ItemsSource, suggestions)) S3RegionBox.ItemsSource = suggestions;
-        RegionHint.Text = provider?.RegionSuggestions.Count > 0 ? "可选择建议值，也可输入自定义 Region。" : "可输入服务商要求的 Region。";
-        S3Heading.Text = string.IsNullOrWhiteSpace(ProviderName) ? "S3 连接" : $"{ProviderName} S3 连接";
+        RegionHint.Text = provider?.RegionSuggestions.Count > 0 ? Tr.F("Endpoint.RegionSuggestHint") : Tr.F("Endpoint.RegionCustomHint");
+        S3Heading.Text = string.IsNullOrWhiteSpace(ProviderName) ? Tr.F("Endpoint.S3Connection") : Tr.Format("Endpoint.S3ConnectionNamed", ProviderName);
     }
 
     private void Next_Click(object sender, RoutedEventArgs e)
     {
         if (SelectedProvider.IsS3Compatible && !_providers.Any(provider => provider.Name.Equals(ProviderName, StringComparison.Ordinal)))
-        { ProviderError.Text = "请选择列表中的 S3 Provider。"; S3ProviderBox.Focus(); return; }
+        { ProviderError.Text = Tr.F("Endpoint.PickProviderFromList"); S3ProviderBox.Focus(); return; }
         ProviderError.Text = "";
         ChooseServiceStep.Visibility = Visibility.Collapsed; ConnectionStep.Visibility = Visibility.Visible;
         BuildProviderFields();
         S3Panel.Visibility = SelectedProvider.IsS3Compatible ? Visibility.Visible : Visibility.Collapsed;
         ProviderFieldsPanel.Visibility = SelectedProvider.IsS3Compatible ? Visibility.Collapsed : Visibility.Visible;
-        StepCaption.Text = "第 2 步，共 2 步 · 配置连接";
+        StepCaption.Text = Tr.F("Endpoint.Step2");
         StepOneIndicator.Background = (Brush)FindResource("BorderSubtleBrush"); StepTwoIndicator.Background = (Brush)FindResource("AccentBrush");
         NextButton.Visibility = Visibility.Collapsed; BackButton.Visibility = TestButton.Visibility = SaveButton.Visibility = Visibility.Visible;
         if (SelectedProvider.IsS3Compatible) MarkS3Dirty();
@@ -276,7 +279,7 @@ public partial class CloudEndpointEditorWindow : Window
     private void Back_Click(object sender, RoutedEventArgs e)
     {
         ChooseServiceStep.Visibility = Visibility.Visible; ConnectionStep.Visibility = Visibility.Collapsed;
-        StepCaption.Text = "第 1 步，共 2 步 · 选择服务";
+        StepCaption.Text = Tr.F("Endpoint.Step1");
         StepOneIndicator.Background = (Brush)FindResource("AccentBrush"); StepTwoIndicator.Background = (Brush)FindResource("BorderSubtleBrush");
         NextButton.Visibility = Visibility.Visible; BackButton.Visibility = TestButton.Visibility = SaveButton.Visibility = Visibility.Collapsed;
     }
@@ -298,10 +301,10 @@ public partial class CloudEndpointEditorWindow : Window
 
         ProviderFieldsPanel.Children.Add(new TextBlock
         {
-            Text = $"{descriptor.DisplayName} 连接",
+            Text = Tr.Format("Endpoint.ConnectionFor", descriptor.DisplayName),
             Style = (Style)FindResource("SectionTitleTextStyle")
         });
-        ProviderFieldsPanel.Children.Add(Label("显示名称", 12));
+        ProviderFieldsPanel.Children.Add(Label(Tr.F("Endpoint.DisplayName"), 12));
         _nameBox = new TextBox { Text = descriptor.NamePlaceholder, Margin = new Thickness(0, 4, 0, 8) };
         AutomationProperties.SetAutomationId(_nameBox, descriptor.NameAutomationId);
         ProviderFieldsPanel.Children.Add(_nameBox);
@@ -331,7 +334,7 @@ public partial class CloudEndpointEditorWindow : Window
                 });
         }
 
-        ProviderFieldsPanel.Children.Add(Label("远程根目录（可选）", 0));
+        ProviderFieldsPanel.Children.Add(Label(Tr.F("Endpoint.RootPath"), 0));
         _rootBox = new TextBox { Text = descriptor.DefaultRoot, Margin = new Thickness(0, 4, 0, 8) };
         AutomationProperties.SetAutomationId(_rootBox, descriptor.RootAutomationId);
         ProviderFieldsPanel.Children.Add(_rootBox);
@@ -402,14 +405,14 @@ public partial class CloudEndpointEditorWindow : Window
     private void Validate(CloudProviderDescriptor descriptor, IReadOnlyDictionary<string, string> values)
     {
         if (_nameBox is not null && string.IsNullOrWhiteSpace(_nameBox.Text))
-            throw new InvalidOperationException("请输入显示名称。");
+            throw new InvalidOperationException(Tr.F("Endpoint.ErrDisplayName"));
         foreach (var field in descriptor.Fields)
         {
             if (field.Required && string.IsNullOrWhiteSpace(values.GetValueOrDefault(field.Key)))
-                throw new InvalidOperationException($"请填写{field.Label}。");
+                throw new InvalidOperationException(Tr.Format("Endpoint.ErrRequiredField", field.Label));
             if (field.Kind == CloudFormFieldKind.Number && values.GetValueOrDefault(field.Key) is { Length: > 0 } number
                 && (!int.TryParse(number, out var parsed) || parsed is < 1 or > 65535))
-                throw new InvalidOperationException($"{field.Label}必须介于 1 和 65535 之间。");
+                throw new InvalidOperationException(Tr.Format("Endpoint.ErrNumberRange", field.Label));
         }
         if (descriptor.CrossFieldRule?.Invoke(values) is { Length: > 0 } error) throw new InvalidOperationException(error);
     }
@@ -453,15 +456,15 @@ public partial class CloudEndpointEditorWindow : Window
         if (SelectedProvider.IsS3Compatible)
         {
             if (!ValidateS3(true)) return;
-            await RunBusyAsync(TestButton, "正在读取指定目录…", async () =>
+            await RunBusyAsync(TestButton, Tr.F("Endpoint.ReadingDirectory"), async () =>
             {
                 try
                 {
                     var result = await CloudEndpointService.ProbeS3Async(CurrentS3Values()); _probeDirectories = result.Directories; _s3Draft.RecordProbe(true);
                     var prefix = CurrentS3Values().Prefix;
                     ProbeResultText.Text = string.IsNullOrEmpty(prefix)
-                        ? "读取成功：该 Bucket 根目录。端点将只能访问此 Bucket。未验证上传权限。"
-                        : $"读取成功：/{prefix}。保存后该前缀由 rclone 强制，端点只能访问此前缀下的内容。未验证上传权限。";
+                        ? Tr.F("Endpoint.ProbeRoot")
+                        : Tr.Format("Endpoint.ProbePrefix", prefix);
                     ProbeResultCard.Visibility = Visibility.Visible; BrowseProbeButton.IsEnabled = true;
                 }
                 catch { _s3Draft.RecordProbe(false); throw; }
@@ -472,17 +475,17 @@ public partial class CloudEndpointEditorWindow : Window
         {
             // The endpoint already exists, so testing it only has to reach the configured root. For an OAuth
             // provider that also avoids a browser round-trip the user did not ask for by opening the editor.
-            await RunBusyAsync(TestButton, "正在验证连接…", async () => { await CloudEndpointService.VerifyAsync(_edit.RemoteName, RootPath); StatusText.Text = "连接验证成功。"; });
+            await RunBusyAsync(TestButton, Tr.F("Endpoint.Verifying"), async () => { await CloudEndpointService.VerifyAsync(_edit.RemoteName, RootPath); StatusText.Text = Tr.F("Endpoint.VerifySuccess"); });
             return;
         }
-        await RunBusyAsync(TestButton, SelectedProvider.RequiresOAuth ? "正在等待浏览器授权…" : "正在验证连接…", async () => { var remote = await EnsureRemoteAsync(); await CloudEndpointService.VerifyAsync(remote, RootPath); StatusText.Text = "连接验证成功。"; });
+        await RunBusyAsync(TestButton, SelectedProvider.RequiresOAuth ? Tr.F("Endpoint.WaitingForAuth") : Tr.F("Endpoint.Verifying"), async () => { var remote = await EnsureRemoteAsync(); await CloudEndpointService.VerifyAsync(remote, RootPath); StatusText.Text = Tr.F("Endpoint.VerifySuccess"); });
     }
 
     private void BrowseProbe_Click(object sender, RoutedEventArgs e)
     {
         var list = new ListBox { MinWidth = 420, MinHeight = 260, Margin = new Thickness(12) };
-        if (_probeDirectories.Count == 0) list.Items.Add("（当前目录没有子目录）"); else foreach (var directory in _probeDirectories) list.Items.Add("📁 " + directory);
-        new Window { Title = "测试读取结果", Owner = this, Content = list, Width = 480, Height = 360, WindowStartupLocation = WindowStartupLocation.CenterOwner }.ShowDialog();
+        if (_probeDirectories.Count == 0) list.Items.Add(Tr.F("Endpoint.NoSubdirectories")); else foreach (var directory in _probeDirectories) list.Items.Add("📁 " + directory);
+        new Window { Title = Tr.F("Endpoint.ProbeResultTitle"), Owner = this, Content = list, Width = 480, Height = 360, WindowStartupLocation = WindowStartupLocation.CenterOwner }.ShowDialog();
     }
 
     private async void Save_Click(object sender, RoutedEventArgs e)
@@ -492,7 +495,7 @@ public partial class CloudEndpointEditorWindow : Window
             if (!ValidateS3(true)) return;
             // An existing endpoint is assumed to have been usable already; the probe warning exists to stop
             // a brand-new configuration from being saved untested.
-            if (_edit is null && !_s3Draft.HasCurrentSuccessfulTest && MessageBox.Show("当前配置尚未通过读取测试。保存后可能无法浏览、上传或同步。\n\n仍要保存吗？", "保存未验证的 S3 端点", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            if (_edit is null && !_s3Draft.HasCurrentSuccessfulTest && MessageBox.Show(Tr.F("Endpoint.SaveUntestedPrompt"), Tr.F("Endpoint.SaveUntestedTitle"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
             var remote = _edit?.RemoteName ?? CloudEndpointService.SanitizeRemoteName(S3NameBox.Text);
             var replace = _edit is not null;
             if (!replace)
@@ -500,11 +503,11 @@ public partial class CloudEndpointEditorWindow : Window
                 var exists = (await CloudEndpointService.LoadAccountsAsync()).Any(account => account.Name.Equals(remote, StringComparison.OrdinalIgnoreCase));
                 if (exists)
                 {
-                    var answer = MessageBox.Show($"端点“{remote}”已存在。\n\n是：替换现有配置；否：返回修改显示名称。", "端点名称重复", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                    var answer = MessageBox.Show(Tr.Format("Endpoint.DuplicateName", remote), Tr.F("Endpoint.DuplicateNameTitle"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
                     if (answer != MessageBoxResult.Yes) { S3NameBox.Focus(); return; } replace = true;
                 }
             }
-            await RunBusyAsync(SaveButton, "正在保存…", async () => { await CloudEndpointService.SaveS3Async(remote, CurrentS3Values(), replace); SavedRemoteName = remote; SavedKind = EndpointType.S3;
+            await RunBusyAsync(SaveButton, Tr.F("Endpoint.Saving"), async () => { await CloudEndpointService.SaveS3Async(remote, CurrentS3Values(), replace); SavedRemoteName = remote; SavedKind = EndpointType.S3;
                 // The saved endpoint is an rclone alias whose root already is the prefix, so the profile
                 // path that addresses the prefix itself is empty.
                 SavedRoot = ""; DialogResult = true; });
@@ -516,7 +519,7 @@ public partial class CloudEndpointEditorWindow : Window
             // Sync's metadata, so moving it never has to touch rclone.conf.
             var remote = _edit.RemoteName;
             var reauthorize = OAuthCredentialsChanged();
-            await RunBusyAsync(SaveButton, reauthorize ? "正在等待浏览器授权…" : "正在保存…", async () =>
+            await RunBusyAsync(SaveButton, reauthorize ? Tr.F("Endpoint.WaitingForAuth") : Tr.F("Endpoint.Saving"), async () =>
             {
                 if (reauthorize) remote = await EnsureRemoteAsync();
                 await CloudEndpointService.SaveMetadataAsync(remote, SelectedKind, RootPath);
@@ -524,7 +527,7 @@ public partial class CloudEndpointEditorWindow : Window
             });
             return;
         }
-        await RunBusyAsync(SaveButton, "正在保存…", async () => { var remote = await EnsureRemoteAsync(); await CloudEndpointService.SaveMetadataAsync(remote, SelectedKind, RootPath); SavedRemoteName = remote; SavedKind = SelectedKind; SavedRoot = RootPath; DialogResult = true; });
+        await RunBusyAsync(SaveButton, Tr.F("Endpoint.Saving"), async () => { var remote = await EnsureRemoteAsync(); await CloudEndpointService.SaveMetadataAsync(remote, SelectedKind, RootPath); SavedRemoteName = remote; SavedKind = SelectedKind; SavedRoot = RootPath; DialogResult = true; });
     }
 
     /// <summary>

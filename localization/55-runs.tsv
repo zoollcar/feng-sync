@@ -1,0 +1,47 @@
+# ---- Run history window ----
+Run.All	全部	All
+Run.ColBytes	字节	Bytes
+Run.ColCategory	类别	Category
+Run.ColCompleted	完成时间	Completed
+Run.ColCorrelationId	诊断 ID	Diagnostic ID
+Run.ColDetail	详情	Detail
+Run.ColFailed	失败	Failed
+Run.ColOutcome	结果	Outcome
+Run.ColPlanned	计划	Planned
+Run.ColRetryable	可重试	Retryable
+Run.ColSucceeded	成功	Succeeded
+Run.EntryList	运行历史记录	Run history
+Run.FilterByOutcome	按结果筛选运行历史	Filter the run history by outcome
+Run.FilterByPeriod	按时间范围筛选运行历史	Filter the run history by period
+Run.Intro	查看每次同步的结果与传输摘要。	See the outcome of every sync and a summary of its transfers.
+Run.Last30Days	30 天	Last 30 days
+Run.Last7Days	7 天	Last 7 days
+Run.OutcomeCancelled	已取消	Cancelled
+Run.OutcomeFailed	失败	Failed
+Run.OutcomeLabel	结果：	Outcome:
+Run.OutcomePartial	部分成功	Partially succeeded
+Run.OutcomeSucceeded	成功	Succeeded
+Run.RecentLabel	最近：	Recent:
+Run.Refresh	刷新运行历史	Refresh the run history
+Run.Refreshing	正在刷新…	Refreshing…
+Run.WindowTitle	运行历史	Run history
+
+# ---- Windows Task Scheduler wizard ----
+Schedule.CliMissing	找不到 FengSync.Cli.exe；请重新安装完整应用。	FengSync.Cli.exe was not found; reinstall the full application.
+Schedule.Close	关闭计划任务窗口	Close the scheduled task window
+Schedule.Create	创建或更新计划任务	Create or update the scheduled task
+Schedule.Created	计划任务已创建或更新。	The scheduled task was created or updated.
+Schedule.Creating	正在创建…	Creating…
+Schedule.Delete	删除此计划任务	Delete this scheduled task
+Schedule.Deleted	计划任务已删除。	The scheduled task was deleted.
+Schedule.Deleting	正在删除…	Deleting…
+Schedule.Frequency	频率	Frequency
+Schedule.FrequencyField	计划任务频率	Scheduled task frequency
+Schedule.Hint	将以无人值守 JSON 模式运行。任务只保存 Profile ID；密码和其他凭据不会写进任务参数。需要将 FengSync.Cli.exe 与应用安装在同一目录。	It runs unattended in JSON mode. The task stores only the Profile ID; passwords and other credentials are not written into the task arguments. FengSync.Cli.exe must be installed in the same folder as the application.
+Schedule.ProfileIntro	为 Profile “{0}”创建 Windows 计划任务。	Create a Windows scheduled task for Profile "{0}".
+Schedule.Requesting	正在请求…	Requesting…
+Schedule.TaskName	任务名称	Task name
+Schedule.TaskNameField	计划任务名称	Scheduled task name
+Schedule.TestRequested	已请求测试运行；请在运行历史中查看结果。	A test run was requested; check the result in the run history.
+Schedule.TestRun	测试运行计划任务	Test-run the scheduled task
+Schedule.WindowTitle	计划任务	Scheduled task

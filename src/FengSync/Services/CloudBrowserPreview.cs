@@ -3,6 +3,7 @@ using System.Text;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -153,28 +154,31 @@ public static class CloudBrowserPreview
         return outcome switch
         {
             CloudPreviewOutcome.Folder =>
-                $"“{entry.Name}”是文件夹。预览只看一个文件，文件夹要列出来才知道里面有什么。",
+                Tr.Format("Preview.Folder", entry.Name),
             CloudPreviewOutcome.PictureWithoutDecoder =>
-                $"“{entry.Name}”是 {extension} 图片，本程序没有它的解码器。请下载后用图片查看器打开。",
+                Tr.Format("Preview.PictureWithoutDecoder", entry.Name, extension),
             CloudPreviewOutcome.NoRenderer =>
-                $"“{extension.TrimStart('.')}”不是本程序能渲染的格式（{entry.Name}）。内置渲染只有图片和文本，请下载后用对应的程序打开。",
+                Tr.Format("Preview.NoRenderer", extension.TrimStart('.'), entry.Name),
             CloudPreviewOutcome.Unrecognized =>
-                $"本程序不知道“{entry.Name}”{(extension.Length > 0 ? $"（{extension}）" : "（没有后缀）")}是什么格式，所以不预览。请下载后用对应的程序打开。",
-            CloudPreviewOutcome.Empty => $"“{entry.Name}”没有字节可读。",
+                Tr.Format("Preview.Unrecognized", entry.Name,
+                    extension.Length > 0 ? $"（{extension}）" : Tr.F("Preview.NoExtension")),
+            CloudPreviewOutcome.Empty => Tr.Format("Preview.Empty", entry.Name),
             CloudPreviewOutcome.TooLarge =>
-                $"“{entry.Name}”有 {CloudItemDetails.HumanSize(total > 0 ? total : entry.Size)}，"
-                + $"超过预览的上限 {CloudItemDetails.HumanSize(CapForName(entry.Name))}。请下载后打开。",
+                Tr.Format("Preview.TooLarge", entry.Name,
+                    CloudItemDetails.HumanSize(total > 0 ? total : entry.Size),
+                    CloudItemDetails.HumanSize(CapForName(entry.Name))),
             CloudPreviewOutcome.Missing =>
-                $"云端已没有“{entry.Name}”，列表里的这一行是上次浏览时的快照。",
+                Tr.Format("Preview.Missing", entry.Name),
             CloudPreviewOutcome.Failed =>
-                $"读不到“{entry.Name}”：{(string.IsNullOrWhiteSpace(detail) ? "云端拒绝了这次读取" : detail!.TrimEnd('。', '.'))}。",
+                Tr.Format("Preview.Failed", entry.Name,
+                    string.IsNullOrWhiteSpace(detail) ? Tr.F("Preview.CloudRefused") : detail!.TrimEnd('。', '.')),
             CloudPreviewOutcome.Binary =>
-                $"“{entry.Name}”里有 0 字节，它不是文本文件，预览画出来的只会是乱码。请下载后用对应的程序打开。",
+                Tr.Format("Preview.Binary", entry.Name),
             CloudPreviewOutcome.NotUtf8 =>
-                $"“{entry.Name}”不是 UTF-8 或 UTF-16 文本。本程序不猜它是哪种代码页——猜错的中文看着像文件损坏。请下载后用编辑器打开。",
+                Tr.Format("Preview.NotUtf8", entry.Name),
             CloudPreviewOutcome.UndecodableBytes =>
-                $"“{entry.Name}”读到的字节不是本程序能解码的图片，多半是文件损坏或后缀写错了。",
-            _ => $"“{entry.Name}”没有可预览的内容。"
+                Tr.Format("Preview.UndecodableBytes", entry.Name),
+            _ => Tr.Format("Preview.NoContent", entry.Name)
         };
     }
 

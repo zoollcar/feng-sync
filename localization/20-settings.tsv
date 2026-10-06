@@ -1,0 +1,86 @@
+# 设置中心 · SettingsWindow (XAML chrome, both editable pages, the two action pages and the dialogs).
+# The Chinese column must stay byte-identical to the literal it replaced.
+Settings.WindowTitle	设置中心	Settings
+Settings.NavCaption	设置	Settings
+Settings.PageGeneral	常规	General
+Settings.PageCloud	云盘	Cloud
+Settings.PageHistory	运行历史	Run history
+Settings.PageLogs	查看日志	View logs
+Settings.ResetPage	恢复本页默认值	Restore this page's defaults
+Settings.Cancel	取消	Cancel
+Settings.Apply	Apply	Apply
+Settings.Ok	确定	OK
+Settings.SectionGeneral	常规	General
+Settings.AutoCheckUpdates	自动检查更新	Check for updates automatically
+Settings.ShowCompleted	同步完成后保留进度窗口	Keep the progress window open after a sync
+Settings.StartWithWindows	随 Windows 启动 Feng Sync	Start Feng Sync with Windows
+Settings.SectionDefaults	默认值	Defaults
+Settings.DefaultConcurrency	默认最大并发传输数	Default maximum concurrent transfers
+Settings.VerifyCopies	默认在复制后验证文件大小	Verify file size after copying, by default
+Settings.ResumeMinimum	启用断点续传的最小文件大小	Smallest file that is resumed rather than restarted
+Settings.ResumeMinimumHint	不小于该大小的文件先写入 xxx.fengsync.partial，传输完成后改名发布，中断后可从断点继续（下载方向）。填 0 表示所有文件都续传；支持 500M、2G 这类写法。低于该大小使用 rclone 多流传输，速度更快但中断后需重新开始。	Files at or above this size are written to xxx.fengsync.partial first and renamed into place when the transfer finishes, so an interrupted download resumes where it stopped. 0 resumes every file; values like 500M and 2G are accepted. Below the threshold rclone uses multi-stream transfers, which are faster but restart from the beginning.
+Settings.TimeTolerance	默认时间容差（秒）	Default time tolerance (seconds)
+Settings.IncludeRules	默认包含规则（每行一条）	Default include rules (one per line)
+Settings.ExcludeRules	默认排除规则（每行一条）	Default exclude rules (one per line)
+Settings.VersioningNone	永久删除	Delete permanently
+Settings.VersioningArchive	版本目录	Version directory
+Settings.DefaultVersioning	默认版本策略	Default versioning strategy
+Settings.ArchiveDirectory	版本目录	Version directory
+Settings.KeepDays	保留天数	Days to keep
+Settings.SectionNotifications	通知与日志	Notifications and logs
+Settings.LogRetention	日志保留天数	Days of logs to keep
+Settings.NotifyOnCompletion	同步完成时显示通知	Show a notification when a sync finishes
+Settings.NetworkRetry	网络失败重试次数	Retries after a network failure
+Settings.SectionAppearance	界面	Appearance
+Settings.Language	界面语言	Interface language
+Settings.LanguageHint	立即生效：点「应用」后窗口上的文字就换成所选语言。文件路径、代理地址和 rclone 自己报出的文字不受影响。	Takes effect at once: the window's text switches language when you click Apply. File paths, proxy addresses and rclone's own messages are not translated.
+Settings.SectionMaintenance	维护	Maintenance
+Settings.SftpServer	SFTP 服务器设置…	SFTP server settings…
+Settings.CleanupTemporary	清理过期本地临时文件	Clean up expired local temporary files
+Settings.SettingsFile	设置文件：{0}	Settings file: {0}
+Settings.HistoryOpenCurrent	打开当前 Profile 的运行历史窗口。	Opens the run history of the Profile selected in the main window.
+Settings.HistoryNoProfile	请先在主窗口选择 Profile 后再查看运行历史。	Select a Profile in the main window first.
+Settings.HistoryForProfile	查看 Profile “{0}” 的运行历史。	Opens the run history of Profile "{0}".
+Settings.LogsOpenIncomplete	显示最近未完成的同步作业日志。	Shows the log of the most recent unfinished sync jobs.
+Settings.OpenAction	打开 {0}	Open {0}
+Settings.CloudIntro	以下设置只影响云盘管理里的上传与下载，不改变 Profile 的同步任务。	These settings affect uploads and downloads in cloud management only. They do not change a Profile's sync job.
+Settings.CloudConcurrency	同时传输数	Transfers at the same time
+Settings.CloudRetry	失败自动重试次数	Automatic retries after a failure
+Settings.CloudConcurrencyHint	同时传输数可在传输窗口里临时调整，这里设置的是每次启动时的默认值。重试次数填 0 表示失败后直接报告；无论填几，都能在传输窗口里手动重试。	The transfer window can change the number of concurrent transfers temporarily; the value here is what each launch starts from. 0 retries means a failure is reported straight away. Whatever you choose, the transfer window can always retry by hand.
+Settings.SectionRateAndWindow	传输速率与时段	Transfer rate and time window
+Settings.UploadLimit	上传限速	Upload limit
+Settings.DownloadLimit	下载限速	Download limit
+Settings.RateLimitHint	留空或填 0 表示不限速；支持 500K、2M 这类写法。限速是 rclone 的进程级设置——实测它不接受按端点分别限速（core/bwlimit 只收一个速率），所以这里设的值对云端浏览、上传、下载一视同仁，并且只在有传输进行时生效，传输结束就恢复不限速。	Empty or 0 means no limit; values like 500K and 2M are accepted. The limit belongs to the rclone process: measured against rclone, it cannot be set per endpoint (core/bwlimit takes a single rate), so the value here applies equally to browsing, uploading and downloading, and only while a transfer is running — it goes back to unlimited once the transfers finish.
+Settings.WindowStart	仅在此时间段传输（开始）	Transfer only in this window (start)
+Settings.WindowEnd	仅在此时间段传输（结束）	Transfer only in this window (end)
+Settings.WindowHint	格式 HH:mm，留空表示任何时间都可以传输。时段外排队中的传输会一直等待，不会被取消；跨午夜（如 22:00–06:00）按一整段处理。实测 rclone 的限速时间表只能改速率、不能让传输停下来，所以这一项由本程序在队列上实现。	Format HH:mm; empty means transfers may run at any time. Transfers queued outside the window keep waiting and are never cancelled, and a window that crosses midnight (22:00–06:00) is treated as one span. Measured against rclone, its bandwidth schedule can only change the rate, not stop a transfer, so this one is implemented on the queue.
+Settings.AfterTransfer	全部传输成功后	After every transfer has succeeded
+Settings.AfterTransferHint	只在整批传输全部成功时才触发；有任何一项失败就只报告，不会关机。执行前会再确认一次，因此需要保持传输窗口打开——没有人能应答的确认框不应该变成一次关机。	It runs only when the whole batch succeeded; a single failure means the action is just reported and nothing shuts down. It asks once more before running, so keep the transfer window open — a confirmation nobody can answer should not turn into a shutdown.
+Settings.SectionProxy	网络代理	Network proxy
+Settings.ProxyServer	代理服务器	Proxy server
+Settings.ProxyHint	留空表示自动：先用环境变量里的 HTTP_PROXY/HTTPS_PROXY，再用 Windows 的 Internet 选项。填写 host:port（如 proxy.corp:8080）或带协议的完整地址（如 http://proxy.corp:8080、socks5://127.0.0.1:1080）。只影响本程序自己启动的 rclone 进程——云盘浏览、挂载、SFTP 服务与同步任务都会走它，不会修改系统或其他程序的代理设置。代理在 rclone 启动时确定，改动需重启程序后才生效。	Empty means automatic: first the HTTP_PROXY/HTTPS_PROXY environment variables, then the Windows Internet options. Enter host:port (for example proxy.corp:8080) or a full address with a scheme (http://proxy.corp:8080, socks5://127.0.0.1:1080). This affects only the rclone processes this program starts — cloud browsing, mounts, the SFTP service and sync jobs all go through it — and never changes the system or another program's proxy settings. The proxy is fixed when rclone starts, so a change takes effect after a restart.
+Settings.SectionDownload	下载	Download
+Settings.DefaultDownloadDirectory	默认下载目录	Default download folder
+Settings.Browse	Browse…	Browse…
+Settings.DownloadHint	留空表示每次下载都询问保存位置。设置了目录后，同名文件仍会在覆盖前确认。	Empty means every download asks where to save it. With a folder set, a file of the same name is still confirmed before it is overwritten.
+Settings.SectionUpload	上传	Upload
+Settings.ConflictAsk	每次询问	Ask every time
+Settings.ConflictOverwrite	直接覆盖	Overwrite
+Settings.ConflictSkip	跳过同名文件	Skip files of the same name
+Settings.ConflictKeepBoth	保留两者（重命名）	Keep both (rename)
+Settings.ConflictTarget	目标目录已有同名文件时	When the destination already has a file of the same name
+Settings.SectionBehaviour	行为	Behaviour
+Settings.CloudNotify	云盘传输完成时显示通知	Show a notification when a cloud transfer finishes
+Settings.CloudResumeOnStartup	启动时恢复上次未完成的云盘传输	Resume the last unfinished cloud transfers at startup
+Settings.SectionMount	挂载	Mounts
+Settings.MountCacheLimit	VFS 缓存上限	VFS cache limit
+Settings.MountCacheHint	留空或填 0 表示不限制缓存大小（rclone 的默认值），缓存会一直增长到磁盘占满。这里是新建挂载的默认值，单个挂载可以在挂载对话框的“高级选项”里单独覆盖。缓存目录与占用大小在云盘管理窗口的挂载区域可以查看和清理。	Empty or 0 means the cache is not capped (rclone's own default), and it grows until the disk is full. This is the default for new mounts; an individual mount can override it under "Advanced" in the mount dialog. The cache folder and its size can be inspected and cleared in the mounts area of the cloud manager window.
+Settings.PickDownloadDirectory	选择默认下载目录	Choose the default download folder
+Settings.MessageTitle	程序设置	Application settings
+Settings.MaintenanceTitle	维护	Maintenance
+Settings.CleanupDone	已清理 {0} 个超过 7 天的本地临时文件。	Removed {0} local temporary files older than 7 days.
+Settings.TransferWindowFormat	传输时段的时间格式应为 HH:mm，例如 22:00 与 06:00；两边都留空表示任何时间都可以传输。	The transfer window's times should be HH:mm, for example 22:00 and 06:00; leaving both empty allows transfers at any time.
+Settings.LogTitle	同步日志	Sync log
+Settings.NoIncompleteLogs	没有未完成的同步作业日志。	There are no unfinished sync job logs.
+Settings.LogEntry	作业 {0}\n开始：{1}\n{2}	Job {0}\nStarted: {1}\n{2}
+Settings.Dirty	有未应用的更改	There are unapplied changes

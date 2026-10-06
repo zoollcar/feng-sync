@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -34,22 +35,22 @@ public static class CloudTransferDiagnostics
                 : $"{task.RemoteUri}/{task.RemotePath} → {task.LocalPath}";
         var lines = new List<string>
         {
-            $"任务：{task.Display}",
-            $"方向：{task.DirectionText}",
-            $"路径：{where}",
-            $"状态：{task.StatusText}",
-            $"尝试次数：{task.Attempt}"
+            Tr.Format("Transfer.DetailTask", task.Display),
+            Tr.Format("Transfer.DetailDirection", task.DirectionText),
+            Tr.Format("Transfer.DetailPath", where),
+            Tr.Format("Transfer.DetailStatus", task.StatusText),
+            Tr.Format("Transfer.DetailAttempt", task.Attempt)
         };
-        if (!string.IsNullOrWhiteSpace(task.Error)) lines.Add("错误：" + task.Error);
-        if (task.HasErrorDetail) lines.Add("诊断详情：" + Environment.NewLine + task.ErrorDetail);
-        else lines.Add("诊断详情：这个任务没有记录更详细的信息。");
+        if (!string.IsNullOrWhiteSpace(task.Error)) lines.Add(Tr.Format("Transfer.DetailError", task.Error));
+        if (task.HasErrorDetail) lines.Add(Tr.Format("Transfer.DetailDiagnostics", task.ErrorDetail));
+        else lines.Add(Tr.F("Transfer.DetailNoDiagnostics"));
         return string.Join(Environment.NewLine, lines);
     }
 
     /// <summary>What the status line says after a copy attempt, so "copy" never looks like it worked when it did not.</summary>
     public static string DescribeCopy(bool copied) => copied
-        ? "详情已复制到剪贴板，可直接粘贴到问题反馈里。"
-        : "没能写入剪贴板，请从详情窗口里自行复制。";
+        ? Tr.F("Transfer.CopiedDetail")
+        : Tr.F("Transfer.CopyDetailFailed");
 
     /// <summary>Where rclone failures for one day are written, matching <c>RcloneFailureLog</c> exactly.</summary>
     public static string LogPath(DateTimeOffset now) =>
@@ -64,15 +65,15 @@ public static class CloudTransferDiagnostics
     {
         try
         {
-            if (!File.Exists(path)) return $"没有找到今天的失败日志：{path}" + Environment.NewLine + "（只有真正发生过 rclone 失败时才会生成这个文件。）";
+            if (!File.Exists(path)) return Tr.Format("Transfer.LogMissing", path);
             var lines = File.ReadLines(path).TakeLast(Math.Max(1, maxLines)).ToList();
-            if (lines.Count == 0) return $"失败日志为空：{path}";
-            return $"共 {lines.Count} 条（最多显示 {maxLines} 条）：{path}" + Environment.NewLine + Environment.NewLine
+            if (lines.Count == 0) return Tr.Format("Transfer.LogEmpty", path);
+            return Tr.Format("Transfer.LogSummary", lines.Count, maxLines, path) + Environment.NewLine + Environment.NewLine
                 + string.Join(Environment.NewLine, lines.Select(Render));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return "无法读取失败日志：" + RcloneUiError.Describe(ex, "cloud-transfer-log");
+            return Tr.Format("Transfer.LogReadFailed", RcloneUiError.Describe(ex, "cloud-transfer-log"));
         }
     }
 
@@ -97,7 +98,7 @@ public static class CloudTransferDiagnostics
                 Text("Category"),
                 Text("Operation"),
                 Text("UserMessage"),
-                Text("CorrelationId") is { Length: > 0 } id ? $"诊断 ID {id}" : ""
+                Text("CorrelationId") is { Length: > 0 } id ? Tr.Format("Transfer.DiagnosticId", id) : ""
             };
             return string.Join("  ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
         }

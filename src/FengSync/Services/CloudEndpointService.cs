@@ -3,6 +3,7 @@ using System.IO;
 using FengSync.Core;
 using FengSync.Core.Rclone.Configuration;
 using FengSync.Core.Rclone.Diagnostics;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -47,11 +48,10 @@ public static class CloudEndpointService
     /// <c>https://s3.&lt;region&gt;.backblazeb2.com</c> endpoint. The endpoint is mandatory here because
     /// rclone would otherwise fall back to the Amazon S3 host.
     /// </summary>
-    private static readonly S3ProviderPreset[] S3Presets =
+    private static IReadOnlyList<S3ProviderPreset> S3Presets =>
     [
         new("Backblaze", "Other",
-            "Backblaze B2 的 S3 兼容 API（仅接受 HTTPS）。Endpoint 形如 https://s3.<region>.backblazeb2.com，"
-            + "Region 必须与 Endpoint 中的区域一致；两者都能在 B2 控制台的 Bucket 详情页看到。",
+            Tr.F("Provider.Backblaze.Description"),
             [], RequiresEndpoint: true)
     ];
 
@@ -109,27 +109,27 @@ public static class CloudEndpointService
     public static IReadOnlyDictionary<string, string> ValidateS3Settings(S3EndpointValues values, IReadOnlyCollection<string> providers)
     {
         var errors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(values.DisplayName)) errors["displayName"] = "请输入显示名称。";
-        if (!providers.Contains(values.Provider, StringComparer.Ordinal)) errors["provider"] = "请选择 rclone 支持的 S3 Provider。";
-        if (string.IsNullOrWhiteSpace(values.AccessKey)) errors["accessKey"] = "请输入 Access Key ID。";
-        if (string.IsNullOrWhiteSpace(values.Secret)) errors["secret"] = "请输入 Secret Access Key。";
-        if (string.IsNullOrWhiteSpace(values.Bucket)) errors["bucket"] = "请输入 Bucket。";
-        if (values.Bucket.Contains('/') || values.Bucket.Contains('\\')) errors["bucket"] = "Bucket 不能包含目录；请单独填写前缀。";
-        if (values.Subdirectory.Split('/', '\\').Any(segment => segment == "..")) errors["subdirectory"] = "前缀不能包含“..”。";
-        if (values.Subdirectory.Contains('\\')) errors["subdirectory"] = "前缀请使用“/”分隔，不要使用“\\”。";
+        if (string.IsNullOrWhiteSpace(values.DisplayName)) errors["displayName"] = Tr.F("S3.NeedDisplayName");
+        if (!providers.Contains(values.Provider, StringComparer.Ordinal)) errors["provider"] = Tr.F("S3.NeedProvider");
+        if (string.IsNullOrWhiteSpace(values.AccessKey)) errors["accessKey"] = Tr.F("S3.NeedAccessKey");
+        if (string.IsNullOrWhiteSpace(values.Secret)) errors["secret"] = Tr.F("S3.NeedSecretKey");
+        if (string.IsNullOrWhiteSpace(values.Bucket)) errors["bucket"] = Tr.F("S3.NeedBucket");
+        if (values.Bucket.Contains('/') || values.Bucket.Contains('\\')) errors["bucket"] = Tr.F("S3.BucketHasNoPrefix");
+        if (values.Subdirectory.Split('/', '\\').Any(segment => segment == "..")) errors["subdirectory"] = Tr.F("S3.PrefixNoDotDot");
+        if (values.Subdirectory.Contains('\\')) errors["subdirectory"] = Tr.F("S3.PrefixUsesSlash");
 
         var endpoint = values.Endpoint.Trim();
         if (endpoint.Length > 0)
         {
             if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || string.IsNullOrWhiteSpace(uri.Host))
-                errors["endpoint"] = "Endpoint 必须是完整的 HTTP 或 HTTPS 地址。";
+                errors["endpoint"] = Tr.F("S3.EndpointMustBeAbsolute");
             else if (uri.AbsolutePath.Trim('/') is not "")
-                errors["endpoint"] = "Endpoint 不能包含 Bucket 或目录。";
+                errors["endpoint"] = Tr.F("S3.EndpointNoBucket");
         }
         else if (FindPreset(values.Provider) is { RequiresEndpoint: true })
         {
             // Without an endpoint rclone would talk to the Amazon S3 host instead of the chosen service.
-            errors["endpoint"] = $"{values.Provider} 必须填写 Endpoint，形如 https://s3.<region>.backblazeb2.com。";
+            errors["endpoint"] = Tr.Format("S3.EndpointRequiredFor", values.Provider);
         }
         return errors;
     }
@@ -293,7 +293,7 @@ public static class CloudEndpointService
             var backing = "fengsync_probe_" + Guid.NewGuid().ToString("N");
             var alias = backing + "_alias";
             await CreateStaticRemoteAsync(configuration, backing, "s3", DisplayName(EndpointType.S3), S3Parameters(values), ct);
-            await CreateStaticRemoteAsync(configuration, alias, "alias", "别名", AliasParameters(backing, values.Prefix), ct);
+            await CreateStaticRemoteAsync(configuration, alias, "alias", Tr.F("Endpoint.AliasLabel"), AliasParameters(backing, values.Prefix), ct);
             // The path is empty on purpose: the alias root is already the prefix. rclone refuses anything
             // above it, so this listing cannot reach a sibling key.
             var directories = await daemon.Client.ListDirectoriesAsync(alias + ":", "", false, ct);
@@ -302,7 +302,7 @@ public static class CloudEndpointService
         finally
         {
             if (Directory.Exists(directory)) Directory.Delete(directory, true);
-            if (Directory.Exists(directory)) throw new IOException($"S3 连接测试临时目录未能清理：{directory}");
+            if (Directory.Exists(directory)) throw new IOException(Tr.Format("S3.ProbeCleanupFailed", directory));
             var parent = Path.GetDirectoryName(directory)!;
             try { if (Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any()) Directory.Delete(parent); } catch { }
         }
@@ -318,11 +318,11 @@ public static class CloudEndpointService
     {
         var existing = await ConfigurationApi.ListRemoteNamesAsync(ct);
         if (existing.Contains(remoteName, StringComparer.OrdinalIgnoreCase) && !replace)
-            throw new InvalidOperationException($"端点名称“{remoteName}”已存在，请修改显示名称。");
+            throw new InvalidOperationException(Tr.Format("Endpoint.NameExists", remoteName));
 
         var backing = BackingRemoteName(remoteName);
         if (existing.Contains(backing, StringComparer.OrdinalIgnoreCase) && !replace)
-            throw new InvalidOperationException($"内部名称“{backing}”已被占用，请修改显示名称。");
+            throw new InvalidOperationException(Tr.Format("Endpoint.BackingNameTaken", backing));
 
         // Read before the write below replaces the record: the group and tags are the user's own filing and
         // this path has no opinion about them, so it must carry them across rather than drop them.
@@ -344,7 +344,7 @@ public static class CloudEndpointService
             if (existing.Contains(backing, StringComparer.OrdinalIgnoreCase)) await ConfigurationApi.DeleteAsync(backing, ct);
 
             await CreateStaticRemoteAsync(ConfigurationApi, backing, "s3", DisplayName(EndpointType.S3), S3Parameters(values), ct);
-            await CreateStaticRemoteAsync(ConfigurationApi, remoteName, "alias", "别名", AliasParameters(backing, prefix), ct);
+            await CreateStaticRemoteAsync(ConfigurationApi, remoteName, "alias", Tr.F("Endpoint.AliasLabel"), AliasParameters(backing, prefix), ct);
             await Metadata.UpsertAsync(CloudEndpointOrganization.Preserve(previous,
                 new(remoteName, "alias", values.Provider, values.Bucket.Trim(),
                     values.Subdirectory.Trim().Trim('/'), backing)), ct);
@@ -390,7 +390,7 @@ public static class CloudEndpointService
     public static async Task ReconnectAsync(EndpointType kind, string remoteName, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         if (!CloudProviderCatalog.RequiresOAuth(kind))
-            throw new NotSupportedException($"{DisplayName(kind)} 不需要浏览器授权，请直接编辑端点参数。");
+            throw new NotSupportedException(Tr.Format("Endpoint.NoOAuthNeeded", DisplayName(kind)));
         await RcloneEnvironment.WarmOAuthDnsAsync(ct);
         var descriptor = CloudProviderCatalog.For(kind);
         var api = ConfigurationApi;
@@ -463,7 +463,7 @@ public static class CloudEndpointService
         if (!string.IsNullOrWhiteSpace(output.Error))
             throw new RcloneException(RcloneFailureClassifier.FromJob("config/create", output.Error));
         if (!string.IsNullOrWhiteSpace(output.State))
-            throw new InvalidOperationException($"无法自动完成 {label} 配置；rclone 需要回答选项“{output.Option?.Name ?? output.State}”。");
+            throw new InvalidOperationException(Tr.Format("Endpoint.NeedsInteractiveOption", label, output.Option?.Name ?? output.State));
     }
 
     /// <summary>Confirms the remote and the user-selected root are reachable.</summary>
@@ -487,7 +487,7 @@ public static class CloudEndpointService
     private static void OpenBrowser(Uri uri)
     {
         try { _ = Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
-        catch (Exception ex) { throw new InvalidOperationException($"无法打开默认浏览器。授权地址：{uri}", ex); }
+        catch (Exception ex) { throw new InvalidOperationException(Tr.Format("Endpoint.BrowserOpenFailed", uri), ex); }
     }
 
 }

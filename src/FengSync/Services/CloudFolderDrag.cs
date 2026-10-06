@@ -1,4 +1,5 @@
 using System.IO;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -57,7 +58,7 @@ public static class CloudFolderDrag
         {
             var path = entry.Path.Trim('/');
             if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException($"递归列表给出的“{path}”不在被拖出的文件夹里。");
+                throw new InvalidOperationException(Tr.Format("Drag.ListingOutsideFolder", path));
             var tail = path[prefix.Length..];
 
             // One account folder per endpoint name, so a remote name is only ever a path segment beneath it.
@@ -77,10 +78,10 @@ public static class CloudFolderDrag
         var clashes = files.Where(x => directoryNames.Contains(x.LocalPath)).Select(x => x.LocalPath)
             .Concat(directories.Where(x => fileNames.Contains(x))).ToArray();
         if (clashes.Length > 0)
-            return Refused(folderLocal, $"云端有同名的文件与文件夹（“{Path.GetFileName(clashes[0])}”），本地放不进同一个名字。");
+            return Refused(folderLocal, Tr.Format("Drag.FileFolderNameClash", Path.GetFileName(clashes[0])));
 
         if (files.Count > MaxFilesPerDrag)
-            return Refused(folderLocal, $"这个文件夹有 {files.Count} 个文件，一次最多拖出 {MaxFilesPerDrag} 个，请进入子文件夹分批拖出。");
+            return Refused(folderLocal, Tr.Format("Drag.TooManyFiles", files.Count, MaxFilesPerDrag));
 
         return new Plan(folderLocal, directories, files, files.Sum(x => x.Size), null);
     }
@@ -117,8 +118,9 @@ public static class CloudFolderDrag
     /// <summary>The name the status line uses for what is being dragged out.</summary>
     public static string Describe(Plan plan) =>
         plan.FileCount == 0
-            ? $"{Path.GetFileName(plan.FolderLocalPath)}（空文件夹）"
-            : $"{Path.GetFileName(plan.FolderLocalPath)} · {plan.FileCount} 个文件 · {CloudItemDetails.HumanSize(plan.TotalBytes)}";
+            ? Tr.Format("Drag.DescribeEmpty", Path.GetFileName(plan.FolderLocalPath))
+            : Tr.Format("Drag.Describe", Path.GetFileName(plan.FolderLocalPath), plan.FileCount,
+                CloudItemDetails.HumanSize(plan.TotalBytes));
 
     private static Plan Refused(string folderLocal, string reason) =>
         new(folderLocal, [], [], 0, reason);
@@ -134,12 +136,12 @@ public static class CloudFolderDrag
         foreach (var segment in segments)
         {
             if (segment == "." || segment == "..")
-                return $"云端的路径里有一段“{segment}”，本地不能这样放。";
+                return Tr.Format("Drag.BadSegment", segment);
             if (segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-                return $"“{segment}”这个云端名字在本地不是合法的文件名。";
+                return Tr.Format("Drag.BadLocalName", segment);
         }
         var root = Path.GetFullPath(folderLocal).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
         var full = Path.GetFullPath(local);
-        return full.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? null : "云端给出的名字会落到这个文件夹外面，没有拖出它。";
+        return full.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? null : Tr.F("Drag.EscapesFolder");
     }
 }

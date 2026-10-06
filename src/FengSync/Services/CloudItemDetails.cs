@@ -1,4 +1,5 @@
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -77,14 +78,15 @@ public static class CloudItemDetails
     {
         var rows = new List<CloudDetailRow>
         {
-            new("名称", entry.Name),
-            new("类型", entry.IsDirectory ? "文件夹" : "文件"),
+            new(Tr.F("Details.Name"), entry.Name),
+            new(Tr.F("Details.Type"), entry.IsDirectory ? Tr.F("Details.Folder") : Tr.F("Details.File")),
         };
         if (stat is { Exists: false })
         {
             // The row on screen is a listing the backend has since stopped answering; saying so is the whole
             // point, because the alternative is a panel of values for a file that is not there.
-            rows.Add(new CloudDetailRow("状态", "云端已没有这个" + (entry.IsDirectory ? "文件夹" : "文件") + "，请刷新目录。"));
+            rows.Add(new CloudDetailRow(Tr.F("Details.Status"),
+                Tr.Format("Details.Gone", entry.IsDirectory ? Tr.F("Details.Folder") : Tr.F("Details.File"))));
             AddLocation(rows, entry, account);
             return rows;
         }
@@ -92,31 +94,31 @@ public static class CloudItemDetails
         var read = stat;
         var reported = read?.Size ?? entry.Size;
         var modified = read?.ModifiedUtc ?? entry.ModifiedUtc;
-        rows.Add(new CloudDetailRow("大小", entry.IsDirectory
+        rows.Add(new CloudDetailRow(Tr.F("Details.Size"), entry.IsDirectory
             ? size is null ? CloudFolderSize.NotCounted : CloudFolderSize.TextFor(size)
-            : HumanSize(reported) + "（" + reported.ToString("N0") + " 字节）"));
-        rows.Add(new CloudDetailRow("修改时间", ModifiedText(modified)));
+            : Tr.Format("Details.SizeValue", HumanSize(reported), reported.ToString("N0"))));
+        rows.Add(new CloudDetailRow(Tr.F("Details.Modified"), ModifiedText(modified)));
         // rclone answers a MimeType for every object, including inode/directory, so this row is about the
         // bytes rather than the extension the listing shows.
-        if (read?.MimeType is { Length: > 0 } mime) rows.Add(new CloudDetailRow("MIME 类型", mime));
+        if (read?.MimeType is { Length: > 0 } mime) rows.Add(new CloudDetailRow(Tr.F("Details.MimeType"), mime));
 
         if (read?.Hashes.Count > 0)
         {
             foreach (var type in HashPreference)
-                if (read.Hashes.TryGetValue(type, out var hash)) rows.Add(new CloudDetailRow("校验值（" + HashLabel(type) + "）", hash));
+                if (read.Hashes.TryGetValue(type, out var hash)) rows.Add(new CloudDetailRow(Tr.Format("Details.HashWithType", HashLabel(type)), hash));
         }
-        else if (entry.IsDirectory) rows.Add(new CloudDetailRow("校验值", "文件夹没有校验值"));
-        else if (hashRequested) rows.Add(new CloudDetailRow("校验值", "此后端未提供校验值"));
-        else rows.Add(new CloudDetailRow("校验值", "未计算"));
+        else if (entry.IsDirectory) rows.Add(new CloudDetailRow(Tr.F("Details.Hash"), Tr.F("Details.FolderNoHash")));
+        else if (hashRequested) rows.Add(new CloudDetailRow(Tr.F("Details.Hash"), Tr.F("Details.BackendNoHash")));
+        else rows.Add(new CloudDetailRow(Tr.F("Details.Hash"), Tr.F("Details.HashNotComputed")));
 
         AddLocation(rows, entry, account);
         return rows;
     }
 
     /// <summary>The button that asks for a checksum, and the warning that goes with it before anything is read.</summary>
-    public const string HashActionLabel = "计算校验值";
+    public static string HashActionLabel => Tr.F("Details.HashActionLabel");
 
-    public const string HashActionHint = "校验值需要读取整个文件；云端对象会因此走完一遍下载，大文件请耐心等待。";
+    public static string HashActionHint => Tr.F("Details.HashActionHint");
 
     /// <summary>
     /// Whether the panel may still offer to read a checksum: only an object that is there, is a file, reported
@@ -164,19 +166,19 @@ public static class CloudItemDetails
         var bytes = files.Sum(entry => entry.Size);
         var rows = new List<CloudDetailRow>
         {
-            new("选择", selection.Count + " 项"),
-            new("文件", files.Count + " 个"),
-            new("大小", files.Count == 0
-                ? "没有文件"
-                : HumanSize(bytes) + "（" + bytes.ToString("N0") + " 字节）"),
+            new(Tr.F("Details.Selection"), Tr.Format("Details.SelectionCount", selection.Count)),
+            new(Tr.F("Details.File"), Tr.Format("Details.FileCount", files.Count)),
+            new(Tr.F("Details.Size"), files.Count == 0
+                ? Tr.F("Details.NoFiles")
+                : Tr.Format("Details.SizeValue", HumanSize(bytes), bytes.ToString("N0"))),
         };
         if (folders > 0)
-            rows.Add(new CloudDetailRow("文件夹", folders + " 个（大小未统计）"));
+            rows.Add(new CloudDetailRow(Tr.F("Details.Folder"), Tr.Format("Details.FolderCount", folders)));
         DateTimeOffset? newest = null;
         foreach (var entry in selection)
             if (entry.ModifiedUtc is { } modified && (newest is null || modified > newest)) newest = modified;
-        rows.Add(new CloudDetailRow("最近修改", ModifiedText(newest)));
-        if (account is not null) rows.Add(new CloudDetailRow("所在端点", EndpointText(account)));
+        rows.Add(new CloudDetailRow(Tr.F("Details.LastModified"), ModifiedText(newest)));
+        if (account is not null) rows.Add(new CloudDetailRow(Tr.F("Details.Endpoint"), EndpointText(account)));
         return rows;
     }
 
@@ -203,11 +205,11 @@ public static class CloudItemDetails
     {
         // The address rclone itself would take, because that is the path a repair or a CLI check needs; the
         // endpoint line below is the one a user recognises.
-        rows.Add(new CloudDetailRow("路径", (account?.Name ?? "") + ":" + entry.Path));
-        if (account is not null) rows.Add(new CloudDetailRow("所在端点", EndpointText(account)));
+        rows.Add(new CloudDetailRow(Tr.F("Details.Path"), (account?.Name ?? "") + ":" + entry.Path));
+        if (account is not null) rows.Add(new CloudDetailRow(Tr.F("Details.Endpoint"), EndpointText(account)));
         if (account is { Prefix.Length: > 0 } withPrefix)
-            rows.Add(new CloudDetailRow("端点根目录", "/" + withPrefix.Prefix
-                + (withPrefix.PrefixIsEnforced ? "（由 rclone 强制，无法越出）" : "")));
+            rows.Add(new CloudDetailRow(Tr.F("Details.EndpointRoot"), "/" + withPrefix.Prefix
+                + (withPrefix.PrefixIsEnforced ? Tr.F("Details.PrefixEnforced") : "")));
     }
 
     private static string EndpointText(CloudEndpointAccount account) =>
@@ -215,5 +217,5 @@ public static class CloudItemDetails
 
     private static string ModifiedText(DateTimeOffset? modified) => modified is { } value
         ? value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
-        : "未知";
+        : Tr.F("Details.Unknown");
 }

@@ -1,3 +1,5 @@
+using FengSync.Localization;
+
 namespace FengSync.Services;
 
 /// <summary>
@@ -7,7 +9,7 @@ namespace FengSync.Services;
 public static class CloudEndpointOrganization
 {
     /// <summary>The heading ungrouped endpoints are filed under, so every row has one.</summary>
-    public const string UngroupedLabel = "未分组";
+    public static string UngroupedLabel => Tr.F("Endpoint.UngroupedLabel");
 
     /// <summary>Trimmed group name, or null when the endpoint is ungrouped.</summary>
     public static string? NormalizeGroup(string? group) => string.IsNullOrWhiteSpace(group) ? null : group.Trim();
@@ -66,9 +68,9 @@ public static class CloudEndpointOrganization
     /// <summary>The status line after an organisation change, kept separate so the wording is testable.</summary>
     public static string Describe(string remoteName, string? group, IReadOnlyList<string>? tags)
     {
-        if (group is null && tags is null) return $"已清除端点“{remoteName}”的分组与标签。";
-        if (group is null) return $"已为端点“{remoteName}”设置 {tags!.Count} 个标签。";
-        if (tags is null) return $"已将端点“{remoteName}”归入分组“{group}”。";
-        return $"已更新端点“{remoteName}”的分组与标签。";
+        if (group is null && tags is null) return Tr.Format("Endpoint.ClearedOrganization", remoteName);
+        if (group is null) return Tr.Format("Endpoint.TagsSet", remoteName, tags!.Count);
+        if (tags is null) return Tr.Format("Endpoint.GroupSet", remoteName, group);
+        return Tr.Format("Endpoint.OrganizationUpdated", remoteName);
     }
 }

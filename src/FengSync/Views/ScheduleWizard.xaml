@@ -1,14 +1,15 @@
 <Window x:Class="FengSync.Views.ScheduleWizard"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="计划任务"
+        xmlns:l="clr-namespace:FengSync.Localization"
+        Title="{Binding [Schedule.WindowTitle], Source={l:Lang}}"
         Width="530"
         Height="350"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{DynamicResource WindowBackgroundBrush}"
         AutomationProperties.AutomationId="ScheduleWizard"
-        AutomationProperties.Name="计划任务">
+        AutomationProperties.Name="{Binding [Schedule.WindowTitle], Source={l:Lang}}">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -30,30 +31,31 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Row="0" Grid.ColumnSpan="2">
-                    <TextBlock Text="计划任务" Style="{StaticResource PageTitleTextStyle}" />
+                    <TextBlock Text="{Binding [Schedule.WindowTitle], Source={l:Lang}}" Style="{StaticResource PageTitleTextStyle}" />
                     <TextBlock x:Name="ProfileText"
                                TextWrapping="Wrap"
                                Style="{StaticResource CaptionTextStyle}"
                                Margin="0,4,0,18" />
                 </StackPanel>
-                <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="任务名称" Style="{StaticResource BodyTextStyle}" />
+                <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{Binding [Schedule.TaskName], Source={l:Lang}}" Style="{StaticResource BodyTextStyle}" />
                 <TextBox Grid.Row="1"
                          Grid.Column="1"
                          x:Name="TaskNameBox"
                          AutomationProperties.AutomationId="ScheduleTaskName"
-                         AutomationProperties.Name="计划任务名称" />
+                         AutomationProperties.Name="{Binding [Schedule.TaskNameField], Source={l:Lang}}" />
                 <TextBlock Grid.Row="2"
                            VerticalAlignment="Center"
                            Margin="0,12,0,0"
-                           Text="频率"
+                           Text="{Binding [Schedule.Frequency], Source={l:Lang}}"
                            Style="{StaticResource BodyTextStyle}" />
                 <ComboBox Grid.Row="2"
                           Grid.Column="1"
                           x:Name="ScheduleBox"
                           AutomationProperties.AutomationId="ScheduleFrequency"
-                          AutomationProperties.Name="计划任务频率"
+                          AutomationProperties.Name="{Binding [Schedule.FrequencyField], Source={l:Lang}}"
                           Margin="0,12,0,0"
                           SelectedIndex="0">
+                    <!-- DAILY / WEEKLY / … are the strings Windows Task Scheduler itself is given and reads back. -->
                     <ComboBoxItem Content="DAILY" />
                     <ComboBoxItem Content="WEEKLY" />
                     <ComboBoxItem Content="MONTHLY" />
@@ -65,7 +67,7 @@
                            Margin="0,16,0,0"
                            TextWrapping="Wrap"
                            Style="{StaticResource CaptionTextStyle}"
-                           Text="将以无人值守 JSON 模式运行。任务只保存 Profile ID；密码和其他凭据不会写进任务参数。需要将 FengSync.Cli.exe 与应用安装在同一目录。" />
+                           Text="{Binding [Schedule.Hint], Source={l:Lang}}" />
             </Grid>
         </Border>
 
@@ -89,25 +91,29 @@
                     <Button IsCancel="True"
                             Margin="0,0,8,0"
                             Style="{StaticResource TertiaryButtonStyle}"
-                            AutomationProperties.Name="关闭计划任务窗口">关闭</Button>
+                            AutomationProperties.Name="{Binding [Schedule.Close], Source={l:Lang}}"
+                            Content="{Binding [Schedule.Close], Source={l:Lang}}" />
                     <Button x:Name="DeleteButton"
                             AutomationProperties.AutomationId="DeleteScheduleButton"
-                            AutomationProperties.Name="删除此计划任务"
+                            AutomationProperties.Name="{Binding [Schedule.Delete], Source={l:Lang}}"
                             Click="Delete_Click"
                             Margin="0,0,8,0"
-                            Style="{StaticResource DangerButtonStyle}">删除</Button>
+                            Style="{StaticResource DangerButtonStyle}"
+                            Content="{Binding [Schedule.Delete], Source={l:Lang}}" />
                     <Button x:Name="TestButton"
                             AutomationProperties.AutomationId="TestScheduleButton"
-                            AutomationProperties.Name="测试运行计划任务"
+                            AutomationProperties.Name="{Binding [Schedule.TestRun], Source={l:Lang}}"
                             Click="Test_Click"
                             Margin="0,0,8,0"
-                            Style="{StaticResource SecondaryButtonStyle}">测试运行</Button>
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Content="{Binding [Schedule.TestRun], Source={l:Lang}}" />
                     <Button x:Name="CreateButton"
                             AutomationProperties.AutomationId="CreateScheduleButton"
-                            AutomationProperties.Name="创建或更新计划任务"
+                            AutomationProperties.Name="{Binding [Schedule.Create], Source={l:Lang}}"
                             Click="Create_Click"
                             IsDefault="True"
-                            Style="{StaticResource PrimaryButtonStyle}">创建或更新</Button>
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Content="{Binding [Schedule.Create], Source={l:Lang}}" />
                 </StackPanel>
             </Grid>
         </Border>

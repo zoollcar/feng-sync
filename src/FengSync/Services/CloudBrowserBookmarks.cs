@@ -1,3 +1,5 @@
+using FengSync.Localization;
+
 namespace FengSync.Services;
 
 /// <summary>One remembered place in the browser: which endpoint, and which directory inside it. <see cref="Path"/> is
@@ -119,7 +121,7 @@ public static class CloudBrowserBookmarks
     /// five endpoints, and the path is the part that tells them apart.
     /// </summary>
     public static string LabelFor(CloudBookmark bookmark, string endpointName) =>
-        bookmark.Path.Length == 0 ? $"{endpointName}  ·  根目录" : $"{endpointName}  ·  /{bookmark.Path}";
+        bookmark.Path.Length == 0 ? Tr.Format("Bookmark.LabelRoot", endpointName) : $"{endpointName}  ·  /{bookmark.Path}";
 
     /// <summary>
     /// Whether a remembered place is the directory the browser is showing. Endpoint names are matched the way the

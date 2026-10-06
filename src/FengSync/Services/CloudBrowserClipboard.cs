@@ -1,3 +1,5 @@
+using FengSync.Localization;
+
 namespace FengSync.Services;
 
 /// <summary>
@@ -79,7 +81,7 @@ public static class CloudPastePlanner
             {
                 // Copying a file onto itself is not a no-op worth queuing: rclone would report it as a
                 // successful copy while the user watched a transfer that could not change anything.
-                skipped.Add($"“{item.Entry.Name}”已经在目标目录里。");
+                skipped.Add(Tr.Format("Mgr.PasteSameName", item.Entry.Name));
                 continue;
             }
             targets.Add(new CloudPasteTarget(
@@ -92,7 +94,7 @@ public static class CloudPastePlanner
                 // directories a folder marker occupies the very key the paste would write.
                 OverwritesExisting: alreadyThere.Any(entry => entry.Name.Equals(item.Entry.Name, StringComparison.OrdinalIgnoreCase))));
         }
-        if (folders > 0) skipped.Add($"{folders} 个文件夹没有被复制：粘贴的单位是文件，请先进入文件夹再选择其中的文件。");
+        if (folders > 0) skipped.Add(Tr.Format("Mgr.PasteFoldersSkipped", folders));
         return new CloudPastePlan(targets, skipped);
     }
 

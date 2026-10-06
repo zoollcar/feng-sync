@@ -1,0 +1,326 @@
+# 云盘相关窗口 · ProfileEditorWindow / CloudEndpointEditorWindow / CloudTransferWindow /
+# CloudTransferHistoryWindow / RemoteEndpointPickerWindow / CloudSyncWizardWindow.
+# The Chinese column must stay byte-identical to the literal it replaced, because the desktop
+# acceptance scenarios assert today's exact wording. Prefixes: Profile. Endpoint. Transfer. Picker. SyncWizard.
+# ---- Profile editor (ProfileEditorWindow) ----
+Profile.WindowTitle	Profile 设置	Profile settings
+Profile.Enabled	已启用	Enabled
+Profile.PageGeneral	常规	General
+Profile.PageCompare	比较	Comparison
+Profile.PageFilters	过滤器	Filters
+Profile.PageSync	同步	Sync
+Profile.PageVersioning	版本管理	Versioning
+Profile.PagePerformance	性能与可靠性	Performance and reliability
+Profile.Name	名称	Name
+Profile.Description	说明	Description
+Profile.LeftEndpoint	左侧端点	Left endpoint
+Profile.RightEndpoint	右侧端点	Right endpoint
+Profile.Test	测试	Test
+Profile.TestLeft	测试左侧端点	Test the left endpoint
+Profile.TestRight	测试右侧端点	Test the right endpoint
+Profile.Browse	浏览…	Browse…
+Profile.BrowseLeft	浏览左侧端点	Browse the left endpoint
+Profile.BrowseRight	浏览右侧端点	Browse the right endpoint
+Profile.SwapEndpoints	交换左右端点	Swap the two endpoints
+Profile.TimeTolerance	时间容差（秒）	Time tolerance (seconds)
+Profile.TimeToleranceHint	在未启用内容 hash 的比较中，修改时间差不超过此值的文件会被视为时间一致。	When content hashes are not in use, files whose modification times differ by no more than this are treated as time-equivalent.
+Profile.FilterRules	过滤规则	Filter rules
+Profile.FilterRulesHint	规则按列表顺序计算，后命中规则覆盖先命中规则。禁用规则会保存但不参与扫描。	Rules are evaluated in list order, and a later match overrides an earlier one. A disabled rule is still saved but takes no part in the scan.
+Profile.AddInclude	添加包含	Add include
+Profile.AddIncludeRule	添加包含规则	Add an include rule
+Profile.AddExclude	添加排除	Add exclude
+Profile.AddExcludeRule	添加排除规则	Add an exclude rule
+Profile.CommonExcludes	常用排除	Common excludes
+Profile.AddCommonExcludes	添加常用排除规则	Add the common exclude rules
+Profile.MoveUp	上移	Move up
+Profile.MoveUpRule	上移所选规则	Move the selected rule up
+Profile.MoveDown	下移	Move down
+Profile.MoveDownRule	下移所选规则	Move the selected rule down
+Profile.Delete	删除	Delete
+Profile.DeleteRule	删除所选规则	Delete the selected rule
+Profile.RuleEnabled	启用	Enabled
+Profile.RuleKind	类型	Kind
+Profile.RulePattern	模式	Pattern
+Profile.RuleComment	注释	Comment
+Profile.RuleAttributes	所选规则的属性条件（留空表示不限）	Attribute conditions for the selected rule (empty means no limit)
+Profile.MinBytes	最小字节	Minimum size in bytes
+Profile.MaxBytes	最大字节	Maximum size in bytes
+Profile.ModifiedAfter	修改时间不早于	Modified no earlier than
+Profile.ModifiedBefore	修改时间不晚于	Modified no later than
+Profile.ModifiedAfterLimit	修改时间下限	Lower bound on the modification time
+Profile.ModifiedBeforeLimit	修改时间上限	Upper bound on the modification time
+Profile.OnlyHidden	仅隐藏文件	Hidden files only
+Profile.OnlySymlink	仅符号链接	Symbolic links only
+Profile.ApplyAttributes	应用属性	Apply attributes
+Profile.ApplyRuleAttributes	应用规则属性	Apply the rule attributes
+Profile.FilterTester	规则测试器	Rule tester
+Profile.TestPathHint	相对路径，例如 cache/draft.tmp	A relative path, for example cache/draft.tmp
+Profile.TestSizeHint	文件大小（字节）	File size in bytes
+Profile.Hidden	隐藏	Hidden
+Profile.SymbolicLink	符号链接	Symbolic link
+Profile.TestFilter	测试过滤规则	Test the filter rules
+Profile.SyncMode	同步模式	Sync mode
+Profile.ModeTwoWay	双向同步	Two-way sync
+Profile.ModeMirrorRight	镜像到右侧	Mirror to the right
+Profile.ModeUpdateRight	更新到右侧	Update to the right
+Profile.ModeCustom	自定义（尚不可用）	Custom (not available yet)
+Profile.ModeCustomHint	自定义模式尚未实现，不能保存或执行。	The custom mode is not implemented yet; it cannot be saved or run.
+Profile.VersioningNone	永久删除	Delete permanently
+Profile.VersioningArchive	版本目录	Version directory
+Profile.VersioningRecycle	回收站（仅 Windows 本地端点）	Recycle bin (Windows local endpoints only)
+Profile.ArchiveDirectory	版本归档目录	Version archive folder
+Profile.KeepDays	保留天数	Days to keep
+Profile.MaxVersions	每文件版本数	Versions per file
+Profile.MaxTotalMb	总容量 MB	Total size in MB
+Profile.VersioningHint	留空的数量或容量不设限制；同步完成后会自动按此策略清理归档。	An empty number or size means no limit; once a sync finishes, the archive is cleaned up automatically according to this policy.
+Profile.PreviewCleanup	预览清理	Preview cleanup
+Profile.PreviewArchiveCleanup	预览版本归档清理	Preview the version archive cleanup
+Profile.CleanupNow	立即清理	Clean up now
+Profile.CleanupArchiveNow	立即清理版本归档	Clean up the version archive now
+Profile.UseDefaultCopies	复制验证使用程序默认值	Use the application default for copy verification
+Profile.VerifyCopies	复制后验证文件	Verify files after copying
+Profile.UseDefaultConcurrency	并发数使用程序默认值	Use the application default for concurrency
+Profile.MaxConcurrency	最大并发数：	Maximum concurrent copies:
+Profile.UseDefaultResume	续传阈值使用程序默认值	Use the application default for the resume threshold
+Profile.ResumeMinimum	启用断点续传的最小文件大小：	Smallest file that is resumed rather than restarted:
+Profile.ResumeMinimumHint	不小于该大小的文件先写入 xxx.fengsync.partial，传输完成后改名发布；中断后下载方向可从断点继续。填 0 表示所有文件都续传，支持 500M、2G 这类写法。	Files at or above this size are written to xxx.fengsync.partial first and renamed into place when the transfer finishes, so an interrupted download resumes where it stopped. 0 resumes every file; values like 500M and 2G are accepted.
+Profile.DeleteSafety	删除安全阈值	Deletion safety thresholds
+Profile.DeleteSafetyHint	超过任一阈值时，执行前必须输入 Profile 名称一次性确认。	If either threshold is exceeded, the Profile name must be typed once to confirm before the run starts.
+Profile.MaxDeletes	最大删除数	Maximum deletions
+Profile.MaxDeleteRatio	最大删除比例 (0-1)	Maximum deletion ratio (0-1)
+Profile.Save	保存	Save
+Profile.SaveAction	保存 Profile	Save the Profile
+Profile.SaveAs	另存为新 Profile	Save as a new Profile
+Profile.Cancel	取消	Cancel
+Profile.CancelAction	取消编辑 Profile	Cancel editing the Profile
+Profile.CommonExcludesAdded	已添加常用临时文件、版本控制目录和系统文件排除规则。	Added exclude rules for common temporary files, version-control folders and system files.
+Profile.ResultIncluded	包含：{0}	Included: {0}
+Profile.ResultExcluded	排除：{0}	Excluded: {0}
+Profile.ErrConcurrency	最大并发数必须在 1 到 64 之间。	The maximum number of concurrent copies must be between 1 and 64.
+Profile.ErrMaxDeletes	最大删除数必须是非负整数。	The maximum deletion count must be a non-negative whole number.
+Profile.ErrMaxDeleteRatio	最大删除比例必须在 0 到 1 之间。	The maximum deletion ratio must be between 0 and 1.
+Profile.ErrTimeTolerance	时间容差必须在 0 到 86400 秒之间。	The time tolerance must be between 0 and 86400 seconds.
+Profile.ErrResumeMinimum	续传最小文件大小无效，请使用 500M、2G 这类写法（0 表示所有文件都续传）。	The smallest resumable file size is not valid; use values like 500M and 2G (0 resumes every file).
+Profile.CannotSave	无法保存 Profile	The Profile cannot be saved.
+Profile.NeedsFix	需要修复：{0}	Needs fixing: {0}
+Profile.EditCopyNote	编辑副本仅在保存后生效	The edited copy takes effect only once it is saved.
+Profile.SelectRuleFirst	请先选择一条规则。	Select a rule first.
+Profile.Previewing	正在预览…	Previewing…
+Profile.Cleaning	正在清理…	Cleaning up…
+Profile.CleanedVersions	已清理 {0} 个归档版本。	Removed {0} archived versions.
+Profile.NothingToClean	没有需要清理的归档版本。	There are no archived versions to clean up.
+Profile.WillClean	预计清理 {0} 项：	About to clean up {0} items:
+Profile.InvalidRetention	保留策略无效：{0}	The retention policy is not valid: {0}
+Profile.Testing	测试中…	Testing…
+Profile.SideLeft	左侧	Left
+Profile.SideRight	右侧	Right
+Profile.EndpointAccessible	{0}端点可访问：{1}	The {0} endpoint is reachable: {1}
+Profile.SftpConnectable	{0} SFTP 主机 {1}:{2} 可连接。凭据会在实际同步时验证。	The {0} SFTP host {1}:{2} is reachable. Credentials are checked during an actual sync.
+Profile.EndpointTestFailed	{0}端点测试失败：{1}	Testing the {0} endpoint failed: {1}
+Profile.ErrEndpointEmpty	端点不能为空。	The endpoint may not be empty.
+Profile.ErrLocalMissing	本地目录不存在或不可访问。	The local folder does not exist or cannot be reached.
+Profile.ErrRemoteInvalid	远端地址或端口无效。	The remote address or port is not valid.
+Profile.ErrOnlySftp	当前编辑器仅可直接测试本地目录和 SFTP TCP 连通性。请在主窗口验证其他云端连接。	This editor can only test a local folder and SFTP connectivity directly. Check other cloud connections in the main window.
+Profile.ErrNonNegativeInt	必须是非负整数。	must be a non-negative whole number.
+Profile.TestFileSize	测试文件大小	Test file size
+Profile.ErrMaxTotalMb	总容量 MB 必须是非负数字。	The total size in MB must be a non-negative number.
+Profile.ErrValidDateTime	必须是有效日期时间。	must be a valid date and time.
+# ---- Cloud endpoint editor (CloudEndpointEditorWindow) ----
+Endpoint.WindowTitle	新建云端端点	New cloud endpoint
+Endpoint.EditTitle	编辑云端端点	Edit cloud endpoint
+Endpoint.ImportTitle	导入云端端点	Import cloud endpoint
+Endpoint.Step1	第 1 步，共 2 步 · 选择服务	Step 1 of 2 · Choose a service
+Endpoint.Step2	第 2 步，共 2 步 · 配置连接	Step 2 of 2 · Set up the connection
+Endpoint.EditCaption	编辑端点 · {0} · 名称与类型不可修改	Editing endpoint · {0} · the name and the type cannot be changed
+Endpoint.ImportCaption	导入端点 · {0} · 请补填凭据后保存	Importing endpoint · {0} · fill in the credentials and save
+Endpoint.ChooseService	选择要连接的云端服务	Choose the cloud service to connect to
+Endpoint.ChooseServiceHint	下一步只显示该服务需要的连接信息。	The next step shows only the connection details this service needs.
+Endpoint.Service	服务	Service
+Endpoint.ServiceType	云端服务类型	Cloud service type
+Endpoint.LoadingProviders	正在读取内置 rclone 支持的 Provider…	Reading the providers rclone supports…
+Endpoint.S3Connection	S3 连接	S3 connection
+Endpoint.S3ConnectionNamed	{0} S3 连接	{0} S3 connection
+Endpoint.DisplayName	显示名称	Display name
+Endpoint.ToggleSecret	显示或隐藏 Secret Access Key	Show or hide the Secret Access Key
+Endpoint.Show	显示	Show
+Endpoint.Prefix	前缀（可选）	Prefix (optional)
+Endpoint.PrefixHint	S3 没有目录层级，这里填的是键前缀。保存后端点只能访问该前缀下的内容，由 rclone 强制，无法越界。	S3 has no directory levels, so this is a key prefix. Once the endpoint is saved it can only reach what is under this prefix; rclone enforces that and it cannot be stepped outside.
+Endpoint.BrowseDirectory	浏览目录	Browse the folder
+Endpoint.Back	返回	Back
+Endpoint.TestConnection	测试连接	Test the connection
+Endpoint.Next	下一步	Next
+Endpoint.Save	保存	Save
+Endpoint.Cancel	取消	Cancel
+Endpoint.RootPath	远程根目录（可选）	Remote root folder (optional)
+Endpoint.ConnectionFor	{0} 连接	{0} connection
+Endpoint.ProviderReadFailed	无法读取 Provider：{0}	The provider list could not be read: {0}
+Endpoint.PickProvider	从列表中选择 rclone 支持的 Provider。	Choose one of the providers rclone supports from the list.
+Endpoint.RegionSuggestHint	可选择建议值，也可输入自定义 Region。	Pick one of the suggestions, or type a custom region.
+Endpoint.RegionCustomHint	可输入服务商要求的 Region。	Type the region the service provider requires.
+Endpoint.PickProviderFromList	请选择列表中的 S3 Provider。	Choose an S3 provider from the list.
+Endpoint.ErrDisplayName	请输入显示名称。	Enter a display name.
+Endpoint.ErrRequiredField	请填写{0}。	Enter {0}.
+Endpoint.ErrNumberRange	{0}必须介于 1 和 65535 之间。	{0} must be between 1 and 65535.
+Endpoint.ReadingDirectory	正在读取指定目录…	Reading the chosen folder…
+Endpoint.ProbeRoot	读取成功：该 Bucket 根目录。端点将只能访问此 Bucket。未验证上传权限。	Read successfully: the root of this bucket. The endpoint will only be able to reach this bucket. Write access is not verified.
+Endpoint.ProbePrefix	读取成功：/{0}。保存后该前缀由 rclone 强制，端点只能访问此前缀下的内容。未验证上传权限。	Read successfully: /{0}. Once saved, rclone enforces this prefix and the endpoint can only reach what is under it. Write access is not verified.
+Endpoint.Verifying	正在验证连接…	Verifying the connection…
+Endpoint.VerifySuccess	连接验证成功。	The connection verified successfully.
+Endpoint.WaitingForAuth	正在等待浏览器授权…	Waiting for the browser authorization…
+Endpoint.NoSubdirectories	（当前目录没有子目录）	(this folder has no subfolders)
+Endpoint.ProbeResultTitle	测试读取结果	Test read result
+Endpoint.SaveUntestedPrompt	当前配置尚未通过读取测试。保存后可能无法浏览、上传或同步。\n\n仍要保存吗？	The current settings have not passed a read test. Once saved, browsing, uploading or syncing may not work.\n\nSave anyway?
+Endpoint.SaveUntestedTitle	保存未验证的 S3 端点	Save an untested S3 endpoint
+Endpoint.Saving	正在保存…	Saving…
+Endpoint.DuplicateName	端点“{0}”已存在。\n\n是：替换现有配置；否：返回修改显示名称。	An endpoint called "{0}" already exists.\n\nYes: replace the existing configuration. No: go back and change the display name.
+Endpoint.DuplicateNameTitle	端点名称重复	Duplicate endpoint name
+# ---- Transfer window and its history (CloudTransferWindow, CloudTransferHistoryWindow) ----
+Transfer.WindowTitle	传输	Transfers
+Transfer.WindowName	云盘传输任务	Cloud transfer jobs
+Transfer.Resume	断点续传	Resume
+Transfer.ResumeAction	断点续传未完成的传输	Resume the unfinished transfers
+Transfer.PauseAll	全部暂停	Pause all
+Transfer.PauseAllAction	暂停全部正在进行的传输	Pause every transfer in progress
+Transfer.CancelAll	全部取消	Cancel all
+Transfer.CancelAllAction	取消全部传输	Cancel every transfer
+Transfer.ClearFinished	清除已完成	Clear finished
+Transfer.ClearAction	清除已完成的传输并归档	Clear the finished transfers and archive them
+Transfer.History	传输历史…	Transfer history…
+Transfer.HistoryAction	查看已归档的传输记录	View the archived transfers
+Transfer.Close	关闭	Close
+Transfer.CloseAction	关闭传输窗口	Close the transfer window
+Transfer.Concurrency	同时传输数	Transfers at once
+Transfer.ConcurrencyName	同时进行的传输数量	Number of transfers running at the same time
+Transfer.AfterTransfer	完成后	When everything finishes
+Transfer.AfterTransferName	全部传输成功后的动作	Action after every transfer has succeeded
+Transfer.TaskList	传输任务列表	Transfer job list
+Transfer.ColumnTask	任务	Job
+Transfer.ColumnProgress	进度	Progress
+Transfer.ColumnStatus	状态	Status
+Transfer.ColumnActions	操作	Actions
+Transfer.Pause	暂停	Pause
+Transfer.PauseOne	暂停此传输	Pause this transfer
+Transfer.Cancel	取消	Cancel
+Transfer.CancelOne	取消此传输	Cancel this transfer
+Transfer.RestartOne	继续或重试此传输	Resume or retry this transfer
+Transfer.ActionUnavailable	这个操作现在不可用。	This action is not available right now.
+Transfer.LoadResumableFailed	无法读取上次未完成的传输：{0}	The unfinished transfers from last time could not be read: {0}
+Transfer.ConcurrencyCurrent	当前 {0} 个；调低不会中断正在进行的传输，只是不再补位。	Currently {0}; lowering it does not interrupt a transfer in progress, it only stops refilling the queue.
+Transfer.AutoRetry	失败会自动重试 {0} 次。	A failure is retried automatically {0} times.
+Transfer.NoAutoRetry	失败不会自动重试。	A failure is not retried automatically.
+Transfer.HintResumeMechanism	取消、暂停或失败的传输都会保留在列表中，可随时继续或重试。本程序沿用同步任务的暂存与断点机制：	A cancelled, paused or failed transfer stays in the list and can be resumed or retried at any time. This program reuses the staging and resume mechanism its sync jobs use:
+Transfer.HintResumeDetail	能校验已传分片的传输从断点继续，云端传输受 rclone 限制会从文件开头重新开始。	a transfer whose uploaded pieces can be verified continues from where it stopped, while a cloud transfer restarts from the beginning of the file because rclone does not allow anything else.
+Transfer.HintCopy	云盘之间的复制由 rclone 在两端之间完成，本程序不接触字节，因此取消或失败之后只能整个文件重新复制。	A copy between two drives is done by rclone at either end and this program never touches the bytes, so after a cancellation or a failure the whole file has to be copied again.
+Transfer.HintContextMenu	右键任意一行可以调整等待顺序、打开所在文件夹、复制分享链接或查看失败详情。	Right-click any row to change its place in the waiting order, open its folder, copy a share link, or see why it failed.
+Transfer.HintDragDrop	把本地文件或文件夹拖入文件浏览器即可上传；把云端文件拖到资源管理器即可下载。	Drag a local file or folder into the file browser to upload it; drag a cloud file into Explorer to download it.
+Transfer.TransferWindow	传输时段 {0}	Transfer window {0}
+Transfer.WindowWaiting	（当前在时段外，等待中的传输不会开始）	(currently outside the window, so a waiting transfer will not start)
+Transfer.NoWindow	不限时段	No time limit
+Transfer.PolicyFooter	。可在设置 → 云盘里修改。	. It can be changed under Settings → Cloud.
+Transfer.NoResumable	当前没有可断点续传的任务。	There is no transfer that can be resumed.
+Transfer.NoPausable	当前没有正在进行的传输可以暂停。	There is no transfer in progress to pause.
+Transfer.NoCompleted	当前没有已完成的传输。	There is no finished transfer.
+Transfer.ClearedArchived	已清除 {0} 条已完成记录，并归档到传输历史。	Cleared {0} finished records and archived them to the transfer history.
+Transfer.Cleared	已清除 {0} 条已完成记录。	Cleared {0} finished records.
+Transfer.NoHistoryArchive	这次运行没有启用传输历史归档。	Transfer history archiving is not enabled for this run.
+Transfer.AfterTransferChosen	已选择“{0}”：只在这一批全部成功后询问，	"{0}" is selected: you will be asked only after the whole batch has succeeded,
+Transfer.AfterTransferKeepOpen	需要保持本窗口打开，因为关机前会再确认一次。	so keep this window open, because you will be asked once more before it shuts down.
+Transfer.NoLocalFolder	这个任务没有本地文件夹可打开。	This job has no local folder to open.
+Transfer.OpenFolderFailed	没能打开文件夹：{0}	The folder could not be opened: {0}
+Transfer.DetailTitle	传输详情	Transfer details
+Transfer.LogTitle	rclone 失败日志	rclone failure log
+Transfer.NoCloudService	本次运行没有可用的云盘服务。	No cloud service is available in this run.
+Transfer.NotAnEndpoint	这个任务的目标不是云端端点。	This job's destination is not a cloud endpoint.
+Transfer.HistoryTitle	传输历史	Transfer history
+Transfer.HistoryWindowName	已归档的云盘传输记录	Archived cloud transfers
+Transfer.HistoryListName	归档的传输记录	Archived transfers
+Transfer.HistoryClear	清空历史	Clear the history
+Transfer.HistoryClearName	删除全部归档记录	Delete every archived record
+Transfer.HistoryConfirmTitle	清空传输历史	Clear the transfer history
+Transfer.HistoryConfirm	删除全部归档的传输记录？此操作不可撤销。	Delete every archived transfer? This cannot be undone.
+# ---- Endpoint picker (RemoteEndpointPickerWindow) ----
+Picker.WindowTitle	添加云端端点	Add a cloud endpoint
+Picker.WindowName	添加云端端点到同步配置	Add a cloud endpoint to the sync configuration
+Picker.ChooseGroup	选择端点与远程路径	Choose an endpoint and a remote path
+Picker.Endpoint	端点	Endpoint
+Picker.AvailableEndpoints	可用云端端点	Available cloud endpoints
+Picker.RemotePath	远程路径	Remote path
+Picker.Browse	浏览…	Browse…
+Picker.BrowseAction	浏览远程路径	Browse the remote path
+Picker.Add	添加	Add
+Picker.AddAction	添加所选云端端点	Add the selected cloud endpoint
+Picker.Cancel	取消	Cancel
+Picker.CancelAction	取消添加云端端点	Cancel adding a cloud endpoint
+Picker.SideLeft	左侧	Left
+Picker.SideRight	右侧	Right
+Picker.Header	添加云端端点 → {0}	Add a cloud endpoint → {0}
+Picker.SubHeader	从已保存的端点中选择，再挑选远端目录，将以 {0} 端点加入 Profile。	Pick one of the saved endpoints and then a remote folder; it joins the Profile as its {0} endpoint.
+Picker.Loading	正在读取云端端点列表…	Reading the list of cloud endpoints…
+Picker.NoEndpoints	尚无云端端点；请通过 工具 → 远程端点管理 创建一个。	There is no cloud endpoint yet; create one under Tools → Remote endpoints.
+Picker.EndpointCount	共 {0} 个云端端点。	{0} cloud endpoints.
+Picker.LoadFailed	无法读取云端端点：{0}	The cloud endpoints could not be read: {0}
+Picker.WillAddEnforced	将添加：{0}（只能访问 /{1} 下的内容，由 rclone 强制）	Will add: {0} (it can only reach what is under /{1}; rclone enforces this)
+Picker.WillAdd	将添加：{0}	Will add: {0}
+Picker.SelectFirst	请先选择一个端点。	Select an endpoint first.
+Picker.Connecting	正在连接云端并读取根目录…	Connecting to the cloud and reading the root folder…
+Picker.CloudDirectoryTitle	云端目录	Cloud folder
+Picker.BrowseFailed	无法浏览远端目录：{0}	The remote folder could not be browsed: {0}
+Picker.PrefixRoot	/（前缀根目录 {0}）	/ (prefix root {0})
+Picker.RootDir	/（根目录）	/ (root folder)
+Picker.ExpandFailed	无法读取子目录：{0}	The subfolders could not be read: {0}
+Picker.LoadingEllipsis	正在加载…	Loading…
+Picker.UseFolder	选择此文件夹	Use this folder
+Picker.ChooseIn	选择 {0}: 中的文件夹	Choose a folder in {0}:
+# ---- One-tap sync wizard (CloudSyncWizardWindow) ----
+SyncWizard.WindowTitle	双向同步向导	Two-way sync wizard
+SyncWizard.WindowName	创建双向同步任务	Create a two-way sync job
+SyncWizard.Intro	两格填完就建一个双向同步任务：任何一端的变化都会同步到另一端。规则、版本与性能可以之后在主窗口的 Profile 编辑器里再调。	Fill in the two boxes and a two-way sync job is created: a change on either side is synced to the other. Rules, versioning and performance can be adjusted later in the Profile editor in the main window.
+SyncWizard.LocalFolder	本地文件夹	Local folder
+SyncWizard.LocalFolderName	选择要同步的本地文件夹	Choose the local folder to sync
+SyncWizard.BrowseLocal	浏览…	Browse…
+SyncWizard.LocalFolderHint	同步的本地一侧。它是磁盘上真实存在的目录，同步会往里写，也会删掉对端已删的文件。	The local side of the sync. It is a real folder on disk: the sync writes into it, and it deletes the files the other side has deleted.
+SyncWizard.CloudEndpoint	云盘端点	Cloud endpoint
+SyncWizard.CloudEndpointName	选择要同步的云盘端点	Choose the cloud endpoint to sync
+SyncWizard.PickCloud	选择…	Choose…
+SyncWizard.CloudEndpointHint	从云盘管理里挑一个已连接的端点；也可以直接填端点 URI。	Pick a connected endpoint from cloud management; you can also type an endpoint URI directly.
+SyncWizard.NameHeader	名称	Name
+SyncWizard.Name	同步任务名称	Sync job name
+SyncWizard.Create	创建	Create
+SyncWizard.Cancel	取消	Cancel
+SyncWizard.CreateFailed	无法创建同步任务。	The sync job could not be created.
+SyncWizard.NoEndpointPicker	这个窗口没有可用的端点选择器。	This window has no endpoint picker available.
+
+# ---- Endpoint lifecycle and login (appended) ----
+Endpoint.BackingNameTaken	内部名称“{0}”已被占用，请修改显示名称。	The internal name "{0}" is already taken; change the display name.
+Endpoint.BrowserOpenFailed	无法打开默认浏览器。授权地址：{0}	The default browser could not be opened. Authorization URL: {0}
+Endpoint.ClearedOrganization	已清除端点“{0}”的分组与标签。	Cleared the group and tags of the endpoint "{0}".
+Endpoint.DisplayNoRoot	{0}  ·  未设置默认根目录	{0}  ·  no default root folder set
+Endpoint.GroupSet	已将端点“{0}”归入分组“{1}”。	The endpoint "{0}" is now in the group "{1}".
+Endpoint.NameExists	端点名称“{0}”已存在，请修改显示名称。	An endpoint named "{0}" already exists; change the display name.
+Endpoint.NeedsInteractiveOption	无法自动完成 {0} 配置；rclone 需要回答选项“{1}”。	The {0} configuration could not be completed automatically; rclone needs an answer to the option "{1}".
+Endpoint.NoOAuthNeeded	{0} 不需要浏览器授权，请直接编辑端点参数。	{0} does not need browser authorization; edit the endpoint settings directly.
+Endpoint.OrganizationUpdated	已更新端点“{0}”的分组与标签。	Updated the group and tags of the endpoint "{0}".
+Endpoint.RenameAliasTargetWrong	重命名后别名“{0}”没有指向新的内部存储（应为 {1}，实际为 {2}）	After the rename, the alias "{0}" does not point at the new internal storage (expected {1}, actual {2})
+Endpoint.RenameBackingTaken	内部名称“{0}”已被占用，请换一个名称。	The internal name "{0}" is already taken; pick another name.
+Endpoint.RenameConfigMismatch	重命名后 rclone 读到的“{0}”配置与重命名前不一致，已还原。	After the rename, the rclone configuration read for "{0}" did not match what it was before the rename; it was reverted.
+Endpoint.RenameNameTaken	已存在名为“{0}”的端点或内部记录，请换一个名称。	An endpoint or internal record named "{0}" already exists; pick another name.
+Endpoint.RenameNeedName	请输入新的端点名称。	Enter a new endpoint name.
+Endpoint.RenameNotInRclone	rclone 中找不到端点“{0}”的配置，请先刷新端点列表。	rclone has no configuration for the endpoint "{0}"; refresh the endpoint list first.
+Endpoint.RenameNotReadable	rclone 未能读取重命名后的端点“{0}”，已还原。	rclone could not read the renamed endpoint "{0}"; it was reverted.
+Endpoint.RenameSameName	新名称与当前名称相同，无需重命名。	The new name is the same as the current one; there is nothing to rename.
+Endpoint.RenameStillMounted	端点“{0}”仍有挂载，请先取消挂载再重命名。	The endpoint "{0}" still has mounts; unmount it before renaming.
+Endpoint.TagsSet	已为端点“{0}”设置 {1} 个标签。	Set {1} tags on the endpoint "{0}".
+Endpoint.UngroupedLabel	未分组	Ungrouped
+
+# ---- Endpoint status and alias (CloudEndpointService, CloudEndpointStatusService) ----
+Endpoint.AliasLabel	别名	Alias
+Endpoint.HealthChecking	检查中…	Checking…
+Endpoint.HealthConnected	已连接	Connected
+Endpoint.HealthNeedsLogin	需要重新登录	Needs signing in again
+Endpoint.HealthUnknown	未检查	Not checked
+Endpoint.HealthUnreachable	无法连接	Cannot connect
+Endpoint.QuotaUsed	已用 {0} / {1}	Used {0} / {1}
+
+# ---- Profile retention preview (ProfileEditorWindow) ----
+Profile.CleanItem	{0}（{1}）	{0} ({1})
+Profile.CleanListSeparator	；	; 

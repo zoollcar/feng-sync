@@ -1,14 +1,15 @@
 <Window x:Class="FengSync.Views.MountPickerDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="挂载到…"
+        xmlns:l="clr-namespace:FengSync.Localization"
+        Title="{Binding [Mount.Title], Source={l:Lang}}"
         Width="600"
         Height="640"
         MinWidth="480"
         MinHeight="420"
         WindowStartupLocation="CenterOwner"
         AutomationProperties.AutomationId="MountPickerDialog"
-        AutomationProperties.Name="选择挂载位置">
+        AutomationProperties.Name="{Binding [Mount.DialogName], Source={l:Lang}}">
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -23,8 +24,8 @@
             <TextBlock x:Name="SubHeaderText" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
         </StackPanel>
 
-        <TabControl x:Name="ModeTabs" Grid.Row="1" Margin="0,12,0,0" SelectionChanged="ModeTabs_SelectionChanged" AutomationProperties.Name="挂载位置类型">
-            <TabItem Header="盘符" AutomationProperties.AutomationId="MountPickerDriveTab" AutomationProperties.Name="选择盘符挂载位置">
+        <TabControl x:Name="ModeTabs" Grid.Row="1" Margin="0,12,0,0" SelectionChanged="ModeTabs_SelectionChanged" AutomationProperties.Name="{Binding [Mount.LocationType], Source={l:Lang}}">
+            <TabItem Header="{Binding [Mount.TabDrive], Source={l:Lang}}" AutomationProperties.AutomationId="MountPickerDriveTab" AutomationProperties.Name="{Binding [Mount.PickDriveLocation], Source={l:Lang}}">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
@@ -32,14 +33,14 @@
                     </Grid.RowDefinitions>
                     <ListBox x:Name="DriveLetterList"
                              AutomationProperties.AutomationId="MountPickerDriveList"
-                             AutomationProperties.Name="可用盘符"
+                             AutomationProperties.Name="{Binding [Mount.AvailableDrives], Source={l:Lang}}"
                              SelectionMode="Single"
                              DisplayMemberPath="Letter"
                              SelectionChanged="DriveLetterList_SelectionChanged" />
                     <TextBlock Grid.Row="1" x:Name="DriveHint" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,8,0,0" />
                 </Grid>
             </TabItem>
-            <TabItem Header="目录" AutomationProperties.AutomationId="MountPickerDirectoryTab" AutomationProperties.Name="选择目录挂载位置">
+            <TabItem Header="{Binding [Mount.TabDirectory], Source={l:Lang}}" AutomationProperties.AutomationId="MountPickerDirectoryTab" AutomationProperties.Name="{Binding [Mount.PickDirectoryLocation], Source={l:Lang}}">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -47,14 +48,14 @@
                     </Grid.RowDefinitions>
                     <DockPanel>
                         <Button DockPanel.Dock="Right"
-                                Content="浏览…"
+                                Content="{Binding [Mount.Browse], Source={l:Lang}}"
                                 Click="BrowseDirectory_Click"
                                 Margin="8,0,0,0"
                                 Style="{StaticResource SecondaryButtonStyle}"
-                                AutomationProperties.Name="浏览并选择挂载目录" />
+                                AutomationProperties.Name="{Binding [Mount.BrowseAndPickDirectory], Source={l:Lang}}" />
                         <TextBox x:Name="DirectoryPathBox"
                                  AutomationProperties.AutomationId="MountPickerDirectoryPath"
-                                 AutomationProperties.Name="挂载目录路径"
+                                 AutomationProperties.Name="{Binding [Mount.DirectoryPath], Source={l:Lang}}"
                                  TextChanged="DirectoryPathBox_TextChanged" />
                     </DockPanel>
                     <TextBlock Grid.Row="1" x:Name="DirectoryHint" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,8,0,0" />
@@ -63,7 +64,7 @@
             <!-- Measured: rclone accepts a UNC mount point and answers with the drive letter Windows allocated
                  for it, so the path the user types is not the mount point that ends up existing. The hint says
                  so rather than promising the path back. -->
-            <TabItem Header="网络共享" AutomationProperties.AutomationId="MountPickerUncTab" AutomationProperties.Name="选择网络共享挂载位置">
+            <TabItem Header="{Binding [Mount.TabUnc], Source={l:Lang}}" AutomationProperties.AutomationId="MountPickerUncTab" AutomationProperties.Name="{Binding [Mount.PickUncLocation], Source={l:Lang}}">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -71,7 +72,7 @@
                     </Grid.RowDefinitions>
                     <TextBox x:Name="UncPathBox"
                              AutomationProperties.AutomationId="MountPickerUncPath"
-                             AutomationProperties.Name="网络共享路径"
+                             AutomationProperties.Name="{Binding [Mount.UncPath], Source={l:Lang}}"
                              TextChanged="UncPathBox_TextChanged" />
                     <TextBlock Grid.Row="1" x:Name="UncHint" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,8,0,0" />
                 </Grid>
@@ -88,39 +89,39 @@
 
         <Expander x:Name="AdvancedExpander"
                   Grid.Row="3"
-                  Header="高级选项"
+                  Header="{Binding [Mount.Advanced], Source={l:Lang}}"
                   Margin="0,12,0,0"
                   AutomationProperties.AutomationId="MountPickerAdvanced"
-                  AutomationProperties.Name="挂载高级选项">
+                  AutomationProperties.Name="{Binding [Mount.AdvancedOptions], Source={l:Lang}}">
             <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="4,8,4,4">
-                    <TextBlock Text="卷标（Windows 显示的名称）" Style="{StaticResource CaptionTextStyle}" />
-                    <TextBox x:Name="VolumeNameBox" AutomationProperties.AutomationId="MountPickerVolumeName" AutomationProperties.Name="卷标" Margin="0,4,0,10" />
+                    <TextBlock Text="{Binding [Mount.VolumeNameLabel], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="VolumeNameBox" AutomationProperties.AutomationId="MountPickerVolumeName" AutomationProperties.Name="{Binding [Mount.VolumeName], Source={l:Lang}}" Margin="0,4,0,10" />
 
-                    <TextBlock Text="缓存模式" Style="{StaticResource CaptionTextStyle}" />
-                    <ComboBox x:Name="CacheModeBox" AutomationProperties.AutomationId="MountPickerCacheMode" AutomationProperties.Name="VFS 缓存模式" Width="220" HorizontalAlignment="Left" Margin="0,4,0,4" SelectionChanged="Advanced_Changed" />
+                    <TextBlock Text="{Binding [Mount.CacheModeLabel], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" />
+                    <ComboBox x:Name="CacheModeBox" AutomationProperties.AutomationId="MountPickerCacheMode" AutomationProperties.Name="{Binding [Mount.CacheMode], Source={l:Lang}}" Width="220" HorizontalAlignment="Left" Margin="0,4,0,4" SelectionChanged="Advanced_Changed" />
                     <TextBlock x:Name="CacheModeHint" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,0,0,10" />
 
-                    <TextBlock Text="缓存上限（如 10G；留空沿用设置里的默认上限；填 0 表示不限）" Style="{StaticResource CaptionTextStyle}" />
-                    <TextBox x:Name="CacheMaxSizeBox" AutomationProperties.AutomationId="MountPickerCacheMaxSize" AutomationProperties.Name="缓存上限" Margin="0,4,0,10" />
+                    <TextBlock Text="{Binding [Mount.CacheMaxSizeLabel], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="CacheMaxSizeBox" AutomationProperties.AutomationId="MountPickerCacheMaxSize" AutomationProperties.Name="{Binding [Mount.CacheMaxSize], Source={l:Lang}}" Margin="0,4,0,10" />
 
-                    <TextBlock Text="缓存保留时间（秒，0 表示用默认 1 小时）" Style="{StaticResource CaptionTextStyle}" />
-                    <TextBox x:Name="CacheMaxAgeBox" AutomationProperties.AutomationId="MountPickerCacheMaxAge" AutomationProperties.Name="缓存保留时间" Margin="0,4,0,10" />
+                    <TextBlock Text="{Binding [Mount.CacheMaxAgeLabel], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="CacheMaxAgeBox" AutomationProperties.AutomationId="MountPickerCacheMaxAge" AutomationProperties.Name="{Binding [Mount.CacheMaxAge], Source={l:Lang}}" Margin="0,4,0,10" />
 
-                    <TextBlock Text="写入回写延迟（秒，0 表示用默认 5 秒）" Style="{StaticResource CaptionTextStyle}" />
-                    <TextBox x:Name="WriteBackBox" AutomationProperties.AutomationId="MountPickerWriteBack" AutomationProperties.Name="写回延迟" Margin="0,4,0,10" />
+                    <TextBlock Text="{Binding [Mount.WriteBackLabel], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="WriteBackBox" AutomationProperties.AutomationId="MountPickerWriteBack" AutomationProperties.Name="{Binding [Mount.WriteBack], Source={l:Lang}}" Margin="0,4,0,10" />
 
-                    <TextBlock Text="目录缓存时间（秒，0 表示用默认 5 分钟）" Style="{StaticResource CaptionTextStyle}" />
-                    <TextBox x:Name="DirCacheTimeBox" AutomationProperties.AutomationId="MountPickerDirCacheTime" AutomationProperties.Name="目录缓存时间" Margin="0,4,0,10" />
+                    <TextBlock Text="{Binding [Mount.DirCacheTimeLabel], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="DirCacheTimeBox" AutomationProperties.AutomationId="MountPickerDirCacheTime" AutomationProperties.Name="{Binding [Mount.DirCacheTime], Source={l:Lang}}" Margin="0,4,0,10" />
 
-                    <TextBlock Text="轮询间隔（秒，0 表示用默认 1 分钟；须小于目录缓存时间）" Style="{StaticResource CaptionTextStyle}" />
-                    <TextBox x:Name="PollIntervalBox" AutomationProperties.AutomationId="MountPickerPollInterval" AutomationProperties.Name="轮询间隔" Margin="0,4,0,10" />
+                    <TextBlock Text="{Binding [Mount.PollIntervalLabel], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" />
+                    <TextBox x:Name="PollIntervalBox" AutomationProperties.AutomationId="MountPickerPollInterval" AutomationProperties.Name="{Binding [Mount.PollInterval], Source={l:Lang}}" Margin="0,4,0,10" />
 
-                    <CheckBox x:Name="NetworkModeBox" AutomationProperties.AutomationId="MountPickerNetworkMode" AutomationProperties.Name="作为网络驱动器挂载" Content="作为网络驱动器挂载（而不是固定磁盘）" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
-                    <CheckBox x:Name="ReadOnlyBox" AutomationProperties.AutomationId="MountPickerReadOnly" AutomationProperties.Name="只读挂载" Content="只读挂载（拒绝一切写入）" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
-                    <CheckBox x:Name="NoChecksumBox" AutomationProperties.AutomationId="MountPickerNoChecksum" AutomationProperties.Name="不比较校验值" Content="不比较校验值（默认开启）" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
-                    <CheckBox x:Name="NoModTimeBox" AutomationProperties.AutomationId="MountPickerNoModTime" AutomationProperties.Name="不读写修改时间" Content="不读写修改时间（默认开启）" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
-                    <CheckBox x:Name="NoSeekBox" AutomationProperties.AutomationId="MountPickerNoSeek" AutomationProperties.Name="禁止文件内定位" Content="禁止文件内定位（部分后端处理不好）" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
+                    <CheckBox x:Name="NetworkModeBox" AutomationProperties.AutomationId="MountPickerNetworkMode" AutomationProperties.Name="{Binding [Mount.NetworkModeName], Source={l:Lang}}" Content="{Binding [Mount.NetworkMode], Source={l:Lang}}" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
+                    <CheckBox x:Name="ReadOnlyBox" AutomationProperties.AutomationId="MountPickerReadOnly" AutomationProperties.Name="{Binding [Mount.ReadOnlyName], Source={l:Lang}}" Content="{Binding [Mount.ReadOnly], Source={l:Lang}}" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
+                    <CheckBox x:Name="NoChecksumBox" AutomationProperties.AutomationId="MountPickerNoChecksum" AutomationProperties.Name="{Binding [Mount.NoChecksumName], Source={l:Lang}}" Content="{Binding [Mount.NoChecksum], Source={l:Lang}}" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
+                    <CheckBox x:Name="NoModTimeBox" AutomationProperties.AutomationId="MountPickerNoModTime" AutomationProperties.Name="{Binding [Mount.NoModTimeName], Source={l:Lang}}" Content="{Binding [Mount.NoModTime], Source={l:Lang}}" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
+                    <CheckBox x:Name="NoSeekBox" AutomationProperties.AutomationId="MountPickerNoSeek" AutomationProperties.Name="{Binding [Mount.NoSeekName], Source={l:Lang}}" Content="{Binding [Mount.NoSeek], Source={l:Lang}}" Margin="0,0,0,6" Checked="Advanced_Changed" Unchecked="Advanced_Changed" />
 
                     <!-- No static AutomationProperties.Name: this line *is* the summary of what will be sent. -->
                     <TextBlock x:Name="AdvancedSummary" AutomationProperties.AutomationId="MountPickerAdvancedSummary" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
@@ -137,13 +138,13 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                 <Button x:Name="OkButton"
                         AutomationProperties.AutomationId="MountPickerOk"
-                        AutomationProperties.Name="确认挂载到所选位置"
-                        Content="挂载"
+                        AutomationProperties.Name="{Binding [Mount.OkName], Source={l:Lang}}"
+                        Content="{Binding [Mount.Ok], Source={l:Lang}}"
                         IsDefault="True"
                         Click="Ok_Click"
                         Style="{StaticResource PrimaryButtonStyle}" />
-                <Button Content="取消"
-                        AutomationProperties.Name="取消选择挂载位置"
+                <Button Content="{Binding [Mount.Cancel], Source={l:Lang}}"
+                        AutomationProperties.Name="{Binding [Mount.CancelName], Source={l:Lang}}"
                         IsCancel="True"
                         Margin="8,0,0,0"
                         Style="{StaticResource TertiaryButtonStyle}" />

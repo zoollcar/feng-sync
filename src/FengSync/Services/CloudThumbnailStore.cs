@@ -5,6 +5,7 @@ using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -244,5 +245,5 @@ public sealed class CloudTileSourceConverter : IValueConverter
         value is CloudFileEntry entry && Peek is { } peek ? peek(entry) : null;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
-        throw new NotSupportedException("缩略图只用于显示，不参与写回。");
+        throw new NotSupportedException(Tr.F("Thumb.NotWritable"));
 }

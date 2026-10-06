@@ -1,0 +1,56 @@
+# ---- E1/E2 make a sync task out of an endpoint ----
+Task.SelectEndpointFirst	请先选择一个云盘端点。	Select a cloud endpoint first.
+Task.SourceInside	{0} 里的 {1}	{1} in {0}
+Task.SourceRoot	{0} 的根目录	the root folder of {0}
+Task.SuggestName	{0} 同步	{0} sync
+Task.WizardBothSidesRemote	两侧不能是同一个位置。	Both sides cannot be the same location.
+Task.WizardCloudMustBeEndpoint	云端那一侧必须是云盘端点，形如 gdrive://名称/路径。	The cloud side must be a cloud endpoint, like gdrive://name/path.
+Task.WizardLocalMustBeFolder	本地那一侧必须是本地文件夹，不能填云盘端点。	The local side must be a local folder; it cannot be a cloud endpoint.
+Task.WizardNeedCloud	请先选择云盘端点。	Select a cloud endpoint first.
+Task.WizardNeedLocal	请先选择本地文件夹。	Select a local folder first.
+
+# ---- S3-style endpoint rules ----
+S3.BucketHasNoPrefix	Bucket 不能包含目录；请单独填写前缀。	Bucket cannot contain a folder; fill in the prefix separately.
+S3.EndpointMustBeAbsolute	Endpoint 必须是完整的 HTTP 或 HTTPS 地址。	Endpoint must be a full HTTP or HTTPS address.
+S3.EndpointNoBucket	Endpoint 不能包含 Bucket 或目录。	Endpoint cannot contain a Bucket or a folder.
+S3.EndpointRequiredFor	{0} 必须填写 Endpoint，形如 https://s3.<region>.backblazeb2.com。	{0} requires an Endpoint, like https://s3.<region>.backblazeb2.com.
+S3.NeedAccessKey	请输入 Access Key ID。	Enter the Access Key ID.
+S3.NeedBucket	请输入 Bucket。	Enter the Bucket.
+S3.NeedDisplayName	请输入显示名称。	Enter a display name.
+S3.NeedProvider	请选择 rclone 支持的 S3 Provider。	Choose an S3 Provider that rclone supports.
+S3.NeedSecretKey	请输入 Secret Access Key。	Enter the Secret Access Key.
+S3.PrefixNoDotDot	前缀不能包含“..”。	The prefix cannot contain "..".
+S3.PrefixUsesSlash	前缀请使用“/”分隔，不要使用“\\”。	Use "/" to separate the prefix, not "\\".
+S3.ProbeCleanupFailed	S3 连接测试临时目录未能清理：{0}	The S3 connection test temporary folder could not be cleaned up: {0}
+
+# ---- Per-provider field catalogue ----
+Provider.Backblaze.Description	Region 必须与 Endpoint 中的区域一致；两者都能在 B2 控制台的 Bucket 详情页看到。	Region must match the region in Endpoint; both can be seen on the Bucket details page in the B2 console.
+Provider.NotAProviderType	不是云端 Provider 类型。	Not a cloud Provider type.
+Provider.Sftp.Host	主机	Host
+Provider.Sftp.KeyFile	私钥文件（可选）	Private key file (optional)
+Provider.Sftp.NamePlaceholder	SFTP 连接	SFTP connection
+Provider.Sftp.Password	密码（使用密钥时可留空）	Password (may be empty when using a key)
+Provider.Sftp.PasswordEdit	密码（留空表示保持原密码不变）	Password (leave empty to keep the current password)
+Provider.Sftp.PasswordOrKeyRequired	SFTP 必须填写密码或私钥文件。	SFTP requires a password or a private key file.
+Provider.Sftp.Port	端口	Port
+Provider.Sftp.User	用户名	User name
+Provider.WebDav.Password	密码（可选）	Password (optional)
+Provider.WebDav.PasswordEdit	密码（留空表示保持原值）	Password (leave empty to keep the current value)
+Provider.WebDav.Url	服务器地址	Server address
+Provider.WebDav.UrlHint	例如 https://cloud.example.com/remote.php/dav/files/user	For example https://cloud.example.com/remote.php/dav/files/user
+Provider.WebDav.User	用户名（可选）	User name (optional)
+Provider.WebDav.Vendor	服务商（可选）	Vendor (optional)
+Provider.WebDav.VendorHint	留空即可；个别服务商需要指定，例如 other、nextcloud、sharepoint。	Leave it empty; a few providers need it set, for example other, nextcloud, sharepoint.
+
+# ---- Profile editor section headings ----
+ProfileEditor.SectionComparison	比较	Comparison
+ProfileEditor.SectionFilter	过滤器	Filters
+ProfileEditor.SectionGeneral	常规	General
+ProfileEditor.SectionPerformance	性能与可靠性	Performance and reliability
+ProfileEditor.SectionSync	同步	Sync
+ProfileEditor.SectionVersioning	版本管理	Versioning
+
+# ---- Provider OAuth fields (CloudProviderCatalog) ----
+Provider.OAuthClientId	Client ID（可选）	Client ID (optional)
+Provider.OAuthClientSecret	Client Secret（可选）	Client Secret (optional)
+Provider.OAuthClientSecretEdit	Client Secret（留空表示保持原值）	Client Secret (leave empty to keep the current value)

@@ -1,5 +1,6 @@
 using FengSync.Core;
 using FengSync.Core.Rclone.Diagnostics;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -34,7 +35,7 @@ public sealed record CloudSizeResult(CloudSizeOutcome Outcome, long Bytes, long 
         new(size.Count == 0 ? CloudSizeOutcome.Empty : CloudSizeOutcome.Counted, size.Bytes, size.Count, size.Sizeless);
 
     /// <summary>An answer with no numbers in it: the directory may exist, but nothing here can be reported.</summary>
-    public static readonly CloudSizeResult NoAnswer = new(CloudSizeOutcome.Failed, 0, 0, 0, "云端没有给出可读取的大小。");
+    public static CloudSizeResult NoAnswer => new(CloudSizeOutcome.Failed, 0, 0, 0, Tr.F("Size.NoAnswer"));
 
     public static CloudSizeResult Refused(string? message) =>
         new(OutcomeFor(message), 0, 0, 0, message);
@@ -72,7 +73,7 @@ public static class CloudFolderSize
     /// The button that asks for the walk. It sits in 属性 rather than in the row menu because the row it changes
     /// is in that panel, and a menu item whose answer lands somewhere else is a command the user has to hunt for.
     /// </summary>
-    public const string ActionLabel = "统计大小";
+    public static string ActionLabel => Tr.F("Size.ActionLabel");
 
     /// <summary>
     /// The hint shown beside the button, before anything is read. It says both halves of what the user is about
@@ -80,10 +81,10 @@ public static class CloudFolderSize
     /// v1.75.0, <c>job/stop</c> answers and the recursion keeps going. Closing the panel stops the waiting,
     /// not the work.
     /// </summary>
-    public const string CostHint = "统计会遍历整个子目录树，对象越多越久；这一步发出去就收不回，关掉面板只是不再等它。";
+    public static string CostHint => Tr.F("Size.CostHint");
 
     /// <summary>The 大小 row for one directory before anybody has counted it.</summary>
-    public const string NotCounted = "未统计";
+    public static string NotCounted => Tr.F("Size.NotCounted");
 
     /// <summary>
     /// The row the panel shows for one counted directory. The byte total keeps the panel's existing shape
@@ -92,12 +93,13 @@ public static class CloudFolderSize
     /// </summary>
     public static string TextFor(CloudSizeResult result) => result.Outcome switch
     {
-        CloudSizeOutcome.Empty => "0 个对象，空目录",
-        CloudSizeOutcome.Counted => $"{CloudItemDetails.HumanSize(result.Bytes)}（{result.Bytes:N0} 字节）· {result.Count:N0} 个对象"
+        CloudSizeOutcome.Empty => Tr.F("Size.Empty"),
+        CloudSizeOutcome.Counted => Tr.Format("Size.Counted", CloudItemDetails.HumanSize(result.Bytes),
+                $"{result.Bytes:N0}", $"{result.Count:N0}")
             + SizelessClause(result),
-        CloudSizeOutcome.Gone => "云端已没有这个文件夹",
-        CloudSizeOutcome.NotADirectory => "这是一个文件，不是文件夹",
-        _ => "未能统计" + (result.Reason is { Length: > 0 } why ? "：" + why : ""),
+        CloudSizeOutcome.Gone => Tr.F("Size.Gone"),
+        CloudSizeOutcome.NotADirectory => Tr.F("Size.NotADirectory"),
+        _ => Tr.F("Size.Failed") + (result.Reason is { Length: > 0 } why ? "：" + why : ""),
     };
 
     /// <summary>
@@ -118,5 +120,5 @@ public static class CloudFolderSize
     /// </summary>
     private static string SizelessClause(CloudSizeResult result) => result.Sizeless == 0
         ? ""
-        : $"（其中 {result.Sizeless:N0} 个云端不报大小，按 0 计入）";
+        : Tr.Format("Size.SizelessCounted", $"{result.Sizeless:N0}");
 }

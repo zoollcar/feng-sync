@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FengSync.Localization;
 using FengSync.Services;
 
 namespace FengSync.Views;
@@ -26,7 +27,7 @@ internal static class CloudConflictPrompt
         var name = CloudTransferTask.NameOf(path);
         var window = new Window
         {
-            Title = "目标已有同名文件",
+            Title = Tr.F("Conflict.Title"),
             Owner = owner,
             Width = 520,
             SizeToContent = SizeToContent.Height,
@@ -40,17 +41,17 @@ internal static class CloudConflictPrompt
         CloudConflictAnswer? answer = null;
 
         var root = new StackPanel { Margin = new Thickness(20) };
-        root.Children.Add(new TextBlock { Text = $"“{name}”已经在目标目录里。", TextWrapping = TextWrapping.Wrap });
+        root.Children.Add(new TextBlock { Text = Tr.Format("Conflict.Exists", name), TextWrapping = TextWrapping.Wrap });
         root.Children.Add(new TextBlock
         {
-            Text = remaining > 1 ? $"本次还有 {remaining} 个同名文件要决定。" : "这是最后一个同名文件。",
+            Text = remaining > 1 ? Tr.Format("Conflict.MoreRemaining", remaining) : Tr.F("Conflict.LastOne"),
             Style = TextPrompt.Resource<Style>("CaptionTextStyle"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0)
         });
         root.Children.Add(new TextBlock
         {
-            Text = "目标：" + path,
+            Text = Tr.Format("Conflict.Target", path),
             Style = TextPrompt.Resource<Style>("CaptionTextStyle"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0)
@@ -58,7 +59,7 @@ internal static class CloudConflictPrompt
 
         var applyToAll = new CheckBox
         {
-            Content = remaining > 1 ? $"把这次选择应用到其余 {remaining - 1} 个同名文件" : "把这次选择应用到其余同名文件",
+            Content = remaining > 1 ? Tr.Format("Conflict.ApplyToRest", remaining - 1) : Tr.F("Conflict.ApplyToRestLast"),
             Margin = new Thickness(0, 14, 0, 0),
             IsEnabled = remaining > 1
         };
@@ -85,19 +86,19 @@ internal static class CloudConflictPrompt
 
         var cancel = new Button
         {
-            Content = "取消",
+            Content = Tr.F("Conflict.Cancel"),
             IsCancel = true,
             Style = TextPrompt.Resource<Style>("TertiaryButtonStyle"),
             Margin = new Thickness(8, 0, 0, 0)
         };
         AutomationProperties.SetAutomationId(cancel, "CloudConflictCancel");
 
-        var overwrite = Choice("覆盖", "CloudConflictOverwrite", "PrimaryButtonStyle", CloudConflictChoice.Overwrite, isDefault: false);
-        var keepBoth = Choice($"保留两者（存为“{CloudFileNames.KeepBothName(name, taken)}”）",
+        var overwrite = Choice(Tr.F("Conflict.Overwrite"), "CloudConflictOverwrite", "PrimaryButtonStyle", CloudConflictChoice.Overwrite, isDefault: false);
+        var keepBoth = Choice(Tr.Format("Conflict.KeepBoth", CloudFileNames.KeepBothName(name, taken)),
             "CloudConflictKeepBoth", "SecondaryButtonStyle", CloudConflictChoice.KeepBoth, isDefault: false);
         // Skipping is the answer that changes nothing, so it is the one allowed to take Enter; an accidental
         // keypress must not replace a file.
-        var skip = Choice("跳过", "CloudConflictSkip", "SecondaryButtonStyle", CloudConflictChoice.Skip, isDefault: true);
+        var skip = Choice(Tr.F("Conflict.Skip"), "CloudConflictSkip", "SecondaryButtonStyle", CloudConflictChoice.Skip, isDefault: true);
 
         var buttons = new StackPanel
         {

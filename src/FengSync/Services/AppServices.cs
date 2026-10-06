@@ -1,5 +1,6 @@
 using FengSync.Core.Mount;
 using FengSync.Core.Rclone.Lifecycle;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -35,7 +36,7 @@ public static class AppServices
 
     /// <summary>Throws when no shell installed its services, which is a programming error rather than user state.</summary>
     public static IAppServiceHost Current =>
-        _host ?? throw new InvalidOperationException("应用服务尚未初始化：请在 Application 构造函数中调用 AppServices.Install。");
+        _host ?? throw new InvalidOperationException(Tr.F("Service.NotInstalled"));
 
     /// <summary>For code that can degrade gracefully instead of failing, such as a preview or a test.</summary>
     public static IAppServiceHost? TryCurrent => _host;

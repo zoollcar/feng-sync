@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Runtime.CompilerServices;
 using FengSync.Core;
 using FengSync.Core.Rclone.Diagnostics;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -25,16 +26,16 @@ public sealed record CloudEndpointStatus(
 
     public string HealthText => Health switch
     {
-        CloudEndpointHealth.Checking => "检查中…",
-        CloudEndpointHealth.Connected => "已连接",
-        CloudEndpointHealth.NeedsLogin => "需要重新登录",
-        CloudEndpointHealth.Unreachable => "无法连接",
-        _ => "未检查"
+        CloudEndpointHealth.Checking => Tr.F("Endpoint.HealthChecking"),
+        CloudEndpointHealth.Connected => Tr.F("Endpoint.HealthConnected"),
+        CloudEndpointHealth.NeedsLogin => Tr.F("Endpoint.HealthNeedsLogin"),
+        CloudEndpointHealth.Unreachable => Tr.F("Endpoint.HealthUnreachable"),
+        _ => Tr.F("Endpoint.HealthUnknown")
     };
 
     /// <summary>Empty when the backend reports no quota, so the row simply shows nothing extra.</summary>
     public string QuotaText => TotalBytes is > 0
-        ? $"已用 {CloudEndpointStatusService.FormatBytes(UsedBytes ?? Math.Max(0, TotalBytes.Value - (FreeBytes ?? 0)))} / {CloudEndpointStatusService.FormatBytes(TotalBytes.Value)}"
+        ? Tr.Format("Endpoint.QuotaUsed", CloudEndpointStatusService.FormatBytes(UsedBytes ?? Math.Max(0, TotalBytes.Value - (FreeBytes ?? 0))), CloudEndpointStatusService.FormatBytes(TotalBytes.Value))
         : "";
 }
 
@@ -103,6 +104,9 @@ public static class CloudEndpointStatusService
     /// <summary>
     /// Keyword fallback for an unclassified error. Kept narrow on purpose: calling a plain network outage
     /// "needs re-login" would send the user through a browser authorization that cannot fix anything.
+    /// The signals are English because the only text that reaches here is rclone's own output, which rclone
+    /// never localizes — matching a translated phrase would make the verdict depend on the interface language
+    /// and could only ever fire in one of them.
     /// </summary>
     internal static CloudEndpointHealth ClassifyMessage(string? message)
     {
@@ -111,7 +115,7 @@ public static class CloudEndpointStatusService
         string[] loginSignals =
         [
             "invalid_grant", "invalid grant", "token expired", "token has been expired", "expired token",
-            "oauth2", "401", "unauthorized", "authentication", "credential", "not signed in", "重新登录", "重新授权", "登录已过期"
+            "oauth2", "401", "unauthorized", "authentication", "credential", "not signed in"
         ];
         return loginSignals.Any(text.Contains) ? CloudEndpointHealth.NeedsLogin : CloudEndpointHealth.Unreachable;
     }

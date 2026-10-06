@@ -1,4 +1,5 @@
 using System.Windows;
+using FengSync.Localization;
 using FengSync.Services;
 
 namespace FengSync.Views;
@@ -14,15 +15,15 @@ public partial class CloudEndpointOrganizationWindow : Window
         IEnumerable<string> existingGroups)
     {
         InitializeComponent();
-        HeaderText.Text = $"“{endpointName}”的分组与标签";
-        SubHeaderText.Text = "分组决定它在列表里的位置，标签用来在搜索框里找到它。";
+        HeaderText.Text = Tr.Format("Organize.Header", endpointName);
+        SubHeaderText.Text = Tr.F("Organize.SubHeader");
         GroupTextBox.Text = group ?? "";
         TagsBox.Text = CloudEndpointOrganization.FormatTags(tags);
         var known = existingGroups.Select(CloudEndpointOrganization.NormalizeGroup)
             .OfType<string>().Distinct(StringComparer.CurrentCultureIgnoreCase).Order(StringComparer.CurrentCulture).ToList();
         GroupHint.Text = known.Count == 0
-            ? "还没有其他分组。填一个名称即可新建分组；留空表示移出分组。"
-            : "已有分组：" + string.Join("、", known) + "。留空表示移出分组。";
+            ? Tr.F("Organize.NoGroupsYet")
+            : Tr.Format("Organize.KnownGroups", string.Join(Tr.F("Organize.GroupSeparator"), known));
     }
 
     /// <summary>

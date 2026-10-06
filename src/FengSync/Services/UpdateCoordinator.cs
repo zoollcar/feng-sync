@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Http;
 using FengSync.Core.Configuration;
 using FengSync.Core.Updates;
+using FengSync.Localization;
 using FengSync.Views;
 using System.Windows;
 
@@ -33,8 +34,8 @@ public sealed class UpdateCoordinator
             return;
         }
         if (!manual) { if (result.Status is not (UpdateCheckStatus.Latest or UpdateCheckStatus.NotModified)) Trace.WriteLine("更新检查失败：" + result.Error); return; }
-        if (result.Status is UpdateCheckStatus.Latest or UpdateCheckStatus.NotModified) MessageBox.Show($"当前已是最新版本 {_versions.DisplayVersion}。", "检查更新", MessageBoxButton.OK, MessageBoxImage.Information);
-        else MessageBox.Show((result.Error ?? "检查更新失败。") + "\nhttps://github.com/zoollcar/feng-sync/releases", "检查更新", MessageBoxButton.OK, MessageBoxImage.Warning);
+        if (result.Status is UpdateCheckStatus.Latest or UpdateCheckStatus.NotModified) MessageBox.Show(Tr.Format("Update.UpToDate", _versions.DisplayVersion), Tr.F("Update.CheckCaption"), MessageBoxButton.OK, MessageBoxImage.Information);
+        else MessageBox.Show((result.Error ?? Tr.F("Update.CheckFailed")) + "\nhttps://github.com/zoollcar/feng-sync/releases", Tr.F("Update.CheckCaption"), MessageBoxButton.OK, MessageBoxImage.Warning);
     }
     /// <summary>Called by the main window after a sync/compare completes so an automatic check is not lost.</summary>
     public Task CheckDeferredAsync(Window owner, bool busy)
@@ -45,20 +46,20 @@ public sealed class UpdateCoordinator
     }
     private async Task DownloadAndInstallAsync(Window owner, GitHubReleaseInfo release, bool busy, UpdateWindow dialog, CancellationToken cancellationToken)
     {
-        if (busy) { MessageBox.Show("同步或比较进行中，不能安装更新。", "检查更新", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (busy) { MessageBox.Show(Tr.F("Update.BusyCannotInstall"), Tr.F("Update.CheckCaption"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         var executable = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(executable)) { MessageBox.Show("无法确定实际程序路径。\n请从 Release 页面手动下载。", "无法自动更新", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        string installation = ""; string? safety = "安装目录验证失败。";
-        if (!InstallationSafety.TryValidate(executable, Path.Combine(Path.GetTempPath(), "FengSync", "updates", "placeholder"), out installation, out safety)) { MessageBox.Show((safety ?? "安装目录验证失败。") + "\n请从 Release 页面手动下载。", "无法自动更新", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (string.IsNullOrWhiteSpace(executable)) { MessageBox.Show(Tr.F("Update.CannotLocateExe") + Tr.F("Update.ManualDownloadHint"), Tr.F("Update.CannotUpdateTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        string installation = ""; string? safety = Tr.F("Update.InstallDirInvalid");
+        if (!InstallationSafety.TryValidate(executable, Path.Combine(Path.GetTempPath(), "FengSync", "updates", "placeholder"), out installation, out safety)) { MessageBox.Show((safety ?? Tr.F("Update.InstallDirInvalid")) + Tr.F("Update.ManualDownloadHint"), Tr.F("Update.CannotUpdateTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         try
         {
             var workflow = new UpdateInstallWorkflow(new HttpClient());
             var handoff = await workflow.DownloadValidateAndLaunchAsync(release, executable, AppContext.BaseDirectory, _versions.CurrentVersion.ToString(), new Progress<UpdateDownloadProgress>(dialog.SetDownloadProgress), cancellationToken);
             dialog.SetDownloadProgress(new UpdateDownloadProgress(release.DownloadSize, release.DownloadSize));
-            owner.Title = "FengSync - 正在退出并安装更新…";
+            owner.Title = Tr.F("Update.ExitingTitle");
             if (_exitForUpdate is not null) await _exitForUpdate();
         }
         catch (OperationCanceledException) { dialog.SetDownloadProgress(new UpdateDownloadProgress(0, null)); }
-        catch (Exception ex) { MessageBox.Show(ex.Message + "\n请从 Release 页面手动下载。", "更新失败", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex) { MessageBox.Show(ex.Message + Tr.F("Update.ManualDownloadHint"), Tr.F("Update.FailedTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 }

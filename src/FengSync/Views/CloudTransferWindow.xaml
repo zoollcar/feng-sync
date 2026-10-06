@@ -1,14 +1,15 @@
 <Window x:Class="FengSync.Views.CloudTransferWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="传输"
+        xmlns:l="clr-namespace:FengSync.Localization"
+        Title="{Binding [Transfer.WindowTitle], Source={l:Lang}}"
         Width="900"
         Height="560"
         MinWidth="760"
         MinHeight="400"
         WindowStartupLocation="CenterScreen"
         AutomationProperties.AutomationId="CloudTransferWindow"
-        AutomationProperties.Name="云盘传输任务">
+        AutomationProperties.Name="{Binding [Transfer.WindowName], Source={l:Lang}}">
     <Grid Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -19,27 +20,27 @@
         </Grid.RowDefinitions>
 
         <StackPanel>
-            <TextBlock Text="传输" Style="{StaticResource DisplayTitleTextStyle}" />
+            <TextBlock Text="{Binding [Transfer.WindowTitle], Source={l:Lang}}" Style="{StaticResource DisplayTitleTextStyle}" />
             <!-- No static AutomationProperties.Name: it would replace the live status text, so a screen
                  reader would announce the label instead of the summary the user needs. -->
             <TextBlock x:Name="SummaryText" AutomationProperties.AutomationId="CloudTransferSummary" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
         </StackPanel>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,0">
-            <Button x:Name="ResumeButton" AutomationProperties.AutomationId="ResumeCloudTransfers" AutomationProperties.Name="断点续传未完成的传输" Content="断点续传" Click="Resume_Click" Style="{StaticResource PrimaryButtonStyle}" />
-            <Button x:Name="PauseAllButton" AutomationProperties.AutomationId="PauseAllCloudTransfers" AutomationProperties.Name="暂停全部正在进行的传输" Content="全部暂停" Click="PauseAll_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-            <Button x:Name="CancelAllButton" AutomationProperties.AutomationId="CancelAllCloudTransfers" AutomationProperties.Name="取消全部传输" Content="全部取消" Click="CancelAll_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-            <Button x:Name="ClearButton" AutomationProperties.AutomationId="ClearCloudTransfers" AutomationProperties.Name="清除已完成的传输并归档" Content="清除已完成" Click="Clear_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-            <Button x:Name="HistoryButton" AutomationProperties.AutomationId="CloudTransferHistory" AutomationProperties.Name="查看已归档的传输记录" Content="传输历史…" Click="History_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-            <Button AutomationProperties.AutomationId="CloseCloudTransfers" AutomationProperties.Name="关闭传输窗口" Content="关闭" IsCancel="True" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+            <Button x:Name="ResumeButton" AutomationProperties.AutomationId="ResumeCloudTransfers" AutomationProperties.Name="{Binding [Transfer.ResumeAction], Source={l:Lang}}" Content="{Binding [Transfer.Resume], Source={l:Lang}}" Click="Resume_Click" Style="{StaticResource PrimaryButtonStyle}" />
+            <Button x:Name="PauseAllButton" AutomationProperties.AutomationId="PauseAllCloudTransfers" AutomationProperties.Name="{Binding [Transfer.PauseAllAction], Source={l:Lang}}" Content="{Binding [Transfer.PauseAll], Source={l:Lang}}" Click="PauseAll_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+            <Button x:Name="CancelAllButton" AutomationProperties.AutomationId="CancelAllCloudTransfers" AutomationProperties.Name="{Binding [Transfer.CancelAllAction], Source={l:Lang}}" Content="{Binding [Transfer.CancelAll], Source={l:Lang}}" Click="CancelAll_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+            <Button x:Name="ClearButton" AutomationProperties.AutomationId="ClearCloudTransfers" AutomationProperties.Name="{Binding [Transfer.ClearAction], Source={l:Lang}}" Content="{Binding [Transfer.ClearFinished], Source={l:Lang}}" Click="Clear_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+            <Button x:Name="HistoryButton" AutomationProperties.AutomationId="CloudTransferHistory" AutomationProperties.Name="{Binding [Transfer.HistoryAction], Source={l:Lang}}" Content="{Binding [Transfer.History], Source={l:Lang}}" Click="History_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+            <Button AutomationProperties.AutomationId="CloseCloudTransfers" AutomationProperties.Name="{Binding [Transfer.CloseAction], Source={l:Lang}}" Content="{Binding [Transfer.Close], Source={l:Lang}}" IsCancel="True" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
         </StackPanel>
 
         <StackPanel Grid.Row="2" Margin="0,10,0,10">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="同时传输数" VerticalAlignment="Center" />
-                <ComboBox x:Name="ConcurrencyBox" AutomationProperties.AutomationId="CloudTransferConcurrency" AutomationProperties.Name="同时进行的传输数量" Width="72" Margin="8,0,0,0" SelectionChanged="Concurrency_Changed" />
-                <TextBlock Text="完成后" VerticalAlignment="Center" Margin="18,0,0,0" />
-                <ComboBox x:Name="AfterTransferBox" AutomationProperties.AutomationId="CloudTransferAfterAction" AutomationProperties.Name="全部传输成功后的动作" Width="170" Margin="8,0,0,0" SelectionChanged="AfterTransfer_Changed" />
+                <TextBlock Text="{Binding [Transfer.Concurrency], Source={l:Lang}}" VerticalAlignment="Center" />
+                <ComboBox x:Name="ConcurrencyBox" AutomationProperties.AutomationId="CloudTransferConcurrency" AutomationProperties.Name="{Binding [Transfer.ConcurrencyName], Source={l:Lang}}" Width="72" Margin="8,0,0,0" SelectionChanged="Concurrency_Changed" />
+                <TextBlock Text="{Binding [Transfer.AfterTransfer], Source={l:Lang}}" VerticalAlignment="Center" Margin="18,0,0,0" />
+                <ComboBox x:Name="AfterTransferBox" AutomationProperties.AutomationId="CloudTransferAfterAction" AutomationProperties.Name="{Binding [Transfer.AfterTransferName], Source={l:Lang}}" Width="170" Margin="8,0,0,0" SelectionChanged="AfterTransfer_Changed" />
                 <TextBlock x:Name="ConcurrencyHint" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap" />
             </StackPanel>
             <!-- Rate ceiling and transfer window come from the settings page; shown here because they change
@@ -55,27 +56,27 @@
             </Border>
         </StackPanel>
 
-        <ListView x:Name="TaskList" Grid.Row="3" AutomationProperties.AutomationId="CloudTransferList" AutomationProperties.Name="传输任务列表" BorderThickness="0" ContextMenuOpening="TaskList_ContextMenuOpening">
+        <ListView x:Name="TaskList" Grid.Row="3" AutomationProperties.AutomationId="CloudTransferList" AutomationProperties.Name="{Binding [Transfer.TaskList], Source={l:Lang}}" BorderThickness="0" ContextMenuOpening="TaskList_ContextMenuOpening">
             <ListView.View>
                 <GridView>
-                    <GridViewColumn Header="任务" Width="240" DisplayMemberBinding="{Binding Display}" />
-                    <GridViewColumn Header="进度" Width="170">
+                    <GridViewColumn Header="{Binding [Transfer.ColumnTask], Source={l:Lang}}" Width="240" DisplayMemberBinding="{Binding Display}" />
+                    <GridViewColumn Header="{Binding [Transfer.ColumnProgress], Source={l:Lang}}" Width="170">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
                                 <ProgressBar Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="10" VerticalAlignment="Center" Margin="0,0,12,0" />
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>
                     </GridViewColumn>
-                    <GridViewColumn Header="状态" Width="210" DisplayMemberBinding="{Binding StatusText}" />
-                    <GridViewColumn Header="操作" Width="200">
+                    <GridViewColumn Header="{Binding [Transfer.ColumnStatus], Source={l:Lang}}" Width="210" DisplayMemberBinding="{Binding StatusText}" />
+                    <GridViewColumn Header="{Binding [Transfer.ColumnActions], Source={l:Lang}}" Width="200">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="暂停" Click="PauseTask_Click" Tag="{Binding}" IsEnabled="{Binding CanPause}" Style="{StaticResource TertiaryButtonStyle}" AutomationProperties.AutomationId="PauseCloudTransfer" AutomationProperties.Name="暂停此传输" />
+                                    <Button Content="{Binding [Transfer.Pause], Source={l:Lang}}" Click="PauseTask_Click" Tag="{Binding}" IsEnabled="{Binding CanPause}" Style="{StaticResource TertiaryButtonStyle}" AutomationProperties.AutomationId="PauseCloudTransfer" AutomationProperties.Name="{Binding [Transfer.PauseOne], Source={l:Lang}}" />
                                     <!-- One button for both restarting verbs: a paused transfer is continued, one that
                                          stopped on its own is retried, and the label follows the task's state. -->
-                                    <Button Content="{Binding RestartText}" Click="RestartTask_Click" Tag="{Binding}" IsEnabled="{Binding IsResumable}" Margin="6,0,0,0" Style="{StaticResource TertiaryButtonStyle}" AutomationProperties.AutomationId="RestartCloudTransfer" AutomationProperties.Name="继续或重试此传输" />
-                                    <Button Content="取消" Click="CancelTask_Click" Tag="{Binding}" IsEnabled="{Binding CanCancel}" Margin="6,0,0,0" Style="{StaticResource TertiaryButtonStyle}" AutomationProperties.AutomationId="CancelCloudTransfer" AutomationProperties.Name="取消此传输" />
+                                    <Button Content="{Binding RestartText}" Click="RestartTask_Click" Tag="{Binding}" IsEnabled="{Binding IsResumable}" Margin="6,0,0,0" Style="{StaticResource TertiaryButtonStyle}" AutomationProperties.AutomationId="RestartCloudTransfer" AutomationProperties.Name="{Binding [Transfer.RestartOne], Source={l:Lang}}" />
+                                    <Button Content="{Binding [Transfer.Cancel], Source={l:Lang}}" Click="CancelTask_Click" Tag="{Binding}" IsEnabled="{Binding CanCancel}" Margin="6,0,0,0" Style="{StaticResource TertiaryButtonStyle}" AutomationProperties.AutomationId="CancelCloudTransfer" AutomationProperties.Name="{Binding [Transfer.CancelOne], Source={l:Lang}}" />
                                 </StackPanel>
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>

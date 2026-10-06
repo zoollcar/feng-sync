@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -104,7 +105,7 @@ public sealed class CloudBrowserBookmarkStore(string? path = null)
             await using var stream = File.OpenRead(_path);
             file = await JsonSerializer.DeserializeAsync(stream, CloudBookmarkJsonContext.Default.CloudBookmarkFile, ct)
                 .ConfigureAwait(false);
-            if (file is null || file.Version != CloudBookmarkFile.CurrentVersion) throw new JsonException("无法识别的收藏文件。");
+            if (file is null || file.Version != CloudBookmarkFile.CurrentVersion) throw new JsonException(Tr.F("Bookmark.UnreadableFile"));
         }
         catch (JsonException)
         {

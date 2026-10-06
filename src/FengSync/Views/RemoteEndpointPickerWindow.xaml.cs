@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using FengSync.Core;
+using FengSync.Localization;
 using FengSync.Services;
 
 namespace FengSync.Views;
@@ -25,9 +26,9 @@ public partial class RemoteEndpointPickerWindow : Window
     {
         InitializeComponent();
         _side = string.IsNullOrEmpty(side) ? "Left" : side;
-        var sideLabel = _side == "Right" ? "右侧" : "左侧";
-        HeaderText.Text = $"添加云端端点 → {sideLabel}";
-        SubHeaderText.Text = $"从已保存的端点中选择，再挑选远端目录，将以 {_side} 端点加入 Profile。";
+        var sideLabel = _side == "Right" ? Tr.F("Picker.SideRight") : Tr.F("Picker.SideLeft");
+        HeaderText.Text = Tr.Format("Picker.Header", sideLabel);
+        SubHeaderText.Text = Tr.Format("Picker.SubHeader", _side);
         EndpointList.ItemsSource = _accounts;
         if (!string.IsNullOrEmpty(initialRemotePath)) RemotePathBox.Text = initialRemotePath;
         Loaded += async (_, _) => await RefreshAsync();
@@ -41,16 +42,16 @@ public partial class RemoteEndpointPickerWindow : Window
         _busy = true;
         try
         {
-            StatusText.Text = "正在读取云端端点列表…";
+            StatusText.Text = Tr.F("Picker.Loading");
             var previous = Selected?.Name;
             var accounts = await CloudEndpointService.LoadEndpointAccountsAsync();
             _accounts.Clear();
             foreach (var account in accounts) _accounts.Add(account);
             var restore = previous is null ? 0 : Math.Max(0, _accounts.ToList().FindIndex(x => x.Name == previous));
             if (_accounts.Count > 0) EndpointList.SelectedIndex = restore;
-            StatusText.Text = _accounts.Count == 0 ? "尚无云端端点；请通过工具 → 远程端点管理 创建一个。" : $"共 {_accounts.Count} 个云端端点。";
+            StatusText.Text = _accounts.Count == 0 ? Tr.F("Picker.NoEndpoints") : Tr.Format("Picker.EndpointCount", _accounts.Count);;
         }
-        catch (Exception ex) { StatusText.Text = "无法读取云端端点：" + RcloneUiError.Describe(ex, "remote-picker-list"); }
+        catch (Exception ex) { StatusText.Text = Tr.Format("Picker.LoadFailed", RcloneUiError.Describe(ex, "remote-picker-list")); }
         finally { _busy = false; UpdateResolved(); }
     }
 
@@ -69,23 +70,23 @@ public partial class RemoteEndpointPickerWindow : Window
         // An enforced prefix is worth stating here: it is why the browse tree stops where it does, and it
         // means this endpoint can never be pointed at a sibling key.
         ResolvedUriText.Text = account.PrefixIsEnforced
-            ? $"将添加：{uri}（只能访问 /{account.Prefix} 下的内容，由 rclone 强制）"
-            : "将添加：" + uri;
+            ? Tr.Format("Picker.WillAddEnforced", uri, account.Prefix)
+            : Tr.Format("Picker.WillAdd", uri);
         AddButton.IsEnabled = true;
     }
 
     private async void BrowseRemote_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Picker.SelectFirst"); return; }
         if (_busy) return;
         _busy = true;
         AddButton.IsEnabled = false;
-        StatusText.Text = "正在连接云端并读取根目录…";
+        StatusText.Text = Tr.F("Picker.Connecting");
         var loading = new Window
         {
-            Title = "云端目录",
+            Title = Tr.F("Picker.CloudDirectoryTitle"),
             Owner = this,
-            Content = new TextBlock { Text = "正在连接云端并读取根目录…", Margin = new Thickness(22), MinWidth = 280, TextWrapping = TextWrapping.Wrap },
+            Content = new TextBlock { Text = Tr.F("Picker.Connecting"), Margin = new Thickness(22), MinWidth = 280, TextWrapping = TextWrapping.Wrap },
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             SizeToContent = SizeToContent.WidthAndHeight,
             ResizeMode = ResizeMode.NoResize,
@@ -101,14 +102,14 @@ public partial class RemoteEndpointPickerWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = "无法浏览远端目录：" + RcloneUiError.Describe(ex, "remote-picker-browse");
+            StatusText.Text = Tr.Format("Picker.BrowseFailed", RcloneUiError.Describe(ex, "remote-picker-browse"));
         }
         finally { _busy = false; loading.Close(); UpdateResolved(); }
     }
 
     private void Add_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Picker.SelectFirst"); return; }
         var kind = CloudEndpointService.KindFromRcloneType(account.Type);
         ResultUri = CloudEndpointService.BuildUri(kind, account.Name, RemotePathBox.Text);
         DialogResult = true;
@@ -122,7 +123,7 @@ public partial class RemoteEndpointPickerWindow : Window
         var filesystem = remote.EndsWith(':') ? remote : remote + ":";
         // The listing root is the endpoint's own root, so an enforced prefix is already the top of this
         // tree: there is nothing above it to navigate to.
-        var rootLabel = account.PrefixIsEnforced ? $"/（前缀根目录 {account.Prefix}）" : "/（根目录）";
+        var rootLabel = account.PrefixIsEnforced ? Tr.Format("Picker.PrefixRoot", account.Prefix) : Tr.F("Picker.RootDir");
         var directories = await client.ListDirectoriesAsync(filesystem, "", false);
         var tree = new TreeView { Margin = new Thickness(12), MinWidth = 420, MinHeight = 360 };
 
@@ -143,9 +144,9 @@ public partial class RemoteEndpointPickerWindow : Window
                         item.Items.Add(Create(childName, childPath));
                     }
                 }
-                catch (Exception ex) { item.Items.Add(new TreeViewItem { Header = "无法读取子目录：" + RcloneUiError.Describe(ex, "remote-picker-expand"), IsEnabled = false }); }
+                catch (Exception ex) { item.Items.Add(new TreeViewItem { Header = Tr.Format("Picker.ExpandFailed", RcloneUiError.Describe(ex, "remote-picker-expand")), IsEnabled = false }); }
             };
-            item.Items.Add(new TreeViewItem { Header = "正在加载…", Tag = null });
+            item.Items.Add(new TreeViewItem { Header = Tr.F("Picker.LoadingEllipsis"), Tag = null });
             return item;
         }
 
@@ -154,12 +155,12 @@ public partial class RemoteEndpointPickerWindow : Window
             rootItem.Items.Add(Create(directory, directory));
         tree.Items.Add(rootItem); rootItem.IsSelected = true; rootItem.IsExpanded = true;
 
-        var use = new Button { Content = "选择此文件夹", IsDefault = true, MinWidth = 110 };
-        var cancel = new Button { Content = "取消", IsCancel = true, Margin = new Thickness(8, 0, 0, 0), MinWidth = 70 };
+        var use = new Button { Content = Tr.F("Picker.UseFolder"), IsDefault = true, MinWidth = 110 };
+        var cancel = new Button { Content = Tr.F("Picker.Cancel"), IsCancel = true, Margin = new Thickness(8, 0, 0, 0), MinWidth = 70 };
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(12, 0, 12, 12) };
         buttons.Children.Add(use); buttons.Children.Add(cancel);
         var layout = new DockPanel(); DockPanel.SetDock(buttons, Dock.Bottom); layout.Children.Add(buttons); layout.Children.Add(tree);
-        var picker = new Window { Title = $"选择 {remote}: 中的文件夹", Owner = this, Content = layout, WindowStartupLocation = WindowStartupLocation.CenterOwner, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.CanResize };
+        var picker = new Window { Title = Tr.Format("Picker.ChooseIn", remote), Owner = this, Content = layout, WindowStartupLocation = WindowStartupLocation.CenterOwner, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.CanResize };
         string? selected = currentPath.Trim('/');
         tree.SelectedItemChanged += (_, _) => selected = (tree.SelectedItem as TreeViewItem)?.Tag as string ?? selected;
         use.Click += (_, _) => picker.DialogResult = true;

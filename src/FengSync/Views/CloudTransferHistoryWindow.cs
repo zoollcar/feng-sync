@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FengSync.Localization;
 using FengSync.Services;
 
 namespace FengSync.Views;
@@ -23,12 +24,12 @@ public sealed class CloudTransferHistoryWindow : Window
     public CloudTransferHistoryWindow(CloudTransferHistoryRepository history)
     {
         _history = history;
-        Title = "传输历史";
+        Title = Tr.F("Transfer.HistoryTitle");
         Width = 900;
         Height = 520;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         AutomationProperties.SetAutomationId(this, "CloudTransferHistoryWindow");
-        AutomationProperties.SetName(this, "已归档的云盘传输记录");
+        AutomationProperties.SetName(this, Tr.F("Transfer.HistoryWindowName"));
 
         var root = new Grid { Margin = new Thickness(18) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -38,7 +39,7 @@ public sealed class CloudTransferHistoryWindow : Window
         var header = new StackPanel();
         header.Children.Add(new TextBlock
         {
-            Text = "传输历史",
+            Text = Tr.F("Transfer.HistoryTitle"),
             Style = Resource<Style>("DisplayTitleTextStyle")
         });
         // No static AutomationProperties.Name: this block *is* the summary, and a label would replace it.
@@ -54,7 +55,7 @@ public sealed class CloudTransferHistoryWindow : Window
 
         _list.BorderThickness = new Thickness(0);
         AutomationProperties.SetAutomationId(_list, "CloudTransferHistoryList");
-        AutomationProperties.SetName(_list, "归档的传输记录");
+        AutomationProperties.SetName(_list, Tr.F("Transfer.HistoryListName"));
         Grid.SetRow(_list, 1);
         root.Children.Add(_list);
 
@@ -64,17 +65,17 @@ public sealed class CloudTransferHistoryWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 12, 0, 0)
         };
-        var clear = new Button { Content = "清空历史", Style = Resource<Style>("DangerButtonStyle") };
+        var clear = new Button { Content = Tr.F("Transfer.HistoryClear"), Style = Resource<Style>("DangerButtonStyle") };
         AutomationProperties.SetAutomationId(clear, "CloudTransferHistoryClear");
-        AutomationProperties.SetName(clear, "删除全部归档记录");
+        AutomationProperties.SetName(clear, Tr.F("Transfer.HistoryClearName"));
         clear.Click += async (_, _) =>
         {
-            if (!TextPrompt.Confirm(this, "清空传输历史", "删除全部归档的传输记录？此操作不可撤销。", danger: true)) return;
+            if (!TextPrompt.Confirm(this, Tr.F("Transfer.HistoryConfirmTitle"), Tr.F("Transfer.HistoryConfirm"), danger: true)) return;
             await _history.ClearAsync();
             await ReloadAsync();
         };
         buttons.Children.Add(clear);
-        var close = new Button { Content = "关闭", IsCancel = true, Style = Resource<Style>("TertiaryButtonStyle"), Margin = new Thickness(8, 0, 0, 0) };
+        var close = new Button { Content = Tr.F("Transfer.Close"), IsCancel = true, Style = Resource<Style>("TertiaryButtonStyle"), Margin = new Thickness(8, 0, 0, 0) };
         AutomationProperties.SetAutomationId(close, "CloudTransferHistoryClose");
         buttons.Children.Add(close);
         Grid.SetRow(buttons, 2);

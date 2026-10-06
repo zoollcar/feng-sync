@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FengSync.Localization;
 using FengSync.Services;
 
 namespace FengSync.Views;
@@ -46,7 +47,7 @@ internal static class CloudPreviewPrompt
                 AutomationProperties.SetAutomationId(picture, "CloudPreviewImage");
                 AutomationProperties.SetName(picture, entry.Name);
                 body.Children.Add(picture);
-                caption.Text = $"{entry.Name} · {CloudItemDetails.HumanSize(entry.Size)} · 已按 {CloudBrowserPreview.PreviewEdgePixels} 像素解码";
+                caption.Text = Tr.Format("Preview.CaptionPicture", entry.Name, CloudItemDetails.HumanSize(entry.Size), CloudBrowserPreview.PreviewEdgePixels);
                 break;
             case CloudPreviewOutcome.Text when panel.Content is { } text:
                 var scroll = new ScrollViewer
@@ -66,7 +67,7 @@ internal static class CloudPreviewPrompt
                 AutomationProperties.SetName(content, entry.Name);
                 scroll.Content = content;
                 body.Children.Add(scroll);
-                caption.Text = $"{entry.Name} · {CloudItemDetails.HumanSize(entry.Size)} · 编码 {panel.TextEncoding}";
+                caption.Text = Tr.Format("Preview.CaptionText", entry.Name, CloudItemDetails.HumanSize(entry.Size), panel.TextEncoding);
                 break;
             default:
                 // Nothing painted: the sentence is the whole answer, and it is written to name the reason rather
@@ -80,13 +81,13 @@ internal static class CloudPreviewPrompt
                 AutomationProperties.SetAutomationId(refusal, "CloudPreviewMessage");
                 AutomationProperties.SetName(refusal, entry.Name);
                 body.Children.Add(refusal);
-                caption.Text = $"不能预览：{entry.Name}";
+                caption.Text = Tr.Format("Preview.Unavailable", entry.Name);
                 break;
         }
 
         var close = new Button
         {
-            Content = "关闭",
+            Content = Tr.F("Preview.Close"),
             IsDefault = true,
             IsCancel = true,
             Style = TextPrompt.Resource<Style>("TertiaryButtonStyle"),

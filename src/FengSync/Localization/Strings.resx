@@ -1,0 +1,4069 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="About.CannotOpen" xml:space="preserve">
+    <value>无法打开链接：{0}</value>
+  </data>
+  <data name="About.CheckUpdates" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="About.CheckUpdatesName" xml:space="preserve">
+    <value>检查 Feng Sync 更新</value>
+  </data>
+  <data name="About.Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="About.CloseName" xml:space="preserve">
+    <value>关闭关于 Feng Sync 窗口</value>
+  </data>
+  <data name="About.Description" xml:space="preserve">
+    <value>本地、SFTP、Google Drive 与 S3 的文件比较和同步。</value>
+  </data>
+  <data name="About.Licenses" xml:space="preserve">
+    <value>第三方许可</value>
+  </data>
+  <data name="About.LicensesName" xml:space="preserve">
+    <value>查看第三方许可</value>
+  </data>
+  <data name="About.LicensesNotice" xml:space="preserve">
+    <value>Microsoft.Data.Sqlite / SQLitePCLRaw：MIT License
+Rclone：MIT License</value>
+  </data>
+  <data name="About.Repository" xml:space="preserve">
+    <value>GitHub 仓库</value>
+  </data>
+  <data name="About.RepositoryName" xml:space="preserve">
+    <value>在浏览器中打开 Feng Sync 的 GitHub 仓库</value>
+  </data>
+  <data name="About.Tagline" xml:space="preserve">
+    <value>文件同步工作区</value>
+  </data>
+  <data name="About.Version" xml:space="preserve">
+    <value>版本 {0}</value>
+  </data>
+  <data name="About.WindowTitle" xml:space="preserve">
+    <value>关于 Feng Sync</value>
+  </data>
+  <data name="AfterTransfer.Cancelled" xml:space="preserve">
+    <value>已取消“{0}”。</value>
+  </data>
+  <data name="AfterTransfer.ConfirmExit" xml:space="preserve">
+    <value>所有传输都已完成。现在退出 Feng Sync？</value>
+  </data>
+  <data name="AfterTransfer.ConfirmShutdown" xml:space="preserve">
+    <value>所有传输都已完成。现在关闭计算机？
+
+关闭会在 60 秒后开始，期间可以在命令行执行 shutdown /a 取消。</value>
+  </data>
+  <data name="AfterTransfer.ConfirmSleep" xml:space="preserve">
+    <value>所有传输都已完成。现在让计算机休眠？</value>
+  </data>
+  <data name="AfterTransfer.DescribeExit" xml:space="preserve">
+    <value>传输完成后退出 Feng Sync</value>
+  </data>
+  <data name="AfterTransfer.DescribeNone" xml:space="preserve">
+    <value>不执行任何操作</value>
+  </data>
+  <data name="AfterTransfer.DescribeShutdown" xml:space="preserve">
+    <value>传输完成后关闭计算机</value>
+  </data>
+  <data name="AfterTransfer.DescribeSleep" xml:space="preserve">
+    <value>传输完成后让计算机休眠</value>
+  </data>
+  <data name="AfterTransfer.Skipped" xml:space="preserve">
+    <value>有 {0} 项传输没有成功，已跳过“{1}”，请先检查失败原因。</value>
+  </data>
+  <data name="Batch.Finished" xml:space="preserve">
+    <value>完成：{0} 成功，{1} 失败。</value>
+  </data>
+  <data name="Batch.ProfileListName" xml:space="preserve">
+    <value>批处理配置列表</value>
+  </data>
+  <data name="Batch.Running" xml:space="preserve">
+    <value>队列运行中（最多 {0} 项）…</value>
+  </data>
+  <data name="Batch.Start" xml:space="preserve">
+    <value>开始</value>
+  </data>
+  <data name="Batch.StartName" xml:space="preserve">
+    <value>开始批处理运行</value>
+  </data>
+  <data name="Batch.StateFailed" xml:space="preserve">
+    <value>失败：{0}</value>
+  </data>
+  <data name="Batch.StateRunning" xml:space="preserve">
+    <value>运行中</value>
+  </data>
+  <data name="Batch.StateSucceeded" xml:space="preserve">
+    <value>成功</value>
+  </data>
+  <data name="Batch.StateWaiting" xml:space="preserve">
+    <value>等待</value>
+  </data>
+  <data name="Batch.StopName" xml:space="preserve">
+    <value>停止批处理队列</value>
+  </data>
+  <data name="Batch.StopQueue" xml:space="preserve">
+    <value>停止队列</value>
+  </data>
+  <data name="Batch.WindowTitle" xml:space="preserve">
+    <value>批处理运行</value>
+  </data>
+  <data name="Bookmark.LabelRoot" xml:space="preserve">
+    <value>{0}  ·  根目录</value>
+  </data>
+  <data name="Bookmark.UnreadableFile" xml:space="preserve">
+    <value>无法识别的收藏文件。</value>
+  </data>
+  <data name="Common.No" xml:space="preserve">
+    <value>否</value>
+  </data>
+  <data name="Common.None" xml:space="preserve">
+    <value>无</value>
+  </data>
+  <data name="Common.Yes" xml:space="preserve">
+    <value>是</value>
+  </data>
+  <data name="Conflict.ApplyToRest" xml:space="preserve">
+    <value>把这次选择应用到其余 {0} 个同名文件</value>
+  </data>
+  <data name="Conflict.ApplyToRestLast" xml:space="preserve">
+    <value>把这次选择应用到其余同名文件</value>
+  </data>
+  <data name="Conflict.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Conflict.Exists" xml:space="preserve">
+    <value>“{0}”已经在目标目录里。</value>
+  </data>
+  <data name="Conflict.KeepBoth" xml:space="preserve">
+    <value>保留两者（存为“{0}”）</value>
+  </data>
+  <data name="Conflict.LastOne" xml:space="preserve">
+    <value>这是最后一个同名文件。</value>
+  </data>
+  <data name="Conflict.MoreRemaining" xml:space="preserve">
+    <value>本次还有 {0} 个同名文件要决定。</value>
+  </data>
+  <data name="Conflict.Overwrite" xml:space="preserve">
+    <value>覆盖</value>
+  </data>
+  <data name="Conflict.Skip" xml:space="preserve">
+    <value>跳过</value>
+  </data>
+  <data name="Conflict.Target" xml:space="preserve">
+    <value>目标：{0}</value>
+  </data>
+  <data name="Conflict.Title" xml:space="preserve">
+    <value>目标已有同名文件</value>
+  </data>
+  <data name="Details.BackendNoHash" xml:space="preserve">
+    <value>此后端未提供校验值</value>
+  </data>
+  <data name="Details.Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Details.Endpoint" xml:space="preserve">
+    <value>所在端点</value>
+  </data>
+  <data name="Details.EndpointRoot" xml:space="preserve">
+    <value>端点根目录</value>
+  </data>
+  <data name="Details.File" xml:space="preserve">
+    <value>文件</value>
+  </data>
+  <data name="Details.FileCount" xml:space="preserve">
+    <value>{0} 个</value>
+  </data>
+  <data name="Details.Folder" xml:space="preserve">
+    <value>文件夹</value>
+  </data>
+  <data name="Details.FolderCount" xml:space="preserve">
+    <value>{0} 个（大小未统计）</value>
+  </data>
+  <data name="Details.FolderNoHash" xml:space="preserve">
+    <value>文件夹没有校验值</value>
+  </data>
+  <data name="Details.Gone" xml:space="preserve">
+    <value>云端已没有这个{0}，请刷新目录。</value>
+  </data>
+  <data name="Details.Hash" xml:space="preserve">
+    <value>校验值</value>
+  </data>
+  <data name="Details.HashActionHint" xml:space="preserve">
+    <value>校验值需要读取整个文件；云端对象会因此走完一遍下载，大文件请耐心等待。</value>
+  </data>
+  <data name="Details.HashActionLabel" xml:space="preserve">
+    <value>计算校验值</value>
+  </data>
+  <data name="Details.HashNotComputed" xml:space="preserve">
+    <value>未计算</value>
+  </data>
+  <data name="Details.HashWithType" xml:space="preserve">
+    <value>校验值（{0}）</value>
+  </data>
+  <data name="Details.LastModified" xml:space="preserve">
+    <value>最近修改</value>
+  </data>
+  <data name="Details.MimeType" xml:space="preserve">
+    <value>MIME 类型</value>
+  </data>
+  <data name="Details.Modified" xml:space="preserve">
+    <value>修改时间</value>
+  </data>
+  <data name="Details.Name" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="Details.NoFiles" xml:space="preserve">
+    <value>没有文件</value>
+  </data>
+  <data name="Details.Path" xml:space="preserve">
+    <value>路径</value>
+  </data>
+  <data name="Details.PrefixEnforced" xml:space="preserve">
+    <value>（由 rclone 强制，无法越出）</value>
+  </data>
+  <data name="Details.Selection" xml:space="preserve">
+    <value>选择</value>
+  </data>
+  <data name="Details.SelectionCount" xml:space="preserve">
+    <value>{0} 项</value>
+  </data>
+  <data name="Details.Size" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="Details.SizeValue" xml:space="preserve">
+    <value>{0}（{1} 字节）</value>
+  </data>
+  <data name="Details.Status" xml:space="preserve">
+    <value>状态</value>
+  </data>
+  <data name="Details.Type" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="Details.Unknown" xml:space="preserve">
+    <value>未知</value>
+  </data>
+  <data name="Diagnostics.Bitness32" xml:space="preserve">
+    <value>32 位</value>
+  </data>
+  <data name="Diagnostics.Bitness64" xml:space="preserve">
+    <value>64 位</value>
+  </data>
+  <data name="Diagnostics.GeneratedUtc" xml:space="preserve">
+    <value>生成时间（UTC）：{0}</value>
+  </data>
+  <data name="Diagnostics.Installed" xml:space="preserve">
+    <value>已安装</value>
+  </data>
+  <data name="Diagnostics.LogFile" xml:space="preserve">
+    <value>日志文件：{0}</value>
+  </data>
+  <data name="Diagnostics.NoCredentials" xml:space="preserve">
+    <value>本报告不含凭据：既不含 rclone.conf，也不含任何端点的参数值。</value>
+  </data>
+  <data name="Diagnostics.NotInstalled" xml:space="preserve">
+    <value>未安装</value>
+  </data>
+  <data name="Diagnostics.NotSet" xml:space="preserve">
+    <value>未设置</value>
+  </data>
+  <data name="Diagnostics.Row.AppVersion" xml:space="preserve">
+    <value>应用版本</value>
+  </data>
+  <data name="Diagnostics.Row.Bitness" xml:space="preserve">
+    <value>进程位数</value>
+  </data>
+  <data name="Diagnostics.Row.Os" xml:space="preserve">
+    <value>操作系统</value>
+  </data>
+  <data name="Diagnostics.Row.RclonePath" xml:space="preserve">
+    <value>rclone 路径</value>
+  </data>
+  <data name="Diagnostics.Row.RcloneVersion" xml:space="preserve">
+    <value>rclone 版本</value>
+  </data>
+  <data name="Diagnostics.Row.WinFspDetail" xml:space="preserve">
+    <value>WinFsp 详情</value>
+  </data>
+  <data name="Diagnostics.Section.Endpoints" xml:space="preserve">
+    <value>端点</value>
+  </data>
+  <data name="Diagnostics.Section.Environment" xml:space="preserve">
+    <value>环境</value>
+  </data>
+  <data name="Diagnostics.Section.LogTail" xml:space="preserve">
+    <value>日志末尾</value>
+  </data>
+  <data name="Diagnostics.Section.Settings" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="Diagnostics.Section.TransferHistory" xml:space="preserve">
+    <value>传输历史</value>
+  </data>
+  <data name="Diagnostics.Setting.AfterTransfer" xml:space="preserve">
+    <value>传输完成后</value>
+  </data>
+  <data name="Diagnostics.Setting.Concurrency" xml:space="preserve">
+    <value>云盘并发传输数</value>
+  </data>
+  <data name="Diagnostics.Setting.Conflict" xml:space="preserve">
+    <value>同名文件冲突</value>
+  </data>
+  <data name="Diagnostics.Setting.DefaultConcurrency" xml:space="preserve">
+    <value>默认并发复制数</value>
+  </data>
+  <data name="Diagnostics.Setting.DownloadDirectory" xml:space="preserve">
+    <value>下载目录</value>
+  </data>
+  <data name="Diagnostics.Setting.DownloadLimit" xml:space="preserve">
+    <value>下载限速</value>
+  </data>
+  <data name="Diagnostics.Setting.FileView" xml:space="preserve">
+    <value>文件视图</value>
+  </data>
+  <data name="Diagnostics.Setting.Language" xml:space="preserve">
+    <value>界面语言</value>
+  </data>
+  <data name="Diagnostics.Setting.MountCache" xml:space="preserve">
+    <value>挂载缓存上限</value>
+  </data>
+  <data name="Diagnostics.Setting.Proxy" xml:space="preserve">
+    <value>rclone 代理</value>
+  </data>
+  <data name="Diagnostics.Setting.ResumeThreshold" xml:space="preserve">
+    <value>断点续传阈值</value>
+  </data>
+  <data name="Diagnostics.Setting.Retries" xml:space="preserve">
+    <value>云盘重试次数</value>
+  </data>
+  <data name="Diagnostics.Setting.TimeTolerance" xml:space="preserve">
+    <value>时间容差（秒）</value>
+  </data>
+  <data name="Diagnostics.Setting.TimeWindow" xml:space="preserve">
+    <value>传输时间窗</value>
+  </data>
+  <data name="Diagnostics.Setting.UploadLimit" xml:space="preserve">
+    <value>上传限速</value>
+  </data>
+  <data name="Diagnostics.Setting.VerifyCopies" xml:space="preserve">
+    <value>复制后校验</value>
+  </data>
+  <data name="Diagnostics.Title" xml:space="preserve">
+    <value>Feng Sync 诊断报告</value>
+  </data>
+  <data name="Diagnostics.Unavailable" xml:space="preserve">
+    <value>未能获取</value>
+  </data>
+  <data name="Drag.BadLocalName" xml:space="preserve">
+    <value>“{0}”这个云端名字在本地不是合法的文件名。</value>
+  </data>
+  <data name="Drag.BadSegment" xml:space="preserve">
+    <value>云端的路径里有一段“{0}”，本地不能这样放。</value>
+  </data>
+  <data name="Drag.Describe" xml:space="preserve">
+    <value>{0} · {1} 个文件 · {2}</value>
+  </data>
+  <data name="Drag.DescribeEmpty" xml:space="preserve">
+    <value>{0}（空文件夹）</value>
+  </data>
+  <data name="Drag.EscapesFolder" xml:space="preserve">
+    <value>云端给出的名字会落到这个文件夹外面，没有拖出它。</value>
+  </data>
+  <data name="Drag.FileFolderNameClash" xml:space="preserve">
+    <value>云端有同名的文件与文件夹（“{0}”），本地放不进同一个名字。</value>
+  </data>
+  <data name="Drag.ListingOutsideFolder" xml:space="preserve">
+    <value>递归列表给出的“{0}”不在被拖出的文件夹里。</value>
+  </data>
+  <data name="Drag.TooManyFiles" xml:space="preserve">
+    <value>这个文件夹有 {0} 个文件，一次最多拖出 {1} 个，请进入子文件夹分批拖出。</value>
+  </data>
+  <data name="Endpoint.AliasLabel" xml:space="preserve">
+    <value>别名</value>
+  </data>
+  <data name="Endpoint.Back" xml:space="preserve">
+    <value>返回</value>
+  </data>
+  <data name="Endpoint.BackingNameTaken" xml:space="preserve">
+    <value>内部名称“{0}”已被占用，请修改显示名称。</value>
+  </data>
+  <data name="Endpoint.BrowseDirectory" xml:space="preserve">
+    <value>浏览目录</value>
+  </data>
+  <data name="Endpoint.BrowserOpenFailed" xml:space="preserve">
+    <value>无法打开默认浏览器。授权地址：{0}</value>
+  </data>
+  <data name="Endpoint.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Endpoint.ChooseService" xml:space="preserve">
+    <value>选择要连接的云端服务</value>
+  </data>
+  <data name="Endpoint.ChooseServiceHint" xml:space="preserve">
+    <value>下一步只显示该服务需要的连接信息。</value>
+  </data>
+  <data name="Endpoint.ClearedOrganization" xml:space="preserve">
+    <value>已清除端点“{0}”的分组与标签。</value>
+  </data>
+  <data name="Endpoint.ConnectionFor" xml:space="preserve">
+    <value>{0} 连接</value>
+  </data>
+  <data name="Endpoint.DisplayName" xml:space="preserve">
+    <value>显示名称</value>
+  </data>
+  <data name="Endpoint.DisplayNoRoot" xml:space="preserve">
+    <value>{0}  ·  未设置默认根目录</value>
+  </data>
+  <data name="Endpoint.DuplicateName" xml:space="preserve">
+    <value>端点“{0}”已存在。
+
+是：替换现有配置；否：返回修改显示名称。</value>
+  </data>
+  <data name="Endpoint.DuplicateNameTitle" xml:space="preserve">
+    <value>端点名称重复</value>
+  </data>
+  <data name="Endpoint.EditCaption" xml:space="preserve">
+    <value>编辑端点 · {0} · 名称与类型不可修改</value>
+  </data>
+  <data name="Endpoint.EditTitle" xml:space="preserve">
+    <value>编辑云端端点</value>
+  </data>
+  <data name="Endpoint.ErrDisplayName" xml:space="preserve">
+    <value>请输入显示名称。</value>
+  </data>
+  <data name="Endpoint.ErrNumberRange" xml:space="preserve">
+    <value>{0}必须介于 1 和 65535 之间。</value>
+  </data>
+  <data name="Endpoint.ErrRequiredField" xml:space="preserve">
+    <value>请填写{0}。</value>
+  </data>
+  <data name="Endpoint.GroupSet" xml:space="preserve">
+    <value>已将端点“{0}”归入分组“{1}”。</value>
+  </data>
+  <data name="Endpoint.HealthChecking" xml:space="preserve">
+    <value>检查中…</value>
+  </data>
+  <data name="Endpoint.HealthConnected" xml:space="preserve">
+    <value>已连接</value>
+  </data>
+  <data name="Endpoint.HealthNeedsLogin" xml:space="preserve">
+    <value>需要重新登录</value>
+  </data>
+  <data name="Endpoint.HealthUnknown" xml:space="preserve">
+    <value>未检查</value>
+  </data>
+  <data name="Endpoint.HealthUnreachable" xml:space="preserve">
+    <value>无法连接</value>
+  </data>
+  <data name="Endpoint.ImportCaption" xml:space="preserve">
+    <value>导入端点 · {0} · 请补填凭据后保存</value>
+  </data>
+  <data name="Endpoint.ImportTitle" xml:space="preserve">
+    <value>导入云端端点</value>
+  </data>
+  <data name="Endpoint.LoadingProviders" xml:space="preserve">
+    <value>正在读取内置 rclone 支持的 Provider…</value>
+  </data>
+  <data name="Endpoint.NameExists" xml:space="preserve">
+    <value>端点名称“{0}”已存在，请修改显示名称。</value>
+  </data>
+  <data name="Endpoint.NeedsInteractiveOption" xml:space="preserve">
+    <value>无法自动完成 {0} 配置；rclone 需要回答选项“{1}”。</value>
+  </data>
+  <data name="Endpoint.Next" xml:space="preserve">
+    <value>下一步</value>
+  </data>
+  <data name="Endpoint.NoOAuthNeeded" xml:space="preserve">
+    <value>{0} 不需要浏览器授权，请直接编辑端点参数。</value>
+  </data>
+  <data name="Endpoint.NoSubdirectories" xml:space="preserve">
+    <value>（当前目录没有子目录）</value>
+  </data>
+  <data name="Endpoint.OrganizationUpdated" xml:space="preserve">
+    <value>已更新端点“{0}”的分组与标签。</value>
+  </data>
+  <data name="Endpoint.PickProvider" xml:space="preserve">
+    <value>从列表中选择 rclone 支持的 Provider。</value>
+  </data>
+  <data name="Endpoint.PickProviderFromList" xml:space="preserve">
+    <value>请选择列表中的 S3 Provider。</value>
+  </data>
+  <data name="Endpoint.Prefix" xml:space="preserve">
+    <value>前缀（可选）</value>
+  </data>
+  <data name="Endpoint.PrefixHint" xml:space="preserve">
+    <value>S3 没有目录层级，这里填的是键前缀。保存后端点只能访问该前缀下的内容，由 rclone 强制，无法越界。</value>
+  </data>
+  <data name="Endpoint.ProbePrefix" xml:space="preserve">
+    <value>读取成功：/{0}。保存后该前缀由 rclone 强制，端点只能访问此前缀下的内容。未验证上传权限。</value>
+  </data>
+  <data name="Endpoint.ProbeResultTitle" xml:space="preserve">
+    <value>测试读取结果</value>
+  </data>
+  <data name="Endpoint.ProbeRoot" xml:space="preserve">
+    <value>读取成功：该 Bucket 根目录。端点将只能访问此 Bucket。未验证上传权限。</value>
+  </data>
+  <data name="Endpoint.ProviderReadFailed" xml:space="preserve">
+    <value>无法读取 Provider：{0}</value>
+  </data>
+  <data name="Endpoint.QuotaUsed" xml:space="preserve">
+    <value>已用 {0} / {1}</value>
+  </data>
+  <data name="Endpoint.ReadingDirectory" xml:space="preserve">
+    <value>正在读取指定目录…</value>
+  </data>
+  <data name="Endpoint.RegionCustomHint" xml:space="preserve">
+    <value>可输入服务商要求的 Region。</value>
+  </data>
+  <data name="Endpoint.RegionSuggestHint" xml:space="preserve">
+    <value>可选择建议值，也可输入自定义 Region。</value>
+  </data>
+  <data name="Endpoint.RenameAliasTargetWrong" xml:space="preserve">
+    <value>重命名后别名“{0}”没有指向新的内部存储（应为 {1}，实际为 {2}）</value>
+  </data>
+  <data name="Endpoint.RenameBackingTaken" xml:space="preserve">
+    <value>内部名称“{0}”已被占用，请换一个名称。</value>
+  </data>
+  <data name="Endpoint.RenameConfigMismatch" xml:space="preserve">
+    <value>重命名后 rclone 读到的“{0}”配置与重命名前不一致，已还原。</value>
+  </data>
+  <data name="Endpoint.RenameNameTaken" xml:space="preserve">
+    <value>已存在名为“{0}”的端点或内部记录，请换一个名称。</value>
+  </data>
+  <data name="Endpoint.RenameNeedName" xml:space="preserve">
+    <value>请输入新的端点名称。</value>
+  </data>
+  <data name="Endpoint.RenameNotInRclone" xml:space="preserve">
+    <value>rclone 中找不到端点“{0}”的配置，请先刷新端点列表。</value>
+  </data>
+  <data name="Endpoint.RenameNotReadable" xml:space="preserve">
+    <value>rclone 未能读取重命名后的端点“{0}”，已还原。</value>
+  </data>
+  <data name="Endpoint.RenameSameName" xml:space="preserve">
+    <value>新名称与当前名称相同，无需重命名。</value>
+  </data>
+  <data name="Endpoint.RenameStillMounted" xml:space="preserve">
+    <value>端点“{0}”仍有挂载，请先取消挂载再重命名。</value>
+  </data>
+  <data name="Endpoint.RootPath" xml:space="preserve">
+    <value>远程根目录（可选）</value>
+  </data>
+  <data name="Endpoint.S3Connection" xml:space="preserve">
+    <value>S3 连接</value>
+  </data>
+  <data name="Endpoint.S3ConnectionNamed" xml:space="preserve">
+    <value>{0} S3 连接</value>
+  </data>
+  <data name="Endpoint.Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Endpoint.SaveUntestedPrompt" xml:space="preserve">
+    <value>当前配置尚未通过读取测试。保存后可能无法浏览、上传或同步。
+
+仍要保存吗？</value>
+  </data>
+  <data name="Endpoint.SaveUntestedTitle" xml:space="preserve">
+    <value>保存未验证的 S3 端点</value>
+  </data>
+  <data name="Endpoint.Saving" xml:space="preserve">
+    <value>正在保存…</value>
+  </data>
+  <data name="Endpoint.Service" xml:space="preserve">
+    <value>服务</value>
+  </data>
+  <data name="Endpoint.ServiceType" xml:space="preserve">
+    <value>云端服务类型</value>
+  </data>
+  <data name="Endpoint.Show" xml:space="preserve">
+    <value>显示</value>
+  </data>
+  <data name="Endpoint.Step1" xml:space="preserve">
+    <value>第 1 步，共 2 步 · 选择服务</value>
+  </data>
+  <data name="Endpoint.Step2" xml:space="preserve">
+    <value>第 2 步，共 2 步 · 配置连接</value>
+  </data>
+  <data name="Endpoint.TagsSet" xml:space="preserve">
+    <value>已为端点“{0}”设置 {1} 个标签。</value>
+  </data>
+  <data name="Endpoint.TestConnection" xml:space="preserve">
+    <value>测试连接</value>
+  </data>
+  <data name="Endpoint.ToggleSecret" xml:space="preserve">
+    <value>显示或隐藏 Secret Access Key</value>
+  </data>
+  <data name="Endpoint.UngroupedLabel" xml:space="preserve">
+    <value>未分组</value>
+  </data>
+  <data name="Endpoint.VerifySuccess" xml:space="preserve">
+    <value>连接验证成功。</value>
+  </data>
+  <data name="Endpoint.Verifying" xml:space="preserve">
+    <value>正在验证连接…</value>
+  </data>
+  <data name="Endpoint.WaitingForAuth" xml:space="preserve">
+    <value>正在等待浏览器授权…</value>
+  </data>
+  <data name="Endpoint.WindowTitle" xml:space="preserve">
+    <value>新建云端端点</value>
+  </data>
+  <data name="Export.BadParameterName" xml:space="preserve">
+    <value>端点“{0}”的参数名“{1}”非法，已跳过。</value>
+  </data>
+  <data name="Export.DuplicateName" xml:space="preserve">
+    <value>导出文件里端点名“{0}”重复，已跳过。</value>
+  </data>
+  <data name="Export.EmptyOrUnrecognized" xml:space="preserve">
+    <value>文件为空或格式无法识别。</value>
+  </data>
+  <data name="Export.NameBadCharacter" xml:space="preserve">
+    <value>端点名称“{0}”包含不允许的字符“{1}”。</value>
+  </data>
+  <data name="Export.NameEmpty" xml:space="preserve">
+    <value>端点名称不能为空。</value>
+  </data>
+  <data name="Export.NameStartsWithDot" xml:space="preserve">
+    <value>端点名称“{0}”不能以“.”开头。</value>
+  </data>
+  <data name="Export.NameSurroundingSpace" xml:space="preserve">
+    <value>端点名称“{0}”前后不能有空白。</value>
+  </data>
+  <data name="Export.NameTooLong" xml:space="preserve">
+    <value>端点名称“{0}”过长（最多 64 个字符）。</value>
+  </data>
+  <data name="Export.NotValidExport" xml:space="preserve">
+    <value>文件不是有效的端点导出：{0}</value>
+  </data>
+  <data name="Export.ParameterNameInvalid" xml:space="preserve">
+    <value>参数名“{0}”不合法。</value>
+  </data>
+  <data name="Export.UnknownType" xml:space="preserve">
+    <value>端点“{0}”的类型“{1}”无法识别，已跳过。</value>
+  </data>
+  <data name="Export.UnsupportedVersion" xml:space="preserve">
+    <value>不支持的导出文件版本 {0}；本版本只认识 {1}。</value>
+  </data>
+  <data name="Guide.Intro" xml:space="preserve">
+    <value>云盘管理可以连接云盘、浏览和传输文件，也可以把云盘上的目录挂载成 Windows 盘符。连接第一个云盘只要三步。</value>
+  </data>
+  <data name="Guide.Later" xml:space="preserve">
+    <value>稍后再说</value>
+  </data>
+  <data name="Guide.NeverAgain" xml:space="preserve">
+    <value>不再显示这个引导</value>
+  </data>
+  <data name="Guide.Start" xml:space="preserve">
+    <value>新建端点</value>
+  </data>
+  <data name="Guide.StatusLater" xml:space="preserve">
+    <value>引导已关闭；下次打开云盘管理还会再问一次。</value>
+  </data>
+  <data name="Guide.StatusNever" xml:space="preserve">
+    <value>已记下：不再显示这个引导。</value>
+  </data>
+  <data name="Guide.StatusStart" xml:space="preserve">
+    <value>已打开新建端点向导。</value>
+  </data>
+  <data name="Guide.Step1Detail" xml:space="preserve">
+    <value>点「新建端点」，在列表里选 Google Drive。</value>
+  </data>
+  <data name="Guide.Step1Title" xml:space="preserve">
+    <value>新建端点</value>
+  </data>
+  <data name="Guide.Step2Detail" xml:space="preserve">
+    <value>点「创建」之后会打开浏览器，登录 Google 账号并允许访问。这一步由 Google 完成，Feng Sync 拿不到你的密码。</value>
+  </data>
+  <data name="Guide.Step2Title" xml:space="preserve">
+    <value>浏览器里授权</value>
+  </data>
+  <data name="Guide.Step3Detail" xml:space="preserve">
+    <value>回到这个窗口点「检查连接」。绿色的一行说明它已经连上；红色的一行会说明是哪一步没成。</value>
+  </data>
+  <data name="Guide.Step3Title" xml:space="preserve">
+    <value>回来检查连接</value>
+  </data>
+  <data name="Guide.Step4Detail" xml:space="preserve">
+    <value>在右边直接浏览文件、拖拽上传下载；需要盘符的话，在左下角「挂载管理」里挂一个。</value>
+  </data>
+  <data name="Guide.Step4Title" xml:space="preserve">
+    <value>浏览或挂载</value>
+  </data>
+  <data name="Guide.Title" xml:space="preserve">
+    <value>开始使用云盘管理</value>
+  </data>
+  <data name="History.AttemptSuffix" xml:space="preserve">
+    <value>（第 {0} 次尝试）</value>
+  </data>
+  <data name="History.Cancelled" xml:space="preserve">
+    <value>已取消</value>
+  </data>
+  <data name="History.Completed" xml:space="preserve">
+    <value>已完成</value>
+  </data>
+  <data name="History.Copy" xml:space="preserve">
+    <value>复制</value>
+  </data>
+  <data name="History.Download" xml:space="preserve">
+    <value>下载</value>
+  </data>
+  <data name="History.Empty" xml:space="preserve">
+    <value>还没有归档的传输。清除已完成时会把它们记到这里。</value>
+  </data>
+  <data name="History.Failed" xml:space="preserve">
+    <value>失败</value>
+  </data>
+  <data name="History.Paused" xml:space="preserve">
+    <value>已暂停</value>
+  </data>
+  <data name="History.Summary" xml:space="preserve">
+    <value>共 {0} 条归档记录，其中成功 {1} 条、失败 {2} 条。</value>
+  </data>
+  <data name="History.Upload" xml:space="preserve">
+    <value>上传</value>
+  </data>
+  <data name="Main.About" xml:space="preserve">
+    <value>关于</value>
+  </data>
+  <data name="Main.Action" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="Main.Batch" xml:space="preserve">
+    <value>批处理</value>
+  </data>
+  <data name="Main.ChangeActionMenu" xml:space="preserve">
+    <value>变更操作菜单</value>
+  </data>
+  <data name="Main.ChooseEndpoint" xml:space="preserve">
+    <value>选择一个端点</value>
+  </data>
+  <data name="Main.Cloud" xml:space="preserve">
+    <value>云端</value>
+  </data>
+  <data name="Main.CloudManagement" xml:space="preserve">
+    <value>云盘管理</value>
+  </data>
+  <data name="Main.Compare" xml:space="preserve">
+    <value>比较</value>
+  </data>
+  <data name="Main.ConflictSummaryEmpty" xml:space="preserve">
+    <value>冲突 0 项</value>
+  </data>
+  <data name="Main.Delete" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="Main.DeleteSummaryEmpty" xml:space="preserve">
+    <value>删除 0 项</value>
+  </data>
+  <data name="Main.DownloadSummaryEmpty" xml:space="preserve">
+    <value>下载 0 项</value>
+  </data>
+  <data name="Main.Duplicate" xml:space="preserve">
+    <value>复制</value>
+  </data>
+  <data name="Main.EditProfile" xml:space="preserve">
+    <value>编辑配置…</value>
+  </data>
+  <data name="Main.EditProfileTooltip" xml:space="preserve">
+    <value>编辑配置</value>
+  </data>
+  <data name="Main.EmptyPickEndpoints" xml:space="preserve">
+    <value>请选择两个端点后点击比较</value>
+  </data>
+  <data name="Main.EnableFile" xml:space="preserve">
+    <value>重新启用此文件</value>
+  </data>
+  <data name="Main.Export" xml:space="preserve">
+    <value>导出…</value>
+  </data>
+  <data name="Main.FilterConflicts" xml:space="preserve">
+    <value>筛选冲突变更</value>
+  </data>
+  <data name="Main.FilterDeletes" xml:space="preserve">
+    <value>筛选删除变更</value>
+  </data>
+  <data name="Main.FilterDownloads" xml:space="preserve">
+    <value>筛选下载变更</value>
+  </data>
+  <data name="Main.FilterUploads" xml:space="preserve">
+    <value>筛选上传变更</value>
+  </data>
+  <data name="Main.IgnoreFile" xml:space="preserve">
+    <value>忽略此文件</value>
+  </data>
+  <data name="Main.Import" xml:space="preserve">
+    <value>导入…</value>
+  </data>
+  <data name="Main.ItemCountEmpty" xml:space="preserve">
+    <value>0 项</value>
+  </data>
+  <data name="Main.KeepLeft" xml:space="preserve">
+    <value>左侧覆盖右侧</value>
+  </data>
+  <data name="Main.KeepRight" xml:space="preserve">
+    <value>右侧覆盖左侧</value>
+  </data>
+  <data name="Main.LeftEndpointPath" xml:space="preserve">
+    <value>左侧端点路径</value>
+  </data>
+  <data name="Main.LeftRelativePath" xml:space="preserve">
+    <value>左侧相对路径</value>
+  </data>
+  <data name="Main.LoadingSettings" xml:space="preserve">
+    <value>正在加载设置…</value>
+  </data>
+  <data name="Main.Local" xml:space="preserve">
+    <value>本地</value>
+  </data>
+  <data name="Main.ModeMirror" xml:space="preserve">
+    <value>镜像到右侧</value>
+  </data>
+  <data name="Main.ModeTwoWay" xml:space="preserve">
+    <value>双向同步</value>
+  </data>
+  <data name="Main.ModeUpdate" xml:space="preserve">
+    <value>更新到右侧</value>
+  </data>
+  <data name="Main.NewSync" xml:space="preserve">
+    <value>新建同步</value>
+  </data>
+  <data name="Main.NoEndpoint" xml:space="preserve">
+    <value>未选择端点</value>
+  </data>
+  <data name="Main.NoProfileSelected" xml:space="preserve">
+    <value>未选择同步配置</value>
+  </data>
+  <data name="Main.PickEndpointsToCompare" xml:space="preserve">
+    <value>选择左右端点后即可比较</value>
+  </data>
+  <data name="Main.PickLeftCloud" xml:space="preserve">
+    <value>选择左侧云端端点</value>
+  </data>
+  <data name="Main.PickLeftLocal" xml:space="preserve">
+    <value>选择左侧本地端点</value>
+  </data>
+  <data name="Main.PickRightCloud" xml:space="preserve">
+    <value>选择右侧云端端点</value>
+  </data>
+  <data name="Main.PickRightLocal" xml:space="preserve">
+    <value>选择右侧本地端点</value>
+  </data>
+  <data name="Main.ProfileRefreshFailed" xml:space="preserve">
+    <value>刷新 Profile 列表失败：{0}</value>
+  </data>
+  <data name="Main.ProfileSyncedFromCloud" xml:space="preserve">
+    <value>已同步 Profile“{0}”。</value>
+  </data>
+  <data name="Main.ProfileWorkspace" xml:space="preserve">
+    <value>Profile 工作区</value>
+  </data>
+  <data name="Main.RightEndpointPath" xml:space="preserve">
+    <value>右侧端点路径</value>
+  </data>
+  <data name="Main.RightRelativePath" xml:space="preserve">
+    <value>右侧相对路径</value>
+  </data>
+  <data name="Main.SaveAsBatchJob" xml:space="preserve">
+    <value>保存为批处理作业…</value>
+  </data>
+  <data name="Main.ScheduleTasks" xml:space="preserve">
+    <value>计划任务</value>
+  </data>
+  <data name="Main.SelectedPrefix" xml:space="preserve">
+    <value>已选择 </value>
+  </data>
+  <data name="Main.SelectedSuffix" xml:space="preserve">
+    <value> 项  ·  并发 </value>
+  </data>
+  <data name="Main.Settings" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="Main.SettingsApplied" xml:space="preserve">
+    <value>程序设置已应用。</value>
+  </data>
+  <data name="Main.ShowAllChanges" xml:space="preserve">
+    <value>显示全部变更</value>
+  </data>
+  <data name="Main.Size" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="Main.StartSync" xml:space="preserve">
+    <value>开始同步</value>
+  </data>
+  <data name="Main.SwapEndpoints" xml:space="preserve">
+    <value>交换左右端点</value>
+  </data>
+  <data name="Main.SyncProfiles" xml:space="preserve">
+    <value>同步配置</value>
+  </data>
+  <data name="Main.ThisRunChanges" xml:space="preserve">
+    <value>本次变更</value>
+  </data>
+  <data name="Main.TotalPending" xml:space="preserve">
+    <value>总计（待传输）</value>
+  </data>
+  <data name="Main.UploadSummaryEmpty" xml:space="preserve">
+    <value>上传 0 项</value>
+  </data>
+  <data name="Mgr.AddressBarName" xml:space="preserve">
+    <value>远程路径地址栏</value>
+  </data>
+  <data name="Mgr.Ascending" xml:space="preserve">
+    <value>升序</value>
+  </data>
+  <data name="Mgr.AutoMount" xml:space="preserve">
+    <value>所选挂载在下次启动时自动挂载</value>
+  </data>
+  <data name="Mgr.AutoMountName" xml:space="preserve">
+    <value>所选挂载随应用启动自动挂载</value>
+  </data>
+  <data name="Mgr.AutoMountNoRecord" xml:space="preserve">
+    <value>这个挂载没有本应用的记录（可能由外部程序启动），因此无法设置自动挂载。</value>
+  </data>
+  <data name="Mgr.AutoMountNoRecordFor" xml:space="preserve">
+    <value>没有找到 {0} 的挂载记录，无法设置自动挂载。</value>
+  </data>
+  <data name="Mgr.AutoMountOff" xml:space="preserve">
+    <value>已取消：{0} 不再随启动自动挂载。</value>
+  </data>
+  <data name="Mgr.AutoMountOn" xml:space="preserve">
+    <value>已设置：{0} 会在下次启动时自动挂载。</value>
+  </data>
+  <data name="Mgr.AutoMountSaveFailed" xml:space="preserve">
+    <value>保存自动挂载设置失败：{0}</value>
+  </data>
+  <data name="Mgr.Back" xml:space="preserve">
+    <value>后退</value>
+  </data>
+  <data name="Mgr.BookmarksCorruptBackup" xml:space="preserve">
+    <value>收藏文件读不出来，已备份为 {0}，收藏与最近访问从空列表开始。</value>
+  </data>
+  <data name="Mgr.BookmarksLoadFailed" xml:space="preserve">
+    <value>无法读取收藏与最近访问：{0}</value>
+  </data>
+  <data name="Mgr.BrowserTitle" xml:space="preserve">
+    <value>文件浏览器</value>
+  </data>
+  <data name="Mgr.BulletField" xml:space="preserve">
+    <value> · {0}：{1}</value>
+  </data>
+  <data name="Mgr.BusyCreate" xml:space="preserve">
+    <value>正在新建…</value>
+  </data>
+  <data name="Mgr.BusyLogin" xml:space="preserve">
+    <value>正在登录…</value>
+  </data>
+  <data name="Mgr.BusyNew" xml:space="preserve">
+    <value>正在新建…</value>
+  </data>
+  <data name="Mgr.BusyOpen" xml:space="preserve">
+    <value>正在打开…</value>
+  </data>
+  <data name="Mgr.BusyRefresh" xml:space="preserve">
+    <value>正在刷新…</value>
+  </data>
+  <data name="Mgr.CacheAlreadyEmpty" xml:space="preserve">
+    <value>挂载缓存已经是空的（{0}）。</value>
+  </data>
+  <data name="Mgr.CacheClearFailed" xml:space="preserve">
+    <value>清理缓存失败：{0}</value>
+  </data>
+  <data name="Mgr.CacheCleared" xml:space="preserve">
+    <value>已清理挂载缓存：{0} 个文件。</value>
+  </data>
+  <data name="Mgr.CacheClearedPartial" xml:space="preserve">
+    <value>已清理挂载缓存：{0} / {1} 个文件；其余正被挂载占用，已保留。</value>
+  </data>
+  <data name="Mgr.CannotCreateSyncTask" xml:space="preserve">
+    <value>无法创建同步任务。</value>
+  </data>
+  <data name="Mgr.CannotReconnectProvider" xml:space="preserve">
+    <value>只有需要浏览器授权的端点可以重新登录；{0} 请直接编辑端点参数。</value>
+  </data>
+  <data name="Mgr.CheckEndpoint" xml:space="preserve">
+    <value>检查连接</value>
+  </data>
+  <data name="Mgr.CheckEndpointName" xml:space="preserve">
+    <value>检查所选云盘端点的连接与容量</value>
+  </data>
+  <data name="Mgr.Clear" xml:space="preserve">
+    <value>清除</value>
+  </data>
+  <data name="Mgr.ClearCache" xml:space="preserve">
+    <value>清理缓存</value>
+  </data>
+  <data name="Mgr.ClearCacheName" xml:space="preserve">
+    <value>清理挂载缓存</value>
+  </data>
+  <data name="Mgr.ClearCachePrompt" xml:space="preserve">
+    <value>将删除挂载缓存目录里的 {0} 个文件（{1}）：
+{2}
+
+</value>
+  </data>
+  <data name="Mgr.ClearCacheTitle" xml:space="preserve">
+    <value>清理挂载缓存</value>
+  </data>
+  <data name="Mgr.ClearSearchName" xml:space="preserve">
+    <value>清除搜索条件</value>
+  </data>
+  <data name="Mgr.ClearingCache" xml:space="preserve">
+    <value>正在清理挂载缓存…</value>
+  </data>
+  <data name="Mgr.ColumnModified" xml:space="preserve">
+    <value>修改时间</value>
+  </data>
+  <data name="Mgr.ColumnName" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="Mgr.ColumnSize" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="Mgr.ColumnType" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="Mgr.CreateSyncTask" xml:space="preserve">
+    <value>创建同步任务</value>
+  </data>
+  <data name="Mgr.CreateSyncTaskName" xml:space="preserve">
+    <value>从所选云盘端点创建同步任务</value>
+  </data>
+  <data name="Mgr.Delete" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="Mgr.DeleteEndpointName" xml:space="preserve">
+    <value>删除所选云盘端点</value>
+  </data>
+  <data name="Mgr.DeleteItemsName" xml:space="preserve">
+    <value>删除所选项目</value>
+  </data>
+  <data name="Mgr.Descending" xml:space="preserve">
+    <value>降序</value>
+  </data>
+  <data name="Mgr.Download" xml:space="preserve">
+    <value>下载</value>
+  </data>
+  <data name="Mgr.DownloadName" xml:space="preserve">
+    <value>下载所选文件</value>
+  </data>
+  <data name="Mgr.DropToUpload" xml:space="preserve">
+    <value>松开鼠标即可上传</value>
+  </data>
+  <data name="Mgr.EditEndpoint" xml:space="preserve">
+    <value>编辑端点</value>
+  </data>
+  <data name="Mgr.EditEndpointName" xml:space="preserve">
+    <value>编辑所选云盘端点</value>
+  </data>
+  <data name="Mgr.EmptyTrash" xml:space="preserve">
+    <value>清空回收站</value>
+  </data>
+  <data name="Mgr.EmptyTrashName" xml:space="preserve">
+    <value>永久删除回收站里的全部内容</value>
+  </data>
+  <data name="Mgr.EndpointCount" xml:space="preserve">
+    <value>共 {0} 个云端端点。</value>
+  </data>
+  <data name="Mgr.EndpointCreated" xml:space="preserve">
+    <value>已创建端点：{0}。</value>
+  </data>
+  <data name="Mgr.EndpointListFailed" xml:space="preserve">
+    <value>无法读取云端端点：{0}</value>
+  </data>
+  <data name="Mgr.EndpointListName" xml:space="preserve">
+    <value>云盘端点列表</value>
+  </data>
+  <data name="Mgr.EndpointSortByName" xml:space="preserve">
+    <value>云盘端点排序依据</value>
+  </data>
+  <data name="Mgr.EndpointSortHealth" xml:space="preserve">
+    <value>状态</value>
+  </data>
+  <data name="Mgr.EndpointSortName" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="Mgr.EndpointSortProvider" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="Mgr.EndpointUpdated" xml:space="preserve">
+    <value>已更新端点：{0}。</value>
+  </data>
+  <data name="Mgr.EndpointsFiltered" xml:space="preserve">
+    <value>已按“{0}”过滤，显示 {1} / {2} 个端点。</value>
+  </data>
+  <data name="Mgr.EndpointsGroup" xml:space="preserve">
+    <value>云盘端点</value>
+  </data>
+  <data name="Mgr.Export" xml:space="preserve">
+    <value>导出…</value>
+  </data>
+  <data name="Mgr.ExportAllName" xml:space="preserve">
+    <value>导出全部云盘端点的非敏感配置</value>
+  </data>
+  <data name="Mgr.ExportDiagnostics" xml:space="preserve">
+    <value>导出诊断…</value>
+  </data>
+  <data name="Mgr.ExportDiagnosticsName" xml:space="preserve">
+    <value>导出一份不含凭据的诊断报告</value>
+  </data>
+  <data name="Mgr.ExternalMountNotice" xml:space="preserve">
+    <value>该挂载由外部程序管理。Feng Sync 只读显示外部挂载，不会结束其进程，也不会代为重新挂载。</value>
+  </data>
+  <data name="Mgr.FavoriteJumpName" xml:space="preserve">
+    <value>跳到收藏的目录</value>
+  </data>
+  <data name="Mgr.FavoriteThisDirectory" xml:space="preserve">
+    <value>收藏此目录</value>
+  </data>
+  <data name="Mgr.FileListName" xml:space="preserve">
+    <value>当前目录中的文件</value>
+  </data>
+  <data name="Mgr.Forward" xml:space="preserve">
+    <value>前进</value>
+  </data>
+  <data name="Mgr.Go" xml:space="preserve">
+    <value>转到</value>
+  </data>
+  <data name="Mgr.GoToName" xml:space="preserve">
+    <value>转到输入的路径</value>
+  </data>
+  <data name="Mgr.GridView" xml:space="preserve">
+    <value>网格视图</value>
+  </data>
+  <data name="Mgr.GuideSeenSaveFailed" xml:space="preserve">
+    <value>无法记住引导状态：{0}</value>
+  </data>
+  <data name="Mgr.HistoryBackName" xml:space="preserve">
+    <value>后退到上一个访问过的目录</value>
+  </data>
+  <data name="Mgr.HistoryForwardName" xml:space="preserve">
+    <value>前进到下一个访问过的目录</value>
+  </data>
+  <data name="Mgr.Import" xml:space="preserve">
+    <value>导入…</value>
+  </data>
+  <data name="Mgr.ImportName" xml:space="preserve">
+    <value>从导出文件导入云盘端点</value>
+  </data>
+  <data name="Mgr.IncludeSubfolders" xml:space="preserve">
+    <value>包含子目录</value>
+  </data>
+  <data name="Mgr.Jump" xml:space="preserve">
+    <value>跳转</value>
+  </data>
+  <data name="Mgr.LoadingEndpointParams" xml:space="preserve">
+    <value>正在读取端点参数…</value>
+  </data>
+  <data name="Mgr.LoadingEndpoints" xml:space="preserve">
+    <value>正在读取云端端点列表…</value>
+  </data>
+  <data name="Mgr.MountCount" xml:space="preserve">
+    <value>共发现 {0} 个挂载，其中 {1} 个由本应用启动。</value>
+  </data>
+  <data name="Mgr.MountEndpoint" xml:space="preserve">
+    <value>挂载选中端点…</value>
+  </data>
+  <data name="Mgr.MountEndpointName" xml:space="preserve">
+    <value>挂载所选云盘端点</value>
+  </data>
+  <data name="Mgr.MountHealthy" xml:space="preserve">
+    <value>挂载点 {0} 当前可用，无需重新挂载。</value>
+  </data>
+  <data name="Mgr.MountListName" xml:space="preserve">
+    <value>当前挂载列表</value>
+  </data>
+  <data name="Mgr.MountReconnectFailed" xml:space="preserve">
+    <value>重新挂载失败：{0}</value>
+  </data>
+  <data name="Mgr.MountRestoreFailed" xml:space="preserve">
+    <value>恢复挂载失败：{0}</value>
+  </data>
+  <data name="Mgr.MountScanFailed" xml:space="preserve">
+    <value>扫描挂载失败：{0}</value>
+  </data>
+  <data name="Mgr.MountsGroup" xml:space="preserve">
+    <value>挂载管理</value>
+  </data>
+  <data name="Mgr.MoveToTrash" xml:space="preserve">
+    <value>移到回收站</value>
+  </data>
+  <data name="Mgr.NewEndpoint" xml:space="preserve">
+    <value>新建端点</value>
+  </data>
+  <data name="Mgr.NewEndpointName" xml:space="preserve">
+    <value>新建云盘端点</value>
+  </data>
+  <data name="Mgr.NewFolder" xml:space="preserve">
+    <value>新建文件夹</value>
+  </data>
+  <data name="Mgr.NewFolderName" xml:space="preserve">
+    <value>在当前目录新建文件夹</value>
+  </data>
+  <data name="Mgr.NoEndpoints" xml:space="preserve">
+    <value>尚无云端端点。点击“新建端点”创建一个。</value>
+  </data>
+  <data name="Mgr.NoMountRecordStore" xml:space="preserve">
+    <value>本进程没有挂载记录存储，无法设置自动挂载。</value>
+  </data>
+  <data name="Mgr.NoMounts" xml:space="preserve">
+    <value>当前系统没有 rclone 挂载。</value>
+  </data>
+  <data name="Mgr.NoMountsToRestore" xml:space="preserve">
+    <value>没有需要恢复的挂载。</value>
+  </data>
+  <data name="Mgr.OpenTransfersName" xml:space="preserve">
+    <value>打开云盘传输窗口</value>
+  </data>
+  <data name="Mgr.OpenTrashName" xml:space="preserve">
+    <value>打开该端点的回收站文件夹</value>
+  </data>
+  <data name="Mgr.OpeningNewEndpointWindow" xml:space="preserve">
+    <value>正在打开新建端点窗口…</value>
+  </data>
+  <data name="Mgr.OpeningSyncWizard" xml:space="preserve">
+    <value>正在打开同步向导…</value>
+  </data>
+  <data name="Mgr.OrganizeEndpoint" xml:space="preserve">
+    <value>分组与标签…</value>
+  </data>
+  <data name="Mgr.OrganizeEndpointName" xml:space="preserve">
+    <value>设置所选云盘端点的分组与标签</value>
+  </data>
+  <data name="Mgr.Paste" xml:space="preserve">
+    <value>粘贴</value>
+  </data>
+  <data name="Mgr.PasteFoldersSkipped" xml:space="preserve">
+    <value>{0} 个文件夹没有被复制：粘贴的单位是文件，请先进入文件夹再选择其中的文件。</value>
+  </data>
+  <data name="Mgr.PasteName" xml:space="preserve">
+    <value>把剪贴板中的项目粘贴到当前目录</value>
+  </data>
+  <data name="Mgr.PasteSameName" xml:space="preserve">
+    <value>“{0}”已经在目标目录里。</value>
+  </data>
+  <data name="Mgr.PathNavigationName" xml:space="preserve">
+    <value>当前路径导航</value>
+  </data>
+  <data name="Mgr.PathWithPrefix" xml:space="preserve">
+    <value>{0}:/{1}    （前缀 /{2}，由 rclone 强制，无法越界）</value>
+  </data>
+  <data name="Mgr.PickEndpoint" xml:space="preserve">
+    <value>请先选择一个端点。</value>
+  </data>
+  <data name="Mgr.PickEndpointForSyncTask" xml:space="preserve">
+    <value>请先选择要创建同步任务的端点。</value>
+  </data>
+  <data name="Mgr.PickEndpointToEdit" xml:space="preserve">
+    <value>请先选择要编辑的端点。</value>
+  </data>
+  <data name="Mgr.PickMountToReconnect" xml:space="preserve">
+    <value>请先选择要重新挂载的挂载点。</value>
+  </data>
+  <data name="Mgr.PreparingSyncTask" xml:space="preserve">
+    <value>正在准备同步任务…</value>
+  </data>
+  <data name="Mgr.RecentJumpName" xml:space="preserve">
+    <value>跳到最近访问的目录</value>
+  </data>
+  <data name="Mgr.ReconnectAborted" xml:space="preserve">
+    <value>重新挂载已中止：原挂载未能取消。
+</value>
+  </data>
+  <data name="Mgr.ReconnectEndpoint" xml:space="preserve">
+    <value>重新登录</value>
+  </data>
+  <data name="Mgr.ReconnectEndpointName" xml:space="preserve">
+    <value>重新登录所选云盘端点</value>
+  </data>
+  <data name="Mgr.ReconnectMount" xml:space="preserve">
+    <value>重新挂载</value>
+  </data>
+  <data name="Mgr.ReconnectMountName" xml:space="preserve">
+    <value>重新挂载所选失效挂载</value>
+  </data>
+  <data name="Mgr.ReconnectMountTail" xml:space="preserve">
+    <value>
+
+将先取消它，再用同样的设置挂载一次。</value>
+  </data>
+  <data name="Mgr.ReconnectMountTitle" xml:space="preserve">
+    <value>重新挂载</value>
+  </data>
+  <data name="Mgr.Reconnected" xml:space="preserve">
+    <value>“{0}”已重新登录。</value>
+  </data>
+  <data name="Mgr.ReconnectingInBrowser" xml:space="preserve">
+    <value>正在重新登录，请在浏览器完成授权…</value>
+  </data>
+  <data name="Mgr.ReconnectingMount" xml:space="preserve">
+    <value>正在重新挂载 {0}…</value>
+  </data>
+  <data name="Mgr.RecycleItemName" xml:space="preserve">
+    <value>把所选项目移入该端点的回收站</value>
+  </data>
+  <data name="Mgr.Refresh" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="Mgr.RefreshDirectoryName" xml:space="preserve">
+    <value>刷新当前目录</value>
+  </data>
+  <data name="Mgr.RefreshList" xml:space="preserve">
+    <value>刷新列表</value>
+  </data>
+  <data name="Mgr.RefreshListName" xml:space="preserve">
+    <value>刷新云盘端点列表</value>
+  </data>
+  <data name="Mgr.RefreshMountsName" xml:space="preserve">
+    <value>刷新挂载列表</value>
+  </data>
+  <data name="Mgr.Rename" xml:space="preserve">
+    <value>重命名</value>
+  </data>
+  <data name="Mgr.RenameEndpointName" xml:space="preserve">
+    <value>重命名所选云盘端点</value>
+  </data>
+  <data name="Mgr.RenameItemName" xml:space="preserve">
+    <value>重命名所选项目</value>
+  </data>
+  <data name="Mgr.Restore" xml:space="preserve">
+    <value>还原</value>
+  </data>
+  <data name="Mgr.RestoreItemsName" xml:space="preserve">
+    <value>把所选的回收站项目还原到原目录</value>
+  </data>
+  <data name="Mgr.RestoreMounts" xml:space="preserve">
+    <value>一键恢复</value>
+  </data>
+  <data name="Mgr.RestoreMountsName" xml:space="preserve">
+    <value>恢复上次的挂载</value>
+  </data>
+  <data name="Mgr.RestoreMountsPrompt" xml:space="preserve">
+    <value>将恢复 {0} 个上次的挂载：
+{1}</value>
+  </data>
+  <data name="Mgr.RestoreMountsTitle" xml:space="preserve">
+    <value>恢复挂载</value>
+  </data>
+  <data name="Mgr.RestoringMounts" xml:space="preserve">
+    <value>正在恢复 {0} 个挂载…</value>
+  </data>
+  <data name="Mgr.ScanningMounts" xml:space="preserve">
+    <value>正在扫描系统全部 rclone 挂载…</value>
+  </data>
+  <data name="Mgr.Search" xml:space="preserve">
+    <value>搜索</value>
+  </data>
+  <data name="Mgr.SearchBoxName" xml:space="preserve">
+    <value>按名称或路径搜索</value>
+  </data>
+  <data name="Mgr.SearchEndpointName" xml:space="preserve">
+    <value>在整个端点内搜索</value>
+  </data>
+  <data name="Mgr.SearchEndpointsName" xml:space="preserve">
+    <value>按名称、类型或前缀搜索云盘端点</value>
+  </data>
+  <data name="Mgr.SearchRecursiveName" xml:space="preserve">
+    <value>搜索包含子目录</value>
+  </data>
+  <data name="Mgr.SettingsLoadFailed" xml:space="preserve">
+    <value>无法读取设置：{0}</value>
+  </data>
+  <data name="Mgr.Sort" xml:space="preserve">
+    <value>排序</value>
+  </data>
+  <data name="Mgr.SortByName" xml:space="preserve">
+    <value>排序依据</value>
+  </data>
+  <data name="Mgr.StatusConnectedNoQuota" xml:space="preserve">
+    <value>“{0}”连接正常；该服务不提供容量信息。</value>
+  </data>
+  <data name="Mgr.StatusConnectedWithQuota" xml:space="preserve">
+    <value>“{0}”连接正常，{1}。</value>
+  </data>
+  <data name="Mgr.StatusFailed" xml:space="preserve">
+    <value>“{0}”{1}：{2}</value>
+  </data>
+  <data name="Mgr.Subtitle" xml:space="preserve">
+    <value>管理云盘端点与挂载，并浏览和传输文件。</value>
+  </data>
+  <data name="Mgr.SyncTaskCancelled" xml:space="preserve">
+    <value>已取消创建同步任务。</value>
+  </data>
+  <data name="Mgr.SyncTaskCreated" xml:space="preserve">
+    <value>已创建同步任务“{0}”：{1} → {2}</value>
+  </data>
+  <data name="Mgr.SyncTaskListFailed" xml:space="preserve">
+    <value>无法读取同步任务列表：{0}</value>
+  </data>
+  <data name="Mgr.SyncWizard" xml:space="preserve">
+    <value>同步向导</value>
+  </data>
+  <data name="Mgr.SyncWizardName" xml:space="preserve">
+    <value>打开一键双向同步向导</value>
+  </data>
+  <data name="Mgr.SyncWizardTaskCreated" xml:space="preserve">
+    <value>已创建双向同步任务“{0}”：{1} ↔ {2}</value>
+  </data>
+  <data name="Mgr.TestAll" xml:space="preserve">
+    <value>测试全部</value>
+  </data>
+  <data name="Mgr.TestAllName" xml:space="preserve">
+    <value>检查全部云盘端点的连接与容量</value>
+  </data>
+  <data name="Mgr.ToggleEndpointSortDirectionName" xml:space="preserve">
+    <value>切换云盘端点列表的升降序</value>
+  </data>
+  <data name="Mgr.ToggleSortDirectionName" xml:space="preserve">
+    <value>切换升序或降序</value>
+  </data>
+  <data name="Mgr.ToggleViewName" xml:space="preserve">
+    <value>在列表视图与网格视图之间切换</value>
+  </data>
+  <data name="Mgr.TransferProgressName" xml:space="preserve">
+    <value>文件传输进度</value>
+  </data>
+  <data name="Mgr.Trash" xml:space="preserve">
+    <value>回收站</value>
+  </data>
+  <data name="Mgr.TypeFile" xml:space="preserve">
+    <value>文件</value>
+  </data>
+  <data name="Mgr.TypeFolder" xml:space="preserve">
+    <value>文件夹</value>
+  </data>
+  <data name="Mgr.Unmount" xml:space="preserve">
+    <value>取消挂载</value>
+  </data>
+  <data name="Mgr.UnmountName" xml:space="preserve">
+    <value>取消所选挂载</value>
+  </data>
+  <data name="Mgr.UpLevel" xml:space="preserve">
+    <value>上一级</value>
+  </data>
+  <data name="Mgr.UpLevelName" xml:space="preserve">
+    <value>返回上一级目录</value>
+  </data>
+  <data name="Mgr.UploadFiles" xml:space="preserve">
+    <value>上传文件</value>
+  </data>
+  <data name="Mgr.UploadFilesName" xml:space="preserve">
+    <value>上传文件到当前目录</value>
+  </data>
+  <data name="Mgr.UploadFolder" xml:space="preserve">
+    <value>上传文件夹</value>
+  </data>
+  <data name="Mgr.UploadFolderName" xml:space="preserve">
+    <value>上传文件夹到当前目录</value>
+  </data>
+  <data name="Mgr.ViewTransfers" xml:space="preserve">
+    <value>查看传输</value>
+  </data>
+  <data name="Mgr.WindowName" xml:space="preserve">
+    <value>云盘端点与文件管理</value>
+  </data>
+  <data name="Mgr.WindowTitle" xml:space="preserve">
+    <value>云盘管理</value>
+  </data>
+  <data name="Mount.Advanced" xml:space="preserve">
+    <value>高级选项</value>
+  </data>
+  <data name="Mount.AdvancedOptions" xml:space="preserve">
+    <value>挂载高级选项</value>
+  </data>
+  <data name="Mount.AvailableDrives" xml:space="preserve">
+    <value>可用盘符</value>
+  </data>
+  <data name="Mount.Browse" xml:space="preserve">
+    <value>浏览…</value>
+  </data>
+  <data name="Mount.BrowseAndPickDirectory" xml:space="preserve">
+    <value>浏览并选择挂载目录</value>
+  </data>
+  <data name="Mount.CacheMaxAge" xml:space="preserve">
+    <value>缓存保留时间</value>
+  </data>
+  <data name="Mount.CacheMaxAgeLabel" xml:space="preserve">
+    <value>缓存保留时间（秒，0 表示用默认 1 小时）</value>
+  </data>
+  <data name="Mount.CacheMaxSize" xml:space="preserve">
+    <value>缓存上限</value>
+  </data>
+  <data name="Mount.CacheMaxSizeLabel" xml:space="preserve">
+    <value>缓存上限（如 10G；留空沿用设置里的默认上限；填 0 表示不限）</value>
+  </data>
+  <data name="Mount.CacheMode" xml:space="preserve">
+    <value>VFS 缓存模式</value>
+  </data>
+  <data name="Mount.CacheModeFull" xml:space="preserve">
+    <value>全部缓存，含正在写入的整个文件</value>
+  </data>
+  <data name="Mount.CacheModeLabel" xml:space="preserve">
+    <value>缓存模式</value>
+  </data>
+  <data name="Mount.CacheModeMinimal" xml:space="preserve">
+    <value>只缓存读到的内容</value>
+  </data>
+  <data name="Mount.CacheModeOff" xml:space="preserve">
+    <value>不缓存，每次读取都走网络</value>
+  </data>
+  <data name="Mount.CacheModeWrites" xml:space="preserve">
+    <value>缓存读取并缓冲写入（默认）</value>
+  </data>
+  <data name="Mount.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Mount.CancelName" xml:space="preserve">
+    <value>取消选择挂载位置</value>
+  </data>
+  <data name="Mount.DialogName" xml:space="preserve">
+    <value>选择挂载位置</value>
+  </data>
+  <data name="Mount.DirCacheTime" xml:space="preserve">
+    <value>目录缓存时间</value>
+  </data>
+  <data name="Mount.DirCacheTimeLabel" xml:space="preserve">
+    <value>目录缓存时间（秒，0 表示用默认 5 分钟）</value>
+  </data>
+  <data name="Mount.DirectoryHint" xml:space="preserve">
+    <value>目录必须尚不存在（rclone 会创建它），父目录必须存在。Feng Sync 不会替你创建目录。</value>
+  </data>
+  <data name="Mount.DirectoryPath" xml:space="preserve">
+    <value>挂载目录路径</value>
+  </data>
+  <data name="Mount.DriveHint" xml:space="preserve">
+    <value>选一个既未被 Windows 使用、也不被现有挂载占用的盘符。</value>
+  </data>
+  <data name="Mount.ErrorBadSeconds" xml:space="preserve">
+    <value>无法识别“{0}”。请填写正整数秒；留空或 0 表示使用默认值。</value>
+  </data>
+  <data name="Mount.ErrorBadSize" xml:space="preserve">
+    <value>无法识别“{0}”。请填写形如 10G、512M 的大小；留空表示沿用设置里的默认上限，0 表示不限。</value>
+  </data>
+  <data name="Mount.Header" xml:space="preserve">
+    <value>挂载 {0}</value>
+  </data>
+  <data name="Mount.LabelCacheMaxAge" xml:space="preserve">
+    <value>缓存保留时间</value>
+  </data>
+  <data name="Mount.LabelDirCacheTime" xml:space="preserve">
+    <value>目录缓存时间</value>
+  </data>
+  <data name="Mount.LabelPollInterval" xml:space="preserve">
+    <value>轮询间隔</value>
+  </data>
+  <data name="Mount.LabelWriteBack" xml:space="preserve">
+    <value>写回延迟</value>
+  </data>
+  <data name="Mount.LocationType" xml:space="preserve">
+    <value>挂载位置类型</value>
+  </data>
+  <data name="Mount.NetworkMode" xml:space="preserve">
+    <value>作为网络驱动器挂载（而不是固定磁盘）</value>
+  </data>
+  <data name="Mount.NetworkModeName" xml:space="preserve">
+    <value>作为网络驱动器挂载</value>
+  </data>
+  <data name="Mount.NoChecksum" xml:space="preserve">
+    <value>不比较校验值（默认开启）</value>
+  </data>
+  <data name="Mount.NoChecksumName" xml:space="preserve">
+    <value>不比较校验值</value>
+  </data>
+  <data name="Mount.NoModTime" xml:space="preserve">
+    <value>不读写修改时间（默认开启）</value>
+  </data>
+  <data name="Mount.NoModTimeName" xml:space="preserve">
+    <value>不读写修改时间</value>
+  </data>
+  <data name="Mount.NoSeek" xml:space="preserve">
+    <value>禁止文件内定位（部分后端处理不好）</value>
+  </data>
+  <data name="Mount.NoSeekName" xml:space="preserve">
+    <value>禁止文件内定位</value>
+  </data>
+  <data name="Mount.Ok" xml:space="preserve">
+    <value>挂载</value>
+  </data>
+  <data name="Mount.OkName" xml:space="preserve">
+    <value>确认挂载到所选位置</value>
+  </data>
+  <data name="Mount.PickDirectoryLocation" xml:space="preserve">
+    <value>选择目录挂载位置</value>
+  </data>
+  <data name="Mount.PickDriveLocation" xml:space="preserve">
+    <value>选择盘符挂载位置</value>
+  </data>
+  <data name="Mount.PickParentTitle" xml:space="preserve">
+    <value>选择挂载点的父目录</value>
+  </data>
+  <data name="Mount.PickUncLocation" xml:space="preserve">
+    <value>选择网络共享挂载位置</value>
+  </data>
+  <data name="Mount.PollInterval" xml:space="preserve">
+    <value>轮询间隔</value>
+  </data>
+  <data name="Mount.PollIntervalLabel" xml:space="preserve">
+    <value>轮询间隔（秒，0 表示用默认 1 分钟；须小于目录缓存时间）</value>
+  </data>
+  <data name="Mount.ProblemCacheMaxSize" xml:space="preserve">
+    <value>缓存上限：{0}</value>
+  </data>
+  <data name="Mount.ProblemField" xml:space="preserve">
+    <value>{0}：{1}</value>
+  </data>
+  <data name="Mount.ReadOnly" xml:space="preserve">
+    <value>只读挂载（拒绝一切写入）</value>
+  </data>
+  <data name="Mount.ReadOnlyName" xml:space="preserve">
+    <value>只读挂载</value>
+  </data>
+  <data name="Mount.StatusDirectoryValid" xml:space="preserve">
+    <value>目录合法，挂载后由 rclone 创建。</value>
+  </data>
+  <data name="Mount.StatusEnterDirectory" xml:space="preserve">
+    <value>请输入目录绝对路径。</value>
+  </data>
+  <data name="Mount.StatusEnterUnc" xml:space="preserve">
+    <value>请输入网络共享路径，例如 \\server\share。</value>
+  </data>
+  <data name="Mount.StatusPickDrive" xml:space="preserve">
+    <value>请选择一个盘符。</value>
+  </data>
+  <data name="Mount.StatusUncValid" xml:space="preserve">
+    <value>路径合法。挂载完成后实际挂载点是 Windows 分配的盘符，会在状态里报告。</value>
+  </data>
+  <data name="Mount.StatusWillMountDrive" xml:space="preserve">
+    <value>将挂载到盘符 {0}。</value>
+  </data>
+  <data name="Mount.SubHeader" xml:space="preserve">
+    <value>选择本地盘符、目录或网络共享，将 {0}:/{1} 挂载到 Feng Sync 可访问的位置。</value>
+  </data>
+  <data name="Mount.Summary" xml:space="preserve">
+    <value>将发送：{0}。</value>
+  </data>
+  <data name="Mount.SummaryCacheMaxAge" xml:space="preserve">
+    <value>缓存保留 {0} 秒</value>
+  </data>
+  <data name="Mount.SummaryCacheMaxSize" xml:space="preserve">
+    <value>缓存上限 {0}</value>
+  </data>
+  <data name="Mount.SummaryCacheMaxSizeNone" xml:space="preserve">
+    <value>缓存上限 不限</value>
+  </data>
+  <data name="Mount.SummaryCacheMode" xml:space="preserve">
+    <value>缓存模式 {0}</value>
+  </data>
+  <data name="Mount.SummaryCompareChecksum" xml:space="preserve">
+    <value>比较校验值</value>
+  </data>
+  <data name="Mount.SummaryDirCacheTime" xml:space="preserve">
+    <value>目录缓存 {0} 秒</value>
+  </data>
+  <data name="Mount.SummaryModTime" xml:space="preserve">
+    <value>读写修改时间</value>
+  </data>
+  <data name="Mount.SummaryNetworkMode" xml:space="preserve">
+    <value>作为网络驱动器</value>
+  </data>
+  <data name="Mount.SummaryNoSeek" xml:space="preserve">
+    <value>禁止定位</value>
+  </data>
+  <data name="Mount.SummaryPollInterval" xml:space="preserve">
+    <value>轮询间隔 {0} 秒</value>
+  </data>
+  <data name="Mount.SummaryReadOnly" xml:space="preserve">
+    <value>只读</value>
+  </data>
+  <data name="Mount.SummarySeparator" xml:space="preserve">
+    <value>；</value>
+  </data>
+  <data name="Mount.SummaryVolume" xml:space="preserve">
+    <value>卷标 {0}</value>
+  </data>
+  <data name="Mount.SummaryWarning" xml:space="preserve">
+    <value> 注意：</value>
+  </data>
+  <data name="Mount.SummaryWriteBack" xml:space="preserve">
+    <value>写回延迟 {0} 秒</value>
+  </data>
+  <data name="Mount.TabDirectory" xml:space="preserve">
+    <value>目录</value>
+  </data>
+  <data name="Mount.TabDrive" xml:space="preserve">
+    <value>盘符</value>
+  </data>
+  <data name="Mount.TabUnc" xml:space="preserve">
+    <value>网络共享</value>
+  </data>
+  <data name="Mount.Title" xml:space="preserve">
+    <value>挂载到…</value>
+  </data>
+  <data name="Mount.UncHint" xml:space="preserve">
+    <value>形如 \\服务器\共享名。Windows 会为它分配一个盘符，挂载完成后实际挂载点是那个盘符，而不是你输入的路径。</value>
+  </data>
+  <data name="Mount.UncPath" xml:space="preserve">
+    <value>网络共享路径</value>
+  </data>
+  <data name="Mount.VolumeName" xml:space="preserve">
+    <value>卷标</value>
+  </data>
+  <data name="Mount.VolumeNameLabel" xml:space="preserve">
+    <value>卷标（Windows 显示的名称）</value>
+  </data>
+  <data name="Mount.WriteBack" xml:space="preserve">
+    <value>写回延迟</value>
+  </data>
+  <data name="Mount.WriteBackLabel" xml:space="preserve">
+    <value>写入回写延迟（秒，0 表示用默认 5 秒）</value>
+  </data>
+  <data name="Notify.BatchAllDone" xml:space="preserve">
+    <value>云盘传输完成：{0} 项。</value>
+  </data>
+  <data name="Notify.BatchSummary" xml:space="preserve">
+    <value>云盘传输结束：{0}。</value>
+  </data>
+  <data name="Notify.Failed" xml:space="preserve">
+    <value>{0} 项失败</value>
+  </data>
+  <data name="Notify.ListSeparator" xml:space="preserve">
+    <value>，</value>
+  </data>
+  <data name="Notify.Stopped" xml:space="preserve">
+    <value>{0} 项已停止</value>
+  </data>
+  <data name="Notify.Succeeded" xml:space="preserve">
+    <value>{0} 项成功</value>
+  </data>
+  <data name="OAuth.BrowserOpened" xml:space="preserve">
+    <value>浏览器已打开，请完成 {0} 授权…</value>
+  </data>
+  <data name="OAuth.NoStructuredControl" xml:space="preserve">
+    <value>内置 rclone 不支持结构化 OAuth 状态接口（config/oauthstatus、config/oauthstop）。请升级 rclone 后重试；Feng Sync 不会回退到解析命令行文本。</value>
+  </data>
+  <data name="OAuth.NonLoopbackAuthUri" xml:space="preserve">
+    <value>rclone 返回了非本机 OAuth 授权地址，已拒绝打开。请检查内置 rclone 的完整性。</value>
+  </data>
+  <data name="OAuth.StateMissingOption" xml:space="preserve">
+    <value>rclone OAuth 状态“{0}”缺少待回答选项。</value>
+  </data>
+  <data name="OAuth.TooManySteps" xml:space="preserve">
+    <value>rclone OAuth 配置步骤过多，已停止以避免无限循环。</value>
+  </data>
+  <data name="OAuth.UnsupportedQuestion" xml:space="preserve">
+    <value>rclone OAuth 要求应用无法自动回答的选项：{0}。
+{1}</value>
+  </data>
+  <data name="Organize.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Organize.CancelName" xml:space="preserve">
+    <value>取消设置分组与标签</value>
+  </data>
+  <data name="Organize.GroupLabel" xml:space="preserve">
+    <value>分组</value>
+  </data>
+  <data name="Organize.GroupName" xml:space="preserve">
+    <value>端点所属分组，留空表示不分组</value>
+  </data>
+  <data name="Organize.GroupSeparator" xml:space="preserve">
+    <value>、</value>
+  </data>
+  <data name="Organize.Header" xml:space="preserve">
+    <value>“{0}”的分组与标签</value>
+  </data>
+  <data name="Organize.KnownGroups" xml:space="preserve">
+    <value>已有分组：{0}。留空表示移出分组。</value>
+  </data>
+  <data name="Organize.NoGroupsYet" xml:space="preserve">
+    <value>还没有其他分组。填一个名称即可新建分组；留空表示移出分组。</value>
+  </data>
+  <data name="Organize.Note" xml:space="preserve">
+    <value>分组与标签只存在于本程序自己的记录里，不会写进 rclone 配置；搜索框可以按它们查找端点。</value>
+  </data>
+  <data name="Organize.Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Organize.SaveName" xml:space="preserve">
+    <value>保存分组与标签</value>
+  </data>
+  <data name="Organize.SubHeader" xml:space="preserve">
+    <value>分组决定它在列表里的位置，标签用来在搜索框里找到它。</value>
+  </data>
+  <data name="Organize.TagsLabel" xml:space="preserve">
+    <value>标签（用逗号分隔）</value>
+  </data>
+  <data name="Organize.TagsName" xml:space="preserve">
+    <value>端点标签，多个标签用逗号分隔</value>
+  </data>
+  <data name="Organize.WindowName" xml:space="preserve">
+    <value>设置云盘端点的分组与标签</value>
+  </data>
+  <data name="Organize.WindowTitle" xml:space="preserve">
+    <value>分组与标签</value>
+  </data>
+  <data name="Picker.Add" xml:space="preserve">
+    <value>添加</value>
+  </data>
+  <data name="Picker.AddAction" xml:space="preserve">
+    <value>添加所选云端端点</value>
+  </data>
+  <data name="Picker.AvailableEndpoints" xml:space="preserve">
+    <value>可用云端端点</value>
+  </data>
+  <data name="Picker.Browse" xml:space="preserve">
+    <value>浏览…</value>
+  </data>
+  <data name="Picker.BrowseAction" xml:space="preserve">
+    <value>浏览远程路径</value>
+  </data>
+  <data name="Picker.BrowseFailed" xml:space="preserve">
+    <value>无法浏览远端目录：{0}</value>
+  </data>
+  <data name="Picker.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Picker.CancelAction" xml:space="preserve">
+    <value>取消添加云端端点</value>
+  </data>
+  <data name="Picker.ChooseGroup" xml:space="preserve">
+    <value>选择端点与远程路径</value>
+  </data>
+  <data name="Picker.ChooseIn" xml:space="preserve">
+    <value>选择 {0}: 中的文件夹</value>
+  </data>
+  <data name="Picker.CloudDirectoryTitle" xml:space="preserve">
+    <value>云端目录</value>
+  </data>
+  <data name="Picker.Connecting" xml:space="preserve">
+    <value>正在连接云端并读取根目录…</value>
+  </data>
+  <data name="Picker.Endpoint" xml:space="preserve">
+    <value>端点</value>
+  </data>
+  <data name="Picker.EndpointCount" xml:space="preserve">
+    <value>共 {0} 个云端端点。</value>
+  </data>
+  <data name="Picker.ExpandFailed" xml:space="preserve">
+    <value>无法读取子目录：{0}</value>
+  </data>
+  <data name="Picker.Header" xml:space="preserve">
+    <value>添加云端端点 → {0}</value>
+  </data>
+  <data name="Picker.LoadFailed" xml:space="preserve">
+    <value>无法读取云端端点：{0}</value>
+  </data>
+  <data name="Picker.Loading" xml:space="preserve">
+    <value>正在读取云端端点列表…</value>
+  </data>
+  <data name="Picker.LoadingEllipsis" xml:space="preserve">
+    <value>正在加载…</value>
+  </data>
+  <data name="Picker.NoEndpoints" xml:space="preserve">
+    <value>尚无云端端点；请通过 工具 → 远程端点管理 创建一个。</value>
+  </data>
+  <data name="Picker.PrefixRoot" xml:space="preserve">
+    <value>/（前缀根目录 {0}）</value>
+  </data>
+  <data name="Picker.RemotePath" xml:space="preserve">
+    <value>远程路径</value>
+  </data>
+  <data name="Picker.RootDir" xml:space="preserve">
+    <value>/（根目录）</value>
+  </data>
+  <data name="Picker.SelectFirst" xml:space="preserve">
+    <value>请先选择一个端点。</value>
+  </data>
+  <data name="Picker.SideLeft" xml:space="preserve">
+    <value>左侧</value>
+  </data>
+  <data name="Picker.SideRight" xml:space="preserve">
+    <value>右侧</value>
+  </data>
+  <data name="Picker.SubHeader" xml:space="preserve">
+    <value>从已保存的端点中选择，再挑选远端目录，将以 {0} 端点加入 Profile。</value>
+  </data>
+  <data name="Picker.UseFolder" xml:space="preserve">
+    <value>选择此文件夹</value>
+  </data>
+  <data name="Picker.WillAdd" xml:space="preserve">
+    <value>将添加：{0}</value>
+  </data>
+  <data name="Picker.WillAddEnforced" xml:space="preserve">
+    <value>将添加：{0}（只能访问 /{1} 下的内容，由 rclone 强制）</value>
+  </data>
+  <data name="Picker.WindowName" xml:space="preserve">
+    <value>添加云端端点到同步配置</value>
+  </data>
+  <data name="Picker.WindowTitle" xml:space="preserve">
+    <value>添加云端端点</value>
+  </data>
+  <data name="Preview.Binary" xml:space="preserve">
+    <value>“{0}”里有 0 字节，它不是文本文件，预览画出来的只会是乱码。请下载后用对应的程序打开。</value>
+  </data>
+  <data name="Preview.CaptionPicture" xml:space="preserve">
+    <value>{0} · {1} · 已按 {2} 像素解码</value>
+  </data>
+  <data name="Preview.CaptionText" xml:space="preserve">
+    <value>{0} · {1} · 编码 {2}</value>
+  </data>
+  <data name="Preview.Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Preview.CloudRefused" xml:space="preserve">
+    <value>云端拒绝了这次读取</value>
+  </data>
+  <data name="Preview.Empty" xml:space="preserve">
+    <value>“{0}”没有字节可读。</value>
+  </data>
+  <data name="Preview.Failed" xml:space="preserve">
+    <value>读不到“{0}”：{1}</value>
+  </data>
+  <data name="Preview.Folder" xml:space="preserve">
+    <value>“{0}”是文件夹。预览只看一个文件，文件夹要列出来才知道里面有什么。</value>
+  </data>
+  <data name="Preview.Missing" xml:space="preserve">
+    <value>云端已没有“{0}”，列表里的这一行是上次浏览时的快照。</value>
+  </data>
+  <data name="Preview.NoContent" xml:space="preserve">
+    <value>“{0}”没有可预览的内容。</value>
+  </data>
+  <data name="Preview.NoExtension" xml:space="preserve">
+    <value>（没有后缀）</value>
+  </data>
+  <data name="Preview.NoRenderer" xml:space="preserve">
+    <value>“{0}”不是本程序能渲染的格式（{1}）。内置渲染只有图片和文本，请下载后用对应的程序打开。</value>
+  </data>
+  <data name="Preview.NotUtf8" xml:space="preserve">
+    <value>“{0}”不是 UTF-8 或 UTF-16 文本。本程序不猜它是哪种代码页——猜错的中文看着像文件损坏。请下载后用编辑器打开。</value>
+  </data>
+  <data name="Preview.PictureWithoutDecoder" xml:space="preserve">
+    <value>“{0}”是 {1} 图片，本程序没有它的解码器。请下载后用图片查看器打开。</value>
+  </data>
+  <data name="Preview.TooLarge" xml:space="preserve">
+    <value>“{0}”有 {1}，超过预览的上限 {2}。请下载后打开。</value>
+  </data>
+  <data name="Preview.Unavailable" xml:space="preserve">
+    <value>不能预览：{0}</value>
+  </data>
+  <data name="Preview.UndecodableBytes" xml:space="preserve">
+    <value>“{0}”读到的字节不是本程序能解码的图片，多半是文件损坏或后缀写错了。</value>
+  </data>
+  <data name="Preview.Unrecognized" xml:space="preserve">
+    <value>本程序不知道“{0}”{1}是什么格式，所以不预览。请下载后用对应的程序打开。</value>
+  </data>
+  <data name="Profile.AddCommonExcludes" xml:space="preserve">
+    <value>添加常用排除规则</value>
+  </data>
+  <data name="Profile.AddExclude" xml:space="preserve">
+    <value>添加排除</value>
+  </data>
+  <data name="Profile.AddExcludeRule" xml:space="preserve">
+    <value>添加排除规则</value>
+  </data>
+  <data name="Profile.AddInclude" xml:space="preserve">
+    <value>添加包含</value>
+  </data>
+  <data name="Profile.AddIncludeRule" xml:space="preserve">
+    <value>添加包含规则</value>
+  </data>
+  <data name="Profile.ApplyAttributes" xml:space="preserve">
+    <value>应用属性</value>
+  </data>
+  <data name="Profile.ApplyRuleAttributes" xml:space="preserve">
+    <value>应用规则属性</value>
+  </data>
+  <data name="Profile.ArchiveDirectory" xml:space="preserve">
+    <value>版本归档目录</value>
+  </data>
+  <data name="Profile.Browse" xml:space="preserve">
+    <value>浏览…</value>
+  </data>
+  <data name="Profile.BrowseLeft" xml:space="preserve">
+    <value>浏览左侧端点</value>
+  </data>
+  <data name="Profile.BrowseRight" xml:space="preserve">
+    <value>浏览右侧端点</value>
+  </data>
+  <data name="Profile.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Profile.CancelAction" xml:space="preserve">
+    <value>取消编辑 Profile</value>
+  </data>
+  <data name="Profile.CannotSave" xml:space="preserve">
+    <value>无法保存 Profile</value>
+  </data>
+  <data name="Profile.CleanItem" xml:space="preserve">
+    <value>{0}（{1}）</value>
+  </data>
+  <data name="Profile.CleanListSeparator" xml:space="preserve">
+    <value>；</value>
+  </data>
+  <data name="Profile.CleanedVersions" xml:space="preserve">
+    <value>已清理 {0} 个归档版本。</value>
+  </data>
+  <data name="Profile.Cleaning" xml:space="preserve">
+    <value>正在清理…</value>
+  </data>
+  <data name="Profile.CleanupArchiveNow" xml:space="preserve">
+    <value>立即清理版本归档</value>
+  </data>
+  <data name="Profile.CleanupNow" xml:space="preserve">
+    <value>立即清理</value>
+  </data>
+  <data name="Profile.CommonExcludes" xml:space="preserve">
+    <value>常用排除</value>
+  </data>
+  <data name="Profile.CommonExcludesAdded" xml:space="preserve">
+    <value>已添加常用临时文件、版本控制目录和系统文件排除规则。</value>
+  </data>
+  <data name="Profile.Delete" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="Profile.DeleteRule" xml:space="preserve">
+    <value>删除所选规则</value>
+  </data>
+  <data name="Profile.DeleteSafety" xml:space="preserve">
+    <value>删除安全阈值</value>
+  </data>
+  <data name="Profile.DeleteSafetyHint" xml:space="preserve">
+    <value>超过任一阈值时，执行前必须输入 Profile 名称一次性确认。</value>
+  </data>
+  <data name="Profile.Description" xml:space="preserve">
+    <value>说明</value>
+  </data>
+  <data name="Profile.EditCopyNote" xml:space="preserve">
+    <value>编辑副本仅在保存后生效</value>
+  </data>
+  <data name="Profile.Enabled" xml:space="preserve">
+    <value>已启用</value>
+  </data>
+  <data name="Profile.EndpointAccessible" xml:space="preserve">
+    <value>{0}端点可访问：{1}</value>
+  </data>
+  <data name="Profile.EndpointTestFailed" xml:space="preserve">
+    <value>{0}端点测试失败：{1}</value>
+  </data>
+  <data name="Profile.ErrConcurrency" xml:space="preserve">
+    <value>最大并发数必须在 1 到 64 之间。</value>
+  </data>
+  <data name="Profile.ErrEndpointEmpty" xml:space="preserve">
+    <value>端点不能为空。</value>
+  </data>
+  <data name="Profile.ErrLocalMissing" xml:space="preserve">
+    <value>本地目录不存在或不可访问。</value>
+  </data>
+  <data name="Profile.ErrMaxDeleteRatio" xml:space="preserve">
+    <value>最大删除比例必须在 0 到 1 之间。</value>
+  </data>
+  <data name="Profile.ErrMaxDeletes" xml:space="preserve">
+    <value>最大删除数必须是非负整数。</value>
+  </data>
+  <data name="Profile.ErrMaxTotalMb" xml:space="preserve">
+    <value>总容量 MB 必须是非负数字。</value>
+  </data>
+  <data name="Profile.ErrNonNegativeInt" xml:space="preserve">
+    <value>必须是非负整数。</value>
+  </data>
+  <data name="Profile.ErrOnlySftp" xml:space="preserve">
+    <value>当前编辑器仅可直接测试本地目录和 SFTP TCP 连通性。请在主窗口验证其他云端连接。</value>
+  </data>
+  <data name="Profile.ErrRemoteInvalid" xml:space="preserve">
+    <value>远端地址或端口无效。</value>
+  </data>
+  <data name="Profile.ErrResumeMinimum" xml:space="preserve">
+    <value>续传最小文件大小无效，请使用 500M、2G 这类写法（0 表示所有文件都续传）。</value>
+  </data>
+  <data name="Profile.ErrTimeTolerance" xml:space="preserve">
+    <value>时间容差必须在 0 到 86400 秒之间。</value>
+  </data>
+  <data name="Profile.ErrValidDateTime" xml:space="preserve">
+    <value>必须是有效日期时间。</value>
+  </data>
+  <data name="Profile.FilterRules" xml:space="preserve">
+    <value>过滤规则</value>
+  </data>
+  <data name="Profile.FilterRulesHint" xml:space="preserve">
+    <value>规则按列表顺序计算，后命中规则覆盖先命中规则。禁用规则会保存但不参与扫描。</value>
+  </data>
+  <data name="Profile.FilterTester" xml:space="preserve">
+    <value>规则测试器</value>
+  </data>
+  <data name="Profile.Hidden" xml:space="preserve">
+    <value>隐藏</value>
+  </data>
+  <data name="Profile.InvalidRetention" xml:space="preserve">
+    <value>保留策略无效：{0}</value>
+  </data>
+  <data name="Profile.KeepDays" xml:space="preserve">
+    <value>保留天数</value>
+  </data>
+  <data name="Profile.LeftEndpoint" xml:space="preserve">
+    <value>左侧端点</value>
+  </data>
+  <data name="Profile.MaxBytes" xml:space="preserve">
+    <value>最大字节</value>
+  </data>
+  <data name="Profile.MaxConcurrency" xml:space="preserve">
+    <value>最大并发数：</value>
+  </data>
+  <data name="Profile.MaxDeleteRatio" xml:space="preserve">
+    <value>最大删除比例 (0-1)</value>
+  </data>
+  <data name="Profile.MaxDeletes" xml:space="preserve">
+    <value>最大删除数</value>
+  </data>
+  <data name="Profile.MaxTotalMb" xml:space="preserve">
+    <value>总容量 MB</value>
+  </data>
+  <data name="Profile.MaxVersions" xml:space="preserve">
+    <value>每文件版本数</value>
+  </data>
+  <data name="Profile.MinBytes" xml:space="preserve">
+    <value>最小字节</value>
+  </data>
+  <data name="Profile.ModeCustom" xml:space="preserve">
+    <value>自定义（尚不可用）</value>
+  </data>
+  <data name="Profile.ModeCustomHint" xml:space="preserve">
+    <value>自定义模式尚未实现，不能保存或执行。</value>
+  </data>
+  <data name="Profile.ModeMirrorRight" xml:space="preserve">
+    <value>镜像到右侧</value>
+  </data>
+  <data name="Profile.ModeTwoWay" xml:space="preserve">
+    <value>双向同步</value>
+  </data>
+  <data name="Profile.ModeUpdateRight" xml:space="preserve">
+    <value>更新到右侧</value>
+  </data>
+  <data name="Profile.ModifiedAfter" xml:space="preserve">
+    <value>修改时间不早于</value>
+  </data>
+  <data name="Profile.ModifiedAfterLimit" xml:space="preserve">
+    <value>修改时间下限</value>
+  </data>
+  <data name="Profile.ModifiedBefore" xml:space="preserve">
+    <value>修改时间不晚于</value>
+  </data>
+  <data name="Profile.ModifiedBeforeLimit" xml:space="preserve">
+    <value>修改时间上限</value>
+  </data>
+  <data name="Profile.MoveDown" xml:space="preserve">
+    <value>下移</value>
+  </data>
+  <data name="Profile.MoveDownRule" xml:space="preserve">
+    <value>下移所选规则</value>
+  </data>
+  <data name="Profile.MoveUp" xml:space="preserve">
+    <value>上移</value>
+  </data>
+  <data name="Profile.MoveUpRule" xml:space="preserve">
+    <value>上移所选规则</value>
+  </data>
+  <data name="Profile.Name" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="Profile.NeedsFix" xml:space="preserve">
+    <value>需要修复：{0}</value>
+  </data>
+  <data name="Profile.NothingToClean" xml:space="preserve">
+    <value>没有需要清理的归档版本。</value>
+  </data>
+  <data name="Profile.OnlyHidden" xml:space="preserve">
+    <value>仅隐藏文件</value>
+  </data>
+  <data name="Profile.OnlySymlink" xml:space="preserve">
+    <value>仅符号链接</value>
+  </data>
+  <data name="Profile.PageCompare" xml:space="preserve">
+    <value>比较</value>
+  </data>
+  <data name="Profile.PageFilters" xml:space="preserve">
+    <value>过滤器</value>
+  </data>
+  <data name="Profile.PageGeneral" xml:space="preserve">
+    <value>常规</value>
+  </data>
+  <data name="Profile.PagePerformance" xml:space="preserve">
+    <value>性能与可靠性</value>
+  </data>
+  <data name="Profile.PageSync" xml:space="preserve">
+    <value>同步</value>
+  </data>
+  <data name="Profile.PageVersioning" xml:space="preserve">
+    <value>版本管理</value>
+  </data>
+  <data name="Profile.PreviewArchiveCleanup" xml:space="preserve">
+    <value>预览版本归档清理</value>
+  </data>
+  <data name="Profile.PreviewCleanup" xml:space="preserve">
+    <value>预览清理</value>
+  </data>
+  <data name="Profile.Previewing" xml:space="preserve">
+    <value>正在预览…</value>
+  </data>
+  <data name="Profile.ResultExcluded" xml:space="preserve">
+    <value>排除：{0}</value>
+  </data>
+  <data name="Profile.ResultIncluded" xml:space="preserve">
+    <value>包含：{0}</value>
+  </data>
+  <data name="Profile.ResumeMinimum" xml:space="preserve">
+    <value>启用断点续传的最小文件大小：</value>
+  </data>
+  <data name="Profile.ResumeMinimumHint" xml:space="preserve">
+    <value>不小于该大小的文件先写入 xxx.fengsync.partial，传输完成后改名发布；中断后下载方向可从断点继续。填 0 表示所有文件都续传，支持 500M、2G 这类写法。</value>
+  </data>
+  <data name="Profile.RightEndpoint" xml:space="preserve">
+    <value>右侧端点</value>
+  </data>
+  <data name="Profile.RuleAttributes" xml:space="preserve">
+    <value>所选规则的属性条件（留空表示不限）</value>
+  </data>
+  <data name="Profile.RuleComment" xml:space="preserve">
+    <value>注释</value>
+  </data>
+  <data name="Profile.RuleEnabled" xml:space="preserve">
+    <value>启用</value>
+  </data>
+  <data name="Profile.RuleKind" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="Profile.RulePattern" xml:space="preserve">
+    <value>模式</value>
+  </data>
+  <data name="Profile.Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Profile.SaveAction" xml:space="preserve">
+    <value>保存 Profile</value>
+  </data>
+  <data name="Profile.SaveAs" xml:space="preserve">
+    <value>另存为新 Profile</value>
+  </data>
+  <data name="Profile.SelectRuleFirst" xml:space="preserve">
+    <value>请先选择一条规则。</value>
+  </data>
+  <data name="Profile.SftpConnectable" xml:space="preserve">
+    <value>{0} SFTP 主机 {1}:{2} 可连接。凭据会在实际同步时验证。</value>
+  </data>
+  <data name="Profile.SideLeft" xml:space="preserve">
+    <value>左侧</value>
+  </data>
+  <data name="Profile.SideRight" xml:space="preserve">
+    <value>右侧</value>
+  </data>
+  <data name="Profile.SwapEndpoints" xml:space="preserve">
+    <value>交换左右端点</value>
+  </data>
+  <data name="Profile.SymbolicLink" xml:space="preserve">
+    <value>符号链接</value>
+  </data>
+  <data name="Profile.SyncMode" xml:space="preserve">
+    <value>同步模式</value>
+  </data>
+  <data name="Profile.Test" xml:space="preserve">
+    <value>测试</value>
+  </data>
+  <data name="Profile.TestFileSize" xml:space="preserve">
+    <value>测试文件大小</value>
+  </data>
+  <data name="Profile.TestFilter" xml:space="preserve">
+    <value>测试过滤规则</value>
+  </data>
+  <data name="Profile.TestLeft" xml:space="preserve">
+    <value>测试左侧端点</value>
+  </data>
+  <data name="Profile.TestPathHint" xml:space="preserve">
+    <value>相对路径，例如 cache/draft.tmp</value>
+  </data>
+  <data name="Profile.TestRight" xml:space="preserve">
+    <value>测试右侧端点</value>
+  </data>
+  <data name="Profile.TestSizeHint" xml:space="preserve">
+    <value>文件大小（字节）</value>
+  </data>
+  <data name="Profile.Testing" xml:space="preserve">
+    <value>测试中…</value>
+  </data>
+  <data name="Profile.TimeTolerance" xml:space="preserve">
+    <value>时间容差（秒）</value>
+  </data>
+  <data name="Profile.TimeToleranceHint" xml:space="preserve">
+    <value>在未启用内容 hash 的比较中，修改时间差不超过此值的文件会被视为时间一致。</value>
+  </data>
+  <data name="Profile.UseDefaultConcurrency" xml:space="preserve">
+    <value>并发数使用程序默认值</value>
+  </data>
+  <data name="Profile.UseDefaultCopies" xml:space="preserve">
+    <value>复制验证使用程序默认值</value>
+  </data>
+  <data name="Profile.UseDefaultResume" xml:space="preserve">
+    <value>续传阈值使用程序默认值</value>
+  </data>
+  <data name="Profile.VerifyCopies" xml:space="preserve">
+    <value>复制后验证文件</value>
+  </data>
+  <data name="Profile.VersioningArchive" xml:space="preserve">
+    <value>版本目录</value>
+  </data>
+  <data name="Profile.VersioningHint" xml:space="preserve">
+    <value>留空的数量或容量不设限制；同步完成后会自动按此策略清理归档。</value>
+  </data>
+  <data name="Profile.VersioningNone" xml:space="preserve">
+    <value>永久删除</value>
+  </data>
+  <data name="Profile.VersioningRecycle" xml:space="preserve">
+    <value>回收站（仅 Windows 本地端点）</value>
+  </data>
+  <data name="Profile.WillClean" xml:space="preserve">
+    <value>预计清理 {0} 项：</value>
+  </data>
+  <data name="Profile.WindowTitle" xml:space="preserve">
+    <value>Profile 设置</value>
+  </data>
+  <data name="ProfileEditor.SectionComparison" xml:space="preserve">
+    <value>比较</value>
+  </data>
+  <data name="ProfileEditor.SectionFilter" xml:space="preserve">
+    <value>过滤器</value>
+  </data>
+  <data name="ProfileEditor.SectionGeneral" xml:space="preserve">
+    <value>常规</value>
+  </data>
+  <data name="ProfileEditor.SectionPerformance" xml:space="preserve">
+    <value>性能与可靠性</value>
+  </data>
+  <data name="ProfileEditor.SectionSync" xml:space="preserve">
+    <value>同步</value>
+  </data>
+  <data name="ProfileEditor.SectionVersioning" xml:space="preserve">
+    <value>版本管理</value>
+  </data>
+  <data name="Progress.AutoClose" xml:space="preserve">
+    <value>完成后自动关闭</value>
+  </data>
+  <data name="Progress.AutoCloseName" xml:space="preserve">
+    <value>同步完成后自动关闭窗口</value>
+  </data>
+  <data name="Progress.BytesProgressName" xml:space="preserve">
+    <value>已传输字节进度</value>
+  </data>
+  <data name="Progress.CancelledReason" xml:space="preserve">
+    <value>同步已取消。</value>
+  </data>
+  <data name="Progress.Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Progress.CloseName" xml:space="preserve">
+    <value>关闭同步进度窗口</value>
+  </data>
+  <data name="Progress.ColErrorAdvice" xml:space="preserve">
+    <value>错误 / 建议</value>
+  </data>
+  <data name="Progress.ColOperation" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="Progress.ColPath" xml:space="preserve">
+    <value>路径</value>
+  </data>
+  <data name="Progress.ColStage" xml:space="preserve">
+    <value>状态</value>
+  </data>
+  <data name="Progress.DoneCancelled" xml:space="preserve">
+    <value>已取消</value>
+  </data>
+  <data name="Progress.DoneFailed" xml:space="preserve">
+    <value>同步失败</value>
+  </data>
+  <data name="Progress.DonePartial" xml:space="preserve">
+    <value>已结束（部分成功）</value>
+  </data>
+  <data name="Progress.DoneSucceeded" xml:space="preserve">
+    <value>已成功完成</value>
+  </data>
+  <data name="Progress.EtaSuffix" xml:space="preserve">
+    <value> · 预计剩余 {0}</value>
+  </data>
+  <data name="Progress.FileProgressName" xml:space="preserve">
+    <value>当前文件传输进度</value>
+  </data>
+  <data name="Progress.FileTransfersBytes" xml:space="preserve">
+    <value>文件传输 / 字节</value>
+  </data>
+  <data name="Progress.FilesDone" xml:space="preserve">
+    <value>已完成 {0} / {1} 个文件，{2} / {3}</value>
+  </data>
+  <data name="Progress.FilesDoneInitial" xml:space="preserve">
+    <value>已完成 0 / {0} 个文件，0 B</value>
+  </data>
+  <data name="Progress.FinishingSync" xml:space="preserve">
+    <value>正在完成同步</value>
+  </data>
+  <data name="Progress.Initializing" xml:space="preserve">
+    <value>正在初始化同步</value>
+  </data>
+  <data name="Progress.KindBlocked" xml:space="preserve">
+    <value>已阻止</value>
+  </data>
+  <data name="Progress.KindConflict" xml:space="preserve">
+    <value>冲突</value>
+  </data>
+  <data name="Progress.KindCopyToLeft" xml:space="preserve">
+    <value>复制到左侧</value>
+  </data>
+  <data name="Progress.KindCopyToRight" xml:space="preserve">
+    <value>复制到右侧</value>
+  </data>
+  <data name="Progress.KindCreateLeftDir" xml:space="preserve">
+    <value>创建左侧目录</value>
+  </data>
+  <data name="Progress.KindCreateRightDir" xml:space="preserve">
+    <value>创建右侧目录</value>
+  </data>
+  <data name="Progress.KindDeleteLeft" xml:space="preserve">
+    <value>删除左侧</value>
+  </data>
+  <data name="Progress.KindDeleteRight" xml:space="preserve">
+    <value>删除右侧</value>
+  </data>
+  <data name="Progress.KindMove" xml:space="preserve">
+    <value>移动</value>
+  </data>
+  <data name="Progress.KindMoveConflict" xml:space="preserve">
+    <value>移动冲突</value>
+  </data>
+  <data name="Progress.LiveSummary" xml:space="preserve">
+    <value>已完成 {0}，执行中 {1}，等待 {2}，失败 {3}</value>
+  </data>
+  <data name="Progress.LogSaved" xml:space="preserve">
+    <value>运行日志已保存：{0}</value>
+  </data>
+  <data name="Progress.NoTransfers" xml:space="preserve">
+    <value>本次没有文件传输</value>
+  </data>
+  <data name="Progress.OperationDetails" xml:space="preserve">
+    <value>操作详情</value>
+  </data>
+  <data name="Progress.OperationDetailsName" xml:space="preserve">
+    <value>同步操作详情</value>
+  </data>
+  <data name="Progress.Preparing" xml:space="preserve">
+    <value>正在准备</value>
+  </data>
+  <data name="Progress.PreparingTransfer" xml:space="preserve">
+    <value>正在准备传输…</value>
+  </data>
+  <data name="Progress.Progress" xml:space="preserve">
+    <value>进度</value>
+  </data>
+  <data name="Progress.RetryCancelled" xml:space="preserve">
+    <value>失败项重试已取消。</value>
+  </data>
+  <data name="Progress.RetryFailed" xml:space="preserve">
+    <value>失败项重试失败。</value>
+  </data>
+  <data name="Progress.RetryFailedName" xml:space="preserve">
+    <value>重试失败项</value>
+  </data>
+  <data name="Progress.RetryFinished" xml:space="preserve">
+    <value>失败项重试已完成。</value>
+  </data>
+  <data name="Progress.RetryingCount" xml:space="preserve">
+    <value>正在重试 {0} 项可重试失败。</value>
+  </data>
+  <data name="Progress.RetryingTitle" xml:space="preserve">
+    <value>正在重试失败项</value>
+  </data>
+  <data name="Progress.SaveLog" xml:space="preserve">
+    <value>保存日志</value>
+  </data>
+  <data name="Progress.SaveLogName" xml:space="preserve">
+    <value>保存本次运行日志</value>
+  </data>
+  <data name="Progress.SkippedReason" xml:space="preserve">
+    <value>因其他操作失败而未执行。</value>
+  </data>
+  <data name="Progress.SpeedElapsed" xml:space="preserve">
+    <value>速度 / 用时</value>
+  </data>
+  <data name="Progress.SpeedLine" xml:space="preserve">
+    <value>{0}/秒 · {1} 项并发 · 已用 {2}</value>
+  </data>
+  <data name="Progress.StageCancelled" xml:space="preserve">
+    <value>已取消</value>
+  </data>
+  <data name="Progress.StageCommitted" xml:space="preserve">
+    <value>已完成</value>
+  </data>
+  <data name="Progress.StageDeleting" xml:space="preserve">
+    <value>删除中</value>
+  </data>
+  <data name="Progress.StageFailed" xml:space="preserve">
+    <value>失败</value>
+  </data>
+  <data name="Progress.StagePending" xml:space="preserve">
+    <value>等待中</value>
+  </data>
+  <data name="Progress.StagePreparing" xml:space="preserve">
+    <value>准备中</value>
+  </data>
+  <data name="Progress.StageTransferring" xml:space="preserve">
+    <value>传输中</value>
+  </data>
+  <data name="Progress.StageVerifying" xml:space="preserve">
+    <value>校验中</value>
+  </data>
+  <data name="Progress.StateIcon" xml:space="preserve">
+    <value>同步状态图标</value>
+  </data>
+  <data name="Progress.Syncing" xml:space="preserve">
+    <value>正在同步</value>
+  </data>
+  <data name="Progress.WaitingForTask" xml:space="preserve">
+    <value>等待传输任务…</value>
+  </data>
+  <data name="Progress.WaitingTransfer" xml:space="preserve">
+    <value>等待传输</value>
+  </data>
+  <data name="Progress.WindowTitle" xml:space="preserve">
+    <value>同步进度</value>
+  </data>
+  <data name="Prompt.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Prompt.Continue" xml:space="preserve">
+    <value>继续</value>
+  </data>
+  <data name="Prompt.Ok" xml:space="preserve">
+    <value>确定</value>
+  </data>
+  <data name="Provider.Backblaze.Description" xml:space="preserve">
+    <value>Region 必须与 Endpoint 中的区域一致；两者都能在 B2 控制台的 Bucket 详情页看到。</value>
+  </data>
+  <data name="Provider.NotAProviderType" xml:space="preserve">
+    <value>不是云端 Provider 类型。</value>
+  </data>
+  <data name="Provider.OAuthClientId" xml:space="preserve">
+    <value>Client ID（可选）</value>
+  </data>
+  <data name="Provider.OAuthClientSecret" xml:space="preserve">
+    <value>Client Secret（可选）</value>
+  </data>
+  <data name="Provider.OAuthClientSecretEdit" xml:space="preserve">
+    <value>Client Secret（留空表示保持原值）</value>
+  </data>
+  <data name="Provider.Sftp.Host" xml:space="preserve">
+    <value>主机</value>
+  </data>
+  <data name="Provider.Sftp.KeyFile" xml:space="preserve">
+    <value>私钥文件（可选）</value>
+  </data>
+  <data name="Provider.Sftp.NamePlaceholder" xml:space="preserve">
+    <value>SFTP 连接</value>
+  </data>
+  <data name="Provider.Sftp.Password" xml:space="preserve">
+    <value>密码（使用密钥时可留空）</value>
+  </data>
+  <data name="Provider.Sftp.PasswordEdit" xml:space="preserve">
+    <value>密码（留空表示保持原密码不变）</value>
+  </data>
+  <data name="Provider.Sftp.PasswordOrKeyRequired" xml:space="preserve">
+    <value>SFTP 必须填写密码或私钥文件。</value>
+  </data>
+  <data name="Provider.Sftp.Port" xml:space="preserve">
+    <value>端口</value>
+  </data>
+  <data name="Provider.Sftp.User" xml:space="preserve">
+    <value>用户名</value>
+  </data>
+  <data name="Provider.WebDav.Password" xml:space="preserve">
+    <value>密码（可选）</value>
+  </data>
+  <data name="Provider.WebDav.PasswordEdit" xml:space="preserve">
+    <value>密码（留空表示保持原值）</value>
+  </data>
+  <data name="Provider.WebDav.Url" xml:space="preserve">
+    <value>服务器地址</value>
+  </data>
+  <data name="Provider.WebDav.UrlHint" xml:space="preserve">
+    <value>例如 https://cloud.example.com/remote.php/dav/files/user</value>
+  </data>
+  <data name="Provider.WebDav.User" xml:space="preserve">
+    <value>用户名（可选）</value>
+  </data>
+  <data name="Provider.WebDav.Vendor" xml:space="preserve">
+    <value>服务商（可选）</value>
+  </data>
+  <data name="Provider.WebDav.VendorHint" xml:space="preserve">
+    <value>留空即可；个别服务商需要指定，例如 other、nextcloud、sharepoint。</value>
+  </data>
+  <data name="Rclone.Category" xml:space="preserve">
+    <value>类别：{0}（可重试：{1}）</value>
+  </data>
+  <data name="Rclone.Context" xml:space="preserve">
+    <value>上下文：{0}</value>
+  </data>
+  <data name="Rclone.DiagnosticId" xml:space="preserve">
+    <value>{0} {1}（诊断 ID：{2}）</value>
+  </data>
+  <data name="Rclone.DiagnosticIdOnly" xml:space="preserve">
+    <value>诊断 ID：{0}</value>
+  </data>
+  <data name="Rclone.ExceptionType" xml:space="preserve">
+    <value>异常类型：{0}</value>
+  </data>
+  <data name="Rclone.Message" xml:space="preserve">
+    <value>信息：{0}</value>
+  </data>
+  <data name="Rclone.NoStatus" xml:space="preserve">
+    <value>无</value>
+  </data>
+  <data name="Rclone.Operation" xml:space="preserve">
+    <value>操作：{0}</value>
+  </data>
+  <data name="Rclone.RequestInput" xml:space="preserve">
+    <value>请求参数：{0}</value>
+  </data>
+  <data name="Rclone.Statuses" xml:space="preserve">
+    <value>HTTP 状态：{0}　RC 状态：{1}</value>
+  </data>
+  <data name="Rclone.TechnicalCode" xml:space="preserve">
+    <value>技术代码：{0}</value>
+  </data>
+  <data name="Rclone.TechnicalMessage" xml:space="preserve">
+    <value>技术信息：{0}</value>
+  </data>
+  <data name="Rclone.Unspecified" xml:space="preserve">
+    <value>未指定</value>
+  </data>
+  <data name="Recycle.AndMore" xml:space="preserve">
+    <value> 等</value>
+  </data>
+  <data name="Recycle.ConfirmFolders" xml:space="preserve">
+    <value>其中文件夹 {0} 个会连同里面的全部内容一起移动。</value>
+  </data>
+  <data name="Recycle.ConfirmFreeSpace" xml:space="preserve">
+    <value>要真正释放空间，就得再进 {0} 用「删除」，或直接用「清空回收站」。</value>
+  </data>
+  <data name="Recycle.ConfirmHeader" xml:space="preserve">
+    <value>把 {0} 项移入该端点的回收站？</value>
+  </data>
+  <data name="Recycle.ConfirmHowToRestore" xml:space="preserve">
+    <value>之后可在 {0} 里选中它按「还原」，回到原来的目录；</value>
+  </data>
+  <data name="Recycle.ConfirmMovesTo" xml:space="preserve">
+    <value>项目会被搬到 {0} 下面，仍然留在这个端点里，所以这一步不会释放空间。</value>
+  </data>
+  <data name="Recycle.ConfirmProceed" xml:space="preserve">
+    <value>确定移动？</value>
+  </data>
+  <data name="Recycle.ConfirmRename" xml:space="preserve">
+    <value>原名已被占用时会自动改成“名称 (1)”而不是盖掉那一份。</value>
+  </data>
+  <data name="Recycle.Declined" xml:space="preserve">
+    <value>已取消，云端没有任何东西被移动。</value>
+  </data>
+  <data name="Recycle.Failed" xml:space="preserve">
+    <value>回收站操作没有完成。</value>
+  </data>
+  <data name="Recycle.InsideTrash" xml:space="preserve">
+    <value>这些项目已经在回收站里了，要彻底删掉请用「删除」。</value>
+  </data>
+  <data name="Recycle.IsTrashFolder" xml:space="preserve">
+    <value>回收站文件夹本身不能移进回收站。</value>
+  </data>
+  <data name="Recycle.Moved" xml:space="preserve">
+    <value>已把 {0} 项移入 {1}（项目仍在云端，空间未释放；还原请进入该文件夹）。</value>
+  </data>
+  <data name="Recycle.NameSeparator" xml:space="preserve">
+    <value>、</value>
+  </data>
+  <data name="Recycle.NotInTrash" xml:space="preserve">
+    <value>这一项不在回收站里，没有可还原的来源。</value>
+  </data>
+  <data name="Recycle.RenamedOnMove" xml:space="preserve">
+    <value>其中 {0} 项在回收站里已有同名项目，改存为 {1}。</value>
+  </data>
+  <data name="Recycle.RenamedOnRestore" xml:space="preserve">
+    <value>其中 {0} 项原名仍被占用，还原为 {1}。</value>
+  </data>
+  <data name="Recycle.Restored" xml:space="preserve">
+    <value>已还原 {0} 项。</value>
+  </data>
+  <data name="Recycle.RestoredTo" xml:space="preserve">
+    <value>已回到 {0}。</value>
+  </data>
+  <data name="Recycle.SomeFailed" xml:space="preserve">
+    <value> {0} 项没有成功：{1}</value>
+  </data>
+  <data name="Run.All" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="Run.ColBytes" xml:space="preserve">
+    <value>字节</value>
+  </data>
+  <data name="Run.ColCategory" xml:space="preserve">
+    <value>类别</value>
+  </data>
+  <data name="Run.ColCompleted" xml:space="preserve">
+    <value>完成时间</value>
+  </data>
+  <data name="Run.ColCorrelationId" xml:space="preserve">
+    <value>诊断 ID</value>
+  </data>
+  <data name="Run.ColDetail" xml:space="preserve">
+    <value>详情</value>
+  </data>
+  <data name="Run.ColFailed" xml:space="preserve">
+    <value>失败</value>
+  </data>
+  <data name="Run.ColOutcome" xml:space="preserve">
+    <value>结果</value>
+  </data>
+  <data name="Run.ColPlanned" xml:space="preserve">
+    <value>计划</value>
+  </data>
+  <data name="Run.ColRetryable" xml:space="preserve">
+    <value>可重试</value>
+  </data>
+  <data name="Run.ColSucceeded" xml:space="preserve">
+    <value>成功</value>
+  </data>
+  <data name="Run.EntryList" xml:space="preserve">
+    <value>运行历史记录</value>
+  </data>
+  <data name="Run.FilterByOutcome" xml:space="preserve">
+    <value>按结果筛选运行历史</value>
+  </data>
+  <data name="Run.FilterByPeriod" xml:space="preserve">
+    <value>按时间范围筛选运行历史</value>
+  </data>
+  <data name="Run.Intro" xml:space="preserve">
+    <value>查看每次同步的结果与传输摘要。</value>
+  </data>
+  <data name="Run.Last30Days" xml:space="preserve">
+    <value>30 天</value>
+  </data>
+  <data name="Run.Last7Days" xml:space="preserve">
+    <value>7 天</value>
+  </data>
+  <data name="Run.OutcomeCancelled" xml:space="preserve">
+    <value>已取消</value>
+  </data>
+  <data name="Run.OutcomeFailed" xml:space="preserve">
+    <value>失败</value>
+  </data>
+  <data name="Run.OutcomeLabel" xml:space="preserve">
+    <value>结果：</value>
+  </data>
+  <data name="Run.OutcomePartial" xml:space="preserve">
+    <value>部分成功</value>
+  </data>
+  <data name="Run.OutcomeSucceeded" xml:space="preserve">
+    <value>成功</value>
+  </data>
+  <data name="Run.RecentLabel" xml:space="preserve">
+    <value>最近：</value>
+  </data>
+  <data name="Run.Refresh" xml:space="preserve">
+    <value>刷新运行历史</value>
+  </data>
+  <data name="Run.Refreshing" xml:space="preserve">
+    <value>正在刷新…</value>
+  </data>
+  <data name="Run.WindowTitle" xml:space="preserve">
+    <value>运行历史</value>
+  </data>
+  <data name="S3.BucketHasNoPrefix" xml:space="preserve">
+    <value>Bucket 不能包含目录；请单独填写前缀。</value>
+  </data>
+  <data name="S3.EndpointMustBeAbsolute" xml:space="preserve">
+    <value>Endpoint 必须是完整的 HTTP 或 HTTPS 地址。</value>
+  </data>
+  <data name="S3.EndpointNoBucket" xml:space="preserve">
+    <value>Endpoint 不能包含 Bucket 或目录。</value>
+  </data>
+  <data name="S3.EndpointRequiredFor" xml:space="preserve">
+    <value>{0} 必须填写 Endpoint，形如 https://s3.&lt;region&gt;.backblazeb2.com。</value>
+  </data>
+  <data name="S3.NeedAccessKey" xml:space="preserve">
+    <value>请输入 Access Key ID。</value>
+  </data>
+  <data name="S3.NeedBucket" xml:space="preserve">
+    <value>请输入 Bucket。</value>
+  </data>
+  <data name="S3.NeedDisplayName" xml:space="preserve">
+    <value>请输入显示名称。</value>
+  </data>
+  <data name="S3.NeedProvider" xml:space="preserve">
+    <value>请选择 rclone 支持的 S3 Provider。</value>
+  </data>
+  <data name="S3.NeedSecretKey" xml:space="preserve">
+    <value>请输入 Secret Access Key。</value>
+  </data>
+  <data name="S3.PrefixNoDotDot" xml:space="preserve">
+    <value>前缀不能包含“..”。</value>
+  </data>
+  <data name="S3.PrefixUsesSlash" xml:space="preserve">
+    <value>前缀请使用“/”分隔，不要使用“\”。</value>
+  </data>
+  <data name="S3.ProbeCleanupFailed" xml:space="preserve">
+    <value>S3 连接测试临时目录未能清理：{0}</value>
+  </data>
+  <data name="Safety.AndMore" xml:space="preserve">
+    <value>  （以及另外 {0} 项）</value>
+  </data>
+  <data name="Safety.CompositionFilesFolders" xml:space="preserve">
+    <value>文件夹 {0} 个、文件 {1} 个</value>
+  </data>
+  <data name="Safety.CompositionFolders" xml:space="preserve">
+    <value>文件夹 {0} 个</value>
+  </data>
+  <data name="Safety.CompositionLine" xml:space="preserve">
+    <value>其中{0}；文件夹会连同其中的全部内容一起删除。</value>
+  </data>
+  <data name="Safety.ConfirmDelete" xml:space="preserve">
+    <value>确定删除以下 {0} 项？</value>
+  </data>
+  <data name="Safety.InRecycleBin" xml:space="preserve">
+    <value>这些项目已经在 {0} 里，删掉以后本应用的「还原」也帮不上了。</value>
+  </data>
+  <data name="Safety.NameControl" xml:space="preserve">
+    <value>名称不能包含控制字符。</value>
+  </data>
+  <data name="Safety.NameDot" xml:space="preserve">
+    <value>名称不能是“.”或“..”。</value>
+  </data>
+  <data name="Safety.NameRequired" xml:space="preserve">
+    <value>请输入名称。</value>
+  </data>
+  <data name="Safety.NameSeparator" xml:space="preserve">
+    <value>名称不能包含“/”或“\”。</value>
+  </data>
+  <data name="Safety.NameTooLong" xml:space="preserve">
+    <value>名称不能超过 {0} 个字符。</value>
+  </data>
+  <data name="Safety.NameWhitespace" xml:space="preserve">
+    <value>名称首尾不能有空格。</value>
+  </data>
+  <data name="Safety.NoTrash" xml:space="preserve">
+    <value>该端点没有回收站，删除后无法恢复。</value>
+  </data>
+  <data name="Safety.TrashSupported" xml:space="preserve">
+    <value>该端点会先移入云端回收站，可在服务商的网页端还原。</value>
+  </data>
+  <data name="Schedule.CliMissing" xml:space="preserve">
+    <value>找不到 FengSync.Cli.exe；请重新安装完整应用。</value>
+  </data>
+  <data name="Schedule.Close" xml:space="preserve">
+    <value>关闭计划任务窗口</value>
+  </data>
+  <data name="Schedule.Create" xml:space="preserve">
+    <value>创建或更新计划任务</value>
+  </data>
+  <data name="Schedule.Created" xml:space="preserve">
+    <value>计划任务已创建或更新。</value>
+  </data>
+  <data name="Schedule.Creating" xml:space="preserve">
+    <value>正在创建…</value>
+  </data>
+  <data name="Schedule.Delete" xml:space="preserve">
+    <value>删除此计划任务</value>
+  </data>
+  <data name="Schedule.Deleted" xml:space="preserve">
+    <value>计划任务已删除。</value>
+  </data>
+  <data name="Schedule.Deleting" xml:space="preserve">
+    <value>正在删除…</value>
+  </data>
+  <data name="Schedule.Frequency" xml:space="preserve">
+    <value>频率</value>
+  </data>
+  <data name="Schedule.FrequencyField" xml:space="preserve">
+    <value>计划任务频率</value>
+  </data>
+  <data name="Schedule.Hint" xml:space="preserve">
+    <value>将以无人值守 JSON 模式运行。任务只保存 Profile ID；密码和其他凭据不会写进任务参数。需要将 FengSync.Cli.exe 与应用安装在同一目录。</value>
+  </data>
+  <data name="Schedule.ProfileIntro" xml:space="preserve">
+    <value>为 Profile “{0}”创建 Windows 计划任务。</value>
+  </data>
+  <data name="Schedule.Requesting" xml:space="preserve">
+    <value>正在请求…</value>
+  </data>
+  <data name="Schedule.TaskName" xml:space="preserve">
+    <value>任务名称</value>
+  </data>
+  <data name="Schedule.TaskNameField" xml:space="preserve">
+    <value>计划任务名称</value>
+  </data>
+  <data name="Schedule.TestRequested" xml:space="preserve">
+    <value>已请求测试运行；请在运行历史中查看结果。</value>
+  </data>
+  <data name="Schedule.TestRun" xml:space="preserve">
+    <value>测试运行计划任务</value>
+  </data>
+  <data name="Schedule.WindowTitle" xml:space="preserve">
+    <value>计划任务</value>
+  </data>
+  <data name="Service.NotInstalled" xml:space="preserve">
+    <value>应用服务尚未初始化：请在 Application 构造函数中调用 AppServices.Install。</value>
+  </data>
+  <data name="Settings.AfterTransfer" xml:space="preserve">
+    <value>全部传输成功后</value>
+  </data>
+  <data name="Settings.AfterTransferHint" xml:space="preserve">
+    <value>只在整批传输全部成功时才触发；有任何一项失败就只报告，不会关机。执行前会再确认一次，因此需要保持传输窗口打开——没有人能应答的确认框不应该变成一次关机。</value>
+  </data>
+  <data name="Settings.Apply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="Settings.ArchiveDirectory" xml:space="preserve">
+    <value>版本目录</value>
+  </data>
+  <data name="Settings.AutoCheckUpdates" xml:space="preserve">
+    <value>自动检查更新</value>
+  </data>
+  <data name="Settings.Browse" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="Settings.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Settings.CleanupDone" xml:space="preserve">
+    <value>已清理 {0} 个超过 7 天的本地临时文件。</value>
+  </data>
+  <data name="Settings.CleanupTemporary" xml:space="preserve">
+    <value>清理过期本地临时文件</value>
+  </data>
+  <data name="Settings.CloudConcurrency" xml:space="preserve">
+    <value>同时传输数</value>
+  </data>
+  <data name="Settings.CloudConcurrencyHint" xml:space="preserve">
+    <value>同时传输数可在传输窗口里临时调整，这里设置的是每次启动时的默认值。重试次数填 0 表示失败后直接报告；无论填几，都能在传输窗口里手动重试。</value>
+  </data>
+  <data name="Settings.CloudIntro" xml:space="preserve">
+    <value>以下设置只影响云盘管理里的上传与下载，不改变 Profile 的同步任务。</value>
+  </data>
+  <data name="Settings.CloudNotify" xml:space="preserve">
+    <value>云盘传输完成时显示通知</value>
+  </data>
+  <data name="Settings.CloudResumeOnStartup" xml:space="preserve">
+    <value>启动时恢复上次未完成的云盘传输</value>
+  </data>
+  <data name="Settings.CloudRetry" xml:space="preserve">
+    <value>失败自动重试次数</value>
+  </data>
+  <data name="Settings.ConflictAsk" xml:space="preserve">
+    <value>每次询问</value>
+  </data>
+  <data name="Settings.ConflictKeepBoth" xml:space="preserve">
+    <value>保留两者（重命名）</value>
+  </data>
+  <data name="Settings.ConflictOverwrite" xml:space="preserve">
+    <value>直接覆盖</value>
+  </data>
+  <data name="Settings.ConflictSkip" xml:space="preserve">
+    <value>跳过同名文件</value>
+  </data>
+  <data name="Settings.ConflictTarget" xml:space="preserve">
+    <value>目标目录已有同名文件时</value>
+  </data>
+  <data name="Settings.DefaultConcurrency" xml:space="preserve">
+    <value>默认最大并发传输数</value>
+  </data>
+  <data name="Settings.DefaultDownloadDirectory" xml:space="preserve">
+    <value>默认下载目录</value>
+  </data>
+  <data name="Settings.DefaultVersioning" xml:space="preserve">
+    <value>默认版本策略</value>
+  </data>
+  <data name="Settings.Dirty" xml:space="preserve">
+    <value>有未应用的更改</value>
+  </data>
+  <data name="Settings.DownloadHint" xml:space="preserve">
+    <value>留空表示每次下载都询问保存位置。设置了目录后，同名文件仍会在覆盖前确认。</value>
+  </data>
+  <data name="Settings.DownloadLimit" xml:space="preserve">
+    <value>下载限速</value>
+  </data>
+  <data name="Settings.ExcludeRules" xml:space="preserve">
+    <value>默认排除规则（每行一条）</value>
+  </data>
+  <data name="Settings.HistoryForProfile" xml:space="preserve">
+    <value>查看 Profile “{0}” 的运行历史。</value>
+  </data>
+  <data name="Settings.HistoryNoProfile" xml:space="preserve">
+    <value>请先在主窗口选择 Profile 后再查看运行历史。</value>
+  </data>
+  <data name="Settings.HistoryOpenCurrent" xml:space="preserve">
+    <value>打开当前 Profile 的运行历史窗口。</value>
+  </data>
+  <data name="Settings.IncludeRules" xml:space="preserve">
+    <value>默认包含规则（每行一条）</value>
+  </data>
+  <data name="Settings.KeepDays" xml:space="preserve">
+    <value>保留天数</value>
+  </data>
+  <data name="Settings.Language" xml:space="preserve">
+    <value>界面语言</value>
+  </data>
+  <data name="Settings.LanguageHint" xml:space="preserve">
+    <value>立即生效：点「应用」后窗口上的文字就换成所选语言。文件路径、代理地址和 rclone 自己报出的文字不受影响。</value>
+  </data>
+  <data name="Settings.LogEntry" xml:space="preserve">
+    <value>作业 {0}
+开始：{1}
+{2}</value>
+  </data>
+  <data name="Settings.LogRetention" xml:space="preserve">
+    <value>日志保留天数</value>
+  </data>
+  <data name="Settings.LogTitle" xml:space="preserve">
+    <value>同步日志</value>
+  </data>
+  <data name="Settings.LogsOpenIncomplete" xml:space="preserve">
+    <value>显示最近未完成的同步作业日志。</value>
+  </data>
+  <data name="Settings.MaintenanceTitle" xml:space="preserve">
+    <value>维护</value>
+  </data>
+  <data name="Settings.MessageTitle" xml:space="preserve">
+    <value>程序设置</value>
+  </data>
+  <data name="Settings.MountCacheHint" xml:space="preserve">
+    <value>留空或填 0 表示不限制缓存大小（rclone 的默认值），缓存会一直增长到磁盘占满。这里是新建挂载的默认值，单个挂载可以在挂载对话框的“高级选项”里单独覆盖。缓存目录与占用大小在云盘管理窗口的挂载区域可以查看和清理。</value>
+  </data>
+  <data name="Settings.MountCacheLimit" xml:space="preserve">
+    <value>VFS 缓存上限</value>
+  </data>
+  <data name="Settings.NavCaption" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="Settings.NetworkRetry" xml:space="preserve">
+    <value>网络失败重试次数</value>
+  </data>
+  <data name="Settings.NoIncompleteLogs" xml:space="preserve">
+    <value>没有未完成的同步作业日志。</value>
+  </data>
+  <data name="Settings.NotifyOnCompletion" xml:space="preserve">
+    <value>同步完成时显示通知</value>
+  </data>
+  <data name="Settings.Ok" xml:space="preserve">
+    <value>确定</value>
+  </data>
+  <data name="Settings.OpenAction" xml:space="preserve">
+    <value>打开 {0}</value>
+  </data>
+  <data name="Settings.PageCloud" xml:space="preserve">
+    <value>云盘</value>
+  </data>
+  <data name="Settings.PageGeneral" xml:space="preserve">
+    <value>常规</value>
+  </data>
+  <data name="Settings.PageHistory" xml:space="preserve">
+    <value>运行历史</value>
+  </data>
+  <data name="Settings.PageLogs" xml:space="preserve">
+    <value>查看日志</value>
+  </data>
+  <data name="Settings.PickDownloadDirectory" xml:space="preserve">
+    <value>选择默认下载目录</value>
+  </data>
+  <data name="Settings.ProxyHint" xml:space="preserve">
+    <value>留空表示自动：先用环境变量里的 HTTP_PROXY/HTTPS_PROXY，再用 Windows 的 Internet 选项。填写 host:port（如 proxy.corp:8080）或带协议的完整地址（如 http://proxy.corp:8080、socks5://127.0.0.1:1080）。只影响本程序自己启动的 rclone 进程——云盘浏览、挂载、SFTP 服务与同步任务都会走它，不会修改系统或其他程序的代理设置。代理在 rclone 启动时确定，改动需重启程序后才生效。</value>
+  </data>
+  <data name="Settings.ProxyServer" xml:space="preserve">
+    <value>代理服务器</value>
+  </data>
+  <data name="Settings.RateLimitHint" xml:space="preserve">
+    <value>留空或填 0 表示不限速；支持 500K、2M 这类写法。限速是 rclone 的进程级设置——实测它不接受按端点分别限速（core/bwlimit 只收一个速率），所以这里设的值对云端浏览、上传、下载一视同仁，并且只在有传输进行时生效，传输结束就恢复不限速。</value>
+  </data>
+  <data name="Settings.ResetPage" xml:space="preserve">
+    <value>恢复本页默认值</value>
+  </data>
+  <data name="Settings.ResumeMinimum" xml:space="preserve">
+    <value>启用断点续传的最小文件大小</value>
+  </data>
+  <data name="Settings.ResumeMinimumHint" xml:space="preserve">
+    <value>不小于该大小的文件先写入 xxx.fengsync.partial，传输完成后改名发布，中断后可从断点继续（下载方向）。填 0 表示所有文件都续传；支持 500M、2G 这类写法。低于该大小使用 rclone 多流传输，速度更快但中断后需重新开始。</value>
+  </data>
+  <data name="Settings.SectionAppearance" xml:space="preserve">
+    <value>界面</value>
+  </data>
+  <data name="Settings.SectionBehaviour" xml:space="preserve">
+    <value>行为</value>
+  </data>
+  <data name="Settings.SectionDefaults" xml:space="preserve">
+    <value>默认值</value>
+  </data>
+  <data name="Settings.SectionDownload" xml:space="preserve">
+    <value>下载</value>
+  </data>
+  <data name="Settings.SectionGeneral" xml:space="preserve">
+    <value>常规</value>
+  </data>
+  <data name="Settings.SectionMaintenance" xml:space="preserve">
+    <value>维护</value>
+  </data>
+  <data name="Settings.SectionMount" xml:space="preserve">
+    <value>挂载</value>
+  </data>
+  <data name="Settings.SectionNotifications" xml:space="preserve">
+    <value>通知与日志</value>
+  </data>
+  <data name="Settings.SectionProxy" xml:space="preserve">
+    <value>网络代理</value>
+  </data>
+  <data name="Settings.SectionRateAndWindow" xml:space="preserve">
+    <value>传输速率与时段</value>
+  </data>
+  <data name="Settings.SectionUpload" xml:space="preserve">
+    <value>上传</value>
+  </data>
+  <data name="Settings.SettingsFile" xml:space="preserve">
+    <value>设置文件：{0}</value>
+  </data>
+  <data name="Settings.SftpServer" xml:space="preserve">
+    <value>SFTP 服务器设置…</value>
+  </data>
+  <data name="Settings.ShowCompleted" xml:space="preserve">
+    <value>同步完成后保留进度窗口</value>
+  </data>
+  <data name="Settings.StartWithWindows" xml:space="preserve">
+    <value>随 Windows 启动 Feng Sync</value>
+  </data>
+  <data name="Settings.TimeTolerance" xml:space="preserve">
+    <value>默认时间容差（秒）</value>
+  </data>
+  <data name="Settings.TransferWindowFormat" xml:space="preserve">
+    <value>传输时段的时间格式应为 HH:mm，例如 22:00 与 06:00；两边都留空表示任何时间都可以传输。</value>
+  </data>
+  <data name="Settings.UploadLimit" xml:space="preserve">
+    <value>上传限速</value>
+  </data>
+  <data name="Settings.VerifyCopies" xml:space="preserve">
+    <value>默认在复制后验证文件大小</value>
+  </data>
+  <data name="Settings.VersioningArchive" xml:space="preserve">
+    <value>版本目录</value>
+  </data>
+  <data name="Settings.VersioningNone" xml:space="preserve">
+    <value>永久删除</value>
+  </data>
+  <data name="Settings.WindowEnd" xml:space="preserve">
+    <value>仅在此时间段传输（结束）</value>
+  </data>
+  <data name="Settings.WindowHint" xml:space="preserve">
+    <value>格式 HH:mm，留空表示任何时间都可以传输。时段外排队中的传输会一直等待，不会被取消；跨午夜（如 22:00–06:00）按一整段处理。实测 rclone 的限速时间表只能改速率、不能让传输停下来，所以这一项由本程序在队列上实现。</value>
+  </data>
+  <data name="Settings.WindowStart" xml:space="preserve">
+    <value>仅在此时间段传输（开始）</value>
+  </data>
+  <data name="Settings.WindowTitle" xml:space="preserve">
+    <value>设置中心</value>
+  </data>
+  <data name="Sftp.AutoStart" xml:space="preserve">
+    <value>随 Feng Sync 自动启动</value>
+  </data>
+  <data name="Sftp.AutoStartName" xml:space="preserve">
+    <value>随 Feng Sync 自动启动 SFTP 服务</value>
+  </data>
+  <data name="Sftp.BuiltInServer" xml:space="preserve">
+    <value>内置 SFTP 服务器（rclone）</value>
+  </data>
+  <data name="Sftp.CacheSize" xml:space="preserve">
+    <value>SFTP 缓存容量上限，单位 GiB</value>
+  </data>
+  <data name="Sftp.CacheSizeLabel" xml:space="preserve">
+    <value>缓存上限（GiB）</value>
+  </data>
+  <data name="Sftp.CacheSizeNotInteger" xml:space="preserve">
+    <value>缓存上限必须为整数 GiB。</value>
+  </data>
+  <data name="Sftp.Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Sftp.CloseName" xml:space="preserve">
+    <value>关闭 SFTP 服务器设置</value>
+  </data>
+  <data name="Sftp.Diagnose" xml:space="preserve">
+    <value>诊断</value>
+  </data>
+  <data name="Sftp.DiagnoseName" xml:space="preserve">
+    <value>诊断 SFTP 服务器</value>
+  </data>
+  <data name="Sftp.EnableService" xml:space="preserve">
+    <value>启用服务</value>
+  </data>
+  <data name="Sftp.EnableServiceName" xml:space="preserve">
+    <value>启用内置 SFTP 服务</value>
+  </data>
+  <data name="Sftp.HostFingerprint" xml:space="preserve">
+    <value>主机指纹：{0}</value>
+  </data>
+  <data name="Sftp.LegacyNote" xml:space="preserve">
+    <value>此版本仅提供一个可读写共享根目录和一个密码账号；旧版多账号配置不会迁移。</value>
+  </data>
+  <data name="Sftp.LegacyRemoved" xml:space="preserve">
+    <value>已清除不兼容的旧版 SFTP 配置，请重新设置服务。</value>
+  </data>
+  <data name="Sftp.ListenAddress" xml:space="preserve">
+    <value>SFTP 监听地址</value>
+  </data>
+  <data name="Sftp.ListenAddressLabel" xml:space="preserve">
+    <value>监听地址 / 端口</value>
+  </data>
+  <data name="Sftp.Listening" xml:space="preserve">
+    <value>SFTP 服务器正在监听 {0}:{1}</value>
+  </data>
+  <data name="Sftp.NotRunning" xml:space="preserve">
+    <value>SFTP 服务当前未运行。</value>
+  </data>
+  <data name="Sftp.OperationError" xml:space="preserve">
+    <value>{0} {1}（诊断 ID：{2}）</value>
+  </data>
+  <data name="Sftp.PasswordDialogTitle" xml:space="preserve">
+    <value>设置 SFTP 密码</value>
+  </data>
+  <data name="Sftp.PasswordEmpty" xml:space="preserve">
+    <value>密码不能为空。</value>
+  </data>
+  <data name="Sftp.PasswordLabel" xml:space="preserve">
+    <value>密码</value>
+  </data>
+  <data name="Sftp.PasswordName" xml:space="preserve">
+    <value>SFTP 密码</value>
+  </data>
+  <data name="Sftp.PasswordSet" xml:space="preserve">
+    <value>密码：已设置（受 Windows 账户保护）</value>
+  </data>
+  <data name="Sftp.PasswordUnset" xml:space="preserve">
+    <value>密码：未设置</value>
+  </data>
+  <data name="Sftp.Port" xml:space="preserve">
+    <value>SFTP 监听端口</value>
+  </data>
+  <data name="Sftp.PortNotInteger" xml:space="preserve">
+    <value>端口必须为整数。</value>
+  </data>
+  <data name="Sftp.Running" xml:space="preserve">
+    <value>SFTP 服务运行中。</value>
+  </data>
+  <data name="Sftp.Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Sftp.SaveName" xml:space="preserve">
+    <value>保存 SFTP 服务器设置</value>
+  </data>
+  <data name="Sftp.SavePasswordName" xml:space="preserve">
+    <value>保存 SFTP 密码</value>
+  </data>
+  <data name="Sftp.Saved" xml:space="preserve">
+    <value>SFTP 设置已保存。</value>
+  </data>
+  <data name="Sftp.Saving" xml:space="preserve">
+    <value>正在保存…</value>
+  </data>
+  <data name="Sftp.SetPassword" xml:space="preserve">
+    <value>设置或重置密码…</value>
+  </data>
+  <data name="Sftp.SetPasswordName" xml:space="preserve">
+    <value>设置或重置 SFTP 密码</value>
+  </data>
+  <data name="Sftp.SharedRoot" xml:space="preserve">
+    <value>SFTP 共享根目录</value>
+  </data>
+  <data name="Sftp.SharedRootLabel" xml:space="preserve">
+    <value>共享根目录</value>
+  </data>
+  <data name="Sftp.Start" xml:space="preserve">
+    <value>启动</value>
+  </data>
+  <data name="Sftp.StartName" xml:space="preserve">
+    <value>启动 SFTP 服务器</value>
+  </data>
+  <data name="Sftp.Starting" xml:space="preserve">
+    <value>正在启动…</value>
+  </data>
+  <data name="Sftp.Stop" xml:space="preserve">
+    <value>停止</value>
+  </data>
+  <data name="Sftp.StopName" xml:space="preserve">
+    <value>停止 SFTP 服务器</value>
+  </data>
+  <data name="Sftp.Stopped" xml:space="preserve">
+    <value>SFTP 服务器已停止；端口已释放。</value>
+  </data>
+  <data name="Sftp.Stopping" xml:space="preserve">
+    <value>正在停止…</value>
+  </data>
+  <data name="Sftp.UserName" xml:space="preserve">
+    <value>SFTP 用户名</value>
+  </data>
+  <data name="Sftp.UserNameLabel" xml:space="preserve">
+    <value>用户名</value>
+  </data>
+  <data name="Sftp.WindowTitle" xml:space="preserve">
+    <value>SFTP 服务器设置</value>
+  </data>
+  <data name="Share.Confirmation" xml:space="preserve">
+    <value>“{0}”会获得一个公开链接：任何拿到这个链接的人都能读取该文件，无需登录你的账号。
+
+链接的有效期和它能否撤回都由云端决定（内置 rclone 实测：S3 给的是约一周后自动失效的签名地址），本应用只负责把结果复制到剪贴板。
+
+确定生成？</value>
+  </data>
+  <data name="Share.ConfirmationTitle" xml:space="preserve">
+    <value>生成分享链接</value>
+  </data>
+  <data name="Share.Copied" xml:space="preserve">
+    <value>分享链接已复制到剪贴板：拿到链接的人无需登录即可读取该文件，有效期由云端决定。</value>
+  </data>
+  <data name="Share.CopiedNotStored" xml:space="preserve">
+    <value>云端已经生成链接，但没能放进剪贴板，请从下方内容里自己复制。</value>
+  </data>
+  <data name="Share.Declined" xml:space="preserve">
+    <value>已取消，云端没有生成链接。</value>
+  </data>
+  <data name="Share.Failed" xml:space="preserve">
+    <value>没有取到分享链接。</value>
+  </data>
+  <data name="Share.Missing" xml:space="preserve">
+    <value>云端已没有这个文件，请刷新目录。</value>
+  </data>
+  <data name="Share.NoContent" xml:space="preserve">
+    <value>云端没有返回链接内容。</value>
+  </data>
+  <data name="Share.NotAFile" xml:space="preserve">
+    <value>文件夹没有可分享的链接，只能分享单个文件。</value>
+  </data>
+  <data name="Share.Unsupported" xml:space="preserve">
+    <value>此端点不支持分享链接，云端没有生成任何东西。</value>
+  </data>
+  <data name="Size.ActionLabel" xml:space="preserve">
+    <value>统计大小</value>
+  </data>
+  <data name="Size.CostHint" xml:space="preserve">
+    <value>统计会遍历整个子目录树，对象越多越久；这一步发出去就收不回，关掉面板只是不再等它。</value>
+  </data>
+  <data name="Size.Counted" xml:space="preserve">
+    <value>{0}（{1} 字节）· {2} 个对象</value>
+  </data>
+  <data name="Size.Empty" xml:space="preserve">
+    <value>0 个对象，空目录</value>
+  </data>
+  <data name="Size.Failed" xml:space="preserve">
+    <value>未能统计</value>
+  </data>
+  <data name="Size.Gone" xml:space="preserve">
+    <value>云端已没有这个文件夹</value>
+  </data>
+  <data name="Size.NoAnswer" xml:space="preserve">
+    <value>云端没有给出可读取的大小。</value>
+  </data>
+  <data name="Size.NotADirectory" xml:space="preserve">
+    <value>这是一个文件，不是文件夹</value>
+  </data>
+  <data name="Size.NotCounted" xml:space="preserve">
+    <value>未统计</value>
+  </data>
+  <data name="Size.SizelessCounted" xml:space="preserve">
+    <value>（其中 {0} 个云端不报大小，按 0 计入）</value>
+  </data>
+  <data name="Sync.BackToSettings" xml:space="preserve">
+    <value>返回设置</value>
+  </data>
+  <data name="Sync.BackToSettingsName" xml:space="preserve">
+    <value>取消同步并返回设置</value>
+  </data>
+  <data name="Sync.CannotStartSafely" xml:space="preserve">
+    <value>无法安全开始同步</value>
+  </data>
+  <data name="Sync.CheckBeforeRun" xml:space="preserve">
+    <value>执行前请核对受影响的文件、空间需求和安全提示。</value>
+  </data>
+  <data name="Sync.Confirm" xml:space="preserve">
+    <value>确认同步</value>
+  </data>
+  <data name="Sync.ConfirmName" xml:space="preserve">
+    <value>确认同步并执行计划</value>
+  </data>
+  <data name="Sync.Copies" xml:space="preserve">
+    <value>复制：{0} 项</value>
+  </data>
+  <data name="Sync.Deletes" xml:space="preserve">
+    <value>删除：{0} 项</value>
+  </data>
+  <data name="Sync.HasOverwriteOrDelete" xml:space="preserve">
+    <value>同步包含覆盖或删除操作</value>
+  </data>
+  <data name="Sync.IssuesCallout" xml:space="preserve">
+    <value>同步前需要解决的问题</value>
+  </data>
+  <data name="Sync.NameMismatch" xml:space="preserve">
+    <value>输入的 Profile 名称不匹配，未执行同步。</value>
+  </data>
+  <data name="Sync.NeedExplicitConfirm" xml:space="preserve">
+    <value>需要明确确认</value>
+  </data>
+  <data name="Sync.NeedProfileName" xml:space="preserve">
+    <value>需要输入同步配置名称以确认</value>
+  </data>
+  <data name="Sync.Overwrites" xml:space="preserve">
+    <value>覆盖：{0} 项</value>
+  </data>
+  <data name="Sync.ProfileNameLabel" xml:space="preserve">
+    <value>输入同步配置名称以确认</value>
+  </data>
+  <data name="Sync.SpaceCheck" xml:space="preserve">
+    <value>目标空间检查</value>
+  </data>
+  <data name="Sync.SpaceRequired" xml:space="preserve">
+    <value>估算目标空间需求：{0}</value>
+  </data>
+  <data name="Sync.SpaceVerified" xml:space="preserve">
+    <value>空间检查：已按本地目标可用空间验证。</value>
+  </data>
+  <data name="Sync.SummaryCallout" xml:space="preserve">
+    <value>本次同步操作摘要</value>
+  </data>
+  <data name="Sync.SummaryTitle" xml:space="preserve">
+    <value>操作摘要</value>
+  </data>
+  <data name="Sync.ThresholdExceeded" xml:space="preserve">
+    <value>删除阈值超限：需要明确确认</value>
+  </data>
+  <data name="Sync.Transfer" xml:space="preserve">
+    <value>传输：{0}</value>
+  </data>
+  <data name="Sync.TypeProfileName" xml:space="preserve">
+    <value>要一次性放行删除阈值，请输入 Profile 名称“{0}”。</value>
+  </data>
+  <data name="Sync.WindowTitle" xml:space="preserve">
+    <value>确认同步操作</value>
+  </data>
+  <data name="SyncWizard.BrowseLocal" xml:space="preserve">
+    <value>浏览…</value>
+  </data>
+  <data name="SyncWizard.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="SyncWizard.CloudEndpoint" xml:space="preserve">
+    <value>云盘端点</value>
+  </data>
+  <data name="SyncWizard.CloudEndpointHint" xml:space="preserve">
+    <value>从云盘管理里挑一个已连接的端点；也可以直接填端点 URI。</value>
+  </data>
+  <data name="SyncWizard.CloudEndpointName" xml:space="preserve">
+    <value>选择要同步的云盘端点</value>
+  </data>
+  <data name="SyncWizard.Create" xml:space="preserve">
+    <value>创建</value>
+  </data>
+  <data name="SyncWizard.CreateFailed" xml:space="preserve">
+    <value>无法创建同步任务。</value>
+  </data>
+  <data name="SyncWizard.Intro" xml:space="preserve">
+    <value>两格填完就建一个双向同步任务：任何一端的变化都会同步到另一端。规则、版本与性能可以之后在主窗口的 Profile 编辑器里再调。</value>
+  </data>
+  <data name="SyncWizard.LocalFolder" xml:space="preserve">
+    <value>本地文件夹</value>
+  </data>
+  <data name="SyncWizard.LocalFolderHint" xml:space="preserve">
+    <value>同步的本地一侧。它是磁盘上真实存在的目录，同步会往里写，也会删掉对端已删的文件。</value>
+  </data>
+  <data name="SyncWizard.LocalFolderName" xml:space="preserve">
+    <value>选择要同步的本地文件夹</value>
+  </data>
+  <data name="SyncWizard.Name" xml:space="preserve">
+    <value>同步任务名称</value>
+  </data>
+  <data name="SyncWizard.NameHeader" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="SyncWizard.NoEndpointPicker" xml:space="preserve">
+    <value>这个窗口没有可用的端点选择器。</value>
+  </data>
+  <data name="SyncWizard.PickCloud" xml:space="preserve">
+    <value>选择…</value>
+  </data>
+  <data name="SyncWizard.WindowName" xml:space="preserve">
+    <value>创建双向同步任务</value>
+  </data>
+  <data name="SyncWizard.WindowTitle" xml:space="preserve">
+    <value>双向同步向导</value>
+  </data>
+  <data name="Task.SelectEndpointFirst" xml:space="preserve">
+    <value>请先选择一个云盘端点。</value>
+  </data>
+  <data name="Task.SourceInside" xml:space="preserve">
+    <value>{0} 里的 {1}</value>
+  </data>
+  <data name="Task.SourceRoot" xml:space="preserve">
+    <value>{0} 的根目录</value>
+  </data>
+  <data name="Task.SuggestName" xml:space="preserve">
+    <value>{0} 同步</value>
+  </data>
+  <data name="Task.WizardBothSidesRemote" xml:space="preserve">
+    <value>两侧不能是同一个位置。</value>
+  </data>
+  <data name="Task.WizardCloudMustBeEndpoint" xml:space="preserve">
+    <value>云端那一侧必须是云盘端点，形如 gdrive://名称/路径。</value>
+  </data>
+  <data name="Task.WizardLocalMustBeFolder" xml:space="preserve">
+    <value>本地那一侧必须是本地文件夹，不能填云盘端点。</value>
+  </data>
+  <data name="Task.WizardNeedCloud" xml:space="preserve">
+    <value>请先选择云盘端点。</value>
+  </data>
+  <data name="Task.WizardNeedLocal" xml:space="preserve">
+    <value>请先选择本地文件夹。</value>
+  </data>
+  <data name="Thumb.Empty" xml:space="preserve">
+    <value>“{0}”没有可读取的内容，缩略图跳过。</value>
+  </data>
+  <data name="Thumb.NotWritable" xml:space="preserve">
+    <value>缩略图只用于显示，不参与写回。</value>
+  </data>
+  <data name="Thumb.TooLarge" xml:space="preserve">
+    <value>“{0}”有 {1}，超过缩略图的上限 {2}，只显示文件图标。</value>
+  </data>
+  <data name="Thumb.Undecodable" xml:space="preserve">
+    <value>“{0}”是 {1} 图片，本程序没有它的解码器，只显示文件图标。</value>
+  </data>
+  <data name="Transfer.ActionUnavailable" xml:space="preserve">
+    <value>这个操作现在不可用。</value>
+  </data>
+  <data name="Transfer.AfterTransfer" xml:space="preserve">
+    <value>完成后</value>
+  </data>
+  <data name="Transfer.AfterTransferChosen" xml:space="preserve">
+    <value>已选择“{0}”：只在这一批全部成功后询问，</value>
+  </data>
+  <data name="Transfer.AfterTransferKeepOpen" xml:space="preserve">
+    <value>需要保持本窗口打开，因为关机前会再确认一次。</value>
+  </data>
+  <data name="Transfer.AfterTransferName" xml:space="preserve">
+    <value>全部传输成功后的动作</value>
+  </data>
+  <data name="Transfer.Attempt" xml:space="preserve">
+    <value>第 {0} 次尝试  ·  {1}</value>
+  </data>
+  <data name="Transfer.AutoRetry" xml:space="preserve">
+    <value>失败会自动重试 {0} 次。</value>
+  </data>
+  <data name="Transfer.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Transfer.CancelAll" xml:space="preserve">
+    <value>全部取消</value>
+  </data>
+  <data name="Transfer.CancelAllAction" xml:space="preserve">
+    <value>取消全部传输</value>
+  </data>
+  <data name="Transfer.CancelOne" xml:space="preserve">
+    <value>取消此传输</value>
+  </data>
+  <data name="Transfer.CancelledReUpload" xml:space="preserve">
+    <value>已取消，可重新上传</value>
+  </data>
+  <data name="Transfer.CancelledRestartCopy" xml:space="preserve">
+    <value>已取消，重新复制会从头开始</value>
+  </data>
+  <data name="Transfer.CancelledResumeDownload" xml:space="preserve">
+    <value>已取消，可继续下载</value>
+  </data>
+  <data name="Transfer.ClearAction" xml:space="preserve">
+    <value>清除已完成的传输并归档</value>
+  </data>
+  <data name="Transfer.ClearFinished" xml:space="preserve">
+    <value>清除已完成</value>
+  </data>
+  <data name="Transfer.Cleared" xml:space="preserve">
+    <value>已清除 {0} 条已完成记录。</value>
+  </data>
+  <data name="Transfer.ClearedArchived" xml:space="preserve">
+    <value>已清除 {0} 条已完成记录，并归档到传输历史。</value>
+  </data>
+  <data name="Transfer.Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Transfer.CloseAction" xml:space="preserve">
+    <value>关闭传输窗口</value>
+  </data>
+  <data name="Transfer.ColumnActions" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="Transfer.ColumnProgress" xml:space="preserve">
+    <value>进度</value>
+  </data>
+  <data name="Transfer.ColumnStatus" xml:space="preserve">
+    <value>状态</value>
+  </data>
+  <data name="Transfer.ColumnTask" xml:space="preserve">
+    <value>任务</value>
+  </data>
+  <data name="Transfer.Concurrency" xml:space="preserve">
+    <value>同时传输数</value>
+  </data>
+  <data name="Transfer.ConcurrencyCurrent" xml:space="preserve">
+    <value>当前 {0} 个；调低不会中断正在进行的传输，只是不再补位。</value>
+  </data>
+  <data name="Transfer.ConcurrencyName" xml:space="preserve">
+    <value>同时进行的传输数量</value>
+  </data>
+  <data name="Transfer.Continue" xml:space="preserve">
+    <value>继续</value>
+  </data>
+  <data name="Transfer.CopiedDetail" xml:space="preserve">
+    <value>详情已复制到剪贴板，可直接粘贴到问题反馈里。</value>
+  </data>
+  <data name="Transfer.Copy" xml:space="preserve">
+    <value>复制</value>
+  </data>
+  <data name="Transfer.CopyDetail" xml:space="preserve">
+    <value>复制详情</value>
+  </data>
+  <data name="Transfer.CopyDetailFailed" xml:space="preserve">
+    <value>没能写入剪贴板，请从详情窗口里自行复制。</value>
+  </data>
+  <data name="Transfer.CopyLink" xml:space="preserve">
+    <value>复制分享链接…</value>
+  </data>
+  <data name="Transfer.CopyMissingTarget" xml:space="preserve">
+    <value>云端复制缺少目标端点或目标路径。</value>
+  </data>
+  <data name="Transfer.CopyNoLocalFolder" xml:space="preserve">
+    <value>复制任务没有本地文件夹：字节由 rclone 在两端之间移动，本机不落盘。</value>
+  </data>
+  <data name="Transfer.DetailAttempt" xml:space="preserve">
+    <value>尝试次数：{0}</value>
+  </data>
+  <data name="Transfer.DetailDiagnostics" xml:space="preserve">
+    <value>诊断详情：
+{0}</value>
+  </data>
+  <data name="Transfer.DetailDirection" xml:space="preserve">
+    <value>方向：{0}</value>
+  </data>
+  <data name="Transfer.DetailError" xml:space="preserve">
+    <value>错误：{0}</value>
+  </data>
+  <data name="Transfer.DetailNoDiagnostics" xml:space="preserve">
+    <value>诊断详情：这个任务没有记录更详细的信息。</value>
+  </data>
+  <data name="Transfer.DetailPath" xml:space="preserve">
+    <value>路径：{0}</value>
+  </data>
+  <data name="Transfer.DetailStatus" xml:space="preserve">
+    <value>状态：{0}</value>
+  </data>
+  <data name="Transfer.DetailTask" xml:space="preserve">
+    <value>任务：{0}</value>
+  </data>
+  <data name="Transfer.DetailTitle" xml:space="preserve">
+    <value>传输详情</value>
+  </data>
+  <data name="Transfer.DiagnosticId" xml:space="preserve">
+    <value>诊断 ID {0}</value>
+  </data>
+  <data name="Transfer.Download" xml:space="preserve">
+    <value>下载</value>
+  </data>
+  <data name="Transfer.HintContextMenu" xml:space="preserve">
+    <value>右键任意一行可以调整等待顺序、打开所在文件夹、复制分享链接或查看失败详情。</value>
+  </data>
+  <data name="Transfer.HintCopy" xml:space="preserve">
+    <value>云盘之间的复制由 rclone 在两端之间完成，本程序不接触字节，因此取消或失败之后只能整个文件重新复制。</value>
+  </data>
+  <data name="Transfer.HintDragDrop" xml:space="preserve">
+    <value>把本地文件或文件夹拖入文件浏览器即可上传；把云端文件拖到资源管理器即可下载。</value>
+  </data>
+  <data name="Transfer.HintResumeDetail" xml:space="preserve">
+    <value>能校验已传分片的传输从断点继续，云端传输受 rclone 限制会从文件开头重新开始。</value>
+  </data>
+  <data name="Transfer.HintResumeMechanism" xml:space="preserve">
+    <value>取消、暂停或失败的传输都会保留在列表中，可随时继续或重试。本程序沿用同步任务的暂存与断点机制：</value>
+  </data>
+  <data name="Transfer.History" xml:space="preserve">
+    <value>传输历史…</value>
+  </data>
+  <data name="Transfer.HistoryAction" xml:space="preserve">
+    <value>查看已归档的传输记录</value>
+  </data>
+  <data name="Transfer.HistoryClear" xml:space="preserve">
+    <value>清空历史</value>
+  </data>
+  <data name="Transfer.HistoryClearName" xml:space="preserve">
+    <value>删除全部归档记录</value>
+  </data>
+  <data name="Transfer.HistoryConfirm" xml:space="preserve">
+    <value>删除全部归档的传输记录？此操作不可撤销。</value>
+  </data>
+  <data name="Transfer.HistoryConfirmTitle" xml:space="preserve">
+    <value>清空传输历史</value>
+  </data>
+  <data name="Transfer.HistoryListName" xml:space="preserve">
+    <value>归档的传输记录</value>
+  </data>
+  <data name="Transfer.HistoryTitle" xml:space="preserve">
+    <value>传输历史</value>
+  </data>
+  <data name="Transfer.HistoryWindowName" xml:space="preserve">
+    <value>已归档的云盘传输记录</value>
+  </data>
+  <data name="Transfer.LimitFailed" xml:space="preserve">
+    <value>限速未能生效：{0}</value>
+  </data>
+  <data name="Transfer.LinkPending" xml:space="preserve">
+    <value>传输还没开始，云端现在可能还没有这个文件。</value>
+  </data>
+  <data name="Transfer.LinkRunning" xml:space="preserve">
+    <value>传输正在进行，等它停下来再生成链接。</value>
+  </data>
+  <data name="Transfer.LinkUnavailable" xml:space="preserve">
+    <value>这个任务没有可分享的云端文件。</value>
+  </data>
+  <data name="Transfer.LoadResumableFailed" xml:space="preserve">
+    <value>无法读取上次未完成的传输：{0}</value>
+  </data>
+  <data name="Transfer.LocalPathNoDirectory" xml:space="preserve">
+    <value>本地路径缺少目录：{0}</value>
+  </data>
+  <data name="Transfer.LogEmpty" xml:space="preserve">
+    <value>失败日志为空：{0}</value>
+  </data>
+  <data name="Transfer.LogMissing" xml:space="preserve">
+    <value>没有找到今天的失败日志：{0}
+（只有真正发生过 rclone 失败时才会生成这个文件。）</value>
+  </data>
+  <data name="Transfer.LogReadFailed" xml:space="preserve">
+    <value>无法读取失败日志：{0}</value>
+  </data>
+  <data name="Transfer.LogSummary" xml:space="preserve">
+    <value>共 {0} 条（最多显示 {1} 条）：{2}</value>
+  </data>
+  <data name="Transfer.LogTitle" xml:space="preserve">
+    <value>rclone 失败日志</value>
+  </data>
+  <data name="Transfer.MoveDown" xml:space="preserve">
+    <value>下移</value>
+  </data>
+  <data name="Transfer.MoveUp" xml:space="preserve">
+    <value>上移</value>
+  </data>
+  <data name="Transfer.NoAutoRetry" xml:space="preserve">
+    <value>失败不会自动重试。</value>
+  </data>
+  <data name="Transfer.NoCloudService" xml:space="preserve">
+    <value>本次运行没有可用的云盘服务。</value>
+  </data>
+  <data name="Transfer.NoCompleted" xml:space="preserve">
+    <value>当前没有已完成的传输。</value>
+  </data>
+  <data name="Transfer.NoErrorInfo" xml:space="preserve">
+    <value>这个任务还没有错误信息。</value>
+  </data>
+  <data name="Transfer.NoHistoryArchive" xml:space="preserve">
+    <value>这次运行没有启用传输历史归档。</value>
+  </data>
+  <data name="Transfer.NoLocalFolder" xml:space="preserve">
+    <value>这个任务没有本地文件夹可打开。</value>
+  </data>
+  <data name="Transfer.NoLocalPath" xml:space="preserve">
+    <value>这个任务没有可打开的本地路径。</value>
+  </data>
+  <data name="Transfer.NoPausable" xml:space="preserve">
+    <value>当前没有正在进行的传输可以暂停。</value>
+  </data>
+  <data name="Transfer.NoResumable" xml:space="preserve">
+    <value>当前没有可断点续传的任务。</value>
+  </data>
+  <data name="Transfer.NoTasks" xml:space="preserve">
+    <value>暂无传输任务。把文件拖到文件浏览器即可上传，把文件拖出即可下载。</value>
+  </data>
+  <data name="Transfer.NoWindow" xml:space="preserve">
+    <value>不限时段</value>
+  </data>
+  <data name="Transfer.NotAnEndpoint" xml:space="preserve">
+    <value>这个任务的目标不是云端端点。</value>
+  </data>
+  <data name="Transfer.OpenFolder" xml:space="preserve">
+    <value>打开所在文件夹</value>
+  </data>
+  <data name="Transfer.OpenFolderFailed" xml:space="preserve">
+    <value>没能打开文件夹：{0}</value>
+  </data>
+  <data name="Transfer.Pause" xml:space="preserve">
+    <value>暂停</value>
+  </data>
+  <data name="Transfer.PauseAll" xml:space="preserve">
+    <value>全部暂停</value>
+  </data>
+  <data name="Transfer.PauseAllAction" xml:space="preserve">
+    <value>暂停全部正在进行的传输</value>
+  </data>
+  <data name="Transfer.PauseOne" xml:space="preserve">
+    <value>暂停此传输</value>
+  </data>
+  <data name="Transfer.PolicyFooter" xml:space="preserve">
+    <value>。可在设置 → 云盘里修改。</value>
+  </data>
+  <data name="Transfer.RateLimited" xml:space="preserve">
+    <value>限速 {0}</value>
+  </data>
+  <data name="Transfer.RateUnlimited" xml:space="preserve">
+    <value>不限速</value>
+  </data>
+  <data name="Transfer.ReorderOnlyPending" xml:space="preserve">
+    <value>只有等待中的传输可以调整顺序。</value>
+  </data>
+  <data name="Transfer.RestartOne" xml:space="preserve">
+    <value>继续或重试此传输</value>
+  </data>
+  <data name="Transfer.Resume" xml:space="preserve">
+    <value>断点续传</value>
+  </data>
+  <data name="Transfer.ResumeAction" xml:space="preserve">
+    <value>断点续传未完成的传输</value>
+  </data>
+  <data name="Transfer.Retry" xml:space="preserve">
+    <value>重试</value>
+  </data>
+  <data name="Transfer.StatusCompleted" xml:space="preserve">
+    <value>已完成  ·  {0} MB</value>
+  </data>
+  <data name="Transfer.StatusFailed" xml:space="preserve">
+    <value>失败：{0}</value>
+  </data>
+  <data name="Transfer.StatusPaused" xml:space="preserve">
+    <value>已暂停</value>
+  </data>
+  <data name="Transfer.StatusPending" xml:space="preserve">
+    <value>等待中</value>
+  </data>
+  <data name="Transfer.SummaryCompleted" xml:space="preserve">
+    <value>已完成 {0}</value>
+  </data>
+  <data name="Transfer.SummaryPaused" xml:space="preserve">
+    <value>已暂停 {0}</value>
+  </data>
+  <data name="Transfer.SummaryPending" xml:space="preserve">
+    <value>等待 {0}</value>
+  </data>
+  <data name="Transfer.SummaryResumable" xml:space="preserve">
+    <value>可续传 {0}</value>
+  </data>
+  <data name="Transfer.SummaryRunning" xml:space="preserve">
+    <value>进行中 {0}</value>
+  </data>
+  <data name="Transfer.SummaryWaitingWindow" xml:space="preserve">
+    <value>等待传输时段 {0}</value>
+  </data>
+  <data name="Transfer.TaskList" xml:space="preserve">
+    <value>传输任务列表</value>
+  </data>
+  <data name="Transfer.TransferWindow" xml:space="preserve">
+    <value>传输时段 {0}</value>
+  </data>
+  <data name="Transfer.UnknownError" xml:space="preserve">
+    <value>未知错误</value>
+  </data>
+  <data name="Transfer.Upload" xml:space="preserve">
+    <value>上传</value>
+  </data>
+  <data name="Transfer.UploadSourceGone" xml:space="preserve">
+    <value>要上传的本地文件已不存在。</value>
+  </data>
+  <data name="Transfer.ViewLog" xml:space="preserve">
+    <value>查看日志</value>
+  </data>
+  <data name="Transfer.WindowName" xml:space="preserve">
+    <value>云盘传输任务</value>
+  </data>
+  <data name="Transfer.WindowTitle" xml:space="preserve">
+    <value>传输</value>
+  </data>
+  <data name="Transfer.WindowWaiting" xml:space="preserve">
+    <value>（当前在时段外，等待中的传输不会开始）</value>
+  </data>
+  <data name="Update.BusyCannotInstall" xml:space="preserve">
+    <value>同步或比较进行中，不能安装更新。</value>
+  </data>
+  <data name="Update.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Update.CancelDownload" xml:space="preserve">
+    <value>取消下载</value>
+  </data>
+  <data name="Update.CancelName" xml:space="preserve">
+    <value>取消更新操作</value>
+  </data>
+  <data name="Update.CannotLocateExe" xml:space="preserve">
+    <value>无法确定实际程序路径。</value>
+  </data>
+  <data name="Update.CannotUpdateTitle" xml:space="preserve">
+    <value>无法自动更新</value>
+  </data>
+  <data name="Update.CheckCaption" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="Update.CheckFailed" xml:space="preserve">
+    <value>检查更新失败。</value>
+  </data>
+  <data name="Update.CurrentVersion" xml:space="preserve">
+    <value>当前版本：{0}</value>
+  </data>
+  <data name="Update.Download" xml:space="preserve">
+    <value>下载并更新</value>
+  </data>
+  <data name="Update.DownloadName" xml:space="preserve">
+    <value>下载并安装更新</value>
+  </data>
+  <data name="Update.DownloadSize" xml:space="preserve">
+    <value>下载大小：{0} MB</value>
+  </data>
+  <data name="Update.Downloading" xml:space="preserve">
+    <value>正在下载：{0} MB</value>
+  </data>
+  <data name="Update.DownloadingPercent" xml:space="preserve">
+    <value>正在下载：{0} MB{1}（{2}%）</value>
+  </data>
+  <data name="Update.ExitingTitle" xml:space="preserve">
+    <value>FengSync - 正在退出并安装更新…</value>
+  </data>
+  <data name="Update.FailedTitle" xml:space="preserve">
+    <value>更新失败</value>
+  </data>
+  <data name="Update.InstallDirInvalid" xml:space="preserve">
+    <value>安装目录验证失败。</value>
+  </data>
+  <data name="Update.Later" xml:space="preserve">
+    <value>稍后提醒</value>
+  </data>
+  <data name="Update.LaterName" xml:space="preserve">
+    <value>稍后提醒更新</value>
+  </data>
+  <data name="Update.LatestVersion" xml:space="preserve">
+    <value>最新版本：{0}  {1}</value>
+  </data>
+  <data name="Update.ManualDownloadHint" xml:space="preserve">
+    <value>
+请从 Release 页面手动下载。</value>
+  </data>
+  <data name="Update.ProgressName" xml:space="preserve">
+    <value>更新下载进度</value>
+  </data>
+  <data name="Update.ReleaseNotesLink" xml:space="preserve">
+    <value>在 GitHub 查看完整 Release 说明</value>
+  </data>
+  <data name="Update.ReleaseNotesLinkName" xml:space="preserve">
+    <value>在 GitHub 查看完整 Release 说明</value>
+  </data>
+  <data name="Update.ReleaseNotesName" xml:space="preserve">
+    <value>此版本的更新说明</value>
+  </data>
+  <data name="Update.Skip" xml:space="preserve">
+    <value>跳过此版本</value>
+  </data>
+  <data name="Update.SkipName" xml:space="preserve">
+    <value>跳过此版本更新</value>
+  </data>
+  <data name="Update.Title" xml:space="preserve">
+    <value>发现更新</value>
+  </data>
+  <data name="Update.UpToDate" xml:space="preserve">
+    <value>当前已是最新版本 {0}。</value>
+  </data>
+  <data name="Update.WindowName" xml:space="preserve">
+    <value>发现 Feng Sync 更新</value>
+  </data>
+  <data name="Update.WindowTitle" xml:space="preserve">
+    <value>发现更新</value>
+  </data>
+  <data name="Version.ExplainGoToConsole" xml:space="preserve">
+    <value>要查看历史版本，请到 {0} 自己的网页端。</value>
+  </data>
+  <data name="Version.ExplainNoConsole" xml:space="preserve">
+    <value>这个端点没有可打开的网页端（{0}），请到你的服务商自己的控制台查看。</value>
+  </data>
+  <data name="Version.ExplainNoVersions" xml:space="preserve">
+    <value>本应用读不到历史版本：它访问云端唯一的通道是 rclone，而 rclone 不提供版本列表。</value>
+  </data>
+  <data name="Version.ExplainSwitchNotUsed" xml:space="preserve">
+    <value>（S3 / B2 / ImageKit 有一个「把旧版本列进目录」的开关，但那会让文件列表里混进云端并不存在的文件，所以本应用不打开它。）</value>
+  </data>
+  <data name="Version.MenuLabel" xml:space="preserve">
+    <value>在网页端查看历史版本…</value>
+  </data>
+  <data name="Version.OpenLabel" xml:space="preserve">
+    <value>打开 {0} 网页端</value>
+  </data>
+  <data name="Version.StatusNoConsole" xml:space="preserve">
+    <value>本应用读不到历史版本（rclone 不提供版本列表），而 {0} 也没有可打开的网页端。</value>
+  </data>
+  <data name="Version.StatusOpened" xml:space="preserve">
+    <value>已在浏览器里打开 {0} 网页端。本应用读不到历史版本：rclone 不提供版本列表。</value>
+  </data>
+</root>

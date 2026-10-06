@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using FengSync.Core;
 using FengSync.Core.Configuration;
+using FengSync.Localization;
 using FengSync.Services;
 using Microsoft.Win32;
 
@@ -17,8 +18,16 @@ namespace FengSync.Views;
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    /// <summary>The pages whose controls are editable and therefore take part in Apply/OK.</summary>
-    private static readonly string[] EditablePages = ["常规", "云盘"];
+    /// <summary>
+    /// The pages whose controls are editable and therefore take part in Apply/OK. These are stable ids
+    /// rather than the words on the nav buttons: a nav button's text changes with the interface language,
+    /// and "which page is on screen" must not.
+    /// </summary>
+    internal const string GeneralPage = "general";
+    internal const string CloudPage = "cloud";
+    internal const string HistoryPage = "history";
+    internal const string LogsPage = "logs";
+    private static readonly string[] EditablePages = [GeneralPage, CloudPage];
 
     private readonly Func<ApplicationSettings, Task> _apply;
     private readonly Func<Task> _configureSftp;
@@ -27,9 +36,21 @@ public partial class SettingsWindow : Window
     private ApplicationSettings _initial;
     private bool _applying;
     /// <summary>Which page is on screen, so "restore defaults" rebuilds the page the user is looking at.</summary>
-    private string _page = "常规";
+    private string _page = GeneralPage;
     /// <summary>Held so the folder picker can write into it without walking the visual tree.</summary>
     private TextBox? _downloadDirectoryBox;
+
+    // A small surface for the tests that drive this window for real: the language test needs to read a live
+    // element's Content after a switch, and to move the language combo. Everything else stays private.
+    /// <summary>The cancel button — a live XAML binding, and the cheapest proof that a switch repaints.</summary>
+    internal Button CancelButton => CancelButtonField;
+
+    /// <summary>The apply button, so a test can press the real one.</summary>
+    internal Button ApplyButtonForTest => ApplyButton;
+
+    /// <summary>The language combo on the general page, or null on any other page.</summary>
+    internal ComboBox? LanguageCombo => FindVisualChildren<ComboBox>(ContentHost)
+        .FirstOrDefault(combo => Equals(AutomationProperties.GetAutomationId(combo), "SettingsLanguage"));
 
     public SettingsWindow(
         ApplicationSettings initial,
@@ -44,7 +65,7 @@ public partial class SettingsWindow : Window
         _configureSftp = configureSftp;
         _cleanupTemporaryFiles = cleanupTemporaryFiles;
         _currentProfile = currentProfile;
-        NavigateTo("常规");
+        NavigateTo(GeneralPage);
     }
 
     private void Navigation_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -55,7 +76,7 @@ public partial class SettingsWindow : Window
         // window has finished loading.
         if (ContentHost is null || ApplyButton is null || OkButton is null || DirtyLabel is null) return;
         if (Navigation?.SelectedItem is not ListBoxItem item) return;
-        NavigateTo((string)item.Content);
+        NavigateTo(item.Tag as string ?? GeneralPage);
     }
 
     private void NavigateTo(string page)
@@ -68,18 +89,18 @@ public partial class SettingsWindow : Window
         OkButton.Visibility = editable ? Visibility.Visible : Visibility.Collapsed;
         switch (page)
         {
-            case "常规": BuildGeneralPage(); break;
-            case "云盘": BuildCloudPage(); break;
-            case "运行历史":
+            case GeneralPage: BuildGeneralPage(); break;
+            case CloudPage: BuildCloudPage(); break;
+            case HistoryPage:
                 if (_currentProfile is null)
-                    BuildActionPage("运行历史", "打开当前 Profile 的运行历史窗口。", null,
-                        "请先在主窗口选择 Profile 后再查看运行历史。");
+                    BuildActionPage(Tr.F("Settings.PageHistory"), Tr.F("Settings.HistoryOpenCurrent"), null,
+                        Tr.F("Settings.HistoryNoProfile"));
                 else
-                    BuildActionPage("运行历史", $"查看 Profile “{_currentProfile.Name}” 的运行历史。",
+                    BuildActionPage(Tr.F("Settings.PageHistory"), Tr.Format("Settings.HistoryForProfile", _currentProfile.Name),
                         () => new RunHistoryWindow(_currentProfile.Id) { Owner = this }.ShowDialog());
                 break;
-            case "查看日志":
-                BuildActionPage("查看日志", "显示最近未完成的同步作业日志。", () => ShowLogFromOwner());
+            case LogsPage:
+                BuildActionPage(Tr.F("Settings.PageLogs"), Tr.F("Settings.LogsOpenIncomplete"), () => ShowLogFromOwner());
                 break;
         }
         DirtyLabel.Text = "";
@@ -91,10 +112,10 @@ public partial class SettingsWindow : Window
     {
         var jobs = await new TaskJournalStore().LoadIncompleteAsync();
         var text = jobs.Count == 0
-            ? "没有未完成的同步作业日志。"
+            ? Tr.F("Settings.NoIncompleteLogs")
             : string.Join(Environment.NewLine + Environment.NewLine, jobs.Select(job =>
-                $"作业 {job.JobId}\n开始：{job.CreatedUtc:yyyy-MM-dd HH:mm:ss}\n" +
-                string.Join(Environment.NewLine, job.Items.Select(item => $"{item.State,-10} {item.Kind,-24} {item.Path}"))));
+                Tr.Format("Settings.LogEntry", job.JobId, job.CreatedUtc.ToString("yyyy-MM-dd HH:mm:ss"),
+                    string.Join(Environment.NewLine, job.Items.Select(item => $"{item.State,-10} {item.Kind,-24} {item.Path}")))));
         var box = new TextBox
         {
             Text = text,
@@ -104,7 +125,7 @@ public partial class SettingsWindow : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             Margin = new Thickness(14)
         };
-        new Window { Title = "同步日志", Owner = this, Content = box, Width = 680, Height = 440, WindowStartupLocation = WindowStartupLocation.CenterOwner }
+        new Window { Title = Tr.F("Settings.LogTitle"), Owner = this, Content = box, Width = 680, Height = 440, WindowStartupLocation = WindowStartupLocation.CenterOwner }
             .ShowDialog();
     }
 
@@ -114,51 +135,62 @@ public partial class SettingsWindow : Window
         var caption = (Style)Application.Current.Resources["CaptionTextStyle"];
         var section = (Style)Application.Current.Resources["SectionTitleTextStyle"];
 
-        sp.Children.Add(NewHeader("常规", section));
-        sp.Children.Add(NewCheckbox("SettingsAutoCheckUpdates", "自动检查更新", _initial.AutoCheckForUpdates));
-        sp.Children.Add(NewCheckbox("SettingsShowCompleted", "同步完成后保留进度窗口", _initial.ShowCompleted));
-        sp.Children.Add(NewCheckbox("SettingsStartWithWindows", "随 Windows 启动 Feng Sync", _initial.StartWithWindows));
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionGeneral"), section));
+        sp.Children.Add(NewCheckbox("SettingsAutoCheckUpdates", Tr.F("Settings.AutoCheckUpdates"), _initial.AutoCheckForUpdates));
+        sp.Children.Add(NewCheckbox("SettingsShowCompleted", Tr.F("Settings.ShowCompleted"), _initial.ShowCompleted));
+        sp.Children.Add(NewCheckbox("SettingsStartWithWindows", Tr.F("Settings.StartWithWindows"), _initial.StartWithWindows));
 
-        sp.Children.Add(NewHeader("默认值", section));
-        sp.Children.Add(NewLabeledRow("默认最大并发传输数", NewTextBox("SettingsConcurrency", _initial.DefaultMaxConcurrentCopies.ToString()), caption));
-        sp.Children.Add(NewCheckbox("SettingsVerifyCopies", "默认在复制后验证文件大小", _initial.DefaultVerifyCopies));
-        sp.Children.Add(NewLabeledRow("启用断点续传的最小文件大小",
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionDefaults"), section));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.DefaultConcurrency"), NewTextBox("SettingsConcurrency", _initial.DefaultMaxConcurrentCopies.ToString()), caption));
+        sp.Children.Add(NewCheckbox("SettingsVerifyCopies", Tr.F("Settings.VerifyCopies"), _initial.DefaultVerifyCopies));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.ResumeMinimum"),
             NewTextBox("SettingsResumeMinimum", ByteSize.Format(_initial.DefaultResumeMinimumBytes)), caption));
         sp.Children.Add(new TextBlock
         {
-            Text = "不小于该大小的文件先写入 xxx.fengsync.partial，传输完成后改名发布，中断后可从断点继续（下载方向）。"
-                 + "填 0 表示所有文件都续传；支持 500M、2G 这类写法。低于该大小使用 rclone 多流传输，速度更快但中断后需重新开始。",
+            Text = Tr.F("Settings.ResumeMinimumHint"),
             Style = caption,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0)
         });
-        sp.Children.Add(NewLabeledRow("默认时间容差（秒）", NewTextBox("SettingsTimeTolerance", _initial.DefaultTimeToleranceSeconds.ToString()), caption));
-        sp.Children.Add(NewLabeledRow("默认包含规则（每行一条）", NewTextBox("SettingsIncludeRules",
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.TimeTolerance"), NewTextBox("SettingsTimeTolerance", _initial.DefaultTimeToleranceSeconds.ToString()), caption));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.IncludeRules"), NewTextBox("SettingsIncludeRules",
             string.Join(Environment.NewLine, _initial.DefaultFilter.Include ?? []), height: 60, multiline: true), caption));
-        sp.Children.Add(NewLabeledRow("默认排除规则（每行一条）", NewTextBox("SettingsExcludeRules",
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.ExcludeRules"), NewTextBox("SettingsExcludeRules",
             string.Join(Environment.NewLine, _initial.DefaultFilter.Exclude ?? []), height: 60, multiline: true), caption));
 
         var versioningCb = NewComboBox("SettingsVersioningMode", 220, _initial.DefaultVersioning.Mode == FengSync.Core.VersioningMode.TimestampedArchive ? 1 : 0,
-            new[] { "永久删除", "版本目录" });
-        sp.Children.Add(NewLabeledRow("默认版本策略", versioningCb, caption));
-        sp.Children.Add(NewLabeledRow("版本目录", NewTextBox("SettingsArchiveDirectory", _initial.DefaultVersioning.ArchiveDirectory ?? ""), caption));
-        sp.Children.Add(NewLabeledRow("保留天数", NewTextBox("SettingsKeepDays", (_initial.DefaultVersioning.KeepDays ?? 30).ToString()), caption));
+            [Tr.F("Settings.VersioningNone"), Tr.F("Settings.VersioningArchive")]);
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.DefaultVersioning"), versioningCb, caption));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.ArchiveDirectory"), NewTextBox("SettingsArchiveDirectory", _initial.DefaultVersioning.ArchiveDirectory ?? ""), caption));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.KeepDays"), NewTextBox("SettingsKeepDays", (_initial.DefaultVersioning.KeepDays ?? 30).ToString()), caption));
 
-        sp.Children.Add(NewHeader("通知与日志", section));
-        sp.Children.Add(NewLabeledRow("日志保留天数", NewTextBox("SettingsLogRetention", _initial.LogRetentionDays.ToString()), caption));
-        sp.Children.Add(NewCheckbox("SettingsNotifyOnCompletion", "同步完成时显示通知", _initial.NotifyOnCompletion));
-        sp.Children.Add(NewLabeledRow("网络失败重试次数", NewTextBox("SettingsNetworkRetry", _initial.NetworkRetryCount.ToString()), caption));
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionNotifications"), section));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.LogRetention"), NewTextBox("SettingsLogRetention", _initial.LogRetentionDays.ToString()), caption));
+        sp.Children.Add(NewCheckbox("SettingsNotifyOnCompletion", Tr.F("Settings.NotifyOnCompletion"), _initial.NotifyOnCompletion));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.NetworkRetry"), NewTextBox("SettingsNetworkRetry", _initial.NetworkRetryCount.ToString()), caption));
 
-        sp.Children.Add(NewHeader("维护", section));
-        var sftpBtn = NewButton("SftpServerSettingsButton", "SFTP 服务器设置…", SecondaryStyle(), 180);
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionAppearance"), section));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.Language"),
+            NewComboBox("SettingsLanguage", 220, LanguageIndex(_initial.Language),
+                [.. AppLanguageContext.Choices().Select(choice => choice.Label)]), caption));
+        sp.Children.Add(new TextBlock
+        {
+            Text = Tr.F("Settings.LanguageHint"),
+            Style = caption,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionMaintenance"), section));
+        var sftpBtn = NewButton("SftpServerSettingsButton", Tr.F("Settings.SftpServer"), SecondaryStyle(), 180);
         sftpBtn.Click += async (_, _) => await _configureSftp();
         sp.Children.Add(sftpBtn);
-        var cleanupBtn = NewButton(null, "清理过期本地临时文件", SecondaryStyle(), 200);
+        var cleanupBtn = NewButton(null, Tr.F("Settings.CleanupTemporary"), SecondaryStyle(), 200);
         cleanupBtn.Click += CleanupTemporaryFiles_Click;
         sp.Children.Add(cleanupBtn);
         sp.Children.Add(new TextBlock
         {
-            Text = "设置文件：" + Path.Combine(AppDataPaths.Root, "FengSync.local.json"),
+            Text = Tr.Format("Settings.SettingsFile", Path.Combine(AppDataPaths.Root, "FengSync.local.json")),
             Style = caption,
             Margin = new Thickness(0, 12, 0, 0),
             TextWrapping = TextWrapping.Wrap
@@ -178,81 +210,72 @@ public partial class SettingsWindow : Window
         var caption = (Style)Application.Current.Resources["CaptionTextStyle"];
         var section = (Style)Application.Current.Resources["SectionTitleTextStyle"];
 
-        sp.Children.Add(NewHeader("云盘", section));
+        sp.Children.Add(NewHeader(Tr.F("Settings.PageCloud"), section));
         sp.Children.Add(new TextBlock
         {
-            Text = "以下设置只影响云盘管理里的上传与下载，不改变 Profile 的同步任务。",
+            Text = Tr.F("Settings.CloudIntro"),
             Style = caption,
             TextWrapping = TextWrapping.Wrap
         });
-        sp.Children.Add(NewLabeledRow("同时传输数", NewTextBox("SettingsCloudConcurrency", _initial.CloudMaxConcurrentTransfers.ToString()), caption));
-        sp.Children.Add(NewLabeledRow("失败自动重试次数", NewTextBox("SettingsCloudRetry", _initial.CloudRetryCount.ToString()), caption));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.CloudConcurrency"), NewTextBox("SettingsCloudConcurrency", _initial.CloudMaxConcurrentTransfers.ToString()), caption));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.CloudRetry"), NewTextBox("SettingsCloudRetry", _initial.CloudRetryCount.ToString()), caption));
         sp.Children.Add(new TextBlock
         {
-            Text = "同时传输数可在传输窗口里临时调整，这里设置的是每次启动时的默认值。"
-                 + "重试次数填 0 表示失败后直接报告；无论填几，都能在传输窗口里手动重试。",
+            Text = Tr.F("Settings.CloudConcurrencyHint"),
             Style = caption,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0)
         });
 
-        sp.Children.Add(NewHeader("传输速率与时段", section));
-        sp.Children.Add(NewLabeledRow("上传限速", NewTextBox("SettingsCloudUploadLimit",
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionRateAndWindow"), section));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.UploadLimit"), NewTextBox("SettingsCloudUploadLimit",
             _initial.CloudUploadLimitBytesPerSecond > 0 ? ByteSize.Format(_initial.CloudUploadLimitBytesPerSecond) : ""), caption));
-        sp.Children.Add(NewLabeledRow("下载限速", NewTextBox("SettingsCloudDownloadLimit",
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.DownloadLimit"), NewTextBox("SettingsCloudDownloadLimit",
             _initial.CloudDownloadLimitBytesPerSecond > 0 ? ByteSize.Format(_initial.CloudDownloadLimitBytesPerSecond) : ""), caption));
         sp.Children.Add(new TextBlock
         {
-            Text = "留空或填 0 表示不限速；支持 500K、2M 这类写法。限速是 rclone 的进程级设置——"
-                 + "实测它不接受按端点分别限速（core/bwlimit 只收一个速率），所以这里设的值对云端浏览、上传、下载一视同仁，"
-                 + "并且只在有传输进行时生效，传输结束就恢复不限速。",
+            Text = Tr.F("Settings.RateLimitHint"),
             Style = caption,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0)
         });
-        sp.Children.Add(NewLabeledRow("仅在此时间段传输（开始）", NewTextBox("SettingsCloudWindowStart",
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.WindowStart"), NewTextBox("SettingsCloudWindowStart",
             _initial.CloudTransferTimeWindow?.Start.ToString("HH\\:mm") ?? ""), caption));
-        sp.Children.Add(NewLabeledRow("仅在此时间段传输（结束）", NewTextBox("SettingsCloudWindowEnd",
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.WindowEnd"), NewTextBox("SettingsCloudWindowEnd",
             _initial.CloudTransferTimeWindow?.End.ToString("HH\\:mm") ?? ""), caption));
         sp.Children.Add(new TextBlock
         {
-            Text = "格式 HH:mm，留空表示任何时间都可以传输。时段外排队中的传输会一直等待，不会被取消；"
-                 + "跨午夜（如 22:00–06:00）按一整段处理。实测 rclone 的限速时间表只能改速率、不能让传输停下来，"
-                 + "所以这一项由本程序在队列上实现。",
+            Text = Tr.F("Settings.WindowHint"),
             Style = caption,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0)
         });
         var afterTransfer = NewComboBox("SettingsCloudAfterTransfer", 220, (int)_initial.CloudAfterTransfer,
             [.. Enum.GetValues<CloudAfterTransferAction>().Select(CloudPostTransferAction.Describe)]);
-        sp.Children.Add(NewLabeledRow("全部传输成功后", afterTransfer, caption));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.AfterTransfer"), afterTransfer, caption));
         sp.Children.Add(new TextBlock
         {
-            Text = "只在整批传输全部成功时才触发；有任何一项失败就只报告，不会关机。执行前会再确认一次，"
-                 + "因此需要保持传输窗口打开——没有人能应答的确认框不应该变成一次关机。",
+            Text = Tr.F("Settings.AfterTransferHint"),
             Style = caption,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0)
         });
 
-        sp.Children.Add(NewHeader("网络代理", section));
-        sp.Children.Add(NewLabeledRow("代理服务器", NewTextBox("SettingsCloudProxy", _initial.RcloneProxy ?? ""), caption));
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionProxy"), section));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.ProxyServer"), NewTextBox("SettingsCloudProxy", _initial.RcloneProxy ?? ""), caption));
         sp.Children.Add(new TextBlock
         {
-            Text = "留空表示自动：先用环境变量里的 HTTP_PROXY/HTTPS_PROXY，再用 Windows 的 Internet 选项。"
-                 + "填写 host:port（如 proxy.corp:8080）或带协议的完整地址（如 http://proxy.corp:8080、socks5://127.0.0.1:1080）。"
-                 + "只影响本程序自己启动的 rclone 进程——云盘浏览、挂载、SFTP 服务与同步任务都会走它，"
-                 + "不会修改系统或其他程序的代理设置。代理在 rclone 启动时确定，改动需重启程序后才生效。",
+            Text = Tr.F("Settings.ProxyHint"),
             Style = caption,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0)
         });
 
-        sp.Children.Add(NewHeader("下载", section));
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionDownload"), section));
         var folder = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-        folder.Children.Add(new TextBlock { Text = "默认下载目录", Style = caption, Margin = new Thickness(0, 0, 0, 6) });
+        folder.Children.Add(new TextBlock { Text = Tr.F("Settings.DefaultDownloadDirectory"), Style = caption, Margin = new Thickness(0, 0, 0, 6) });
         var dock = new DockPanel();
-        var browse = NewButton("SettingsCloudDownloadBrowse", "浏览…", SecondaryStyle(), 90);
+        var browse = NewButton("SettingsCloudDownloadBrowse", Tr.F("Settings.Browse"), SecondaryStyle(), 90);
         browse.Click += BrowseDownloadDirectory_Click;
         DockPanel.SetDock(browse, Dock.Right);
         dock.Children.Add(browse);
@@ -261,30 +284,28 @@ public partial class SettingsWindow : Window
         folder.Children.Add(dock);
         folder.Children.Add(new TextBlock
         {
-            Text = "留空表示每次下载都询问保存位置。设置了目录后，同名文件仍会在覆盖前确认。",
+            Text = Tr.F("Settings.DownloadHint"),
             Style = caption,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0)
         });
         sp.Children.Add(folder);
 
-        sp.Children.Add(NewHeader("上传", section));
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionUpload"), section));
         var conflict = NewComboBox("SettingsCloudConflict", 220, ConflictIndex(_initial.CloudUploadConflict),
-            new[] { "每次询问", "直接覆盖", "跳过同名文件", "保留两者（重命名）" });
-        sp.Children.Add(NewLabeledRow("目标目录已有同名文件时", conflict, caption));
+            [Tr.F("Settings.ConflictAsk"), Tr.F("Settings.ConflictOverwrite"), Tr.F("Settings.ConflictSkip"), Tr.F("Settings.ConflictKeepBoth")]);
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.ConflictTarget"), conflict, caption));
 
-        sp.Children.Add(NewHeader("行为", section));
-        sp.Children.Add(NewCheckbox("SettingsCloudNotify", "云盘传输完成时显示通知", _initial.CloudNotifyOnCompletion));
-        sp.Children.Add(NewCheckbox("SettingsCloudResumeOnStartup", "启动时恢复上次未完成的云盘传输", _initial.CloudResumeOnStartup));
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionBehaviour"), section));
+        sp.Children.Add(NewCheckbox("SettingsCloudNotify", Tr.F("Settings.CloudNotify"), _initial.CloudNotifyOnCompletion));
+        sp.Children.Add(NewCheckbox("SettingsCloudResumeOnStartup", Tr.F("Settings.CloudResumeOnStartup"), _initial.CloudResumeOnStartup));
 
-        sp.Children.Add(NewHeader("挂载", section));
-        sp.Children.Add(NewLabeledRow("VFS 缓存上限", NewTextBox("SettingsMountCacheLimit",
+        sp.Children.Add(NewHeader(Tr.F("Settings.SectionMount"), section));
+        sp.Children.Add(NewLabeledRow(Tr.F("Settings.MountCacheLimit"), NewTextBox("SettingsMountCacheLimit",
             _initial.MountCacheMaxSizeBytes > 0 ? ByteSize.Format(_initial.MountCacheMaxSizeBytes) : ""), caption));
         sp.Children.Add(new TextBlock
         {
-            Text = "留空或填 0 表示不限制缓存大小（rclone 的默认值），缓存会一直增长到磁盘占满。"
-                 + "这里是新建挂载的默认值，单个挂载可以在挂载对话框的“高级选项”里单独覆盖。"
-                 + "缓存目录与占用大小在云盘管理窗口的挂载区域可以查看和清理。",
+            Text = Tr.F("Settings.MountCacheHint"),
             Style = caption,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0)
@@ -295,7 +316,7 @@ public partial class SettingsWindow : Window
 
     private void BrowseDownloadDirectory_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog { Title = "选择默认下载目录" };
+        var dialog = new OpenFolderDialog { Title = Tr.F("Settings.PickDownloadDirectory") };
         if (dialog.ShowDialog(this) != true) return;
         if (_downloadDirectoryBox is not null) _downloadDirectoryBox.Text = dialog.FolderName;
     }
@@ -334,8 +355,8 @@ public partial class SettingsWindow : Window
         }
         if (onLaunch is not null)
         {
-            var launch = NewButton(null, $"打开 {title}", (Style)Application.Current.Resources["PrimaryButtonStyle"], 140);
-            AutomationProperties.SetAutomationId(launch, title == "运行历史" ? "OpenRunHistory" : "OpenLogViewer");
+            var launch = NewButton(null, Tr.Format("Settings.OpenAction", title), (Style)Application.Current.Resources["PrimaryButtonStyle"], 140);
+            AutomationProperties.SetAutomationId(launch, title == Tr.F("Settings.PageHistory") ? "OpenRunHistory" : "OpenLogViewer");
             launch.Click += (_, _) => onLaunch();
             sp.Children.Add(launch);
         }
@@ -390,7 +411,7 @@ public partial class SettingsWindow : Window
     }
 
     private void MarkDirty(object sender, RoutedEventArgs e) => SetDirty(true);
-    private void SetDirty(bool dirty) => DirtyLabel.Text = dirty ? "有未应用的更改" : "";
+    private void SetDirty(bool dirty) => DirtyLabel.Text = dirty ? Tr.F("Settings.Dirty") : "";
 
     private async Task<bool> ApplyAsync()
     {
@@ -400,13 +421,17 @@ public partial class SettingsWindow : Window
         {
             var value = BuildSettings();
             await _apply(value);
+            // This page's text was built by Tr.F when the page was built, so a language change means the
+            // page has to be built again — rebuilt on the page the user is on, not on the first one.
+            var languageChanged = value.Language != _initial.Language;
             _initial = value;
             SetDirty(false);
+            if (languageChanged) NavigateTo(_page);
             return true;
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "程序设置", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(ex.Message, Tr.F("Settings.MessageTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         finally { _applying = false; }
@@ -453,6 +478,7 @@ public partial class SettingsWindow : Window
                     },
                     "SettingsCloudConflict" => value with { CloudUploadConflict = ConflictPolicy(co.SelectedIndex) },
                     "SettingsCloudAfterTransfer" => value with { CloudAfterTransfer = AfterTransferPolicy(co.SelectedIndex) },
+                    "SettingsLanguage" => value with { Language = LanguagePolicy(co.SelectedIndex) },
                     _ => value
                 };
         // The transfer window is parsed as a pair rather than as two independent boxes: half a window is not a
@@ -473,7 +499,7 @@ public partial class SettingsWindow : Window
         var end = FindText("SettingsCloudWindowEnd")?.Trim() ?? "";
         if (start.Length == 0 && end.Length == 0) return value with { CloudTransferTimeWindow = null };
         var window = CloudTransferTimeWindow.Parse(start, end);
-        if (window is null) throw new InvalidOperationException("传输时段的时间格式应为 HH:mm，例如 22:00 与 06:00；两边都留空表示任何时间都可以传输。");
+        if (window is null) throw new InvalidOperationException(Tr.F("Settings.TransferWindowFormat"));
         return value with { CloudTransferTimeWindow = window };
     }
 
@@ -483,6 +509,16 @@ public partial class SettingsWindow : Window
             if (box.GetValue(AutomationProperties.AutomationIdProperty) is string found && found == id) return box.Text;
         return null;
     }
+
+    /// <summary>
+    /// The combo's selected index, for the two languages. Out of range lands on the default rather than
+    /// throwing: a stale index is a display problem, and the validator is what reports a bad stored value.
+    /// </summary>
+    internal static int LanguageIndex(AppLanguage language) =>
+        language == AppLanguage.English ? 1 : 0;
+
+    internal static AppLanguage LanguagePolicy(int index) =>
+        index == 1 ? AppLanguage.English : AppLanguage.Chinese;
 
     internal static CloudAfterTransferAction AfterTransferPolicy(int index) =>
         Enum.IsDefined(typeof(CloudAfterTransferAction), index) ? (CloudAfterTransferAction)index : CloudAfterTransferAction.None;
@@ -549,9 +585,9 @@ public partial class SettingsWindow : Window
         try
         {
             var removed = await _cleanupTemporaryFiles();
-            MessageBox.Show($"已清理 {removed} 个超过 7 天的本地临时文件。", "维护", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(Tr.Format("Settings.CleanupDone", removed), Tr.F("Settings.MaintenanceTitle"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
-        catch (Exception ex) { MessageBox.Show(ex.Message, "维护", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex) { MessageBox.Show(ex.Message, Tr.F("Settings.MaintenanceTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     private void ResetPage_Click(object sender, RoutedEventArgs e)

@@ -5,6 +5,7 @@ using FengSync.Core.Updates;
 using FengSync.Core.Execution;
 using FengSync.Core.Scanning;
 using FengSync.Core.SftpServer;
+using FengSync.Localization;
 using FengSync.Services;
 using FluentIcon = FluentIcons.Common.Icon;
 using Microsoft.Win32;
@@ -65,8 +66,28 @@ public partial class MainWindow : Window
         UpdateSettingsText();
         UpdateHeaderForCurrentProfile();
         UpdateComparisonEmptyState();
-        Status.Text = "正在加载设置…";
+        Status.Text = Tr.F("Main.LoadingSettings");
+        // E1: the cloud manager window can create a sync task, so this list is no longer the only writer of
+        // profiles.json. Without this the user builds a task over there and comes back to a list that has
+        // never heard of it — the file is right and the screen is stale, which reads as a lost task.
+        SyncProfileNotifier.Saved += OnSyncProfileSaved;
+        Closed += (_, _) => SyncProfileNotifier.Saved -= OnSyncProfileSaved;
         Loaded += async (_, _) => await InitializeAsync();
+    }
+
+    /// <summary>Re-reads the list after somebody else saved a profile, and adopts the new one.</summary>
+    private void OnSyncProfileSaved(SyncProfile saved)
+    {
+        Dispatcher.BeginInvoke(async () =>
+        {
+            try
+            {
+                await LoadProfilesAsync();
+                ProfileList.SelectedItem = _profiles.FirstOrDefault(profile => profile.Id == saved.Id);
+                Status.Text = Tr.Format("Main.ProfileSyncedFromCloud", saved.Name);
+            }
+            catch (Exception ex) { Status.Text = Tr.Format("Main.ProfileRefreshFailed", RcloneUiError.Describe(ex, "profile-list-refresh")); }
+        });
     }
 
     private void ApplyRowFilter()
@@ -723,9 +744,12 @@ public partial class MainWindow : Window
         settings = settings with { MainWindowSidebarWidth = ClampSidebarWidth(SidebarColumn.ActualWidth) };
         await new SettingsStore().SaveAsync(settings);
         _settings = settings;
+        // Before the status line and the header: they are about to be rewritten in the new language, and
+        // setting them first would show the old words for one frame.
+        AppLanguageContext.Current.Apply(settings.Language);
         ApplyCloudTransferSettings(settings);
         UpdateSettingsText();
-        Status.Text = "程序设置已应用。";
+        Status.Text = Tr.F("Main.SettingsApplied");
         await RestoreCloudTransfersAsync(settings);
     }
 

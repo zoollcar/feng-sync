@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FengSync.Localization;
 
 namespace FengSync.Views;
 
@@ -36,9 +37,9 @@ internal static class TextPrompt
         root.Children.Add(error);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
-        var confirm = new Button { Content = "确定", IsDefault = true, Style = Resource<Style>("PrimaryButtonStyle") };
+        var confirm = new Button { Content = Tr.F("Prompt.Ok"), IsDefault = true, Style = Resource<Style>("PrimaryButtonStyle") };
         AutomationProperties.SetAutomationId(confirm, "TextPromptConfirm");
-        var cancel = new Button { Content = "取消", IsCancel = true, Style = Resource<Style>("TertiaryButtonStyle"), Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = Tr.F("Prompt.Cancel"), IsCancel = true, Style = Resource<Style>("TertiaryButtonStyle"), Margin = new Thickness(8, 0, 0, 0) };
         confirm.Click += (_, _) =>
         {
             var reason = validate(box.Text);
@@ -68,11 +69,11 @@ internal static class TextPrompt
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
         var confirm = new Button
         {
-            Content = "继续",
+            Content = Tr.F("Prompt.Continue"),
             Style = Resource<Style>(danger ? "DangerButtonStyle" : "PrimaryButtonStyle")
         };
         AutomationProperties.SetAutomationId(confirm, "TextPromptConfirm");
-        var cancel = new Button { Content = "取消", IsDefault = true, IsCancel = true, Style = Resource<Style>("TertiaryButtonStyle"), Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = Tr.F("Prompt.Cancel"), IsDefault = true, IsCancel = true, Style = Resource<Style>("TertiaryButtonStyle"), Margin = new Thickness(8, 0, 0, 0) };
         confirm.Click += (_, _) => window.DialogResult = true;
         // Cancel first, and as the default: an accidental Enter must not confirm a delete.
         buttons.Children.Add(cancel);

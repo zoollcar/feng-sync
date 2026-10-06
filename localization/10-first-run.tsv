@@ -1,0 +1,19 @@
+# E5 首启引导 · CloudFirstRunGuide. The Chinese column must stay byte-identical to the literal it replaced,
+# so the tests that assert today's wording keep passing without being rewritten.
+Guide.Title	开始使用云盘管理	Getting started with cloud management
+Guide.Intro	云盘管理可以连接云盘、浏览和传输文件，也可以把云盘上的目录挂载成 Windows 盘符。连接第一个云盘只要三步。	Cloud management can connect to cloud drives, browse and transfer files, and mount a cloud folder as a Windows drive. Connecting your first drive takes three steps.
+Guide.NeverAgain	不再显示这个引导	Do not show this guide again
+Guide.Later	稍后再说	Later
+Guide.Start	新建端点	New endpoint
+Guide.Step1Title	新建端点	New endpoint
+Guide.Step1Detail	点「新建端点」，在列表里选 Google Drive。	Click "New endpoint" and pick Google Drive from the list.
+Guide.Step2Title	浏览器里授权	Authorize in the browser
+Guide.Step2Detail	点「创建」之后会打开浏览器，登录 Google 账号并允许访问。这一步由 Google 完成，Feng Sync 拿不到你的密码。	After you click "Create" a browser opens: sign in to your Google account and grant access. Google does that step; Feng Sync never sees your password.
+Guide.Step3Title	回来检查连接	Come back and check the connection
+Guide.Step3Detail	回到这个窗口点「检查连接」。绿色的一行说明它已经连上；红色的一行会说明是哪一步没成。	Back in this window, click "Check connection". A green line means it is connected; a red line says which step failed.
+Guide.Step4Title	浏览或挂载	Browse or mount
+Guide.Step4Detail	在右边直接浏览文件、拖拽上传下载；需要盘符的话，在左下角「挂载管理」里挂一个。	Browse files on the right and drag them to upload or download; if you want a drive letter, mount one under "Mounts" at the bottom left.
+Guide.StatusStart	已打开新建端点向导。	The new-endpoint editor is open.
+Guide.StatusNever	已记下：不再显示这个引导。	Noted: this guide will not show again.
+Guide.StatusLater	引导已关闭；下次打开云盘管理还会再问一次。	Guide closed; it will ask again the next time you open cloud management.
+Main.SettingsApplied	程序设置已应用。	Application settings applied.

@@ -1,6 +1,7 @@
 using System.IO;
 using FengSync.Core;
 using FengSync.Core.Rclone.Configuration;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -56,24 +57,24 @@ public static class CloudEndpointRename
     /// </summary>
     public static string? Validate(string? requested, string oldName, CloudEndpointRenameContext context)
     {
-        if (string.IsNullOrWhiteSpace(requested)) return "请输入新的端点名称。";
+        if (string.IsNullOrWhiteSpace(requested)) return Tr.F("Endpoint.RenameNeedName");
         var newName = CloudEndpointService.SanitizeRemoteName(requested);
         if (newName.Equals(oldName, StringComparison.OrdinalIgnoreCase))
-            return "新名称与当前名称相同，无需重命名。";
+            return Tr.F("Endpoint.RenameSameName");
 
         // A live mount holds the filesystem string "<old>:", which the daemon resolved when it mounted. It
         // would keep working until the next remount and then point at nothing, so the rename waits instead.
         if (context.MountedRemotes.Contains(oldName, StringComparer.OrdinalIgnoreCase))
-            return $"端点“{oldName}”仍有挂载，请先取消挂载再重命名。";
+            return Tr.Format("Endpoint.RenameStillMounted", oldName);
 
         if (context.RemoteNames.Contains(newName, StringComparer.OrdinalIgnoreCase) ||
             context.MetadataKeys.Contains(newName, StringComparer.OrdinalIgnoreCase))
-            return $"已存在名为“{newName}”的端点或内部记录，请换一个名称。";
+            return Tr.Format("Endpoint.RenameNameTaken", newName);
 
         var backing = CloudEndpointService.BackingRemoteName(newName);
         if (context.RemoteNames.Contains(backing, StringComparer.OrdinalIgnoreCase) ||
             context.MetadataKeys.Contains(backing, StringComparer.OrdinalIgnoreCase))
-            return $"内部名称“{backing}”已被占用，请换一个名称。";
+            return Tr.Format("Endpoint.RenameBackingTaken", backing);
 
         return null;
     }
@@ -120,7 +121,7 @@ public static class CloudEndpointRename
             var source = backing ?? oldName;
             var parameters = await api.GetRemoteParametersAsync(source, ct);
             if (parameters.Count == 0)
-                throw new InvalidOperationException($"rclone 中找不到端点“{oldName}”的配置，请先刷新端点列表。");
+                throw new InvalidOperationException(Tr.Format("Endpoint.RenameNotInRclone", oldName));
 
             var configPath = BundledRclone.ConfigPath;
             var profiles = new ProfileStore();
@@ -194,12 +195,12 @@ public static class CloudEndpointRename
 
         var copied = await api.GetRemoteParametersAsync(backing is null ? newName : newBacking, ct);
         if (!SameParameters(parameters, copied))
-            throw new InvalidOperationException($"重命名后 rclone 读到的“{newName}”配置与重命名前不一致，已还原。");
+            throw new InvalidOperationException(Tr.Format("Endpoint.RenameConfigMismatch", newName));
 
         var names = await api.ListRemoteNamesAsync(ct);
         if (!names.Contains(newName, StringComparer.OrdinalIgnoreCase) ||
             names.Contains(oldName, StringComparer.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"rclone 未能读取重命名后的端点“{newName}”，已还原。");
+            throw new InvalidOperationException(Tr.Format("Endpoint.RenameNotReadable", newName));
 
         if (backing is not null)
         {
@@ -207,7 +208,7 @@ public static class CloudEndpointRename
             var alias = await api.GetRemoteParametersAsync(newName, ct);
             if (!alias.TryGetValue("remote", out var target) || !target.Equals(expected, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException(
-                    $"重命名后别名“{newName}”没有指向新的内部存储（应为 {expected}，实际为 {target ?? "（无）"}），已还原。");
+                    Tr.Format("Endpoint.RenameAliasTargetWrong", newName, expected, target ?? Tr.F("Common.None")));
         }
     }
 

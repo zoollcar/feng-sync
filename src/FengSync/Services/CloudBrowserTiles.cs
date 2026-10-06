@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -80,9 +81,9 @@ public static class CloudBrowserTiles
     /// </summary>
     public static string? RefusalFor(CloudFileEntry entry) => DecideFor(entry) switch
     {
-        CloudTileDecision.Empty => $"“{entry.Name}”没有可读取的内容，缩略图跳过。",
-        CloudTileDecision.Undecodable => $"“{entry.Name}”是 {Path.GetExtension(entry.Name)} 图片，本程序没有它的解码器，只显示文件图标。",
-        CloudTileDecision.TooLarge => $"“{entry.Name}”有 {CloudItemDetails.HumanSize(entry.Size)}，超过缩略图的上限 {CloudItemDetails.HumanSize(ThumbnailMaxBytes)}，只显示文件图标。",
+        CloudTileDecision.Empty => Tr.Format("Thumb.Empty", entry.Name),
+        CloudTileDecision.Undecodable => Tr.Format("Thumb.Undecodable", entry.Name, Path.GetExtension(entry.Name)),
+        CloudTileDecision.TooLarge => Tr.Format("Thumb.TooLarge", entry.Name, CloudItemDetails.HumanSize(entry.Size), CloudItemDetails.HumanSize(ThumbnailMaxBytes)),
         _ => null,
     };
 

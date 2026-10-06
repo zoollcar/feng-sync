@@ -2,14 +2,15 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:fluent="clr-namespace:FluentIcons.Wpf;assembly=FluentIcons.Wpf"
-        Title="同步进度"
+        xmlns:l="clr-namespace:FengSync.Localization"
+        Title="{Binding [Progress.WindowTitle], Source={l:Lang}}"
         Width="820"
         Height="680"
         MinHeight="560"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanMinimize"
         AutomationProperties.AutomationId="ProgressWindow"
-        AutomationProperties.Name="同步进度">
+        AutomationProperties.Name="{Binding [Progress.WindowTitle], Source={l:Lang}}">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -35,13 +36,13 @@
                                    Margin="0,0,12,0"
                                    VerticalAlignment="Top"
                                    Style="{StaticResource LibraryIconStyle}"
-                                   AutomationProperties.Name="同步状态图标" />
+                                   AutomationProperties.Name="{Binding [Progress.StateIcon], Source={l:Lang}}" />
                 <StackPanel>
                     <TextBlock x:Name="StateTitle"
-                               Text="正在同步"
+                               Text="{Binding [Progress.Syncing], Source={l:Lang}}"
                                Style="{StaticResource PageTitleTextStyle}" />
                     <TextBlock x:Name="StateDescription"
-                               Text="正在准备传输…"
+                               Text="{Binding [Progress.PreparingTransfer], Source={l:Lang}}"
                                Style="{StaticResource CaptionTextStyle}"
                                Margin="0,4,0,0" />
                 </StackPanel>
@@ -49,7 +50,7 @@
 
             <StackPanel Grid.Row="1" Margin="0,20,0,0">
                 <DockPanel LastChildFill="False">
-                    <TextBlock Text="进度" Style="{StaticResource SectionTitleTextStyle}" />
+                    <TextBlock Text="{Binding [Progress.Progress], Source={l:Lang}}" Style="{StaticResource SectionTitleTextStyle}" />
                     <TextBlock x:Name="Counter"
                                DockPanel.Dock="Right"
                                Style="{StaticResource CaptionTextStyle}"
@@ -58,7 +59,7 @@
                 <ProgressBar x:Name="FileProgress"
                              Height="8"
                              Margin="0,8,0,0"
-                             AutomationProperties.Name="当前文件传输进度" />
+                             AutomationProperties.Name="{Binding [Progress.FileProgressName], Source={l:Lang}}" />
                 <TextBlock x:Name="CurrentFile"
                            Margin="0,8,0,0"
                            TextTrimming="CharacterEllipsis"
@@ -78,14 +79,14 @@
                         CornerRadius="{StaticResource RadiusMedium}"
                         Padding="16">
                     <StackPanel>
-                        <TextBlock Text="文件传输 / 字节" Style="{StaticResource SectionTitleTextStyle}" />
+                        <TextBlock Text="{Binding [Progress.FileTransfersBytes], Source={l:Lang}}" Style="{StaticResource SectionTitleTextStyle}" />
                         <ProgressBar x:Name="BytesGraph"
                                      Height="6"
                                      Margin="0,12,0,0"
-                                     AutomationProperties.Name="已传输字节进度" />
+                                     AutomationProperties.Name="{Binding [Progress.BytesProgressName], Source={l:Lang}}" />
                         <TextBlock x:Name="BytesText"
                                    AutomationProperties.AutomationId="ProgressBytesText"
-                                   Text="等待传输"
+                                   Text="{Binding [Progress.WaitingTransfer], Source={l:Lang}}"
                                    Style="{StaticResource CaptionTextStyle}"
                                    TextWrapping="Wrap"
                                    Margin="0,8,0,0" />
@@ -100,7 +101,7 @@
                         Padding="16"
                         Margin="12,0,0,0">
                     <StackPanel>
-                        <TextBlock Text="速度 / 用时" Style="{StaticResource SectionTitleTextStyle}" />
+                        <TextBlock Text="{Binding [Progress.SpeedElapsed], Source={l:Lang}}" Style="{StaticResource SectionTitleTextStyle}" />
                         <TextBlock x:Name="SpeedText"
                                    AutomationProperties.AutomationId="ProgressSpeedText"
                                    Text="0 B/s"
@@ -112,18 +113,18 @@
                 </Border>
             </Grid>
 
-            <GroupBox Grid.Row="3" Header="操作详情" Margin="0,16,0,0">
+            <GroupBox Grid.Row="3" Header="{Binding [Progress.OperationDetails], Source={l:Lang}}" Margin="0,16,0,0">
                 <DataGrid x:Name="OperationResults"
                           AutoGenerateColumns="False"
                           IsReadOnly="True"
                           CanUserAddRows="False"
                           CanUserSortColumns="False"
-                          AutomationProperties.Name="同步操作详情">
+                          AutomationProperties.Name="{Binding [Progress.OperationDetailsName], Source={l:Lang}}">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="状态" Binding="{Binding StageText}" Width="90" />
-                        <DataGridTextColumn Header="操作" Binding="{Binding KindText}" Width="115" />
-                        <DataGridTextColumn Header="路径" Binding="{Binding Path}" Width="*" />
-                        <DataGridTextColumn Header="错误 / 建议" Binding="{Binding Error}" Width="2*" />
+                        <DataGridTextColumn Header="{Binding [Progress.ColStage], Source={l:Lang}}" Binding="{Binding StageText}" Width="90" />
+                        <DataGridTextColumn Header="{Binding [Progress.ColOperation], Source={l:Lang}}" Binding="{Binding KindText}" Width="115" />
+                        <DataGridTextColumn Header="{Binding [Progress.ColPath], Source={l:Lang}}" Binding="{Binding Path}" Width="*" />
+                        <DataGridTextColumn Header="{Binding [Progress.ColErrorAdvice], Source={l:Lang}}" Binding="{Binding Error}" Width="2*" />
                     </DataGrid.Columns>
                 </DataGrid>
             </GroupBox>
@@ -136,27 +137,30 @@
                 Padding="24,12">
             <DockPanel>
                 <CheckBox x:Name="AutoClose"
-                          Content="完成后自动关闭"
+                          Content="{Binding [Progress.AutoClose], Source={l:Lang}}"
                           VerticalAlignment="Center"
-                          AutomationProperties.Name="同步完成后自动关闭窗口" />
+                          AutomationProperties.Name="{Binding [Progress.AutoCloseName], Source={l:Lang}}" />
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="SaveLogButton"
                             Click="SaveLog_Click"
                             IsEnabled="False"
                             Style="{StaticResource TertiaryButtonStyle}"
                             Margin="0,0,8,0"
-                            AutomationProperties.Name="保存本次运行日志">保存日志</Button>
+                            AutomationProperties.Name="{Binding [Progress.SaveLogName], Source={l:Lang}}"
+                            Content="{Binding [Progress.SaveLog], Source={l:Lang}}" />
                     <Button x:Name="RetryButton"
                             Click="Retry_Click"
                             IsEnabled="False"
                             Style="{StaticResource SecondaryButtonStyle}"
                             Margin="0,0,8,0"
-                            AutomationProperties.Name="重试失败项">重试失败项</Button>
+                            AutomationProperties.Name="{Binding [Progress.RetryFailedName], Source={l:Lang}}"
+                            Content="{Binding [Progress.RetryFailed], Source={l:Lang}}" />
                     <Button x:Name="CloseButton"
                             Click="Close_Click"
                             IsEnabled="False"
                             Style="{StaticResource PrimaryButtonStyle}"
-                            AutomationProperties.Name="关闭同步进度窗口">关闭</Button>
+                            AutomationProperties.Name="{Binding [Progress.CloseName], Source={l:Lang}}"
+                            Content="{Binding [Progress.Close], Source={l:Lang}}" />
                 </StackPanel>
             </DockPanel>
         </Border>

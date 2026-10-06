@@ -3,14 +3,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:fluent="clr-namespace:FluentIcons.Wpf;assembly=FluentIcons.Wpf"
         xmlns:services="clr-namespace:FengSync.Services"
-        Title="云盘管理"
+        xmlns:l="clr-namespace:FengSync.Localization"
+        Title="{Binding [Mgr.WindowTitle], Source={l:Lang}}"
         Width="1280"
         Height="820"
         MinWidth="1000"
         MinHeight="640"
         WindowStartupLocation="CenterOwner"
         AutomationProperties.AutomationId="RemoteEndpointManagerWindow"
-        AutomationProperties.Name="云盘端点与文件管理">
+        AutomationProperties.Name="{Binding [Mgr.WindowName], Source={l:Lang}}">
     <Window.Resources>
         <!-- The two drawings of the browser's one row collection (see ApplyBrowserView): the GridView declared on
              FileList stays the list view, and these two describe the same rows as tiles. A second
@@ -43,25 +44,28 @@
         <Grid Grid.Column="0">
             <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
             <StackPanel>
-                <TextBlock Text="云盘管理" Style="{StaticResource DisplayTitleTextStyle}" />
-                <TextBlock Text="管理云盘端点与挂载，并浏览和传输文件。" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                <TextBlock Text="{Binding [Mgr.WindowTitle], Source={l:Lang}}" Style="{StaticResource DisplayTitleTextStyle}" />
+                <TextBlock Text="{Binding [Mgr.Subtitle], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
             </StackPanel>
-            <GroupBox Grid.Row="1" Header="云盘端点" Margin="0,12,0,0">
+            <GroupBox Grid.Row="1" Header="{Binding [Mgr.EndpointsGroup], Source={l:Lang}}" Margin="0,12,0,0">
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <!-- A WrapPanel rather than a StackPanel: the left column is 340 px, and the endpoint
                          actions must degrade to a second line instead of being clipped. -->
                     <WrapPanel Margin="4,4,4,6">
-                        <TextBlock Text="搜索" VerticalAlignment="Center" />
-                        <TextBox x:Name="EndpointSearchBox" AutomationProperties.AutomationId="CloudEndpointSearch" AutomationProperties.Name="按名称、类型或前缀搜索云盘端点" Width="120" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="EndpointSearch_TextChanged" />
-                        <TextBlock Text="排序" VerticalAlignment="Center" Margin="12,0,0,0" />
-                        <ComboBox x:Name="EndpointSortBox" AutomationProperties.AutomationId="CloudEndpointSort" AutomationProperties.Name="云盘端点排序依据" Width="92" Margin="8,0,0,0" SelectionChanged="EndpointSort_Changed" />
-                        <Button x:Name="EndpointSortDirectionButton" AutomationProperties.AutomationId="CloudEndpointSortDirection" AutomationProperties.Name="切换云盘端点列表的升降序" Content="升序" Click="EndpointSortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                        <Button x:Name="CheckAllButton" AutomationProperties.AutomationId="CheckAllCloudEndpoints" AutomationProperties.Name="检查全部云盘端点的连接与容量" Content="测试全部" Click="CheckAll_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button x:Name="ExportEndpointsButton" AutomationProperties.AutomationId="ExportCloudEndpoints" AutomationProperties.Name="导出全部云盘端点的非敏感配置" Content="导出…" Click="ExportEndpoints_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                        <Button x:Name="ImportEndpointsButton" AutomationProperties.AutomationId="ImportCloudEndpoints" AutomationProperties.Name="从导出文件导入云盘端点" Content="导入…" Click="ImportEndpoints_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                        <TextBlock Text="{Binding [Mgr.Search], Source={l:Lang}}" VerticalAlignment="Center" />
+                        <TextBox x:Name="EndpointSearchBox" AutomationProperties.AutomationId="CloudEndpointSearch" AutomationProperties.Name="{Binding [Mgr.SearchEndpointsName], Source={l:Lang}}" Width="120" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="EndpointSearch_TextChanged" />
+                        <TextBlock Text="{Binding [Mgr.Sort], Source={l:Lang}}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                        <ComboBox x:Name="EndpointSortBox" AutomationProperties.AutomationId="CloudEndpointSort" AutomationProperties.Name="{Binding [Mgr.EndpointSortByName], Source={l:Lang}}" Width="92" Margin="8,0,0,0" SelectionChanged="EndpointSort_Changed" />
+                        <Button x:Name="EndpointSortDirectionButton" AutomationProperties.AutomationId="CloudEndpointSortDirection" AutomationProperties.Name="{Binding [Mgr.ToggleEndpointSortDirectionName], Source={l:Lang}}" Content="{Binding [Mgr.Ascending], Source={l:Lang}}" Click="EndpointSortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                        <Button x:Name="CheckAllButton" AutomationProperties.AutomationId="CheckAllCloudEndpoints" AutomationProperties.Name="{Binding [Mgr.TestAllName], Source={l:Lang}}" Content="{Binding [Mgr.TestAll], Source={l:Lang}}" Click="CheckAll_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button x:Name="ExportEndpointsButton" AutomationProperties.AutomationId="ExportCloudEndpoints" AutomationProperties.Name="{Binding [Mgr.ExportAllName], Source={l:Lang}}" Content="{Binding [Mgr.Export], Source={l:Lang}}" Click="ExportEndpoints_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                        <Button x:Name="ImportEndpointsButton" AutomationProperties.AutomationId="ImportCloudEndpoints" AutomationProperties.Name="{Binding [Mgr.ImportName], Source={l:Lang}}" Content="{Binding [Mgr.Import], Source={l:Lang}}" Click="ImportEndpoints_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                        <!-- E3: a support report is a machine-level side effect (it asks rclone for its version
+                             and reads today's log), so the two answers it needs are both seams below. -->
+                        <Button x:Name="ExportDiagnosticsButton" AutomationProperties.AutomationId="ExportCloudDiagnostics" AutomationProperties.Name="{Binding [Mgr.ExportDiagnosticsName], Source={l:Lang}}" Content="{Binding [Mgr.ExportDiagnostics], Source={l:Lang}}" Click="ExportDiagnostics_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                     </WrapPanel>
-                    <ListBox Grid.Row="1" x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="云盘端点列表" BorderThickness="0" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged">
+                    <ListBox Grid.Row="1" x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="{Binding [Mgr.EndpointListName], Source={l:Lang}}" BorderThickness="0" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <!-- Four lines per row: the group heading when this row starts one, the endpoint,
@@ -94,35 +98,43 @@
             </GroupBox>
             <StackPanel Grid.Row="2" Margin="0,10,0,0">
                 <StackPanel Orientation="Horizontal">
-                    <Button x:Name="NewButton" AutomationProperties.Name="新建云盘端点" Content="新建端点" Click="New_Click" Style="{StaticResource PrimaryButtonStyle}" />
-                    <Button x:Name="EditButton" AutomationProperties.AutomationId="EditCloudEndpoint" AutomationProperties.Name="编辑所选云盘端点" Content="编辑端点" Click="Edit_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                    <Button x:Name="RefreshButton" AutomationProperties.Name="刷新云盘端点列表" Content="刷新列表" Click="Refresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                    <Button x:Name="NewButton" AutomationProperties.Name="{Binding [Mgr.NewEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.NewEndpoint], Source={l:Lang}}" Click="New_Click" Style="{StaticResource PrimaryButtonStyle}" />
+                    <Button x:Name="EditButton" AutomationProperties.AutomationId="EditCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.EditEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.EditEndpoint], Source={l:Lang}}" Click="Edit_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="RefreshButton" AutomationProperties.Name="{Binding [Mgr.RefreshListName], Source={l:Lang}}" Content="{Binding [Mgr.RefreshList], Source={l:Lang}}" Click="Refresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                 </StackPanel>
                 <WrapPanel Margin="0,8,0,0">
                     <!-- Collapsed unless the selected endpoint is Google Drive: only that backend needs an
                          interactive browser authorization, so for SFTP/S3 the button would lead nowhere. -->
-                    <Button x:Name="ReconnectButton" AutomationProperties.Name="重新登录所选云盘端点" Content="重新登录" Click="Reconnect_Click" Visibility="Collapsed" Style="{StaticResource SecondaryButtonStyle}" />
-                    <Button x:Name="CheckButton" AutomationProperties.AutomationId="CheckCloudEndpoint" AutomationProperties.Name="检查所选云盘端点的连接与容量" Content="检查连接" Click="Check_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                    <Button x:Name="RenameEndpointButton" AutomationProperties.AutomationId="RenameCloudEndpoint" AutomationProperties.Name="重命名所选云盘端点" Content="重命名" Click="RenameEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                    <Button x:Name="OrganizeEndpointButton" AutomationProperties.AutomationId="OrganizeCloudEndpoint" AutomationProperties.Name="设置所选云盘端点的分组与标签" Content="分组与标签…" Click="OrganizeEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                    <Button x:Name="DeleteButton" AutomationProperties.Name="删除所选云盘端点" Content="删除" Click="Delete_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+                    <Button x:Name="ReconnectButton" AutomationProperties.Name="{Binding [Mgr.ReconnectEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.ReconnectEndpoint], Source={l:Lang}}" Click="Reconnect_Click" Visibility="Collapsed" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="CheckButton" AutomationProperties.AutomationId="CheckCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.CheckEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.CheckEndpoint], Source={l:Lang}}" Click="Check_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="RenameEndpointButton" AutomationProperties.AutomationId="RenameCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.RenameEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.Rename], Source={l:Lang}}" Click="RenameEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="OrganizeEndpointButton" AutomationProperties.AutomationId="OrganizeCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.OrganizeEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.OrganizeEndpoint], Source={l:Lang}}" Click="OrganizeEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                    <!-- E1: the one command that leaves endpoint management for sync management. The cloud side
+                         is filled from the directory the browser is on (see CloudSyncTask); the local side is
+                         deliberately left blank for the user to pick in the profile editor that opens. -->
+                    <Button x:Name="CreateSyncTaskButton" AutomationProperties.AutomationId="CreateCloudSyncTask" AutomationProperties.Name="{Binding [Mgr.CreateSyncTaskName], Source={l:Lang}}" Content="{Binding [Mgr.CreateSyncTask], Source={l:Lang}}" Click="CreateSyncTask_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                    <!-- E2: the same task with both sides chosen by hand. It needs no selected endpoint, which
+                         is why it lives here but is never disabled — the wizard is how a first cloud task gets
+                         made before any endpoint row has been picked. -->
+                    <Button x:Name="SyncWizardButton" AutomationProperties.AutomationId="OpenCloudSyncWizard" AutomationProperties.Name="{Binding [Mgr.SyncWizardName], Source={l:Lang}}" Content="{Binding [Mgr.SyncWizard], Source={l:Lang}}" Click="SyncWizard_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
+                    <Button x:Name="DeleteButton" AutomationProperties.Name="{Binding [Mgr.DeleteEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.Delete], Source={l:Lang}}" Click="Delete_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
                 </WrapPanel>
             </StackPanel>
-            <GroupBox Grid.Row="3" Header="挂载管理" Margin="0,14,0,0">
+            <GroupBox Grid.Row="3" Header="{Binding [Mgr.MountsGroup], Source={l:Lang}}" Margin="0,14,0,0">
                 <StackPanel Margin="4">
-                    <ListBox x:Name="MountsList" AutomationProperties.Name="当前挂载列表" Height="110" SelectionChanged="MountsList_SelectionChanged" DisplayMemberPath="Display" />
+                    <ListBox x:Name="MountsList" AutomationProperties.Name="{Binding [Mgr.MountListName], Source={l:Lang}}" Height="110" SelectionChanged="MountsList_SelectionChanged" DisplayMemberPath="Display" />
                     <WrapPanel Margin="0,8,0,0">
-                        <Button x:Name="RefreshMountsButton" AutomationProperties.Name="刷新挂载列表" Content="刷新" Click="RefreshMounts_Click" Style="{StaticResource TertiaryButtonStyle}" />
-                        <Button x:Name="MountSelectedEndpointButton" AutomationProperties.Name="挂载所选云盘端点" Content="挂载选中端点…" Click="MountSelectedEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
-                        <Button x:Name="UnmountMountButton" AutomationProperties.Name="取消所选挂载" Content="取消挂载" Click="UnmountMount_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-                        <Button x:Name="RestoreMountsButton" AutomationProperties.AutomationId="RestoreCloudMounts" AutomationProperties.Name="恢复上次的挂载" Content="一键恢复" Click="RestoreMounts_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button x:Name="ReconnectMountButton" AutomationProperties.AutomationId="ReconnectCloudMount" AutomationProperties.Name="重新挂载所选失效挂载" Content="重新挂载" Click="ReconnectMount_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button x:Name="ClearMountCacheButton" AutomationProperties.AutomationId="ClearCloudMountCache" AutomationProperties.Name="清理挂载缓存" Content="清理缓存" Click="ClearMountCache_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                        <Button x:Name="RefreshMountsButton" AutomationProperties.Name="{Binding [Mgr.RefreshMountsName], Source={l:Lang}}" Content="{Binding [Mgr.Refresh], Source={l:Lang}}" Click="RefreshMounts_Click" Style="{StaticResource TertiaryButtonStyle}" />
+                        <Button x:Name="MountSelectedEndpointButton" AutomationProperties.Name="{Binding [Mgr.MountEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.MountEndpoint], Source={l:Lang}}" Click="MountSelectedEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
+                        <Button x:Name="UnmountMountButton" AutomationProperties.Name="{Binding [Mgr.UnmountName], Source={l:Lang}}" Content="{Binding [Mgr.Unmount], Source={l:Lang}}" Click="UnmountMount_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+                        <Button x:Name="RestoreMountsButton" AutomationProperties.AutomationId="RestoreCloudMounts" AutomationProperties.Name="{Binding [Mgr.RestoreMountsName], Source={l:Lang}}" Content="{Binding [Mgr.RestoreMounts], Source={l:Lang}}" Click="RestoreMounts_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button x:Name="ReconnectMountButton" AutomationProperties.AutomationId="ReconnectCloudMount" AutomationProperties.Name="{Binding [Mgr.ReconnectMountName], Source={l:Lang}}" Content="{Binding [Mgr.ReconnectMount], Source={l:Lang}}" Click="ReconnectMount_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button x:Name="ClearMountCacheButton" AutomationProperties.AutomationId="ClearCloudMountCache" AutomationProperties.Name="{Binding [Mgr.ClearCacheName], Source={l:Lang}}" Content="{Binding [Mgr.ClearCache], Source={l:Lang}}" Click="ClearMountCache_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                     </WrapPanel>
                     <CheckBox x:Name="AutoMountBox"
                               AutomationProperties.AutomationId="CloudMountAutoMount"
-                              AutomationProperties.Name="所选挂载随应用启动自动挂载"
-                              Content="所选挂载在下次启动时自动挂载"
+                              AutomationProperties.Name="{Binding [Mgr.AutoMountName], Source={l:Lang}}"
+                              Content="{Binding [Mgr.AutoMount], Source={l:Lang}}"
                               Margin="0,8,0,0"
                               Checked="AutoMount_Changed"
                               Unchecked="AutoMount_Changed" />
@@ -143,9 +155,9 @@
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <TextBlock Text="文件浏览器" Style="{StaticResource DisplayTitleTextStyle}" />
+            <TextBlock Text="{Binding [Mgr.BrowserTitle], Source={l:Lang}}" Style="{StaticResource DisplayTitleTextStyle}" />
 
-            <ItemsControl x:Name="Breadcrumbs" Grid.Row="1" AutomationProperties.AutomationId="CloudBreadcrumbs" AutomationProperties.Name="当前路径导航" Margin="0,10,0,0">
+            <ItemsControl x:Name="Breadcrumbs" Grid.Row="1" AutomationProperties.AutomationId="CloudBreadcrumbs" AutomationProperties.Name="{Binding [Mgr.PathNavigationName], Source={l:Lang}}" Margin="0,10,0,0">
                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -155,27 +167,27 @@
             </ItemsControl>
 
             <DockPanel Grid.Row="2" Margin="0,6,0,0">
-                <Button DockPanel.Dock="Right" Content="转到" Click="Go_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" AutomationProperties.AutomationId="CloudAddressGo" AutomationProperties.Name="转到输入的路径" />
-                <TextBox x:Name="AddressBox" AutomationProperties.AutomationId="CloudAddressBar" AutomationProperties.Name="远程路径地址栏" KeyDown="AddressBox_KeyDown" Padding="8,6,8,6" />
+                <Button DockPanel.Dock="Right" Content="{Binding [Mgr.Go], Source={l:Lang}}" Click="Go_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" AutomationProperties.AutomationId="CloudAddressGo" AutomationProperties.Name="{Binding [Mgr.GoToName], Source={l:Lang}}" />
+                <TextBox x:Name="AddressBox" AutomationProperties.AutomationId="CloudAddressBar" AutomationProperties.Name="{Binding [Mgr.AddressBarName], Source={l:Lang}}" KeyDown="AddressBox_KeyDown" Padding="8,6,8,6" />
             </DockPanel>
 
             <WrapPanel Grid.Row="3" Margin="0,10,0,0">
-                <Button x:Name="BackButton" AutomationProperties.Name="返回上一级目录" Content="上一级" Click="Back_Click" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="HistoryBackButton" AutomationProperties.AutomationId="CloudHistoryBack" AutomationProperties.Name="后退到上一个访问过的目录" Content="后退" Click="HistoryBack_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="HistoryForwardButton" AutomationProperties.AutomationId="CloudHistoryForward" AutomationProperties.Name="前进到下一个访问过的目录" Content="前进" Click="HistoryForward_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button AutomationProperties.Name="刷新当前目录" Content="刷新" Click="BrowseRefresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="NewFolderButton" AutomationProperties.AutomationId="CloudNewFolder" AutomationProperties.Name="在当前目录新建文件夹" Content="新建文件夹" Click="NewFolder_Click" Margin="20,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="RenameButton" AutomationProperties.AutomationId="CloudRename" AutomationProperties.Name="重命名所选项目" Content="重命名" Click="Rename_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="RecycleButton" AutomationProperties.AutomationId="CloudRecycle" AutomationProperties.Name="把所选项目移入该端点的回收站" Content="移到回收站" Click="Recycle_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="DeleteEntryButton" AutomationProperties.AutomationId="CloudDeleteEntries" AutomationProperties.Name="删除所选项目" Content="删除" Click="DeleteEntries_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-                <Button x:Name="RestoreButton" AutomationProperties.AutomationId="CloudRestore" AutomationProperties.Name="把所选的回收站项目还原到原目录" Content="还原" Click="Restore_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="EmptyTrashButton" AutomationProperties.AutomationId="CloudEmptyTrash" AutomationProperties.Name="永久删除回收站里的全部内容" Content="清空回收站" Click="EmptyTrash_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-                <Button x:Name="OpenTrashButton" AutomationProperties.AutomationId="CloudOpenTrash" AutomationProperties.Name="打开该端点的回收站文件夹" Content="回收站" Click="OpenTrash_Click" Margin="20,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="PasteButton" AutomationProperties.AutomationId="CloudPaste" AutomationProperties.Name="把剪贴板中的项目粘贴到当前目录" Content="粘贴" Click="Paste_Click" Margin="20,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="DownloadButton" AutomationProperties.AutomationId="CloudDownload" AutomationProperties.Name="下载所选文件" Content="下载" Click="DownloadSelected_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button AutomationProperties.Name="上传文件到当前目录" Content="上传文件" Click="UploadFiles_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
-                <Button AutomationProperties.Name="上传文件夹到当前目录" Content="上传文件夹" Click="UploadFolder_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button AutomationProperties.AutomationId="OpenCloudTransfers" AutomationProperties.Name="打开云盘传输窗口" Content="查看传输" Click="OpenTransfers_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="BackButton" AutomationProperties.Name="{Binding [Mgr.UpLevelName], Source={l:Lang}}" Content="{Binding [Mgr.UpLevel], Source={l:Lang}}" Click="Back_Click" Style="{StaticResource TertiaryButtonStyle}" />
+                <Button x:Name="HistoryBackButton" AutomationProperties.AutomationId="CloudHistoryBack" AutomationProperties.Name="{Binding [Mgr.HistoryBackName], Source={l:Lang}}" Content="{Binding [Mgr.Back], Source={l:Lang}}" Click="HistoryBack_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <Button x:Name="HistoryForwardButton" AutomationProperties.AutomationId="CloudHistoryForward" AutomationProperties.Name="{Binding [Mgr.HistoryForwardName], Source={l:Lang}}" Content="{Binding [Mgr.Forward], Source={l:Lang}}" Click="HistoryForward_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <Button AutomationProperties.Name="{Binding [Mgr.RefreshDirectoryName], Source={l:Lang}}" Content="{Binding [Mgr.Refresh], Source={l:Lang}}" Click="BrowseRefresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <Button x:Name="NewFolderButton" AutomationProperties.AutomationId="CloudNewFolder" AutomationProperties.Name="{Binding [Mgr.NewFolderName], Source={l:Lang}}" Content="{Binding [Mgr.NewFolder], Source={l:Lang}}" Click="NewFolder_Click" Margin="20,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="RenameButton" AutomationProperties.AutomationId="CloudRename" AutomationProperties.Name="{Binding [Mgr.RenameItemName], Source={l:Lang}}" Content="{Binding [Mgr.Rename], Source={l:Lang}}" Click="Rename_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="RecycleButton" AutomationProperties.AutomationId="CloudRecycle" AutomationProperties.Name="{Binding [Mgr.RecycleItemName], Source={l:Lang}}" Content="{Binding [Mgr.MoveToTrash], Source={l:Lang}}" Click="Recycle_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="DeleteEntryButton" AutomationProperties.AutomationId="CloudDeleteEntries" AutomationProperties.Name="{Binding [Mgr.DeleteItemsName], Source={l:Lang}}" Content="{Binding [Mgr.Delete], Source={l:Lang}}" Click="DeleteEntries_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+                <Button x:Name="RestoreButton" AutomationProperties.AutomationId="CloudRestore" AutomationProperties.Name="{Binding [Mgr.RestoreItemsName], Source={l:Lang}}" Content="{Binding [Mgr.Restore], Source={l:Lang}}" Click="Restore_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="EmptyTrashButton" AutomationProperties.AutomationId="CloudEmptyTrash" AutomationProperties.Name="{Binding [Mgr.EmptyTrashName], Source={l:Lang}}" Content="{Binding [Mgr.EmptyTrash], Source={l:Lang}}" Click="EmptyTrash_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+                <Button x:Name="OpenTrashButton" AutomationProperties.AutomationId="CloudOpenTrash" AutomationProperties.Name="{Binding [Mgr.OpenTrashName], Source={l:Lang}}" Content="{Binding [Mgr.Trash], Source={l:Lang}}" Click="OpenTrash_Click" Margin="20,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <Button x:Name="PasteButton" AutomationProperties.AutomationId="CloudPaste" AutomationProperties.Name="{Binding [Mgr.PasteName], Source={l:Lang}}" Content="{Binding [Mgr.Paste], Source={l:Lang}}" Click="Paste_Click" Margin="20,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="DownloadButton" AutomationProperties.AutomationId="CloudDownload" AutomationProperties.Name="{Binding [Mgr.DownloadName], Source={l:Lang}}" Content="{Binding [Mgr.Download], Source={l:Lang}}" Click="DownloadSelected_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button AutomationProperties.Name="{Binding [Mgr.UploadFilesName], Source={l:Lang}}" Content="{Binding [Mgr.UploadFiles], Source={l:Lang}}" Click="UploadFiles_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
+                <Button AutomationProperties.Name="{Binding [Mgr.UploadFolderName], Source={l:Lang}}" Content="{Binding [Mgr.UploadFolder], Source={l:Lang}}" Click="UploadFolder_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button AutomationProperties.AutomationId="OpenCloudTransfers" AutomationProperties.Name="{Binding [Mgr.OpenTransfersName], Source={l:Lang}}" Content="{Binding [Mgr.ViewTransfers], Source={l:Lang}}" Click="OpenTransfers_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
             </WrapPanel>
 
             <WrapPanel Grid.Row="4" Margin="0,10,0,8">
@@ -186,23 +198,23 @@
                      The toggle deliberately carries no static AutomationProperties.Name: its content changes with the
                      state it reports (收藏此目录 / 取消收藏), and a static name would replace that state as the
                      accessible name, exactly as it does for a live TextBlock. -->
-                <TextBlock Text="跳转" VerticalAlignment="Center" />
-                <ComboBox x:Name="FavoriteJumpBox" AutomationProperties.AutomationId="CloudFavoriteJumps" AutomationProperties.Name="跳到收藏的目录" Width="220" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
-                <ComboBox x:Name="RecentJumpBox" AutomationProperties.AutomationId="CloudRecentJumps" AutomationProperties.Name="跳到最近访问的目录" Width="220" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
-                <Button x:Name="FavoriteToggleButton" AutomationProperties.AutomationId="CloudFavoriteToggle" Content="收藏此目录" Click="FavoriteToggle_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <TextBlock Text="搜索" VerticalAlignment="Center" Margin="20,0,0,0" />
-                <TextBox x:Name="SearchBox" AutomationProperties.AutomationId="CloudSearch" AutomationProperties.Name="按名称或路径搜索" Width="200" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown" />
-                <CheckBox x:Name="SearchRecursiveBox" AutomationProperties.AutomationId="CloudSearchRecursive" AutomationProperties.Name="搜索包含子目录" Content="包含子目录" Margin="12,0,0,0" VerticalAlignment="Center" />
-                <Button AutomationProperties.AutomationId="CloudSearchRun" AutomationProperties.Name="在整个端点内搜索" Content="搜索" Click="Search_Click" Margin="12,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button AutomationProperties.AutomationId="CloudSearchClear" AutomationProperties.Name="清除搜索条件" Content="清除" Click="SearchClear_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <TextBlock Text="排序" VerticalAlignment="Center" Margin="20,0,0,0" />
-                <ComboBox x:Name="SortBox" AutomationProperties.AutomationId="CloudSortColumn" AutomationProperties.Name="排序依据" Width="110" Margin="8,0,0,0" SelectionChanged="Sort_Changed" />
-                <Button x:Name="SortDirectionButton" AutomationProperties.AutomationId="CloudSortDirection" AutomationProperties.Name="切换升序或降序" Content="升序" Click="SortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="ViewToggleButton" AutomationProperties.AutomationId="CloudViewToggle" AutomationProperties.Name="在列表视图与网格视图之间切换" Content="网格视图" Click="ViewToggle_Click" Margin="20,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <TextBlock Text="{Binding [Mgr.Jump], Source={l:Lang}}" VerticalAlignment="Center" />
+                <ComboBox x:Name="FavoriteJumpBox" AutomationProperties.AutomationId="CloudFavoriteJumps" AutomationProperties.Name="{Binding [Mgr.FavoriteJumpName], Source={l:Lang}}" Width="220" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
+                <ComboBox x:Name="RecentJumpBox" AutomationProperties.AutomationId="CloudRecentJumps" AutomationProperties.Name="{Binding [Mgr.RecentJumpName], Source={l:Lang}}" Width="220" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
+                <Button x:Name="FavoriteToggleButton" AutomationProperties.AutomationId="CloudFavoriteToggle" Content="{Binding [Mgr.FavoriteThisDirectory], Source={l:Lang}}" Click="FavoriteToggle_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <TextBlock Text="{Binding [Mgr.Search], Source={l:Lang}}" VerticalAlignment="Center" Margin="20,0,0,0" />
+                <TextBox x:Name="SearchBox" AutomationProperties.AutomationId="CloudSearch" AutomationProperties.Name="{Binding [Mgr.SearchBoxName], Source={l:Lang}}" Width="200" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown" />
+                <CheckBox x:Name="SearchRecursiveBox" AutomationProperties.AutomationId="CloudSearchRecursive" AutomationProperties.Name="{Binding [Mgr.SearchRecursiveName], Source={l:Lang}}" Content="{Binding [Mgr.IncludeSubfolders], Source={l:Lang}}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                <Button AutomationProperties.AutomationId="CloudSearchRun" AutomationProperties.Name="{Binding [Mgr.SearchEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.Search], Source={l:Lang}}" Click="Search_Click" Margin="12,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button AutomationProperties.AutomationId="CloudSearchClear" AutomationProperties.Name="{Binding [Mgr.ClearSearchName], Source={l:Lang}}" Content="{Binding [Mgr.Clear], Source={l:Lang}}" Click="SearchClear_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <TextBlock Text="{Binding [Mgr.Sort], Source={l:Lang}}" VerticalAlignment="Center" Margin="20,0,0,0" />
+                <ComboBox x:Name="SortBox" AutomationProperties.AutomationId="CloudSortColumn" AutomationProperties.Name="{Binding [Mgr.SortByName], Source={l:Lang}}" Width="110" Margin="8,0,0,0" SelectionChanged="Sort_Changed" />
+                <Button x:Name="SortDirectionButton" AutomationProperties.AutomationId="CloudSortDirection" AutomationProperties.Name="{Binding [Mgr.ToggleSortDirectionName], Source={l:Lang}}" Content="{Binding [Mgr.Ascending], Source={l:Lang}}" Click="SortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <Button x:Name="ViewToggleButton" AutomationProperties.AutomationId="CloudViewToggle" AutomationProperties.Name="{Binding [Mgr.ToggleViewName], Source={l:Lang}}" Content="{Binding [Mgr.GridView], Source={l:Lang}}" Click="ViewToggle_Click" Margin="20,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                 <TextBlock x:Name="ViewSummary" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Margin="20,0,0,0" />
             </WrapPanel>
 
-            <ListView x:Name="FileList" Grid.Row="5" SelectionMode="Extended" SelectionChanged="FileList_SelectionChanged" AutomationProperties.Name="当前目录中的文件" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening" PreviewMouseLeftButtonDown="FileList_PreviewMouseLeftButtonDown" PreviewMouseMove="FileList_PreviewMouseMove">
+            <ListView x:Name="FileList" Grid.Row="5" SelectionMode="Extended" SelectionChanged="FileList_SelectionChanged" AutomationProperties.Name="{Binding [Mgr.FileListName], Source={l:Lang}}" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening" PreviewMouseLeftButtonDown="FileList_PreviewMouseLeftButtonDown" PreviewMouseMove="FileList_PreviewMouseMove">
                 <ListView.ItemContainerStyle>
                     <!-- The row carries its own name, in both drawings. Measured against the real shell: a tile's
                          inner text never reaches the automation tree (the grid row has no children there at all),
@@ -213,22 +225,26 @@
                     </Style>
                 </ListView.ItemContainerStyle>
                 <ListView.View><GridView>
-                    <GridViewColumn Header="名称" Width="320"><GridViewColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="{Binding Icon}" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource LibraryIconStyle}" /><TextBlock Text="{Binding NameDisplay}" VerticalAlignment="Center" /></StackPanel></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
-                    <GridViewColumn Header="类型" Width="80" DisplayMemberBinding="{Binding Type}" />
-                    <GridViewColumn Header="大小" Width="100" DisplayMemberBinding="{Binding SizeDisplay}" />
-                    <GridViewColumn Header="修改时间" Width="150" DisplayMemberBinding="{Binding ModifiedDisplay}" />
+                    <!-- AutomationId is the column's stable id, not its text: a GridViewColumn has no Tag
+                         (it is a DependencyObject, not a FrameworkElement), and ColumnHeader_Click matches on
+                         this id so the click handler still finds its column once the header is a localized
+                         label. The id is the same key the ordering list carries, so the two cannot drift. -->
+                    <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnName" Header="{Binding [Mgr.ColumnName], Source={l:Lang}}" Width="320"><GridViewColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="{Binding Icon}" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource LibraryIconStyle}" /><TextBlock Text="{Binding NameDisplay}" VerticalAlignment="Center" /></StackPanel></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
+                    <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnType" Header="{Binding [Mgr.ColumnType], Source={l:Lang}}" Width="80" DisplayMemberBinding="{Binding Type}" />
+                    <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnSize" Header="{Binding [Mgr.ColumnSize], Source={l:Lang}}" Width="100" DisplayMemberBinding="{Binding SizeDisplay}" />
+                    <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnModified" Header="{Binding [Mgr.ColumnModified], Source={l:Lang}}" Width="150" DisplayMemberBinding="{Binding ModifiedDisplay}" />
                 </GridView></ListView.View>
             </ListView>
             <Border x:Name="DropHint" Grid.Row="5" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="{StaticResource RadiusMedium}" Background="{DynamicResource AccentBrush}" Opacity="0.94" Margin="2">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="松开鼠标即可上传" Foreground="White" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding [Mgr.DropToUpload], Source={l:Lang}}" Foreground="White" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
                     <TextBlock x:Name="DropHintText" Foreground="White" FontSize="13" Margin="0,8,0,0" HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center" />
                 </StackPanel>
             </Border>
 
             <StackPanel Grid.Row="6" Margin="0,8,0,0">
                 <TextBlock x:Name="PathText" AutomationProperties.AutomationId="CloudCurrentPath" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
-                <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" AutomationProperties.Name="文件传输进度" Margin="0,6,0,0" />
+                <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" AutomationProperties.Name="{Binding [Mgr.TransferProgressName], Source={l:Lang}}" Margin="0,6,0,0" />
                 <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="CloudFileStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,5,0,0" />
             </StackPanel>
         </Grid>

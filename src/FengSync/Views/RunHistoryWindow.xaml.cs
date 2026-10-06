@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Views;
 
@@ -29,7 +30,7 @@ public partial class RunHistoryWindow : Window
         var original = RefreshButton.Content;
         try
         {
-            RefreshButton.IsEnabled = false; RefreshButton.Content = "正在刷新…";
+            RefreshButton.IsEnabled = false; RefreshButton.Content = Tr.F("Run.Refreshing");
             var outcome = OutcomeBox.SelectedIndex switch { 1 => RunOutcome.Succeeded, 2 => RunOutcome.PartialSuccess, 3 => RunOutcome.Failed, 4 => RunOutcome.Cancelled, _ => (RunOutcome?)null };
             var since = PeriodBox.SelectedIndex switch { 1 => DateTimeOffset.UtcNow.AddDays(-7), 2 => DateTimeOffset.UtcNow.AddDays(-30), _ => (DateTimeOffset?)null };
             Entries.ItemsSource = (await _repository.QueryAsync(_profileId, outcome, since)).Select(RunHistoryDisplayRow.From).ToList();
@@ -46,7 +47,7 @@ internal sealed record RunHistoryDisplayRow(
 {
     public static RunHistoryDisplayRow From(RunHistoryEntry entry) => new(
         entry.ProfileId,
-        entry.Outcome switch { RunOutcome.Succeeded => "成功", RunOutcome.PartialSuccess => "部分成功", RunOutcome.Failed => "失败", RunOutcome.Cancelled => "已取消", _ => entry.Outcome.ToString() },
+        entry.Outcome switch { RunOutcome.Succeeded => Tr.F("Run.OutcomeSucceeded"), RunOutcome.PartialSuccess => Tr.F("Run.OutcomePartial"), RunOutcome.Failed => Tr.F("Run.OutcomeFailed"), RunOutcome.Cancelled => Tr.F("Run.OutcomeCancelled"), _ => entry.Outcome.ToString() },
         entry.CompletedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
         entry.Planned, entry.Succeeded, entry.Failed, FormatBytes(entry.TransferredBytes), entry.Detail,
         entry.FailureCategory, entry.FailureRetryable, entry.CorrelationId);

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -69,10 +70,10 @@ public static class CloudEndpointPortability
     {
         CloudEndpointExportBundle? bundle;
         try { bundle = JsonSerializer.Deserialize(json ?? "", CloudEndpointPortabilityJsonContext.Default.CloudEndpointExportBundle); }
-        catch (JsonException ex) { return new([], [$"文件不是有效的端点导出：{ex.Message}"]); }
-        if (bundle is null) return new([], ["文件为空或格式无法识别。"]);
+        catch (JsonException ex) { return new([], [Tr.Format("Export.NotValidExport", ex.Message)]); }
+        if (bundle is null) return new([], [Tr.F("Export.EmptyOrUnrecognized")]);
         if (bundle.Version != CurrentVersion)
-            return new([], [$"不支持的导出文件版本 {bundle.Version}；本版本只认识 {CurrentVersion}。"]);
+            return new([], [Tr.Format("Export.UnsupportedVersion", bundle.Version, CurrentVersion)]);
 
         var drafts = new List<CloudEndpointDraft>();
         var errors = new List<string>();
@@ -81,11 +82,11 @@ public static class CloudEndpointPortability
         {
             var kind = EndpointSchemes.TypeForRcloneType(entry.Type);
             if (kind is null || CloudProviderCatalog.TryFor(kind.Value) is null)
-            { errors.Add($"端点“{entry.RemoteName}”的类型“{entry.Type}”无法识别，已跳过。"); continue; }
+            { errors.Add(Tr.Format("Export.UnknownType", entry.RemoteName, entry.Type)); continue; }
             if (ValidateRemoteName(entry.RemoteName) is { } nameError) { errors.Add(nameError); continue; }
-            if (!seen.Add(entry.RemoteName)) { errors.Add($"导出文件里端点名“{entry.RemoteName}”重复，已跳过。"); continue; }
+            if (!seen.Add(entry.RemoteName)) { errors.Add(Tr.Format("Export.DuplicateName", entry.RemoteName)); continue; }
             if ((entry.ParameterNames ?? []).FirstOrDefault(name => ValidateParameterName(name) is not null) is { } badParameter)
-            { errors.Add($"端点“{entry.RemoteName}”的参数名“{badParameter}”非法，已跳过。"); continue; }
+            { errors.Add(Tr.Format("Export.BadParameterName", entry.RemoteName, badParameter)); continue; }
             drafts.Add(new(kind.Value, entry.RemoteName, entry.Provider ?? "", entry.Bucket ?? "",
                 entry.Subdirectory ?? "", CloudEndpointOrganization.NormalizeGroup(entry.Group),
                 CloudEndpointOrganization.NormalizeTags(entry.Tags), entry.ParameterNames ?? []));
@@ -100,14 +101,14 @@ public static class CloudEndpointPortability
     /// </summary>
     public static string? ValidateRemoteName(string? name)
     {
-        if (string.IsNullOrWhiteSpace(name)) return "端点名称不能为空。";
+        if (string.IsNullOrWhiteSpace(name)) return Tr.F("Export.NameEmpty");
         var value = name.Trim();
-        if (value != name) return $"端点名称“{name}”前后不能有空白。";
-        if (value.Length > 64) return $"端点名称“{value}”过长（最多 64 个字符）。";
-        if (value.StartsWith('.')) return $"端点名称“{value}”不能以“.”开头。";
+        if (value != name) return Tr.Format("Export.NameSurroundingSpace", name);
+        if (value.Length > 64) return Tr.Format("Export.NameTooLong", value);
+        if (value.StartsWith('.')) return Tr.Format("Export.NameStartsWithDot", value);
         foreach (var c in value)
             if (!char.IsLetterOrDigit(c) && c is not ('_' or '-' or '.'))
-                return $"端点名称“{value}”包含不允许的字符“{c}”。";
+                return Tr.Format("Export.NameBadCharacter", value, c);
         return null;
     }
 
@@ -115,7 +116,7 @@ public static class CloudEndpointPortability
     public static string? ValidateParameterName(string? name) =>
         !string.IsNullOrWhiteSpace(name) && name.All(c => char.IsLetterOrDigit(c) || c is '_' or '-')
             ? null
-            : $"参数名“{name}”不合法。";
+            : Tr.Format("Export.ParameterNameInvalid", name);
 
     /// <summary>A name that does not collide with what is already configured, so an import never overwrites.</summary>
     public static string UniqueName(string desired, IReadOnlyCollection<string> existing)

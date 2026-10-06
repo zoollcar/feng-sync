@@ -1,4 +1,5 @@
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -26,7 +27,7 @@ public static class CloudVersionHistory
     /// a version would be the same kind of lie as a button that can only refuse, and this one at least does
     /// exactly what it says.
     /// </summary>
-    public const string MenuLabel = "在网页端查看历史版本…";
+    public static string MenuLabel => Tr.F("Version.MenuLabel");
 
     /// <summary>Only a file has a history to look at; a folder is not an object the cloud keeps versions of.</summary>
     public static bool Offers(CloudFileEntry entry) => !entry.IsDirectory;
@@ -41,7 +42,7 @@ public static class CloudVersionHistory
     {
         public bool CanOpen => Url is not null;
 
-        public string OpenLabel => $"打开 {Provider} 网页端";
+        public string OpenLabel => Tr.Format("Version.OpenLabel", Provider);
     }
 
     /// <summary>
@@ -62,14 +63,14 @@ public static class CloudVersionHistory
     /// exists is not used, and where the history really is.
     /// </summary>
     public static string Explain(string provider, bool hasConsole) =>
-        "本应用读不到历史版本：它访问云端唯一的通道是 rclone，而 rclone 不提供版本列表。"
-        + "（S3 / B2 / ImageKit 有一个「把旧版本列进目录」的开关，但那会让文件列表里混进云端并不存在的文件，所以本应用不打开它。）"
+        Tr.F("Version.ExplainNoVersions")
+        + Tr.F("Version.ExplainSwitchNotUsed")
         + (hasConsole
-            ? $"要查看历史版本，请到 {provider} 自己的网页端。"
-            : $"这个端点没有可打开的网页端（{provider}），请到你的服务商自己的控制台查看。");
+            ? Tr.Format("Version.ExplainGoToConsole", provider)
+            : Tr.Format("Version.ExplainNoConsole", provider));
 
     /// <summary>The line the status bar carries afterwards — the same fact, short enough to read at a glance.</summary>
     public static string StatusFor(Offer offer) => offer.CanOpen
-        ? $"已在浏览器里打开 {offer.Provider} 网页端。本应用读不到历史版本：rclone 不提供版本列表。"
-        : $"本应用读不到历史版本（rclone 不提供版本列表），而 {offer.Provider} 也没有可打开的网页端。";
+        ? Tr.Format("Version.StatusOpened", offer.Provider)
+        : Tr.Format("Version.StatusNoConsole", offer.Provider);
 }

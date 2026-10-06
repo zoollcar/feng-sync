@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Automation;
 using FengSync.Core.Rclone.Diagnostics;
 using FengSync.Core.SftpServer;
+using FengSync.Localization;
 
 namespace FengSync.Views;
 
@@ -27,18 +28,18 @@ public partial class SftpServerSettingsWindow : Window
             EnabledBox.IsChecked = _loaded.Enabled; AutoStartBox.IsChecked = _loaded.StartWithApplication;
             AddressBox.Text = _loaded.ListenAddress; PortBox.Text = _loaded.Port.ToString(); RootPathBox.Text = _loaded.RootPath ?? ""; UserNameBox.Text = _loaded.UserName ?? "";
             CacheSizeBox.Text = (_loaded.CacheMaxSizeBytes / (1024L * 1024 * 1024)).ToString();
-            PasswordStateText.Text = _passwords.HasPassword ? "密码：已设置（受 Windows 账户保护）" : "密码：未设置";
-            FingerprintText.Text = "主机指纹：" + new SftpHostKeyStore().GetKeyReference().Fingerprint;
-            StatusText.Text = _store.LegacyConfigurationRemoved ? "已清除不兼容的旧版 SFTP 配置，请重新设置服务。" : App.CurrentApp.SftpService.IsRunning ? "SFTP 服务运行中。" : "SFTP 服务当前未运行。";
+            PasswordStateText.Text = _passwords.HasPassword ? Tr.F("Sftp.PasswordSet") : Tr.F("Sftp.PasswordUnset");
+            FingerprintText.Text = Tr.Format("Sftp.HostFingerprint", new SftpHostKeyStore().GetKeyReference().Fingerprint);
+            StatusText.Text = _store.LegacyConfigurationRemoved ? Tr.F("Sftp.LegacyRemoved") : App.CurrentApp.SftpService.IsRunning ? Tr.F("Sftp.Running") : Tr.F("Sftp.NotRunning");
         }
         catch (SftpServerOperationException ex)
         {
-            StatusText.Text = $"{ex.Message} {ex.SuggestedAction}（诊断 ID：{ex.CorrelationId}）";
+            StatusText.Text = Tr.Format("Sftp.OperationError", ex.Message, ex.SuggestedAction, ex.CorrelationId);
             System.Diagnostics.Trace.TraceError($"SFTP {ex.Operation} failed; code={ex.TechnicalCode}; correlationId={ex.CorrelationId}");
         }
         catch (RcloneException ex)
         {
-            StatusText.Text = $"{ex.Failure.UserMessage} {ex.Failure.SuggestedAction}（诊断 ID：{ex.Failure.CorrelationId}）";
+            StatusText.Text = Tr.Format("Sftp.OperationError", ex.Failure.UserMessage, ex.Failure.SuggestedAction, ex.Failure.CorrelationId);
             System.Diagnostics.Trace.TraceError($"rclone {ex.Failure.Operation} failed; category={ex.Failure.Category}; correlationId={ex.Failure.CorrelationId}; detail={ex.Failure.TechnicalMessage}");
         }
         catch (Exception ex) { StatusText.Text = ex.Message; }
@@ -46,20 +47,20 @@ public partial class SftpServerSettingsWindow : Window
 
     private SftpServerOptions Collect(bool enabled)
     {
-        if (!int.TryParse(PortBox.Text, out var port)) throw new InvalidOperationException("端口必须为整数。");
-        if (!long.TryParse(CacheSizeBox.Text, out var cacheGiB)) throw new InvalidOperationException("缓存上限必须为整数 GiB。");
+        if (!int.TryParse(PortBox.Text, out var port)) throw new InvalidOperationException(Tr.F("Sftp.PortNotInteger"));
+        if (!long.TryParse(CacheSizeBox.Text, out var cacheGiB)) throw new InvalidOperationException(Tr.F("Sftp.CacheSizeNotInteger"));
         return new(enabled, AutoStartBox.IsChecked == true, AddressBox.Text.Trim(), port, EmptyToNull(RootPathBox.Text), EmptyToNull(UserNameBox.Text), _loaded.HostKeyPath, checked(cacheGiB * 1024L * 1024 * 1024), _passwords.HasPassword);
     }
     private async Task SaveAsync(bool enabled) { var next = Collect(enabled); next.Validate(); await _store.SaveAsync(next); _loaded = next; }
-    private async void Save_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, "正在保存…", async () => { await SaveAsync(EnabledBox.IsChecked == true); StatusText.Text = "SFTP 设置已保存。"; });
-    private async void Start_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, "正在启动…", async () => { await SaveAsync(true); await App.CurrentApp.SftpService.StartAsync(_loaded); StatusText.Text = "SFTP 服务器正在监听 " + _loaded.ListenAddress + ":" + _loaded.Port; });
-    private async void Stop_Click(object sender, RoutedEventArgs e) { while (_operationInProgress) await Task.Delay(25); await RunBusyAsync((Button)sender, "正在停止…", async () => { await App.CurrentApp.SftpService.StopAsync(); StatusText.Text = "SFTP 服务器已停止；端口已释放。"; }); }
+    private async void Save_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, Tr.F("Sftp.Saving"), async () => { await SaveAsync(EnabledBox.IsChecked == true); StatusText.Text = Tr.F("Sftp.Saved"); });
+    private async void Start_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, Tr.F("Sftp.Starting"), async () => { await SaveAsync(true); await App.CurrentApp.SftpService.StartAsync(_loaded); StatusText.Text = Tr.Format("Sftp.Listening", _loaded.ListenAddress, _loaded.Port); });
+    private async void Stop_Click(object sender, RoutedEventArgs e) { while (_operationInProgress) await Task.Delay(25); await RunBusyAsync((Button)sender, Tr.F("Sftp.Stopping"), async () => { await App.CurrentApp.SftpService.StopAsync(); StatusText.Text = Tr.F("Sftp.Stopped"); }); }
     private void Diagnose_Click(object sender, RoutedEventArgs e) { try { StatusText.Text = new SftpRuntimeDiagnostics().Inspect(Collect(false)).Summary; } catch (Exception ex) { StatusText.Text = ex.Message; } }
     private async void SetPassword_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new PasswordDialog { Owner = this };
         if (dialog.ShowDialog() != true) return;
-        try { await _passwords.SaveAsync(dialog.Password); PasswordStateText.Text = "密码：已设置（受 Windows 账户保护）"; }
+        try { await _passwords.SaveAsync(dialog.Password); PasswordStateText.Text = Tr.F("Sftp.PasswordSet"); }
         catch (Exception ex) { StatusText.Text = ex.Message; }
     }
     private async Task RunBusyAsync(Button button, string busyText, Func<Task> action)
@@ -68,12 +69,12 @@ public partial class SftpServerSettingsWindow : Window
         try { button.IsEnabled = false; button.Content = busyText; StatusText.Text = busyText; await action(); }
         catch (SftpServerOperationException ex)
         {
-            StatusText.Text = $"{ex.Message} {ex.SuggestedAction}（诊断 ID：{ex.CorrelationId}）";
+            StatusText.Text = Tr.Format("Sftp.OperationError", ex.Message, ex.SuggestedAction, ex.CorrelationId);
             System.Diagnostics.Trace.TraceError($"SFTP {ex.Operation} failed; code={ex.TechnicalCode}; correlationId={ex.CorrelationId}");
         }
         catch (RcloneException ex)
         {
-            StatusText.Text = $"{ex.Failure.UserMessage} {ex.Failure.SuggestedAction}（诊断 ID：{ex.Failure.CorrelationId}）";
+            StatusText.Text = Tr.Format("Sftp.OperationError", ex.Failure.UserMessage, ex.Failure.SuggestedAction, ex.Failure.CorrelationId);
             System.Diagnostics.Trace.TraceError($"rclone {ex.Failure.Operation} failed; category={ex.Failure.Category}; correlationId={ex.Failure.CorrelationId}; detail={ex.Failure.TechnicalMessage}");
         }
         catch (Exception ex) { StatusText.Text = ex.Message; }
@@ -85,13 +86,13 @@ public partial class SftpServerSettingsWindow : Window
         private readonly PasswordBox _password = new(); public string Password => _password.Password;
         public PasswordDialog()
         {
-            Title = "设置 SFTP 密码"; Width = 360; SizeToContent = SizeToContent.Height; WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            Title = Tr.F("Sftp.PasswordDialogTitle"); Width = 360; SizeToContent = SizeToContent.Height; WindowStartupLocation = WindowStartupLocation.CenterOwner;
             AutomationProperties.SetAutomationId(this, "SftpPasswordDialog"); AutomationProperties.SetName(this, Title);
-            AutomationProperties.SetAutomationId(_password, "SftpPassword"); AutomationProperties.SetName(_password, "SFTP 密码");
-            var save = new Button { Content = "保存", IsDefault = true };
-            AutomationProperties.SetAutomationId(save, "SaveSftpPassword"); AutomationProperties.SetName(save, "保存 SFTP 密码");
-            save.Click += (_, _) => { if (string.IsNullOrEmpty(_password.Password)) { MessageBox.Show("密码不能为空。", Title); return; } DialogResult = true; };
-            Content = new StackPanel { Margin = new Thickness(18), Children = { new TextBlock { Text = "密码" }, _password, save } };
+            AutomationProperties.SetAutomationId(_password, "SftpPassword"); AutomationProperties.SetName(_password, Tr.F("Sftp.PasswordName"));
+            var save = new Button { Content = Tr.F("Sftp.Save"), IsDefault = true };
+            AutomationProperties.SetAutomationId(save, "SaveSftpPassword"); AutomationProperties.SetName(save, Tr.F("Sftp.SavePasswordName"));
+            save.Click += (_, _) => { if (string.IsNullOrEmpty(_password.Password)) { MessageBox.Show(Tr.F("Sftp.PasswordEmpty"), Title); return; } DialogResult = true; };
+            Content = new StackPanel { Margin = new Thickness(18), Children = { new TextBlock { Text = Tr.F("Sftp.PasswordLabel") }, _password, save } };
         }
     }
 }

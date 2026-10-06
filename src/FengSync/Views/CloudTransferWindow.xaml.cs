@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using FengSync.Core;
 using FengSync.Core.Configuration;
+using FengSync.Localization;
 using FengSync.Services;
 
 namespace FengSync.Views;
@@ -122,7 +123,7 @@ public partial class CloudTransferWindow : Window
         LastMenu = menu;
         LastMenuTask = task;
         var item = menu.First(entry => entry.Command == command);
-        if (!item.Enabled) { HintText.Text = item.Hint ?? "这个操作现在不可用。"; return; }
+        if (!item.Enabled) { HintText.Text = item.Hint ?? Tr.F("Transfer.ActionUnavailable"); return; }
         await ExecuteAsync(task, command);
     }
 
@@ -179,7 +180,7 @@ public partial class CloudTransferWindow : Window
             BuildAfterTransferOptions();
             await _queue.LoadResumableAsync();
         }
-        catch (Exception ex) { HintText.Text = "无法读取上次未完成的传输：" + RcloneUiError.Describe(ex, "cloud-transfer-journal"); }
+        catch (Exception ex) { HintText.Text = Tr.Format("Transfer.LoadResumableFailed", RcloneUiError.Describe(ex, "cloud-transfer-journal")); }
         UpdateState();
     }
 
@@ -207,20 +208,20 @@ public partial class CloudTransferWindow : Window
         CancelAllButton.IsEnabled = _queue.HasActiveTransfers;
         ClearButton.IsEnabled = _queue.HasCompletedTasks;
         HistoryButton.IsEnabled = _queue.History is not null;
-        ConcurrencyHint.Text = $"当前 {_queue.Concurrency} 个；调低不会中断正在进行的传输，只是不再补位。"
-            + (_queue.MaxRetries > 0 ? $"失败会自动重试 {_queue.MaxRetries} 次。" : "失败不会自动重试。");
+        ConcurrencyHint.Text = Tr.Format("Transfer.ConcurrencyCurrent", _queue.Concurrency)
+            + (_queue.MaxRetries > 0 ? Tr.Format("Transfer.AutoRetry", _queue.MaxRetries) : Tr.F("Transfer.NoAutoRetry"));
         PolicyText.Text = DescribePolicy();
         var limitError = _queue.LimitError;
         LimitErrorText.Text = limitError ?? "";
         LimitErrorText.Visibility = string.IsNullOrEmpty(limitError) ? Visibility.Collapsed : Visibility.Visible;
         HintText.Text = _queue.HasTasks
-            ? "取消、暂停或失败的传输都会保留在列表中，可随时继续或重试。本程序沿用同步任务的暂存与断点机制："
-              + "能校验已传分片的传输从断点继续，云端传输受 rclone 限制会从文件开头重新开始。"
+            ? Tr.F("Transfer.HintResumeMechanism")
+              + Tr.F("Transfer.HintResumeDetail")
               // A copy is the case the sentence above only hints at: rclone moves the bytes between two
               // remotes, so this program never holds them and has no verified prefix to append to.
-              + (_queue.HasCopyTasks ? "云盘之间的复制由 rclone 在两端之间完成，本程序不接触字节，因此取消或失败之后只能整个文件重新复制。" : "")
-              + "右键任意一行可以调整等待顺序、打开所在文件夹、复制分享链接或查看失败详情。"
-            : "把本地文件或文件夹拖入文件浏览器即可上传；把云端文件拖到资源管理器即可下载。";
+              + (_queue.HasCopyTasks ? Tr.F("Transfer.HintCopy") : "")
+              + Tr.F("Transfer.HintContextMenu")
+            : Tr.F("Transfer.HintDragDrop");
     }
 
     /// <summary>
@@ -230,23 +231,23 @@ public partial class CloudTransferWindow : Window
     private string DescribePolicy()
     {
         var parts = new List<string> { _queue.LimitText };
-        if (_queue.TimeWindow is { } window) parts.Add($"传输时段 {window.Describe()}" + (_queue.WaitingForWindow ? "（当前在时段外，等待中的传输不会开始）" : ""));
-        else parts.Add("不限时段");
-        return string.Join(" · ", parts) + "。可在设置 → 云盘里修改。";
+        if (_queue.TimeWindow is { } window) parts.Add(Tr.Format("Transfer.TransferWindow", window.Describe()) + (_queue.WaitingForWindow ? Tr.F("Transfer.WindowWaiting") : ""));
+        else parts.Add(Tr.F("Transfer.NoWindow"));
+        return string.Join(" · ", parts) + Tr.F("Transfer.PolicyFooter");
     }
 
     private void Resume_Click(object sender, RoutedEventArgs e)
     {
         var resumed = _queue.ResumeFinished();
         UpdateState();
-        if (resumed == 0) HintText.Text = "当前没有可断点续传的任务。";
+        if (resumed == 0) HintText.Text = Tr.F("Transfer.NoResumable");
     }
 
     private void PauseAll_Click(object sender, RoutedEventArgs e)
     {
         var paused = _queue.PauseAll();
         UpdateState();
-        if (paused == 0) HintText.Text = "当前没有正在进行的传输可以暂停。";
+        if (paused == 0) HintText.Text = Tr.F("Transfer.NoPausable");
     }
 
     private void CancelAll_Click(object sender, RoutedEventArgs e)
@@ -260,15 +261,15 @@ public partial class CloudTransferWindow : Window
         var cleared = _queue.ClearFinished();
         UpdateState();
         HintText.Text = cleared == 0
-            ? "当前没有已完成的传输。"
+            ? Tr.F("Transfer.NoCompleted")
             : _queue.History is not null
-                ? $"已清除 {cleared} 条已完成记录，并归档到传输历史。"
-                : $"已清除 {cleared} 条已完成记录。";
+                ? Tr.Format("Transfer.ClearedArchived", cleared)
+                : Tr.Format("Transfer.Cleared", cleared);
     }
 
     private void History_Click(object sender, RoutedEventArgs e)
     {
-        if (_queue.History is null) { HintText.Text = "这次运行没有启用传输历史归档。"; return; }
+        if (_queue.History is null) { HintText.Text = Tr.F("Transfer.NoHistoryArchive"); return; }
         (ShowHistory ?? ShowHistoryWindow)();
     }
 
@@ -316,8 +317,8 @@ public partial class CloudTransferWindow : Window
         if (AfterTransferBox.SelectedIndex < 0) return;
         _afterTransfer.Action = (CloudAfterTransferAction)AfterTransferBox.SelectedIndex;
         if (_afterTransfer.Action == CloudAfterTransferAction.None) return;
-        HintText.Text = $"已选择“{CloudPostTransferAction.Describe(_afterTransfer.Action)}”：只在这一批全部成功后询问，"
-            + "需要保持本窗口打开，因为关机前会再确认一次。";
+        HintText.Text = Tr.Format("Transfer.AfterTransferChosen", CloudPostTransferAction.Describe(_afterTransfer.Action))
+            + Tr.F("Transfer.AfterTransferKeepOpen");
     }
 
     // ---- the row menu -----------------------------------------------------------------------------------
@@ -343,9 +344,9 @@ public partial class CloudTransferWindow : Window
     private void OpenTaskFolder(CloudTransferTask task)
     {
         var folder = CloudTransferRowMenu.LocalFolderOf(task);
-        if (folder is null) { HintText.Text = "这个任务没有本地文件夹可打开。"; return; }
+        if (folder is null) { HintText.Text = Tr.F("Transfer.NoLocalFolder"); return; }
         try { (OpenFolder ?? (value => Process.Start(new ProcessStartInfo(value) { UseShellExecute = true })))(folder); }
-        catch (Exception ex) { HintText.Text = "没能打开文件夹：" + RcloneUiError.Describe(ex, "cloud-transfer-folder"); }
+        catch (Exception ex) { HintText.Text = Tr.Format("Transfer.OpenFolderFailed", RcloneUiError.Describe(ex, "cloud-transfer-folder")); }
     }
 
     private void CopyDetail(CloudTransferTask task)
@@ -356,12 +357,12 @@ public partial class CloudTransferWindow : Window
         catch (Exception ex)
         {
             copied = false;
-            (ShowText ?? ShowTextWindow)("传输详情", text + Environment.NewLine + Environment.NewLine + RcloneUiError.Describe(ex, "cloud-transfer-clipboard"));
+            (ShowText ?? ShowTextWindow)(Tr.F("Transfer.DetailTitle"), text + Environment.NewLine + Environment.NewLine + RcloneUiError.Describe(ex, "cloud-transfer-clipboard"));
         }
         HintText.Text = CloudTransferDiagnostics.DescribeCopy(copied);
     }
 
-    private void ShowLog() => (ShowText ?? ShowTextWindow)("rclone 失败日志", CloudTransferDiagnostics.ReadLog(CloudTransferDiagnostics.LogPath(_queue.Clock())));
+    private void ShowLog() => (ShowText ?? ShowTextWindow)(Tr.F("Transfer.LogTitle"), CloudTransferDiagnostics.ReadLog(CloudTransferDiagnostics.LogPath(_queue.Clock())));
 
     /// <summary>
     /// Asks the cloud for a link to the task's remote object and copies it. The confirmation, the outcome
@@ -391,9 +392,9 @@ public partial class CloudTransferWindow : Window
 
     private async Task<CloudShareLinkResult> ShareDefaultAsync(CloudTransferTask task)
     {
-        if (_files is null) return new CloudShareLinkResult(CloudShareLinkOutcome.Unsupported, Detail: "本次运行没有可用的云盘服务。");
+        if (_files is null) return new CloudShareLinkResult(CloudShareLinkOutcome.Unsupported, Detail: Tr.F("Transfer.NoCloudService"));
         if (EndpointSchemes.RemoteNameOf(task.RemoteUri) is not { } remote)
-            return new CloudShareLinkResult(CloudShareLinkOutcome.Failed, Detail: "这个任务的目标不是云端端点。");
+            return new CloudShareLinkResult(CloudShareLinkOutcome.Failed, Detail: Tr.F("Transfer.NotAnEndpoint"));
         return CloudShareLinks.FromAnswer(await _files.PublicLinkAsync(remote, task.RemotePath));
     }
 

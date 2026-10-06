@@ -1,5 +1,6 @@
 using System.IO;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -49,15 +50,15 @@ public static class CloudTransferRowMenu
         var shareable = OffersLink(task);
         return
         [
-            new(CloudTransferRowCommand.MoveUp, "上移", context.CanMoveUp,
-                context.CanMoveUp ? null : "只有等待中的传输可以调整顺序。"),
-            new(CloudTransferRowCommand.MoveDown, "下移", context.CanMoveDown,
-                context.CanMoveDown ? null : "只有等待中的传输可以调整顺序。"),
-            new(CloudTransferRowCommand.OpenFolder, "打开所在文件夹", folder is not null, OpenFolderHint(task, folder), SeparatorBefore: true),
-            new(CloudTransferRowCommand.CopyLink, "复制分享链接…", shareable, shareable ? null : LinkHint(task)),
-            new(CloudTransferRowCommand.CopyDetail, "复制详情", CloudTransferDiagnostics.OffersDetail(task),
-                CloudTransferDiagnostics.OffersDetail(task) ? null : "这个任务还没有错误信息。", SeparatorBefore: true),
-            new(CloudTransferRowCommand.ViewLog, "查看日志", true)
+            new(CloudTransferRowCommand.MoveUp, Tr.F("Transfer.MoveUp"), context.CanMoveUp,
+                context.CanMoveUp ? null : Tr.F("Transfer.ReorderOnlyPending")),
+            new(CloudTransferRowCommand.MoveDown, Tr.F("Transfer.MoveDown"), context.CanMoveDown,
+                context.CanMoveDown ? null : Tr.F("Transfer.ReorderOnlyPending")),
+            new(CloudTransferRowCommand.OpenFolder, Tr.F("Transfer.OpenFolder"), folder is not null, OpenFolderHint(task, folder), SeparatorBefore: true),
+            new(CloudTransferRowCommand.CopyLink, Tr.F("Transfer.CopyLink"), shareable, shareable ? null : LinkHint(task)),
+            new(CloudTransferRowCommand.CopyDetail, Tr.F("Transfer.CopyDetail"), CloudTransferDiagnostics.OffersDetail(task),
+                CloudTransferDiagnostics.OffersDetail(task) ? null : Tr.F("Transfer.NoErrorInfo"), SeparatorBefore: true),
+            new(CloudTransferRowCommand.ViewLog, Tr.F("Transfer.ViewLog"), true)
         ];
     }
 
@@ -78,8 +79,8 @@ public static class CloudTransferRowMenu
         folder is not null
             ? null
             : task.Direction == CloudTransferDirection.Copy
-                ? "复制任务没有本地文件夹：字节由 rclone 在两端之间移动，本机不落盘。"
-                : "这个任务没有可打开的本地路径。";
+                ? Tr.F("Transfer.CopyNoLocalFolder")
+                : Tr.F("Transfer.NoLocalPath");
 
     /// <summary>
     /// Whether asking the cloud for a link makes sense yet. A transfer that is still pending or running may have
@@ -92,8 +93,8 @@ public static class CloudTransferRowMenu
 
     private static string LinkHint(CloudTransferTask task) => task.State switch
     {
-        CloudTransferState.Pending => "传输还没开始，云端现在可能还没有这个文件。",
-        CloudTransferState.Running => "传输正在进行，等它停下来再生成链接。",
-        _ => "这个任务没有可分享的云端文件。"
+        CloudTransferState.Pending => Tr.F("Transfer.LinkPending"),
+        CloudTransferState.Running => Tr.F("Transfer.LinkRunning"),
+        _ => Tr.F("Transfer.LinkUnavailable")
     };
 }

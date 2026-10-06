@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using FengSync.Core.Configuration;
 using FengSync.Core.Mount;
+using FengSync.Localization;
 
 namespace FengSync.Views;
 
@@ -67,13 +68,13 @@ public partial class MountPickerDialog : Window
         _rootPath = rootPath.Trim('/');
         _occupiedMountPoints = occupiedMountPoints;
         _defaultCacheMaxSizeBytes = defaultCacheMaxSizeBytes;
-        HeaderText.Text = $"挂载 {_remoteName}";
+        HeaderText.Text = Tr.Format("Mount.Header", _remoteName);
         var shown = string.IsNullOrWhiteSpace(displayRoot) ? _rootPath : displayRoot.Trim().Trim('/');
-        SubHeaderText.Text = $"选择本地盘符、目录或网络共享，将 {_remoteName}:/{shown} 挂载到 Feng Sync 可访问的位置。";
+        SubHeaderText.Text = Tr.Format("Mount.SubHeader", _remoteName, shown);
         DriveLetterList.ItemsSource = MountPointInspector.EnumerateDriveLetters();
-        DriveHint.Text = "选一个既未被 Windows 使用、也不被现有挂载占用的盘符。";
-        DirectoryHint.Text = "目录必须尚不存在（rclone 会创建它），父目录必须存在。Feng Sync 不会替你创建目录。";
-        UncHint.Text = @"形如 \\服务器\共享名。Windows 会为它分配一个盘符，挂载完成后实际挂载点是那个盘符，而不是你输入的路径。";
+        DriveHint.Text = Tr.F("Mount.DriveHint");
+        DirectoryHint.Text = Tr.F("Mount.DirectoryHint");
+        UncHint.Text = Tr.F("Mount.UncHint");
         CapacityHint.Text = MountCapacity.DescribeUpcoming();
         BuildCacheModeOptions();
         SeedAdvancedDefaults();
@@ -106,7 +107,7 @@ public partial class MountPickerDialog : Window
         // must NOT exist yet. We show the parent and let the user type the missing folder name.
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "选择挂载点的父目录",
+            Title = Tr.F("Mount.PickParentTitle"),
         };
         if (!string.IsNullOrWhiteSpace(DirectoryPathBox.Text))
         {
@@ -179,7 +180,7 @@ public partial class MountPickerDialog : Window
             {
                 if (DriveLetterList.SelectedItem is not MountPointInspector.DriveLetterOption option)
                 {
-                    StatusText.Text = "请选择一个盘符。";
+                    StatusText.Text = Tr.F("Mount.StatusPickDrive");
                     OkButton.IsEnabled = false;
                     return;
                 }
@@ -187,16 +188,16 @@ public partial class MountPickerDialog : Window
                 // a letter already claimed by an existing mount has to be refused while the user is choosing,
                 // not after they press OK.
                 var validation = MountPointInspector.Validate(option.Letter, MountTargetKind.DriveLetter, _occupiedMountPoints);
-                StatusText.Text = validation.IsValid ? $"将挂载到盘符 {option.Letter}。" : validation.Error!;
+                StatusText.Text = validation.IsValid ? Tr.Format("Mount.StatusWillMountDrive", option.Letter) : validation.Error!;
                 OkButton.IsEnabled = validation.IsValid;
                 return;
             }
             case MountPickerMode.Directory:
             {
                 var path = DirectoryPathBox.Text?.Trim() ?? "";
-                if (path.Length == 0) { StatusText.Text = "请输入目录绝对路径。"; OkButton.IsEnabled = false; return; }
+                if (path.Length == 0) { StatusText.Text = Tr.F("Mount.StatusEnterDirectory"); OkButton.IsEnabled = false; return; }
                 var validation = MountPointInspector.Validate(path, MountTargetKind.Directory, _occupiedMountPoints);
-                StatusText.Text = validation.IsValid ? "目录合法，挂载后由 rclone 创建。" : validation.Error!;
+                StatusText.Text = validation.IsValid ? Tr.F("Mount.StatusDirectoryValid") : validation.Error!;
                 OkButton.IsEnabled = validation.IsValid;
                 return;
             }
@@ -205,13 +206,13 @@ public partial class MountPickerDialog : Window
                 var path = UncPathBox.Text?.Trim() ?? "";
                 if (path.Length == 0)
                 {
-                    StatusText.Text = @"请输入网络共享路径，例如 \\server\share。";
+                    StatusText.Text = Tr.F("Mount.StatusEnterUnc");
                     OkButton.IsEnabled = false;
                     return;
                 }
                 var validation = MountPointInspector.Validate(path, MountTargetKind.NetworkShare, _occupiedMountPoints);
                 StatusText.Text = validation.IsValid
-                    ? "路径合法。挂载完成后实际挂载点是 Windows 分配的盘符，会在状态里报告。"
+                    ? Tr.F("Mount.StatusUncValid")
                     : validation.Error!;
                 OkButton.IsEnabled = validation.IsValid;
                 return;
@@ -223,10 +224,10 @@ public partial class MountPickerDialog : Window
     {
         CacheModeOption[] options =
         [
-            new(MountCacheMode.Off, "不缓存，每次读取都走网络"),
-            new(MountCacheMode.Minimal, "只缓存读到的内容"),
-            new(MountCacheMode.Writes, "缓存读取并缓冲写入（默认）"),
-            new(MountCacheMode.Full, "全部缓存，含正在写入的整个文件")
+            new(MountCacheMode.Off, Tr.F("Mount.CacheModeOff")),
+            new(MountCacheMode.Minimal, Tr.F("Mount.CacheModeMinimal")),
+            new(MountCacheMode.Writes, Tr.F("Mount.CacheModeWrites")),
+            new(MountCacheMode.Full, Tr.F("Mount.CacheModeFull"))
         ];
         CacheModeBox.ItemsSource = options;
         CacheModeBox.DisplayMemberPath = nameof(CacheModeOption.Label);
@@ -268,25 +269,27 @@ public partial class MountPickerDialog : Window
     private static string Describe(MountOptionsSettings options)
     {
         var parts = new List<string>();
-        if (options.VolumeName is { } volume) parts.Add($"卷标 {volume}");
-        if (options.NetworkMode) parts.Add("作为网络驱动器");
-        parts.Add($"缓存模式 {MountOptions.WireCacheMode(options.CacheMode ?? MountOptions.DefaultCacheMode)}");
+        if (options.VolumeName is { } volume) parts.Add(Tr.Format("Mount.SummaryVolume", volume));
+        if (options.NetworkMode) parts.Add(Tr.F("Mount.SummaryNetworkMode"));
+        // The cache mode is named here by its rclone flag, not by the combo box's label: this line says what
+        // is about to be sent, and the label only says what the user picked from.
+        parts.Add(Tr.Format("Mount.SummaryCacheMode", MountOptions.WireCacheMode(options.CacheMode ?? MountOptions.DefaultCacheMode)));
         parts.Add(options.CacheMaxSizeBytes is > 0
-            ? $"缓存上限 {ByteSize.Format(options.CacheMaxSizeBytes.Value)}"
-            : "缓存上限 不限");
-        if (options.CacheMaxAge is { } age) parts.Add($"缓存保留 {age.TotalSeconds:0} 秒");
-        if (options.WriteBack is { } writeBack) parts.Add($"写回延迟 {writeBack.TotalSeconds:0} 秒");
-        if (options.DirCacheTime is { } dirCache) parts.Add($"目录缓存 {dirCache.TotalSeconds:0} 秒");
-        if (options.PollInterval is { } poll) parts.Add($"轮询间隔 {poll.TotalSeconds:0} 秒");
-        if (options.ReadOnly) parts.Add("只读");
-        if (!options.NoChecksum) parts.Add("比较校验值");
-        if (!options.NoModTime) parts.Add("读写修改时间");
-        if (options.NoSeek) parts.Add("禁止定位");
+            ? Tr.Format("Mount.SummaryCacheMaxSize", ByteSize.Format(options.CacheMaxSizeBytes.Value))
+            : Tr.F("Mount.SummaryCacheMaxSizeNone"));
+        if (options.CacheMaxAge is { } age) parts.Add(Tr.Format("Mount.SummaryCacheMaxAge", age.TotalSeconds.ToString("0")));
+        if (options.WriteBack is { } writeBack) parts.Add(Tr.Format("Mount.SummaryWriteBack", writeBack.TotalSeconds.ToString("0")));
+        if (options.DirCacheTime is { } dirCache) parts.Add(Tr.Format("Mount.SummaryDirCacheTime", dirCache.TotalSeconds.ToString("0")));
+        if (options.PollInterval is { } poll) parts.Add(Tr.Format("Mount.SummaryPollInterval", poll.TotalSeconds.ToString("0")));
+        if (options.ReadOnly) parts.Add(Tr.F("Mount.SummaryReadOnly"));
+        if (!options.NoChecksum) parts.Add(Tr.F("Mount.SummaryCompareChecksum"));
+        if (!options.NoModTime) parts.Add(Tr.F("Mount.SummaryModTime"));
+        if (options.NoSeek) parts.Add(Tr.F("Mount.SummaryNoSeek"));
 
-        var text = "将发送：" + string.Join("；", parts) + "。";
+        var text = Tr.Format("Mount.Summary", string.Join(Tr.F("Mount.SummarySeparator"), parts));
         // Warnings, not refusals: rclone accepts these combinations and enforces nothing.
         var warnings = MountOptions.Warnings(options);
-        return warnings.Count == 0 ? text : text + " 注意：" + string.Join(" ", warnings);
+        return warnings.Count == 0 ? text : text + Tr.F("Mount.SummaryWarning") + string.Join(" ", warnings);
     }
 
     /// <summary>
@@ -296,16 +299,16 @@ public partial class MountPickerDialog : Window
     /// </summary>
     private string? DescribeAdvancedProblem()
     {
-        if (!TryParseBytes(CacheMaxSizeBox.Text, out _, out var bytesError)) return "缓存上限：" + bytesError;
+        if (!TryParseBytes(CacheMaxSizeBox.Text, out _, out var bytesError)) return Tr.Format("Mount.ProblemCacheMaxSize", bytesError);
         foreach (var (label, box) in new (string Label, TextBox Box)[]
         {
-            ("缓存保留时间", CacheMaxAgeBox),
-            ("写回延迟", WriteBackBox),
-            ("目录缓存时间", DirCacheTimeBox),
-            ("轮询间隔", PollIntervalBox)
+            (Tr.F("Mount.LabelCacheMaxAge"), CacheMaxAgeBox),
+            (Tr.F("Mount.LabelWriteBack"), WriteBackBox),
+            (Tr.F("Mount.LabelDirCacheTime"), DirCacheTimeBox),
+            (Tr.F("Mount.LabelPollInterval"), PollIntervalBox)
         })
         {
-            if (!TryParseSeconds(box.Text, out _, out var error)) return $"{label}：{error}";
+            if (!TryParseSeconds(box.Text, out _, out var error)) return Tr.Format("Mount.ProblemField", label, error);
         }
         return null;
     }
@@ -327,7 +330,7 @@ public partial class MountPickerDialog : Window
         // 0 is a real choice — no ceiling — and is expressed by leaving the key out entirely.
         if (value == "0") { bytes = 0; return true; }
         if (ByteSize.TryParse(value, out var parsed) && parsed > 0) { bytes = parsed; return true; }
-        error = $"无法识别“{value}”。请填写形如 10G、512M 的大小；留空表示沿用设置里的默认上限，0 表示不限。";
+        error = Tr.Format("Mount.ErrorBadSize", value);
         return false;
     }
 
@@ -343,7 +346,7 @@ public partial class MountPickerDialog : Window
             span = TimeSpan.FromSeconds(seconds);
             return true;
         }
-        error = $"无法识别“{value}”。请填写正整数秒；留空或 0 表示使用默认值。";
+        error = Tr.Format("Mount.ErrorBadSeconds", value);
         return false;
     }
 

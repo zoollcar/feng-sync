@@ -1,0 +1,61 @@
+# ---- Main window ----
+Main.About	关于	About
+Main.Action	操作	Action
+Main.Batch	批处理	Batch
+Main.ChangeActionMenu	变更操作菜单	Change action menu
+Main.ChooseEndpoint	选择一个端点	Choose an endpoint
+Main.Cloud	云端	Cloud
+Main.CloudManagement	云盘管理	Cloud management
+Main.Compare	比较	Compare
+Main.ConflictSummaryEmpty	冲突 0 项	0 conflicts
+Main.Delete	删除	Delete
+Main.DeleteSummaryEmpty	删除 0 项	0 deletions
+Main.DownloadSummaryEmpty	下载 0 项	0 downloads
+Main.Duplicate	复制	Copy
+Main.EditProfile	编辑配置…	Edit Profile…
+Main.EditProfileTooltip	编辑配置	Edit Profile
+Main.EmptyPickEndpoints	请选择两个端点后点击比较	Choose two endpoints, then click Compare
+Main.EnableFile	重新启用此文件	Re-enable this file
+Main.Export	导出…	Export…
+Main.FilterConflicts	筛选冲突变更	Filter conflicts
+Main.FilterDeletes	筛选删除变更	Filter deletions
+Main.FilterDownloads	筛选下载变更	Filter downloads
+Main.FilterUploads	筛选上传变更	Filter uploads
+Main.IgnoreFile	忽略此文件	Ignore this file
+Main.Import	导入…	Import…
+Main.ItemCountEmpty	0 项	0 items
+Main.KeepLeft	左侧覆盖右侧	Left overwrites right
+Main.KeepRight	右侧覆盖左侧	Right overwrites left
+Main.LeftEndpointPath	左侧端点路径	Left endpoint path
+Main.LeftRelativePath	左侧相对路径	Left relative path
+Main.LoadingSettings	正在加载设置…	Loading settings…
+Main.Local	本地	Local
+Main.ModeMirror	镜像到右侧	Mirror to the right
+Main.ModeTwoWay	双向同步	Two-way sync
+Main.ModeUpdate	更新到右侧	Update to the right
+Main.NewSync	新建同步	New sync
+Main.NoEndpoint	未选择端点	No endpoint selected
+Main.NoProfileSelected	未选择同步配置	No Profile selected
+Main.PickEndpointsToCompare	选择左右端点后即可比较	Choose the left and right endpoints to compare
+Main.PickLeftCloud	选择左侧云端端点	Choose the left cloud endpoint
+Main.PickLeftLocal	选择左侧本地端点	Choose the left local endpoint
+Main.PickRightCloud	选择右侧云端端点	Choose the right cloud endpoint
+Main.PickRightLocal	选择右侧本地端点	Choose the right local endpoint
+Main.ProfileRefreshFailed	刷新 Profile 列表失败：{0}	Refreshing the Profile list failed: {0}
+Main.ProfileSyncedFromCloud	已同步 Profile“{0}”。	Synced Profile "{0}".
+Main.ProfileWorkspace	Profile 工作区	Profile workspace
+Main.RightEndpointPath	右侧端点路径	Right endpoint path
+Main.RightRelativePath	右侧相对路径	Right relative path
+Main.SaveAsBatchJob	保存为批处理作业…	Save as a batch job…
+Main.ScheduleTasks	计划任务	Scheduled tasks
+Main.SelectedPrefix	已选择 	Selected 
+Main.SelectedSuffix	 项  ·  并发 	 items  ·  concurrent 
+Main.Settings	设置	Settings
+Main.ShowAllChanges	显示全部变更	Show all changes
+Main.Size	大小	Size
+Main.StartSync	开始同步	Start sync
+Main.SwapEndpoints	交换左右端点	Swap the two endpoints
+Main.SyncProfiles	同步配置	Sync profiles
+Main.ThisRunChanges	本次变更	Changes in this run
+Main.TotalPending	总计（待传输）	Total (pending transfer)
+Main.UploadSummaryEmpty	上传 0 项	0 uploads

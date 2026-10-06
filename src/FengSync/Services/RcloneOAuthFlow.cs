@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FengSync.Core.Rclone.Configuration;
 using FengSync.Core.Rclone.Diagnostics;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -44,7 +45,7 @@ internal sealed class RcloneOAuthFlow(IRcloneConfigurationApi api, Action<Uri> o
         CancellationToken cancellationToken)
     {
         if (!await api.SupportsOAuthControlAsync(cancellationToken))
-            throw new NotSupportedException("内置 rclone 不支持结构化 OAuth 状态接口（config/oauthstatus、config/oauthstop）。请升级 rclone 后重试；Feng Sync 不会回退到解析命令行文本。");
+            throw new NotSupportedException(Tr.F("OAuth.NoStructuredControl"));
 
         var parameters = descriptor.MergeParameters(fields)
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
@@ -85,7 +86,7 @@ internal sealed class RcloneOAuthFlow(IRcloneConfigurationApi api, Action<Uri> o
                         ValidateAuthorizationUri(authorizationUri);
                         openBrowser(authorizationUri);
                         browserOpened = true;
-                        progress?.Report($"浏览器已打开，请完成 {descriptor.DisplayName} 授权…");
+                        progress?.Report(Tr.Format("OAuth.BrowserOpened", descriptor.DisplayName));
                     }
                     await Task.WhenAny(configure, Task.Delay(100, cancellationToken));
                 }
@@ -96,14 +97,14 @@ internal sealed class RcloneOAuthFlow(IRcloneConfigurationApi api, Action<Uri> o
                         create && first ? "config/create" : "config/update", output.Error));
                 if (string.IsNullOrEmpty(output.State)) return;
                 if (output.Option is null)
-                    throw new InvalidOperationException($"rclone OAuth 状态“{output.State}”缺少待回答选项。");
+                    throw new InvalidOperationException(Tr.Format("OAuth.StateMissingOption", output.State));
 
                 state = output.State;
                 result = Answer(output.Option);
                 first = false;
             }
 
-            throw new InvalidOperationException("rclone OAuth 配置步骤过多，已停止以避免无限循环。");
+            throw new InvalidOperationException(Tr.F("OAuth.TooManySteps"));
         }
         catch
         {
@@ -145,11 +146,11 @@ internal sealed class RcloneOAuthFlow(IRcloneConfigurationApi api, Action<Uri> o
     }
 
     private static InvalidOperationException UnsupportedQuestion(RcloneConfigOption option)
-        => new($"rclone OAuth 要求应用无法自动回答的选项：{option.Name}。{Environment.NewLine}{option.Help}".Trim());
+        => new(Tr.Format("OAuth.UnsupportedQuestion", option.Name, option.Help).Trim());
 
     private static void ValidateAuthorizationUri(Uri uri)
     {
         if (uri.Scheme is not ("http" or "https") || !uri.IsLoopback || !uri.AbsolutePath.Equals("/auth", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("rclone 返回了非本机 OAuth 授权地址，已拒绝打开。请检查内置 rclone 的完整性。");
+            throw new InvalidOperationException(Tr.F("OAuth.NonLoopbackAuthUri"));
     }
 }

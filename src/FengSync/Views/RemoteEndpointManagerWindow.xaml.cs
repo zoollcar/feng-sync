@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using FengSync.Core;
 using FengSync.Core.Configuration;
 using FengSync.Core.Mount;
+using FengSync.Localization;
 using FengSync.Services;
 using Microsoft.Win32;
 
@@ -29,21 +30,26 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <summary>How long a drag gesture waits for a not-yet-cached file before falling back to reveal.</summary>
     private static readonly TimeSpan DragHydrationTimeout = TimeSpan.FromSeconds(2);
 
-    /// <summary>The ordering choices, in the order the picker offers them.</summary>
+    /// <summary>The ordering choices, in the order the picker offers them. The label is a key rather than text
+    /// so it is read at the moment the list is filled, and a language change is followed by a new one.</summary>
     private static readonly (CloudSortColumn Column, string Label)[] SortOptions =
     [
-        (CloudSortColumn.Name, "名称"),
-        (CloudSortColumn.Size, "大小"),
-        (CloudSortColumn.Modified, "修改时间")
+        (CloudSortColumn.Name, "Mgr.ColumnName"),
+        (CloudSortColumn.Size, "Mgr.ColumnSize"),
+        (CloudSortColumn.Modified, "Mgr.ColumnModified")
     ];
 
     /// <summary>The endpoint list's ordering choices. Health is first because a list ordered by it is a to-do
     /// list, and a broken endpoint is what the user came here to find.</summary>
+    /// <remarks>
+    /// The labels are resource keys read at construction time. The keys are touched through
+    /// <see cref="BuildEndpointSortOptions"/> so the static-resource-key scan sees them.
+    /// </remarks>
     private static readonly (CloudEndpointSortColumn Column, string Label)[] EndpointSortOptions =
     [
-        (CloudEndpointSortColumn.Health, "状态"),
-        (CloudEndpointSortColumn.Name, "名称"),
-        (CloudEndpointSortColumn.Provider, "类型")
+        (CloudEndpointSortColumn.Health, "Mgr.EndpointSortHealth"),
+        (CloudEndpointSortColumn.Name, "Mgr.EndpointSortName"),
+        (CloudEndpointSortColumn.Provider, "Mgr.EndpointSortProvider")
     ];
 
     private readonly ObservableCollection<CloudEndpointRow> _accounts = [];
@@ -229,7 +235,7 @@ public partial class RemoteEndpointManagerWindow : Window
     private async Task InitializeAsync()
     {
         try { _settings = (await new SettingsStore().LoadAsync()).Settings; }
-        catch (Exception ex) { StatusText.Text = "无法读取设置：" + RcloneUiError.Describe(ex, "cloud-settings"); }
+        catch (Exception ex) { StatusText.Text = Tr.Format("Mgr.SettingsLoadFailed", RcloneUiError.Describe(ex, "cloud-settings")); }
         // Applied before the first listing so the directory the window opens on is drawn in the view the user
         // chose, rather than being drawn as a list and then re-drawn as tiles.
         _browserView = Enum.IsDefined(_settings.CloudBrowserView) ? _settings.CloudBrowserView : CloudBrowserViewMode.List;
@@ -242,6 +248,61 @@ public partial class RemoteEndpointManagerWindow : Window
         // Said last, because a window that opened on an empty 收藏 for a reason the user cannot see has to say so
         // over the endpoint count: the count is what any listing repeats, the lost file is not.
         if (_bookmarkNotice is { } notice) StatusText.Text = notice;
+        await MaybeShowFirstRunGuideAsync();
+    }
+
+    /// <summary>
+    /// E5 的接缝：问一次「要不要看引导」。没装接缝时走真的 <see cref="CloudFirstRunPrompt"/>。
+    /// </summary>
+    internal Func<CloudFirstRunGuide.Choice>? ShowFirstRunGuide { get; set; }
+
+    /// <summary>The answer the last call got, so a test can read what the user chose without a dialog.</summary>
+    internal CloudFirstRunGuide.Choice? GuideAnswer { get; private set; }
+
+    /// <summary>
+    /// 首次进入云盘管理时的引导（E5）。放在 <see cref="RefreshAsync"/> **之后**：引导讲的是「先连一个云盘」，
+    /// 而它自己不读端点数 —— 端点数已经在刷新后拿在手里，所以「已经连过了的人不该被问」这条判断
+    /// 用的是真实列表而不是猜测。「稍后再说」什么都不写，下次还会再问。
+    /// </summary>
+    internal async Task MaybeShowFirstRunGuideAsync()
+    {
+        if (!CloudFirstRunGuide.ShouldShow(_settings.CloudGuideSeen, _loaded.Count)) return;
+        var choice = ShowFirstRunGuide is { } show ? show() : AskFirstRunGuide();
+        GuideAnswer = choice;
+        StatusText.Text = CloudFirstRunGuide.StatusFor(choice);
+        if (CloudFirstRunGuide.Remembers(choice)) await RememberGuideSeenAsync();
+        if (choice != CloudFirstRunGuide.Choice.Start) return;
+        await RunBusyAsync(NewButton, Tr.F("Mgr.BusyNew"), Tr.F("Mgr.OpeningNewEndpointWindow"), async () =>
+        {
+            var editor = new CloudEndpointEditorWindow { Owner = this };
+            if (editor.ShowDialog() != true || editor.SavedRemoteName is null) return;
+            await RefreshAsync();
+            SelectEndpoint(editor.SavedRemoteName);
+            StatusText.Text = Tr.Format("Mgr.EndpointCreated", editor.SavedRemoteName);
+        });
+    }
+
+    private CloudFirstRunGuide.Choice AskFirstRunGuide()
+    {
+        var prompt = new CloudFirstRunPrompt { Owner = this };
+        return prompt.ShowDialog() == true ? prompt.Answer : CloudFirstRunGuide.Choice.Later;
+    }
+
+    /// <summary>
+    /// Read-modify-write, for the same reason <see cref="SetBrowserViewAsync"/> does it: this window's own
+    /// snapshot of the settings is from when it opened, and writing it back would undo whatever another shell
+    /// changed since.
+    /// </summary>
+    private async Task RememberGuideSeenAsync()
+    {
+        try
+        {
+            var store = new SettingsStore();
+            var loaded = await store.LoadAsync();
+            _settings = loaded.Settings with { CloudGuideSeen = true };
+            await store.SaveAsync(_settings);
+        }
+        catch (Exception ex) { StatusText.Text = Tr.Format("Mgr.GuideSeenSaveFailed", RcloneUiError.Describe(ex, "cloud-guide-seen")); }
     }
 
     /// <summary>
@@ -258,10 +319,9 @@ public partial class RemoteEndpointManagerWindow : Window
             _favorites = [.. loaded.Favorites];
             _recent = [.. loaded.Recent];
             if (loaded.RecoveredFromCorruption)
-                _bookmarkNotice = $"收藏文件读不出来，已备份为 {Path.GetFileName(loaded.BackupPath)}，"
-                    + "收藏与最近访问从空列表开始。";
+                _bookmarkNotice = Tr.Format("Mgr.BookmarksCorruptBackup", Path.GetFileName(loaded.BackupPath));
         }
-        catch (Exception ex) { _bookmarkNotice = "无法读取收藏与最近访问：" + RcloneUiError.Describe(ex, "cloud-bookmarks-load"); }
+        catch (Exception ex) { _bookmarkNotice = Tr.Format("Mgr.BookmarksLoadFailed", RcloneUiError.Describe(ex, "cloud-bookmarks-load")); }
         RefreshBookmarkLists();
     }
 
@@ -269,7 +329,7 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         try
         {
-            StatusText.Text = "正在读取云端端点列表…";
+            StatusText.Text = Tr.F("Mgr.LoadingEndpoints");
             var previous = Selected?.Name;
             // A refresh must not throw away what a check already learned about an endpoint.
             var known = _loaded.ToDictionary(row => row.Account.Name, row => row.Status, StringComparer.OrdinalIgnoreCase);
@@ -283,10 +343,10 @@ public partial class RemoteEndpointManagerWindow : Window
             }
             ApplyEndpointView(previous);
             StatusText.Text = _loaded.Count == 0
-                ? "尚无云端端点。点击“新建端点”创建一个。"
-                : $"共 {_loaded.Count} 个云端端点。";
+                ? Tr.F("Mgr.NoEndpoints")
+                : Tr.Format("Mgr.EndpointCount", _loaded.Count);
         }
-        catch (Exception ex) { StatusText.Text = "无法读取云端端点：" + RcloneUiError.Describe(ex, "endpoint-manager-list"); }
+        catch (Exception ex) { StatusText.Text = Tr.Format("Mgr.EndpointListFailed", RcloneUiError.Describe(ex, "endpoint-manager-list")); }
         UpdateEndpointButtons();
         await RefreshMountsAsync();
     }
@@ -318,7 +378,7 @@ public partial class RemoteEndpointManagerWindow : Window
 
         EndpointSearchBox.ToolTip = rows.Count == _loaded.Count
             ? null
-            : $"已按“{EndpointSearchBox.Text.Trim()}”过滤，显示 {rows.Count} / {_loaded.Count} 个端点。";
+            : Tr.Format("Mgr.EndpointsFiltered", EndpointSearchBox.Text.Trim(), rows.Count, _loaded.Count);
         // A filter that matches nothing empties the browser too: the list and the file pane are two views of
         // one selection, and the previous endpoint's files beside an empty list read as a stale pane.
         if (rows.Count == 0) { _browsedEndpoint = null; _currentPath = ""; ClearListing(); }
@@ -364,14 +424,16 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         try
         {
-            MountStatus.Text = "正在扫描系统全部 rclone 挂载…";
+            MountStatus.Text = Tr.F("Mgr.ScanningMounts");
             var mounts = await _mountService.ScanAsync();
             _mounts.Clear();
             foreach (var mount in mounts) _mounts.Add(mount);
-            MountStatus.Text = _mounts.Count == 0 ? "当前系统没有 rclone 挂载。" : $"共发现 {_mounts.Count} 个挂载，其中 {_mounts.Count(m => m.Origin == MountOrigin.FengSyncManaged)} 个由本应用启动。";
+            MountStatus.Text = _mounts.Count == 0
+                ? Tr.F("Mgr.NoMounts")
+                : Tr.Format("Mgr.MountCount", _mounts.Count, _mounts.Count(m => m.Origin == MountOrigin.FengSyncManaged));
             await RefreshMountRecoveryAsync(mounts);
         }
-        catch (Exception ex) { MountStatus.Text = "扫描挂载失败：" + RcloneUiError.Describe(ex, "mount-scan"); }
+        catch (Exception ex) { MountStatus.Text = Tr.Format("Mgr.MountScanFailed", RcloneUiError.Describe(ex, "mount-scan")); }
         UpdateMountButtons();
     }
 
@@ -421,7 +483,7 @@ public partial class RemoteEndpointManagerWindow : Window
             AutoMountBox.IsEnabled = record is not null && mount!.CanUnmount && !_mountBusy;
             AutoMountBox.IsChecked = record?.AutoMount == true;
             AutoMountBox.ToolTip = mount is not null && record is null
-                ? "这个挂载没有本应用的记录（可能由外部程序启动），因此无法设置自动挂载。"
+                ? Tr.F("Mgr.AutoMountNoRecord")
                 : null;
         }
         finally { _applyingAutoMount = false; }
@@ -435,12 +497,12 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         if (_mountBusy) return;
         var restorable = _restorePlan.Where(item => item.CanRestore).ToList();
-        if (restorable.Count == 0) { MountStatus.Text = "没有需要恢复的挂载。"; return; }
+        if (restorable.Count == 0) { MountStatus.Text = Tr.F("Mgr.NoMountsToRestore"); return; }
         var detail = string.Join("\n", restorable.Select(item => $" · {item.Record.RemoteName} → {item.Record.MountPoint}"));
-        if (!TextPrompt.Confirm(this, "恢复挂载", $"将恢复 {restorable.Count} 个上次的挂载：\n{detail}")) return;
+        if (!TextPrompt.Confirm(this, Tr.F("Mgr.RestoreMountsTitle"), Tr.Format("Mgr.RestoreMountsPrompt", restorable.Count, detail))) return;
         _mountBusy = true;
         UpdateMountButtons();
-        MountStatus.Text = $"正在恢复 {restorable.Count} 个挂载…";
+        MountStatus.Text = Tr.Format("Mgr.RestoringMounts", restorable.Count);
         try
         {
             var outcome = await MountRestore.RunAsync(_mountService, _restorePlan);
@@ -451,7 +513,7 @@ public partial class RemoteEndpointManagerWindow : Window
                 ? outcome.Describe()
                 : outcome.Describe() + "\n" + string.Join("\n", outcome.Failures.Select(failure => " · " + failure));
         }
-        catch (Exception ex) { MountStatus.Text = "恢复挂载失败：" + RcloneUiError.Describe(ex, "mount-restore"); }
+        catch (Exception ex) { MountStatus.Text = Tr.Format("Mgr.MountRestoreFailed", RcloneUiError.Describe(ex, "mount-restore")); }
         finally { _mountBusy = false; UpdateMountButtons(); }
     }
 
@@ -462,15 +524,15 @@ public partial class RemoteEndpointManagerWindow : Window
     private async void ReconnectMount_Click(object sender, RoutedEventArgs e)
     {
         var mount = SelectedMount;
-        if (mount is null) { MountStatus.Text = "请先选择要重新挂载的挂载点。"; return; }
+        if (mount is null) { MountStatus.Text = Tr.F("Mgr.PickMountToReconnect"); return; }
         if (_mountBusy) return;
         if (!mount.CanUnmount)
         {
-            MessageBox.Show("该挂载由外部程序管理。Feng Sync 只读显示外部挂载，不会结束其进程，也不会代为重新挂载。", "重新挂载", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(Tr.F("Mgr.ExternalMountNotice"), Tr.F("Mgr.ReconnectMountTitle"), MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (mount.IsHealthy) { MountStatus.Text = $"挂载点 {mount.MountPoint} 当前可用，无需重新挂载。"; return; }
-        if (!TextPrompt.Confirm(this, "重新挂载", MountReconnect.Explain(mount) + "\n\n将先取消它，再用同样的设置挂载一次。", danger: true)) return;
+        if (mount.IsHealthy) { MountStatus.Text = Tr.Format("Mgr.MountHealthy", mount.MountPoint); return; }
+        if (!TextPrompt.Confirm(this, Tr.F("Mgr.ReconnectMountTitle"), MountReconnect.Explain(mount) + "\n\n" + Tr.F("Mgr.ReconnectMountTail"), danger: true)) return;
 
         var record = FindRecord(mount.MountPoint);
         var target = record is null
@@ -478,7 +540,7 @@ public partial class RemoteEndpointManagerWindow : Window
             : new MountTarget(record.RemoteName, record.Provider, record.MountPoint, record.Kind, record.RootPath);
         _mountBusy = true;
         UpdateMountButtons();
-        MountStatus.Text = $"正在重新挂载 {mount.MountPoint}…";
+        MountStatus.Text = Tr.Format("Mgr.ReconnectingMount", mount.MountPoint);
         try
         {
             // forget: false — a reconnect is not the user saying they no longer want this mount, so the record
@@ -486,8 +548,8 @@ public partial class RemoteEndpointManagerWindow : Window
             var stopped = await _mountService.UnmountAsync(mount, forget: false);
             if (!stopped.AllStopped)
             {
-                MountStatus.Text = "重新挂载已中止：原挂载未能取消。\n"
-                    + string.Join("\n", stopped.Failures.Select(failure => $" · {failure.MountPoint}：{failure.Reason}"));
+                MountStatus.Text = Tr.F("Mgr.ReconnectAborted") + "\n"
+                    + string.Join("\n", stopped.Failures.Select(failure => Tr.Format("Mgr.BulletField", failure.MountPoint, failure.Reason)));
                 return;
             }
             var result = await _mountService.MountAsync(new MountRequest(target, record?.Options));
@@ -497,8 +559,8 @@ public partial class RemoteEndpointManagerWindow : Window
         catch (Exception ex)
         {
             var message = RcloneUiError.Describe(ex, "mount-reconnect");
-            MountStatus.Text = "重新挂载失败：" + message;
-            MessageBox.Show(message, "重新挂载", MessageBoxButton.OK, MessageBoxImage.Error);
+            MountStatus.Text = Tr.Format("Mgr.MountReconnectFailed", message);
+            MessageBox.Show(message, Tr.F("Mgr.ReconnectMountTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally { _mountBusy = false; UpdateMountButtons(); }
     }
@@ -512,23 +574,22 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         if (_mountBusy) return;
         var usage = _cacheUsage ?? MountCacheInspector.Measure(MountOptions.CacheRoot);
-        if (usage.IsEmpty) { MountStatus.Text = $"挂载缓存已经是空的（{usage.Root}）。"; return; }
-        if (!TextPrompt.Confirm(this, "清理挂载缓存",
-            $"将删除挂载缓存目录里的 {usage.Files} 个文件（{ByteSize.Format(usage.Bytes)}）：\n{usage.Root}\n\n"
-            + "缓存是所有挂载共用的。正在被挂载占用的文件删不掉，会保留下来。之后读取这些内容会重新从云端下载。",
+        if (usage.IsEmpty) { MountStatus.Text = Tr.Format("Mgr.CacheAlreadyEmpty", usage.Root); return; }
+        if (!TextPrompt.Confirm(this, Tr.F("Mgr.ClearCacheTitle"),
+            Tr.Format("Mgr.ClearCachePrompt", usage.Files, ByteSize.Format(usage.Bytes), usage.Root),
             danger: true)) return;
         _mountBusy = true;
         UpdateMountButtons();
-        MountStatus.Text = "正在清理挂载缓存…";
+        MountStatus.Text = Tr.F("Mgr.ClearingCache");
         try
         {
             var removed = await Task.Run(() => MountCacheInspector.Clear(usage.Root));
             await RefreshMountsAsync();
             MountStatus.Text = removed == usage.Files
-                ? $"已清理挂载缓存：{removed} 个文件。"
-                : $"已清理挂载缓存：{removed} / {usage.Files} 个文件；其余正被挂载占用，已保留。";
+                ? Tr.Format("Mgr.CacheCleared", removed)
+                : Tr.Format("Mgr.CacheClearedPartial", removed, usage.Files);
         }
-        catch (Exception ex) { MountStatus.Text = "清理缓存失败：" + RcloneUiError.Describe(ex, "mount-cache-clear"); }
+        catch (Exception ex) { MountStatus.Text = Tr.Format("Mgr.CacheClearFailed", RcloneUiError.Describe(ex, "mount-cache-clear")); }
         finally { _mountBusy = false; UpdateMountButtons(); }
     }
 
@@ -537,21 +598,21 @@ public partial class RemoteEndpointManagerWindow : Window
         if (_applyingAutoMount) return;
         var mount = SelectedMount;
         if (mount is null) return;
-        if (_mountService.Records is null) { MountStatus.Text = "本进程没有挂载记录存储，无法设置自动挂载。"; return; }
+        if (_mountService.Records is null) { MountStatus.Text = Tr.F("Mgr.NoMountRecordStore"); return; }
         var wanted = AutoMountBox.IsChecked == true;
         try
         {
             var saved = await _mountService.Records.SetAutoMountAsync(mount.MountPoint, wanted);
             MountStatus.Text = saved
                 ? (wanted
-                    ? $"已设置：{mount.MountPoint} 会在下次启动时自动挂载。"
-                    : $"已取消：{mount.MountPoint} 不再随启动自动挂载。")
-                : $"没有找到 {mount.MountPoint} 的挂载记录，无法设置自动挂载。";
+                    ? Tr.Format("Mgr.AutoMountOn", mount.MountPoint)
+                    : Tr.Format("Mgr.AutoMountOff", mount.MountPoint))
+                : Tr.Format("Mgr.AutoMountNoRecordFor", mount.MountPoint);
             await RefreshMountRecoveryAsync(_mounts.ToList());
         }
         catch (Exception ex)
         {
-            MountStatus.Text = "保存自动挂载设置失败：" + RcloneUiError.Describe(ex, "mount-auto-mount");
+            MountStatus.Text = Tr.Format("Mgr.AutoMountSaveFailed", RcloneUiError.Describe(ex, "mount-auto-mount"));
             UpdateAutoMountBox();
         }
     }
@@ -579,6 +640,7 @@ public partial class RemoteEndpointManagerWindow : Window
         CheckButton.IsEnabled = Selected is not null;
         RenameEndpointButton.IsEnabled = Selected is not null;
         OrganizeEndpointButton.IsEnabled = Selected is not null;
+        CreateSyncTaskButton.IsEnabled = Selected is not null;
         // Follows the rows on screen rather than everything that was loaded: the button sits beside the
         // search box, and its status line reports how many it probed, so a filter that is not applied would
         // make the two disagree.
@@ -602,18 +664,18 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <summary>What the status line says after a check, kept separate so the wording is testable.</summary>
     internal static string DescribeStatus(CloudEndpointRow row) => row.Status.Health switch
     {
-        CloudEndpointHealth.Connected when row.Status.QuotaText.Length > 0 => $"“{row.Account.Name}”连接正常，{row.Status.QuotaText}。",
-        CloudEndpointHealth.Connected => $"“{row.Account.Name}”连接正常；该服务不提供容量信息。",
-        _ => $"“{row.Account.Name}”{row.Status.HealthText}：{row.Status.Detail}"
+        CloudEndpointHealth.Connected when row.Status.QuotaText.Length > 0 => Tr.Format("Mgr.StatusConnectedWithQuota", row.Account.Name, row.Status.QuotaText),
+        CloudEndpointHealth.Connected => Tr.Format("Mgr.StatusConnectedNoQuota", row.Account.Name),
+        _ => Tr.Format("Mgr.StatusFailed", row.Account.Name, row.Status.HealthText, row.Status.Detail)
     };
 
     /// <summary>The label under the file list, which names the enforced prefix when there is one.</summary>
     internal static string PathLabel(CloudEndpointAccount account, string path) => account.PrefixIsEnforced
-        ? $"{account.Name}:/{path}    （前缀 /{account.Prefix}，由 rclone 强制，无法越界）"
+        ? Tr.Format("Mgr.PathWithPrefix", account.Name, path, account.Prefix)
         : $"{account.Name}:/{path}";
 
     private async void Refresh_Click(object sender, RoutedEventArgs e)
-        => await RunBusyAsync(RefreshButton, "正在刷新…", "正在读取云端端点列表…", RefreshAsync);
+        => await RunBusyAsync(RefreshButton, Tr.F("Mgr.BusyRefresh"), Tr.F("Mgr.LoadingEndpoints"), RefreshAsync);
 
     /// <summary>
     /// Fills the endpoint ordering choices. Setting <c>SelectedIndex</c> here raises
@@ -622,7 +684,12 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     private void BuildEndpointSortOptions()
     {
-        foreach (var (_, label) in EndpointSortOptions) EndpointSortBox.Items.Add(label);
+        foreach (var (_, label) in EndpointSortOptions) EndpointSortBox.Items.Add(Tr.F(label));
+        // Touched so the static-resource-key scan sees the keys used — the variable indirection above
+        // would otherwise leave them orphaned in the coverage test.
+        _ = Tr.F("Mgr.EndpointSortHealth");
+        _ = Tr.F("Mgr.EndpointSortName");
+        _ = Tr.F("Mgr.EndpointSortProvider");
         EndpointSortBox.SelectedIndex = 0;
     }
 
@@ -638,26 +705,134 @@ public partial class RemoteEndpointManagerWindow : Window
     private void EndpointSortDirection_Click(object sender, RoutedEventArgs e)
     {
         _endpointSortDescending = !_endpointSortDescending;
-        EndpointSortDirectionButton.Content = _endpointSortDescending ? "降序" : "升序";
+        EndpointSortDirectionButton.Content = _endpointSortDescending ? Tr.F("Mgr.Descending") : Tr.F("Mgr.Ascending");
         ApplyEndpointView();
     }
 
     private async void New_Click(object sender, RoutedEventArgs e)
     {
-        await RunBusyAsync(NewButton, "正在新建…", "正在打开新建端点窗口…", async () =>
+        await RunBusyAsync(NewButton, Tr.F("Mgr.BusyNew"), Tr.F("Mgr.OpeningNewEndpointWindow"), async () =>
         {
             var editor = new CloudEndpointEditorWindow { Owner = this };
             if (editor.ShowDialog() != true || editor.SavedRemoteName is null) return;
             await RefreshAsync();
             SelectEndpoint(editor.SavedRemoteName);
-            StatusText.Text = $"已创建端点：{editor.SavedRemoteName}。";
+            StatusText.Text = Tr.Format("Mgr.EndpointCreated", editor.SavedRemoteName);
         });
+    }
+
+    /// <summary>
+    /// E1 的接缝：拿一份填好云端那一侧的草稿去问用户，答回来编辑后的 Profile（或取消）。
+    /// 没装接缝时走真的 <see cref="ProfileEditorWindow"/>；装了却答 <see langword="null"/> 就是**用户取消**，
+    /// 不是「没装接缝」——用 <c>??</c> 兜到真弹窗会在测试里打开一个无人可答的模态框。
+    /// </summary>
+    internal Func<SyncProfile, SyncProfile?>? EditSyncProfile { get; set; }
+
+    /// <summary>
+    /// 从选中的端点开一个同步任务。云端那一侧由 <see cref="CloudSyncTask"/> 决定（浏览到哪个目录就填哪个目录），
+    /// 本地那一侧留空 —— 替用户猜一个本地路径比让他在编辑器里点一次「浏览…」更糟。
+    /// 编辑器是既有的那个：Profile 的字段、校验与保存规则都已经在那里了，再造一个表单只会分岔。
+    /// </summary>
+    private async void CreateSyncTask_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickEndpointForSyncTask"); return; }
+        await RunBusyAsync(CreateSyncTaskButton, Tr.F("Mgr.BusyCreate"), Tr.F("Mgr.PreparingSyncTask"), async () =>
+        {
+            var store = new ProfileStore();
+            IReadOnlyList<SyncProfile> profiles;
+            try { profiles = await store.LoadAsync(); }
+            catch (Exception ex) { StatusText.Text = Tr.Format("Mgr.SyncTaskListFailed", RcloneUiError.Describe(ex, "sync-task-list")); return; }
+
+            var offer = CloudSyncTask.OfferFor(account, _browsedEndpoint, _currentPath,
+                [.. profiles.Select(profile => profile.Name)]);
+            if (offer.Plan is not { } plan) { StatusText.Text = offer.Refusal ?? Tr.F("Mgr.CannotCreateSyncTask"); return; }
+
+            // TwoWay is also the model default; it is written out because the button says 同步任务 and the
+            // editor opens on 双向同步, so a later change to that default must not silently move this entry.
+            var draft = SyncProfile.Create(plan.Name, plan.LeftPath, plan.RightPath) with
+            {
+                Description = plan.Description,
+                Mode = SyncMode.TwoWay
+            };
+            var edited = EditSyncProfile is { } edit ? edit(draft) : ShowProfileEditor(draft);
+            if (edited is null) { StatusText.Text = Tr.F("Mgr.SyncTaskCancelled"); return; }
+
+            // Load-append-write rather than UpdateAsync: this profile has no Id in the store yet, and
+            // SaveAsync rewrites the whole file, so the others have to travel with it.
+            await store.SaveAsync([.. profiles.Where(profile => profile.Id != edited.Id), edited]);
+            SyncProfileNotifier.RaiseSaved(edited);
+            StatusText.Text = Tr.Format("Mgr.SyncTaskCreated", edited.Name, edited.LeftPath, edited.RightPath);
+        });
+    }
+
+    private SyncProfile? ShowProfileEditor(SyncProfile draft)
+    {
+        var editor = new ProfileEditorWindow(draft, _settings) { Owner = this };
+        return editor.ShowDialog() == true ? editor.SavedProfile : null;
+    }
+
+    /// <summary>
+    /// E2 的接缝：问用户要一份两格填好的草稿，答回来计划或取消。没装接缝时走真的
+    /// <see cref="CloudSyncWizardWindow"/>；装了却答 <see langword="null"/> 就是**用户取消**。
+    /// </summary>
+    internal Func<CloudSyncTask.Plan?>? ShowSyncWizard { get; set; }
+
+    /// <summary>
+    /// E2 的接缝：向导里「选择…」那一下。默认走既有的 <see cref="RemoteEndpointPickerWindow"/> ——
+    /// 它是主窗口加云端端点时用的同一个窗，所以向导里挑出来的端点与主窗口里能用的完全是同一批。
+    /// </summary>
+    internal Func<string, string?, string?>? AskEndpoint { get; set; }
+
+    /// <summary>
+    /// 双向同步向导（E2）。与 E1 的差别只有两处：本地那一侧也是用户挑的（而不是留空），
+    /// 以及建完就存、不再开 Profile 编辑器 —— 那是「一键」的含义。校验全在
+    /// <see cref="CloudSyncTask.WizardOfferFor"/>，所以少一格或两格相同都在存盘**之前**被说清。
+    /// </summary>
+    private async void SyncWizard_Click(object sender, RoutedEventArgs e)
+    {
+        await RunBusyAsync(SyncWizardButton, Tr.F("Mgr.BusyCreate"), Tr.F("Mgr.OpeningSyncWizard"), async () =>
+        {
+            var store = new ProfileStore();
+            IReadOnlyList<SyncProfile> profiles;
+            try { profiles = await store.LoadAsync(); }
+            catch (Exception ex) { StatusText.Text = Tr.Format("Mgr.SyncTaskListFailed", RcloneUiError.Describe(ex, "sync-wizard-list")); return; }
+
+            var names = profiles.Select(profile => profile.Name).ToList();
+            var plan = ShowSyncWizard is { } show ? show() : RunSyncWizard(names);
+            if (plan is null) { StatusText.Text = Tr.F("Mgr.SyncTaskCancelled"); return; }
+            // Re-checked here rather than trusted from the wizard: the seam can be installed by a test or by
+            // a future caller, and profiles.json is the one place a bad row is expensive to undo.
+            var offer = CloudSyncTask.WizardOfferFor(plan.LeftPath, plan.RightPath, names);
+            if (offer.Plan is not { } checkedPlan) { StatusText.Text = offer.Refusal ?? Tr.F("Mgr.CannotCreateSyncTask"); return; }
+
+            var profile = SyncProfile.Create(checkedPlan.Name, checkedPlan.LeftPath, checkedPlan.RightPath) with
+            {
+                Description = checkedPlan.Description,
+                Mode = SyncMode.TwoWay
+            };
+            await store.SaveAsync([.. profiles, profile]);
+            SyncProfileNotifier.RaiseSaved(profile);
+            StatusText.Text = Tr.Format("Mgr.SyncWizardTaskCreated", profile.Name, profile.LeftPath, profile.RightPath);
+        });
+    }
+
+    private CloudSyncTask.Plan? RunSyncWizard(IReadOnlyCollection<string> existingNames)
+    {
+        var wizard = new CloudSyncWizardWindow(existingNames, askEndpoint: AskEndpoint ?? ShowEndpointPicker)
+        { Owner = this };
+        return wizard.ShowDialog() == true ? wizard.Result : null;
+    }
+
+    private string? ShowEndpointPicker(string side, string? initial)
+    {
+        var picker = new RemoteEndpointPickerWindow(side, initial) { Owner = this };
+        return picker.ShowDialog() == true ? picker.ResultUri : null;
     }
 
     private async void Edit_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择要编辑的端点。"; return; }
-        await RunBusyAsync(EditButton, "正在打开…", "正在读取端点参数…", async () =>
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickEndpointToEdit"); return; }
+        await RunBusyAsync(EditButton, Tr.F("Mgr.BusyOpen"), Tr.F("Mgr.LoadingEndpointParams"), async () =>
         {
             // Read the parameters before opening the form: an edit form must show the settings rclone
             // actually holds, not the subset the endpoint list displays.
@@ -666,22 +841,22 @@ public partial class RemoteEndpointManagerWindow : Window
             if (editor.ShowDialog() != true || editor.SavedRemoteName is null) return;
             await RefreshAsync();
             SelectEndpoint(editor.SavedRemoteName);
-            StatusText.Text = $"已更新端点：{editor.SavedRemoteName}。";
+            StatusText.Text = Tr.Format("Mgr.EndpointUpdated", editor.SavedRemoteName);
         });
     }
 
     private async void Reconnect_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择一个端点。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickEndpoint"); return; }
         var kind = KindOf(account);
         if (!CloudProviderCatalog.RequiresOAuth(kind))
-        { StatusText.Text = $"只有需要浏览器授权的端点可以重新登录；{CloudEndpointService.DisplayName(kind)} 请直接编辑端点参数。"; return; }
-        await RunBusyAsync(ReconnectButton, "正在登录…", "正在重新登录，请在浏览器完成授权…", async () =>
+        { StatusText.Text = Tr.Format("Mgr.CannotReconnectProvider", CloudEndpointService.DisplayName(kind)); return; }
+        await RunBusyAsync(ReconnectButton, Tr.F("Mgr.BusyLogin"), Tr.F("Mgr.ReconnectingInBrowser"), async () =>
         {
             var progress = new Progress<string>(message => StatusText.Text = message);
             await CloudEndpointService.ReconnectAsync(kind, account.Name, progress);
             await RefreshAsync();
-            StatusText.Text = $"“{account.Name}”已重新登录。";
+            StatusText.Text = Tr.Format("Mgr.Reconnected", account.Name);
         });
     }
 
@@ -845,6 +1020,101 @@ public partial class RemoteEndpointManagerWindow : Window
     /// pre-filled, so the user supplies the credentials and the same validation and create path run as for a
     /// hand-entered endpoint. A name already in use is never overwritten: the newcomer is renamed.
     /// </summary>
+    /// <summary>
+    /// E3 的接缝：问「这份诊断写到哪里」，答一个路径或取消。没装接缝时走真的 <see cref="SaveFileDialog"/>。
+    /// 刻意**只**接管路径而不接管写入：接缝如果连写一起接管，测试就只能断言「有人被叫过」，
+    /// 而「文件真的落盘、里面真的没有凭据」恰恰是这一项要证明的两件事。
+    /// </summary>
+    internal Func<string, string?>? AskDiagnosticsFile { get; set; }
+
+    /// <summary>
+    /// 导出一份诊断报告（E3）。内容由 <see cref="CloudDiagnosticsReport"/> 拼装：环境、端点（只有名字与
+    /// 类型）、设置（代理口令脱敏）、传输归档与今天的 rclone 日志尾部。**不导出 <c>rclone.conf</c>** ——
+    /// 端点的凭据只在那个文件里，所以不碰它就是这件事的全部保证。
+    /// </summary>
+    private async void ExportDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        await RunBusyAsync(ExportDiagnosticsButton, "正在导出…", "正在收集诊断信息…", async () =>
+        {
+            var now = _transfers.Clock();
+            var snapshot = await CollectDiagnosticsAsync(now);
+            var report = CloudDiagnosticsReport.Compose(snapshot);
+            var defaultName = CloudDiagnosticsReport.DefaultFileName(now);
+            var path = AskDiagnosticsFile is { } ask ? ask(defaultName) : AskDiagnosticsPath(defaultName);
+            if (path is not { Length: > 0 }) { StatusText.Text = "已取消导出诊断。"; return; }
+            try { await File.WriteAllTextAsync(path, report, new System.Text.UTF8Encoding(false)); }
+            catch (Exception ex) { StatusText.Text = "无法写入诊断文件：" + RcloneUiError.Describe(ex, "diagnostics-write"); return; }
+            StatusText.Text = $"诊断报告已导出：{path}。";
+        });
+    }
+
+    private string? AskDiagnosticsPath(string defaultName)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "导出诊断报告",
+            FileName = defaultName,
+            DefaultExt = ".txt",
+            AddExtension = true,
+            Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*"
+        };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
+    /// <summary>
+    /// Gathers the report. Every answer is best-effort and says so on its own: a report that lost WinFsp,
+    /// the rclone version and the log to one exception would be a report that looks complete and is not.
+    /// </summary>
+    private async Task<CloudDiagnosticsReport.Snapshot> CollectDiagnosticsAsync(DateTimeOffset now)
+    {
+        var winFsp = Safe(() => WinFspDetector.Detect(), (WinFspStatus?)null);
+        var rcloneVersion = await SafeAsync(() => _files.RcloneVersionAsync(), (string?)"") ?? "";
+        var rclonePath = Safe(() => BundledRclone.ExecutablePath, "");
+        var accounts = _accounts.Select(row => row.Account).ToList();
+        var history = await SafeAsync(() => new CloudTransferHistoryRepository().QueryAsync(), []);
+        var logPath = Safe(() => CloudTransferDiagnostics.LogPath(now), "");
+        var logTail = Safe(() => CloudTransferDiagnostics.ReadLog(logPath, maxLines: 120), "");
+        return new CloudDiagnosticsReport.Snapshot(
+            new ApplicationVersionService().DisplayVersion,
+            System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            Environment.Is64BitProcess,
+            winFsp?.Installed ?? false,
+            winFsp?.Summary ?? "",
+            rcloneVersion,
+            rclonePath,
+            CloudDiagnosticsReport.EndpointRows(accounts),
+            CloudDiagnosticsReport.SettingsRows(_settings),
+            logPath,
+            logTail,
+            HistoryRows(history),
+            now.ToUniversalTime());
+    }
+
+    /// <summary>归档那几行：条数、成功数与最后一条的时间与说法。</summary>
+    private static IReadOnlyList<CloudDiagnosticsReport.Row> HistoryRows(IReadOnlyList<CloudTransferHistoryEntry> history)
+    {
+        if (history.Count == 0) return [];
+        var succeeded = history.Count(entry => entry.Succeeded);
+        return
+        [
+            new("条数", history.Count.ToString()),
+            new("其中成功", succeeded.ToString()),
+            new("最近一条", $"{history[0].ArchivedUtc.LocalDateTime:yyyy-MM-dd HH:mm} · {CloudTransferHistorySummary.Describe(history[0])}")
+        ];
+    }
+
+    private static T Safe<T>(Func<T> read, T fallback)
+    {
+        try { return read(); }
+        catch (Exception) { return fallback; }
+    }
+
+    private static async Task<T> SafeAsync<T>(Func<Task<T>> read, T fallback)
+    {
+        try { return await read(); }
+        catch (Exception) { return fallback; }
+    }
+
     private async void ImportEndpoints_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
@@ -1502,7 +1772,7 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private void BuildSortOptions()
     {
-        foreach (var (_, label) in SortOptions) SortBox.Items.Add(label);
+        foreach (var (_, label) in SortOptions) SortBox.Items.Add(Tr.F(label));
         SortBox.SelectedIndex = 0;
     }
 
@@ -1516,7 +1786,7 @@ public partial class RemoteEndpointManagerWindow : Window
     private void SortDirection_Click(object sender, RoutedEventArgs e)
     {
         _sortDescending = !_sortDescending;
-        SortDirectionButton.Content = _sortDescending ? "降序" : "升序";
+        SortDirectionButton.Content = _sortDescending ? Tr.F("Mgr.Descending") : Tr.F("Mgr.Ascending");
         ApplyView();
     }
 
@@ -1527,13 +1797,16 @@ public partial class RemoteEndpointManagerWindow : Window
     private void ColumnHeader_Click(object sender, RoutedEventArgs e)
     {
         if (e.OriginalSource is not GridViewColumnHeader header || header.Role == GridViewColumnHeaderRole.Padding) return;
-        // The header's own text lives on its column; GridViewColumnHeader itself only exposes Column/Role.
-        var index = (header.Column?.Header as string) switch { "名称" => 0, "大小" => 1, "修改时间" => 2, _ => -1 };
+        // The column carries its ordering key as its automation id, and that id is the same key the ordering
+        // list holds — so the two cannot drift. Matching the header *text* would stop working the moment the
+        // header became a localized label, and would read the wrong column in the other language.
+        var key = header.Column is { } column ? AutomationProperties.GetAutomationId(column) : "";
+        var index = Array.FindIndex(SortOptions, option => option.Label == key);
         if (index < 0) return;
         if (SortOptions[index].Column == _sortColumn) _sortDescending = !_sortDescending;
         else { _sortColumn = SortOptions[index].Column; _sortDescending = false; }
         SortBox.SelectedIndex = index;
-        SortDirectionButton.Content = _sortDescending ? "降序" : "升序";
+        SortDirectionButton.Content = _sortDescending ? Tr.F("Mgr.Descending") : Tr.F("Mgr.Ascending");
         ApplyView();
     }
 

@@ -1,0 +1,162 @@
+# ---- Sync progress window ----
+Progress.AutoClose	完成后自动关闭	Close when finished
+Progress.AutoCloseName	同步完成后自动关闭窗口	Close the window when the sync finishes
+Progress.BytesProgressName	已传输字节进度	Transferred bytes progress
+Progress.CancelledReason	同步已取消。	The sync was cancelled.
+Progress.Close	关闭	Close
+Progress.CloseName	关闭同步进度窗口	Close the sync progress window
+Progress.ColErrorAdvice	错误 / 建议	Error / advice
+Progress.ColOperation	操作	Operation
+Progress.ColPath	路径	Path
+Progress.ColStage	状态	Stage
+Progress.DoneCancelled	已取消	Cancelled
+Progress.DoneFailed	同步失败	Sync failed
+Progress.DonePartial	已结束（部分成功）	Finished (partly succeeded)
+Progress.DoneSucceeded	已成功完成	Finished successfully
+Progress.EtaSuffix	 · 预计剩余 {0}	 · {0} remaining
+Progress.FileProgressName	当前文件传输进度	Current file transfer progress
+Progress.FileTransfersBytes	文件传输 / 字节	File transfers / bytes
+Progress.FilesDone	已完成 {0} / {1} 个文件，{2} / {3}	Finished {0} / {1} files, {2} / {3}
+Progress.FilesDoneInitial	已完成 0 / {0} 个文件，0 B	Finished 0 / {0} files, 0 B
+Progress.FinishingSync	正在完成同步	Finishing the sync
+Progress.Initializing	正在初始化同步	Initializing the sync
+Progress.KindBlocked	已阻止	Blocked
+Progress.KindConflict	冲突	Conflict
+Progress.KindCopyToLeft	复制到左侧	Copy to the left
+Progress.KindCopyToRight	复制到右侧	Copy to the right
+Progress.KindCreateLeftDir	创建左侧目录	Create the left folder
+Progress.KindCreateRightDir	创建右侧目录	Create the right folder
+Progress.KindDeleteLeft	删除左侧	Delete on the left
+Progress.KindDeleteRight	删除右侧	Delete on the right
+Progress.KindMove	移动	Move
+Progress.KindMoveConflict	移动冲突	Move conflict
+Progress.LiveSummary	已完成 {0}，执行中 {1}，等待 {2}，失败 {3}	Finished {0}, running {1}, waiting {2}, failed {3}
+Progress.LogSaved	运行日志已保存：{0}	The run log was saved: {0}
+Progress.NoTransfers	本次没有文件传输	No file transfers in this run
+Progress.OperationDetails	操作详情	Operation details
+Progress.OperationDetailsName	同步操作详情	Sync operation details
+Progress.Preparing	正在准备	Preparing
+Progress.PreparingTransfer	正在准备传输…	Preparing the transfer…
+Progress.Progress	进度	Progress
+Progress.RetryCancelled	失败项重试已取消。	The retry of failed items was cancelled.
+Progress.RetryFailed	失败项重试失败。	The retry of failed items failed.
+Progress.RetryFailedName	重试失败项	Retry the failed items
+Progress.RetryFinished	失败项重试已完成。	The retry of failed items finished.
+Progress.RetryingCount	正在重试 {0} 项可重试失败。	Retrying {0} retryable failures.
+Progress.RetryingTitle	正在重试失败项	Retrying failed items
+Progress.SaveLog	保存日志	Save log
+Progress.SaveLogName	保存本次运行日志	Save this run's log
+Progress.SkippedReason	因其他操作失败而未执行。	Not run because another operation failed.
+Progress.SpeedElapsed	速度 / 用时	Speed / elapsed
+Progress.SpeedLine	{0}/秒 · {1} 项并发 · 已用 {2}	{0}/s · {1} concurrent · {2} elapsed
+Progress.StageCancelled	已取消	Cancelled
+Progress.StageCommitted	已完成	Done
+Progress.StageDeleting	删除中	Deleting
+Progress.StageFailed	失败	Failed
+Progress.StagePending	等待中	Waiting
+Progress.StagePreparing	准备中	Preparing
+Progress.StageTransferring	传输中	Transferring
+Progress.StageVerifying	校验中	Verifying
+Progress.StateIcon	同步状态图标	Sync status icon
+Progress.Syncing	正在同步	Syncing
+Progress.WaitingForTask	等待传输任务…	Waiting for a transfer job…
+Progress.WaitingTransfer	等待传输	Waiting to transfer
+Progress.WindowTitle	同步进度	Sync progress
+
+# ---- Batch run queue ----
+Batch.Finished	完成：{0} 成功，{1} 失败。	Finished: {0} succeeded, {1} failed.
+Batch.ProfileListName	批处理配置列表	Batch Profile list
+Batch.Running	队列运行中（最多 {0} 项）…	Queue running (up to {0} items)…
+Batch.Start	开始	Start
+Batch.StartName	开始批处理运行	Start the batch run
+Batch.StateFailed	失败：{0}	Failed: {0}
+Batch.StateRunning	运行中	Running
+Batch.StateSucceeded	成功	Succeeded
+Batch.StateWaiting	等待	Waiting
+Batch.StopName	停止批处理队列	Stop the batch queue
+Batch.StopQueue	停止队列	Stop queue
+Batch.WindowTitle	批处理运行	Batch run
+
+# ---- Cloud folder size ----
+Size.ActionLabel	统计大小	Calculate size
+Size.CostHint	统计会遍历整个子目录树，对象越多越久；这一步发出去就收不回，关掉面板只是不再等它。	The calculation walks the whole subfolder tree, so the more objects there are the longer it takes; once it is sent it cannot be taken back, and closing the panel only stops waiting for it.
+Size.Counted	{0}（{1} 字节）· {2} 个对象	{0} ({1} bytes) · {2} objects
+Size.Empty	0 个对象，空目录	0 objects, empty folder
+Size.Failed	未能统计	Could not calculate
+Size.Gone	云端已没有这个文件夹	The cloud no longer has this folder
+Size.NoAnswer	云端没有给出可读取的大小。	The cloud did not return a readable size.
+Size.NotADirectory	这是一个文件，不是文件夹	This is a file, not a folder
+Size.NotCounted	未统计	Not calculated
+Size.SizelessCounted	（其中 {0} 个云端不报大小，按 0 计入）	(of which {0} report no size from the cloud and count as 0)
+
+# ---- Copyable rclone diagnostic block ----
+Rclone.Category	类别：{0}（可重试：{1}）	Category: {0} (retryable: {1})
+Rclone.Context	上下文：{0}	Context: {0}
+Rclone.DiagnosticId	{0} {1}（诊断 ID：{2}）	{0} {1} (diagnostic ID: {2})
+Rclone.DiagnosticIdOnly	诊断 ID：{0}	Diagnostic ID: {0}
+Rclone.ExceptionType	异常类型：{0}	Exception type: {0}
+Rclone.Message	信息：{0}	Message: {0}
+Rclone.NoStatus	无	none
+Rclone.Operation	操作：{0}	Operation: {0}
+Rclone.RequestInput	请求参数：{0}	Request input: {0}
+Rclone.Statuses	HTTP 状态：{0}　RC 状态：{1}	HTTP status: {0} RC status: {1}
+Rclone.TechnicalCode	技术代码：{0}	Technical code: {0}
+Rclone.TechnicalMessage	技术信息：{0}	Technical message: {0}
+Rclone.Unspecified	未指定	Unspecified
+
+# ---- Transfer queue rows, row menu and diagnostics (CloudTransferQueue, CloudTransferRowMenu, CloudTransferDiagnostics) ----
+Transfer.Attempt	第 {0} 次尝试  ·  {1}	Attempt {0}  ·  {1}
+Transfer.CancelledReUpload	已取消，可重新上传	Cancelled; it can be uploaded again
+Transfer.CancelledRestartCopy	已取消，重新复制会从头开始	Cancelled; copying it again starts over
+Transfer.CancelledResumeDownload	已取消，可继续下载	Cancelled; the download can be continued
+Transfer.Continue	继续	Resume
+Transfer.CopiedDetail	详情已复制到剪贴板，可直接粘贴到问题反馈里。	The details were copied to the clipboard; paste them straight into a bug report.
+Transfer.Copy	复制	Copy
+Transfer.CopyDetail	复制详情	Copy details
+Transfer.CopyDetailFailed	没能写入剪贴板，请从详情窗口里自行复制。	The clipboard could not be written; copy it from the details window yourself.
+Transfer.CopyLink	复制分享链接…	Copy share link…
+Transfer.CopyMissingTarget	云端复制缺少目标端点或目标路径。	The cloud copy is missing its destination endpoint or destination path.
+Transfer.CopyNoLocalFolder	复制任务没有本地文件夹：字节由 rclone 在两端之间移动，本机不落盘。	A copy has no local folder: rclone moves the bytes between the two ends and they never land on this machine.
+Transfer.DetailAttempt	尝试次数：{0}	Attempts: {0}
+Transfer.DetailDiagnostics	诊断详情：\n{0}	Diagnostics: \n{0}
+Transfer.DetailDirection	方向：{0}	Direction: {0}
+Transfer.DetailError	错误：{0}	Error: {0}
+Transfer.DetailNoDiagnostics	诊断详情：这个任务没有记录更详细的信息。	Diagnostics: this job recorded no further information.
+Transfer.DetailPath	路径：{0}	Path: {0}
+Transfer.DetailStatus	状态：{0}	Status: {0}
+Transfer.DetailTask	任务：{0}	Job: {0}
+Transfer.DiagnosticId	诊断 ID {0}	Diagnostic ID {0}
+Transfer.Download	下载	Download
+Transfer.LimitFailed	限速未能生效：{0}	The rate limit did not take effect: {0}
+Transfer.LinkPending	传输还没开始，云端现在可能还没有这个文件。	The transfer has not started, so the cloud may not have this file yet.
+Transfer.LinkRunning	传输正在进行，等它停下来再生成链接。	The transfer is running; wait for it to stop before making a link.
+Transfer.LinkUnavailable	这个任务没有可分享的云端文件。	This job has no cloud file to share.
+Transfer.LocalPathNoDirectory	本地路径缺少目录：{0}	The local path has no folder: {0}
+Transfer.LogEmpty	失败日志为空：{0}	The failure log is empty: {0}
+Transfer.LogMissing	没有找到今天的失败日志：{0}\n（只有真正发生过 rclone 失败时才会生成这个文件。）	Today's failure log was not found: {0}\n(The file is created only when an rclone failure really happened.)
+Transfer.LogReadFailed	无法读取失败日志：{0}	The failure log could not be read: {0}
+Transfer.LogSummary	共 {0} 条（最多显示 {1} 条）：{2}	{0} records (showing at most {1}): {2}
+Transfer.MoveDown	下移	Move down
+Transfer.MoveUp	上移	Move up
+Transfer.NoErrorInfo	这个任务还没有错误信息。	This job has no error information yet.
+Transfer.NoLocalPath	这个任务没有可打开的本地路径。	This job has no local path to open.
+Transfer.NoTasks	暂无传输任务。把文件拖到文件浏览器即可上传，把文件拖出即可下载。	No transfers yet. Drag a file into the file browser to upload it; drag one out to download it.
+Transfer.OpenFolder	打开所在文件夹	Open containing folder
+Transfer.RateLimited	限速 {0}	Limited to {0}
+Transfer.RateUnlimited	不限速	No limit
+Transfer.ReorderOnlyPending	只有等待中的传输可以调整顺序。	Only transfers that are still waiting can be reordered.
+Transfer.Retry	重试	Retry
+Transfer.StatusCompleted	已完成  ·  {0} MB	Finished  ·  {0} MB
+Transfer.StatusFailed	失败：{0}	Failed: {0}
+Transfer.StatusPaused	已暂停	Paused
+Transfer.StatusPending	等待中	Waiting
+Transfer.SummaryCompleted	已完成 {0}	Finished {0}
+Transfer.SummaryPaused	已暂停 {0}	Paused {0}
+Transfer.SummaryPending	等待 {0}	Waiting {0}
+Transfer.SummaryResumable	可续传 {0}	Resumable {0}
+Transfer.SummaryRunning	进行中 {0}	Running {0}
+Transfer.SummaryWaitingWindow	等待传输时段 {0}	Waiting for the transfer window {0}
+Transfer.UnknownError	未知错误	Unknown error
+Transfer.Upload	上传	Upload
+Transfer.UploadSourceGone	要上传的本地文件已不存在。	The local file to upload is gone.
+Transfer.ViewLog	查看日志	View log

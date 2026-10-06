@@ -113,6 +113,34 @@ public sealed record ApplicationSettings
     /// browsing, mounts, the SFTP service and profile sync runs alike. It never touches the system proxy.
     /// </remarks>
     public string? RcloneProxy { get; init; }
+
+    /// <summary>
+    /// Which language the shell's own text is shown in. A display preference rather than a behaviour
+    /// switch: it selects the resource set every visible string is read from, and nothing else changes.
+    /// Defaults to <see cref="AppLanguage.Chinese"/> because that is the language this application was
+    /// written in, and a setting nobody has touched must not repaint the app under them.
+    /// </summary>
+    public AppLanguage Language { get; init; } = AppLanguage.Chinese;
+
+    /// <summary>
+    /// Whether the cloud manager has already shown its first-run guide (E5). Off by default, and it is the
+    /// only thing that makes the guide stop: <c>CloudFirstRunGuide.ShouldShow</c> also declines to show it to
+    /// somebody who already has endpoints, so this flag is what silences it for a user who read it and said
+    /// nothing. Saved by the window that owns the guide, not by <c>SettingsWindow</c>.
+    /// </summary>
+    public bool CloudGuideSeen { get; init; }
+}
+
+/// <summary>
+/// The shell's languages. Persisted as a number, so the list is append-only: renumbering an existing
+/// member would silently repaint somebody's saved choice as a different language.
+/// </summary>
+public enum AppLanguage
+{
+    /// <summary>简体中文。The default.</summary>
+    Chinese,
+    /// <summary>English.</summary>
+    English
 }
 
 /// <summary>

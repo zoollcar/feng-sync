@@ -1,5 +1,6 @@
 using FengSync.Core;
 using FengSync.Core.Rclone.Diagnostics;
+using FengSync.Localization;
 using FluentIcon = FluentIcons.Common.Icon;
 
 namespace FengSync.Services;
@@ -23,6 +24,14 @@ public sealed class CloudFileManagerService
     /// </summary>
     public CloudFileManagerService(Func<CancellationToken, Task<RcloneRcClient>>? client = null) =>
         _client = client ?? (ct => AppServices.Current.RcloneHost.GetClientAsync(ct));
+
+    /// <summary>
+    /// The bundled rclone's own build string (E3's diagnostics export). Lives here rather than in the window
+    /// because the RC client is this service's private business, and a second way to reach it would be a
+    /// second place where the answer could be shaped differently.
+    /// </summary>
+    public async Task<string?> RcloneVersionAsync(CancellationToken ct = default) =>
+        await (await _client(ct)).RcloneVersionAsync(ct);
 
     public async Task<IReadOnlyList<CloudFileEntry>> ListAsync(string remote, string path, CancellationToken ct = default)
     {
@@ -289,7 +298,7 @@ public sealed record CloudFileEntry(string Name, string Path, bool IsDirectory, 
 
     // Fully qualified: this record's own Path property shadows System.IO.Path here.
     public FluentIcon Icon => IsDirectory ? FluentIcon.Folder : ExtensionIcon(System.IO.Path.GetExtension(Name));
-    public string Type => IsDirectory ? "文件夹" : "文件";
+    public string Type => IsDirectory ? Tr.F("Mgr.TypeFolder") : Tr.F("Mgr.TypeFile");
     public string SizeDisplay => IsDirectory ? "" : CloudItemDetails.HumanSize(Size);
     public string ModifiedDisplay => ModifiedUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "";
 

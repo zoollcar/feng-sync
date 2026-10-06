@@ -1,0 +1,119 @@
+# ---- After-transfer action (CloudPostTransferAction) ----
+AfterTransfer.Cancelled	已取消“{0}”。	"{0}" was cancelled.
+AfterTransfer.ConfirmExit	所有传输都已完成。现在退出 Feng Sync？	Every transfer has finished. Exit Feng Sync now?
+AfterTransfer.ConfirmShutdown	所有传输都已完成。现在关闭计算机？\n\n关闭会在 60 秒后开始，期间可以在命令行执行 shutdown /a 取消。	Every transfer has finished. Shut down the computer now?\n\nShutdown starts in 60 seconds; run shutdown /a on the command line to call it off.
+AfterTransfer.ConfirmSleep	所有传输都已完成。现在让计算机休眠？	Every transfer has finished. Sleep the computer now?
+AfterTransfer.DescribeExit	传输完成后退出 Feng Sync	Exit Feng Sync when the transfers finish
+AfterTransfer.DescribeNone	不执行任何操作	Do nothing
+AfterTransfer.DescribeShutdown	传输完成后关闭计算机	Shut down the computer when the transfers finish
+AfterTransfer.DescribeSleep	传输完成后让计算机休眠	Sleep the computer when the transfers finish
+AfterTransfer.Skipped	有 {0} 项传输没有成功，已跳过“{1}”，请先检查失败原因。	{0} transfers did not succeed, so "{1}" was skipped; check the failures first.
+
+# ---- Cloud item details panel (CloudItemDetails) ----
+Details.BackendNoHash	此后端未提供校验值	This backend provides no checksum
+Details.Endpoint	所在端点	Endpoint
+Details.EndpointRoot	端点根目录	Endpoint root
+Details.File	文件	File
+Details.FileCount	{0} 个	{0} files
+Details.Folder	文件夹	Folder
+Details.FolderCount	{0} 个（大小未统计）	{0} folders (size not counted)
+Details.FolderNoHash	文件夹没有校验值	A folder has no checksum
+Details.Gone	云端已没有这个{0}，请刷新目录。	The cloud no longer has this {0}; refresh the folder.
+Details.Hash	校验值	Checksum
+Details.HashActionHint	校验值需要读取整个文件；云端对象会因此走完一遍下载，大文件请耐心等待。	A checksum reads the whole file; a cloud object is downloaded in full to answer, so be patient with a large file.
+Details.HashActionLabel	计算校验值	Compute checksum
+Details.HashNotComputed	未计算	Not computed
+Details.HashWithType	校验值（{0}）	Checksum ({0})
+Details.LastModified	最近修改	Last modified
+Details.MimeType	MIME 类型	MIME type
+Details.Modified	修改时间	Modified
+Details.Name	名称	Name
+Details.NoFiles	没有文件	No files
+Details.Path	路径	Path
+Details.PrefixEnforced	（由 rclone 强制，无法越出）	(enforced by rclone, cannot be escaped)
+Details.Selection	选择	Selection
+Details.SelectionCount	{0} 项	{0} items
+Details.Size	大小	Size
+Details.SizeValue	{0}（{1} 字节）	{0} ({1} bytes)
+Details.Status	状态	Status
+Details.Type	类型	Type
+Details.Unknown	未知	Unknown
+
+# ---- Transfer history rows (CloudTransferHistory) ----
+History.AttemptSuffix	（第 {0} 次尝试）	(attempt {0})
+History.Cancelled	已取消	Cancelled
+History.Completed	已完成	Completed
+History.Copy	复制	Copy
+History.Download	下载	Download
+History.Empty	还没有归档的传输。清除已完成时会把它们记到这里。	No transfers are archived yet. Clearing the finished ones files them here.
+History.Failed	失败	Failed
+History.Paused	已暂停	Paused
+History.Summary	共 {0} 条归档记录，其中成功 {1} 条、失败 {2} 条。	{0} archived records, of which {1} succeeded and {2} failed.
+History.Upload	上传	Upload
+
+# ---- Name and capacity safety (CloudFileOperationSafety) ----
+Safety.AndMore	  （以及另外 {0} 项）	  (and {0} more)
+Safety.CompositionFilesFolders	文件夹 {0} 个、文件 {1} 个	{0} folders, {1} files
+Safety.CompositionFolders	文件夹 {0} 个	{0} folders
+Safety.CompositionLine	其中{0}；文件夹会连同其中的全部内容一起删除。	of which {0}; deleting a folder also deletes everything inside it.
+Safety.ConfirmDelete	确定删除以下 {0} 项？	Delete these {0} items?
+Safety.InRecycleBin	这些项目已经在 {0} 里，删掉以后本应用的「还原」也帮不上了。	These items are already in {0}; once deleted, this program's "Restore" cannot help either.
+Safety.NameControl	名称不能包含控制字符。	A name cannot contain control characters.
+Safety.NameDot	名称不能是“.”或“..”。	A name cannot be "." or "..".
+Safety.NameRequired	请输入名称。	Enter a name.
+Safety.NameSeparator	名称不能包含“/”或“\\”。	A name cannot contain "/" or "\\".
+Safety.NameTooLong	名称不能超过 {0} 个字符。	A name cannot be longer than {0} characters.
+Safety.NameWhitespace	名称首尾不能有空格。	A name cannot begin or end with a space.
+Safety.NoTrash	该端点没有回收站，删除后无法恢复。	This endpoint has no trash, so a delete cannot be undone.
+Safety.TrashSupported	该端点会先移入云端回收站，可在服务商的网页端还原。	This endpoint moves them to the cloud trash first, where the provider's web console can restore them.
+
+# ---- Version history (CloudVersionHistory) ----
+Version.ExplainGoToConsole	要查看历史版本，请到 {0} 自己的网页端。	To see version history, go to {0}'s own web console.
+Version.ExplainNoConsole	这个端点没有可打开的网页端（{0}），请到你的服务商自己的控制台查看。	This endpoint has no web console to open ({0}); look in your provider's own console.
+Version.ExplainNoVersions	本应用读不到历史版本：它访问云端唯一的通道是 rclone，而 rclone 不提供版本列表。	This program cannot read version history: its only route to the cloud is rclone, and rclone provides no version list.
+Version.ExplainSwitchNotUsed	（S3 / B2 / ImageKit 有一个「把旧版本列进目录」的开关，但那会让文件列表里混进云端并不存在的文件，所以本应用不打开它。）	(S3 / B2 / ImageKit have a switch that lists old versions as files, but that mixes names the cloud does not have into the file list, so this program leaves it off.)
+Version.MenuLabel	在网页端查看历史版本…	View version history in the web console…
+Version.OpenLabel	打开 {0} 网页端	Open the {0} web console
+Version.StatusNoConsole	本应用读不到历史版本（rclone 不提供版本列表），而 {0} 也没有可打开的网页端。	This program cannot read version history (rclone provides no version list), and {0} has no web console to open.
+Version.StatusOpened	已在浏览器里打开 {0} 网页端。本应用读不到历史版本：rclone 不提供版本列表。	Opened the {0} web console in the browser. This program cannot read version history: rclone provides no version list.
+
+# ---- Browser bookmarks (CloudBrowserBookmarks, CloudBrowserBookmarkStore) ----
+Bookmark.LabelRoot	{0}  ·  根目录	{0}  ·  root folder
+Bookmark.UnreadableFile	无法识别的收藏文件。	Unrecognized bookmarks file.
+
+# ---- Batch completion notification (CloudCompletionNotifier) ----
+Notify.BatchAllDone	云盘传输完成：{0} 项。	Cloud transfer complete: {0} items.
+Notify.BatchSummary	云盘传输结束：{0}。	Cloud transfer finished: {0}.
+Notify.Failed	{0} 项失败	{0} failed
+Notify.ListSeparator	，	, 
+Notify.Stopped	{0} 项已停止	{0} stopped
+Notify.Succeeded	{0} 项成功	{0} succeeded
+
+# ---- rclone OAuth flow (RcloneOAuthFlow) ----
+OAuth.BrowserOpened	浏览器已打开，请完成 {0} 授权…	The browser is open; finish authorizing {0}…
+OAuth.NoStructuredControl	内置 rclone 不支持结构化 OAuth 状态接口（config/oauthstatus、config/oauthstop）。请升级 rclone 后重试；Feng Sync 不会回退到解析命令行文本。	The built-in rclone does not support the structured OAuth status interface (config/oauthstatus, config/oauthstop). Upgrade rclone and try again; Feng Sync will not fall back to parsing command-line text.
+OAuth.NonLoopbackAuthUri	rclone 返回了非本机 OAuth 授权地址，已拒绝打开。请检查内置 rclone 的完整性。	rclone returned a non-local OAuth authorization address, so it was not opened. Check the integrity of the built-in rclone.
+OAuth.StateMissingOption	rclone OAuth 状态“{0}”缺少待回答选项。	The rclone OAuth state "{0}" has no option to answer.
+OAuth.TooManySteps	rclone OAuth 配置步骤过多，已停止以避免无限循环。	The rclone OAuth configuration took too many steps, so it was stopped to avoid an endless loop.
+OAuth.UnsupportedQuestion	rclone OAuth 要求应用无法自动回答的选项：{0}。\n{1}	rclone OAuth asks for an option this application cannot answer automatically: {0}.\n{1}
+
+# ---- Application service locator (AppServices) ----
+Service.NotInstalled	应用服务尚未初始化：请在 Application 构造函数中调用 AppServices.Install。	The application services have not been initialized: call AppServices.Install in the Application constructor.
+
+# ---- Browser thumbnails (CloudBrowserTiles, CloudThumbnailStore) ----
+Thumb.Empty	“{0}”没有可读取的内容，缩略图跳过。	"{0}" has nothing to read, so no thumbnail is shown.
+Thumb.NotWritable	缩略图只用于显示，不参与写回。	The thumbnail is only for display and is never written back.
+Thumb.TooLarge	“{0}”有 {1}，超过缩略图的上限 {2}，只显示文件图标。	"{0}" is {1}, over the thumbnail limit of {2}, so only the file icon is shown.
+Thumb.Undecodable	“{0}”是 {1} 图片，本程序没有它的解码器，只显示文件图标。	"{0}" is a {1} image and this program has no decoder for it, so only the file icon is shown.
+
+# ---- Update coordinator (UpdateCoordinator) ----
+Update.BusyCannotInstall	同步或比较进行中，不能安装更新。	An update cannot be installed while a sync or comparison is running.
+Update.CannotLocateExe	无法确定实际程序路径。	The real program path could not be determined.
+Update.CannotUpdateTitle	无法自动更新	The update cannot be installed automatically
+Update.CheckCaption	检查更新	Check for updates
+Update.CheckFailed	检查更新失败。	Checking for updates failed.
+Update.ExitingTitle	FengSync - 正在退出并安装更新…	FengSync - exiting to install the update…
+Update.FailedTitle	更新失败	The update failed
+Update.InstallDirInvalid	安装目录验证失败。	The installation folder could not be verified.
+Update.ManualDownloadHint	\n请从 Release 页面手动下载。	\nDownload it manually from the Releases page.
+Update.UpToDate	当前已是最新版本 {0}。	You are already on the latest version, {0}.

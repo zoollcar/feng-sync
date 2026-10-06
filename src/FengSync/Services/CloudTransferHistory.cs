@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Text.Json;
 using FengSync.Core;
+using FengSync.Localization;
 
 namespace FengSync.Services;
 
@@ -114,31 +115,32 @@ public static class CloudTransferHistorySummary
     {
         var direction = entry.Direction switch
         {
-            CloudTransferDirection.Upload => "上传",
-            CloudTransferDirection.Download => "下载",
-            _ => "复制"
+            CloudTransferDirection.Upload => Tr.F("History.Upload"),
+            CloudTransferDirection.Download => Tr.F("History.Download"),
+            _ => Tr.F("History.Copy")
         };
         var name = entry.Direction == CloudTransferDirection.Upload
             ? System.IO.Path.GetFileName(entry.LocalPath)
             : CloudTransferTask.NameOf(entry.RemotePath);
         var outcome = entry.State switch
         {
-            CloudTransferState.Completed => "已完成",
-            CloudTransferState.Failed => "失败",
-            CloudTransferState.Cancelled => "已取消",
-            CloudTransferState.Paused => "已暂停",
+            CloudTransferState.Completed => Tr.F("History.Completed"),
+            CloudTransferState.Failed => Tr.F("History.Failed"),
+            CloudTransferState.Cancelled => Tr.F("History.Cancelled"),
+            CloudTransferState.Paused => Tr.F("History.Paused"),
             _ => entry.State.ToString()
         };
         var where = entry.Direction == CloudTransferDirection.Copy
             ? $"{entry.RemoteUri}/{entry.RemotePath} → {entry.TargetUri}/{entry.TargetPath}"
             : $"{entry.RemoteUri}/{entry.RemotePath}";
         return $"{entry.ArchivedUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}  {direction}  {name}  {outcome}  {where}"
-            + (entry.Attempt > 1 ? $"（第 {entry.Attempt} 次尝试）" : "");
+            + (entry.Attempt > 1 ? Tr.Format("History.AttemptSuffix", entry.Attempt) : "");
     }
 
     /// <summary>The line above the list. Says what is not there rather than only what is.</summary>
     public static string DescribeAll(IReadOnlyList<CloudTransferHistoryEntry> entries) => entries.Count == 0
-        ? "还没有归档的传输。清除已完成时会把它们记到这里。"
-        : $"共 {entries.Count} 条归档记录，其中成功 {entries.Count(entry => entry.Succeeded)} 条、"
-            + $"失败 {entries.Count(entry => entry.State == CloudTransferState.Failed)} 条。";
+        ? Tr.F("History.Empty")
+        : Tr.Format("History.Summary", entries.Count,
+            entries.Count(entry => entry.Succeeded),
+            entries.Count(entry => entry.State == CloudTransferState.Failed));
 }

@@ -5,6 +5,7 @@ using System.IO;
 using System.Collections.ObjectModel;
 using FengSync.Core;
 using FengSync.Core.Configuration;
+using FengSync.Localization;
 using FengSync.Services;
 using FengSync.ViewModels;
 
@@ -45,28 +46,30 @@ public partial class ProfileEditorWindow : Window
     private void ApplyCommonExcludes_Click(object sender, RoutedEventArgs e)
     {
         var common = new[] { "**/*.tmp", "**/*.partial", ".git/**", ".svn/**", "Thumbs.db", ".DS_Store" };
-        foreach (var pattern in common.Where(pattern => _rules.All(rule => !rule.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase)))) _rules.Add(new(FilterRuleKind.Exclude, pattern, "常用排除"));
-        FilterTestResult.Text = "已添加常用临时文件、版本控制目录和系统文件排除规则。";
+        foreach (var pattern in common.Where(pattern => _rules.All(rule => !rule.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase)))) _rules.Add(new(FilterRuleKind.Exclude, pattern, Tr.F("Profile.CommonExcludes")));
+        FilterTestResult.Text = Tr.F("Profile.CommonExcludesAdded");
     }
     private void TestFilter_Click(object sender, RoutedEventArgs e)
     {
         var path = FilterTestPathBox.Text.Trim();
-        if (!TryLong(FilterTestSizeBox.Text, out var size, "测试文件大小")) return;
+        if (!TryLong(FilterTestSizeBox.Text, out var size, Tr.F("Profile.TestFileSize"))) return;
         var engine = new SyncFilter(Rules: Rules()).CreateEngine();
         var decision = engine.Evaluate(path, new FilterEntryAttributes(size, IsHidden: FilterTestHiddenBox.IsChecked == true, IsSymbolicLink: FilterTestSymlinkBox.IsChecked == true));
-        FilterTestResult.Text = decision.Included ? "包含：" + decision.Reason : "排除：" + decision.Reason;
+        FilterTestResult.Text = decision.Included
+            ? Tr.Format("Profile.ResultIncluded", decision.Reason)
+            : Tr.Format("Profile.ResultExcluded", decision.Reason);
     }
     private void Save(bool newId)
     {
-        if (!int.TryParse(ConcurrencyBox.Text, out var concurrency) || concurrency is < 1 or > 64) { MessageBox.Show("最大并发数必须在 1 到 64 之间。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        if (!int.TryParse(MaxDeletesBox.Text, out var maxDeletes) || maxDeletes < 0) { Sections.SelectedIndex = 5; MessageBox.Show("最大删除数必须是非负整数。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        if (!double.TryParse(MaxDeleteRatioBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var maxDeleteRatio) || maxDeleteRatio is < 0 or > 1) { Sections.SelectedIndex = 5; MessageBox.Show("最大删除比例必须在 0 到 1 之间。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        if (!int.TryParse(TimeToleranceBox.Text, out var tolerance) || tolerance is < 0 or > 86400) { Sections.SelectedIndex = 1; MessageBox.Show("时间容差必须在 0 到 86400 秒之间。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        if (!TryNullableInt(KeepDaysBox.Text, out var keepDays, "保留天数") || !TryNullableInt(MaxVersionsBox.Text, out var maxVersions, "每文件版本数") || !TryTotalBytes(MaxTotalMbBox.Text, out var maxTotalBytes)) { Sections.SelectedIndex = 4; return; }
+        if (!int.TryParse(ConcurrencyBox.Text, out var concurrency) || concurrency is < 1 or > 64) { MessageBox.Show(Tr.F("Profile.ErrConcurrency"), Tr.F("Profile.WindowTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (!int.TryParse(MaxDeletesBox.Text, out var maxDeletes) || maxDeletes < 0) { Sections.SelectedIndex = 5; MessageBox.Show(Tr.F("Profile.ErrMaxDeletes"), Tr.F("Profile.WindowTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (!double.TryParse(MaxDeleteRatioBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var maxDeleteRatio) || maxDeleteRatio is < 0 or > 1) { Sections.SelectedIndex = 5; MessageBox.Show(Tr.F("Profile.ErrMaxDeleteRatio"), Tr.F("Profile.WindowTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (!int.TryParse(TimeToleranceBox.Text, out var tolerance) || tolerance is < 0 or > 86400) { Sections.SelectedIndex = 1; MessageBox.Show(Tr.F("Profile.ErrTimeTolerance"), Tr.F("Profile.WindowTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (!TryNullableInt(KeepDaysBox.Text, out var keepDays, Tr.F("Profile.KeepDays")) || !TryNullableInt(MaxVersionsBox.Text, out var maxVersions, Tr.F("Profile.MaxVersions")) || !TryTotalBytes(MaxTotalMbBox.Text, out var maxTotalBytes)) { Sections.SelectedIndex = 4; return; }
         long? resumeMinimum = null;
         if (UseDefaultResume.IsChecked != true)
         {
-            if (!ByteSize.TryParse(ResumeMinimumBox.Text, out var parsedResume)) { Sections.SelectedIndex = 5; MessageBox.Show("续传最小文件大小无效，请使用 500M、2G 这类写法（0 表示所有文件都续传）。", "Profile 设置", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            if (!ByteSize.TryParse(ResumeMinimumBox.Text, out var parsedResume)) { Sections.SelectedIndex = 5; MessageBox.Show(Tr.F("Profile.ErrResumeMinimum"), Tr.F("Profile.WindowTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             resumeMinimum = parsedResume;
         }
         var filter = new SyncFilter(Rules: Rules());
@@ -75,10 +78,12 @@ public partial class ProfileEditorWindow : Window
         var settings = new ProfileSettings(UseDefaultConcurrency.IsChecked == true ? null : concurrency, UseDefaultCopies.IsChecked == true ? null : VerifyCopies.IsChecked == true, filter, versioning, tolerance, resumeMinimum);
         _viewModel.Update(p => p with { Name = NameBox.Text.Trim(), Description = DescriptionBox.Text, LeftPath = LeftPathBox.Text.Trim(), RightPath = RightPathBox.Text.Trim(), Mode = mode, Enabled = Enabled.IsChecked == true, MaxDeletes = maxDeletes, MaxDeleteRatio = maxDeleteRatio, Settings = settings });
         var validation = ProfileValidator.Validate(_viewModel.Profile);
-        if (!validation.IsValid) { Sections.SelectedIndex = validation.Errors.Any(x => x.Contains("端点") || x.Contains("名称")) ? 0 : 4; MessageBox.Show(string.Join(Environment.NewLine, validation.Errors), "无法保存 Profile", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        // Which page to open is decided by the field the refusal is about, never by looking for a word inside
+        // its sentence — that word changes with the interface language.
+        if (!validation.IsValid) { Sections.SelectedIndex = validation.Errors.Any(x => x.Field is ProfileValidationField.Identity or ProfileValidationField.Endpoints) ? 0 : 4; MessageBox.Show(string.Join(Environment.NewLine, validation.Messages), Tr.F("Profile.CannotSave"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         SavedProfile = newId ? _viewModel.SaveAsNew() : _viewModel.Profile; DialogResult = true;
     }
-    private void RefreshState() { CompatibilityText.Text = _viewModel.Compatibility.CanRun ? "" : "需要修复：" + _viewModel.Compatibility.Summary; DirtyLabel.Text = "编辑副本仅在保存后生效"; }
+    private void RefreshState() { CompatibilityText.Text = _viewModel.Compatibility.CanRun ? "" : Tr.Format("Profile.NeedsFix", _viewModel.Compatibility.Summary); DirtyLabel.Text = Tr.F("Profile.EditCopyNote"); }
     private void UseDefaultCopies_Changed(object sender, RoutedEventArgs e) => VerifyCopies.IsEnabled = UseDefaultCopies.IsChecked != true;
     private void UseDefaultConcurrency_Changed(object sender, RoutedEventArgs e) => ConcurrencyBox.IsEnabled = UseDefaultConcurrency.IsChecked != true;
     private void UseDefaultResume_Changed(object sender, RoutedEventArgs e) => ResumeMinimumBox.IsEnabled = UseDefaultResume.IsChecked != true;
@@ -96,16 +101,16 @@ public partial class ProfileEditorWindow : Window
     }
     private void ApplyRuleAttributes_Click(object sender, RoutedEventArgs e)
     {
-        if (RuleGrid.SelectedItem is not EditableFilterRule rule) { FilterTestResult.Text = "请先选择一条规则。"; return; }
-        if (!TryLong(RuleMinSizeBox.Text, out var min, "最小字节") || !TryLong(RuleMaxSizeBox.Text, out var max, "最大字节") || !TryDate(RuleAfterBox.Text, out var after, "修改时间下限") || !TryDate(RuleBeforeBox.Text, out var before, "修改时间上限")) return;
+        if (RuleGrid.SelectedItem is not EditableFilterRule rule) { FilterTestResult.Text = Tr.F("Profile.SelectRuleFirst"); return; }
+        if (!TryLong(RuleMinSizeBox.Text, out var min, Tr.F("Profile.MinBytes")) || !TryLong(RuleMaxSizeBox.Text, out var max, Tr.F("Profile.MaxBytes")) || !TryDate(RuleAfterBox.Text, out var after, Tr.F("Profile.ModifiedAfterLimit")) || !TryDate(RuleBeforeBox.Text, out var before, Tr.F("Profile.ModifiedBeforeLimit"))) return;
         rule.MinimumSizeBytes = min; rule.MaximumSizeBytes = max; rule.ModifiedAfter = after; rule.ModifiedBefore = before; rule.Hidden = RuleHiddenBox.IsChecked == true ? true : null; rule.SymbolicLink = RuleSymlinkBox.IsChecked == true ? true : null; RuleGrid.Items.Refresh();
     }
-    private async void PreviewRetention_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, "正在预览…", () => ShowRetentionAsync(cleanup: false));
-    private async void CleanupRetention_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, "正在清理…", () => ShowRetentionAsync(cleanup: true));
+    private async void PreviewRetention_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, Tr.F("Profile.Previewing"), () => ShowRetentionAsync(cleanup: false));
+    private async void CleanupRetention_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, Tr.F("Profile.Cleaning"), () => ShowRetentionAsync(cleanup: true));
     private async Task ShowRetentionAsync(bool cleanup)
     {
-        try { if (!TryNullableInt(KeepDaysBox.Text, out var days, "保留天数") || !TryNullableInt(MaxVersionsBox.Text, out var versions, "每文件版本数") || !TryTotalBytes(MaxTotalMbBox.Text, out var bytes)) return; var service = new RetentionCleanupService(); var policy = new RetentionPolicy(days, versions, bytes); if (cleanup) { var count = await service.CleanupAsync(ArchiveBox.Text.Trim(), policy); RetentionResult.Text = $"已清理 {count} 个归档版本。"; } else { var candidates = await service.PreviewAsync(ArchiveBox.Text.Trim(), policy); RetentionResult.Text = candidates.Count == 0 ? "没有需要清理的归档版本。" : $"预计清理 {candidates.Count} 项：" + string.Join("；", candidates.Take(3).Select(x => Path.GetFileName(x.Path) + "（" + x.Reason + "）")); } }
-        catch (Exception ex) { RetentionResult.Text = "保留策略无效：" + ex.Message; }
+        try { if (!TryNullableInt(KeepDaysBox.Text, out var days, Tr.F("Profile.KeepDays")) || !TryNullableInt(MaxVersionsBox.Text, out var versions, Tr.F("Profile.MaxVersions")) || !TryTotalBytes(MaxTotalMbBox.Text, out var bytes)) return; var service = new RetentionCleanupService(); var policy = new RetentionPolicy(days, versions, bytes); if (cleanup) { var count = await service.CleanupAsync(ArchiveBox.Text.Trim(), policy); RetentionResult.Text = Tr.Format("Profile.CleanedVersions", count); } else { var candidates = await service.PreviewAsync(ArchiveBox.Text.Trim(), policy); RetentionResult.Text = candidates.Count == 0 ? Tr.F("Profile.NothingToClean") : Tr.Format("Profile.WillClean", candidates.Count) + string.Join(Tr.F("Profile.CleanListSeparator"), candidates.Take(3).Select(x => Tr.Format("Profile.CleanItem", Path.GetFileName(x.Path), x.Reason))); } }
+        catch (Exception ex) { RetentionResult.Text = Tr.Format("Profile.InvalidRetention", ex.Message); }
     }
     private void SwapEndpoints_Click(object sender, RoutedEventArgs e) => (LeftPathBox.Text, RightPathBox.Text) = (RightPathBox.Text, LeftPathBox.Text);
     private void BrowseLeft_Click(object sender, RoutedEventArgs e) => Browse(LeftPathBox);
@@ -115,26 +120,26 @@ public partial class ProfileEditorWindow : Window
         var dialog = new Microsoft.Win32.OpenFolderDialog();
         if (dialog.ShowDialog() == true) target.Text = dialog.FolderName;
     }
-    private async void TestLeft_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, "测试中…", () => TestEndpointAsync("左侧", LeftPathBox.Text));
-    private async void TestRight_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, "测试中…", () => TestEndpointAsync("右侧", RightPathBox.Text));
+    private async void TestLeft_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, Tr.F("Profile.Testing"), () => TestEndpointAsync(Tr.F("Profile.SideLeft"), LeftPathBox.Text));
+    private async void TestRight_Click(object sender, RoutedEventArgs e) => await RunBusyAsync((Button)sender, Tr.F("Profile.Testing"), () => TestEndpointAsync(Tr.F("Profile.SideRight"), RightPathBox.Text));
     private async Task TestEndpointAsync(string side, string value)
     {
         try
         {
             var endpoint = value.Trim();
-            if (string.IsNullOrWhiteSpace(endpoint)) throw new InvalidOperationException("端点不能为空。");
+            if (string.IsNullOrWhiteSpace(endpoint)) throw new InvalidOperationException(Tr.F("Profile.ErrEndpointEmpty"));
             if (!endpoint.Contains("://", StringComparison.Ordinal))
             {
-                if (!Directory.Exists(endpoint)) throw new DirectoryNotFoundException("本地目录不存在或不可访问。");
-                EndpointTestResult.Text = $"{side}端点可访问：{endpoint}"; return;
+                if (!Directory.Exists(endpoint)) throw new DirectoryNotFoundException(Tr.F("Profile.ErrLocalMissing"));
+                EndpointTestResult.Text = Tr.Format("Profile.EndpointAccessible", side, endpoint); return;
             }
-            if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host)) throw new InvalidOperationException("远端地址或端口无效。");
-            if (!uri.Scheme.Equals("sftp", StringComparison.OrdinalIgnoreCase)) throw new NotSupportedException("当前编辑器仅可直接测试本地目录和 SFTP TCP 连通性。请在主窗口验证其他云端连接。");
+            if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host)) throw new InvalidOperationException(Tr.F("Profile.ErrRemoteInvalid"));
+            if (!uri.Scheme.Equals("sftp", StringComparison.OrdinalIgnoreCase)) throw new NotSupportedException(Tr.F("Profile.ErrOnlySftp"));
             using var client = new TcpClient(); using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await client.ConnectAsync(uri.Host, uri.IsDefaultPort ? 22 : uri.Port, timeout.Token);
-            EndpointTestResult.Text = $"{side} SFTP 主机 {uri.Host}:{(uri.IsDefaultPort ? 22 : uri.Port)} 可连接。凭据会在实际同步时验证。";
+            EndpointTestResult.Text = Tr.Format("Profile.SftpConnectable", side, uri.Host, uri.IsDefaultPort ? 22 : uri.Port);
         }
-        catch (Exception ex) { EndpointTestResult.Text = $"{side}端点测试失败：{RcloneUiError.Describe(ex, "profile-endpoint-test")}"; }
+        catch (Exception ex) { EndpointTestResult.Text = Tr.Format("Profile.EndpointTestFailed", side, RcloneUiError.Describe(ex, "profile-endpoint-test")); }
     }
     private async Task RunBusyAsync(Button button, string busyText, Func<Task> action)
     {
@@ -145,10 +150,10 @@ public partial class ProfileEditorWindow : Window
         finally { button.IsEnabled = true; button.Content = original; _backgroundActionInProgress = false; }
     }
     private IReadOnlyList<FilterRule> Rules() => _rules.Where(x => !string.IsNullOrWhiteSpace(x.Pattern)).Select(x => x.ToRule()).ToList();
-    private bool TryLong(string text, out long? value, string title) { if (string.IsNullOrWhiteSpace(text)) { value = null; return true; } if (long.TryParse(text, out var parsed) && parsed >= 0) { value = parsed; return true; } value = null; FilterTestResult.Text = title + "必须是非负整数。"; return false; }
-    private bool TryNullableInt(string text, out int? value, string title) { if (string.IsNullOrWhiteSpace(text)) { value = null; return true; } if (int.TryParse(text, out var parsed) && parsed >= 0) { value = parsed; return true; } value = null; RetentionResult.Text = title + "必须是非负整数。"; return false; }
-    private bool TryTotalBytes(string text, out long? value) { if (string.IsNullOrWhiteSpace(text)) { value = null; return true; } if (double.TryParse(text, out var mb) && mb >= 0 && mb <= long.MaxValue / 1024d / 1024d) { value = (long)(mb * 1024 * 1024); return true; } value = null; RetentionResult.Text = "总容量 MB 必须是非负数字。"; return false; }
-    private bool TryDate(string text, out DateTimeOffset? value, string title) { if (string.IsNullOrWhiteSpace(text)) { value = null; return true; } if (DateTimeOffset.TryParse(text, out var parsed)) { value = parsed; return true; } value = null; FilterTestResult.Text = title + "必须是有效日期时间。"; return false; }
+    private bool TryLong(string text, out long? value, string title) { if (string.IsNullOrWhiteSpace(text)) { value = null; return true; } if (long.TryParse(text, out var parsed) && parsed >= 0) { value = parsed; return true; } value = null; FilterTestResult.Text = title + Tr.F("Profile.ErrNonNegativeInt"); return false; }
+    private bool TryNullableInt(string text, out int? value, string title) { if (string.IsNullOrWhiteSpace(text)) { value = null; return true; } if (int.TryParse(text, out var parsed) && parsed >= 0) { value = parsed; return true; } value = null; RetentionResult.Text = title + Tr.F("Profile.ErrNonNegativeInt"); return false; }
+    private bool TryTotalBytes(string text, out long? value) { if (string.IsNullOrWhiteSpace(text)) { value = null; return true; } if (double.TryParse(text, out var mb) && mb >= 0 && mb <= long.MaxValue / 1024d / 1024d) { value = (long)(mb * 1024 * 1024); return true; } value = null; RetentionResult.Text = Tr.F("Profile.ErrMaxTotalMb"); return false; }
+    private bool TryDate(string text, out DateTimeOffset? value, string title) { if (string.IsNullOrWhiteSpace(text)) { value = null; return true; } if (DateTimeOffset.TryParse(text, out var parsed)) { value = parsed; return true; } value = null; FilterTestResult.Text = title + Tr.F("Profile.ErrValidDateTime"); return false; }
     private sealed class EditableFilterRule(FilterRuleKind kind, string pattern, string? comment)
     {
         public FilterRuleKind Kind { get; } = kind; public string Pattern { get; set; } = pattern; public string? Comment { get; set; } = comment; public bool Enabled { get; set; } = true; public long? MinimumSizeBytes { get; set; } public long? MaximumSizeBytes { get; set; } public DateTimeOffset? ModifiedAfter { get; set; } public DateTimeOffset? ModifiedBefore { get; set; } public bool? Hidden { get; set; } public bool? SymbolicLink { get; set; }

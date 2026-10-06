@@ -1,3 +1,5 @@
+using FengSync.Localization;
+
 namespace FengSync.Services;
 
 /// <summary>
@@ -181,34 +183,34 @@ public static class CloudRecycleBin
         var folders = entries.Count(entry => entry.IsDirectory);
         var lines = new List<string>
         {
-            $"把 {entries.Count} 项移入该端点的回收站？",
+            Tr.Format("Recycle.ConfirmHeader", entries.Count),
             "",
-            $"项目会被搬到 {FolderName} 下面，仍然留在这个端点里，所以这一步不会释放空间。",
+            Tr.Format("Recycle.ConfirmMovesTo", FolderName),
         };
-        if (folders > 0) lines.Add($"其中文件夹 {folders} 个会连同里面的全部内容一起移动。");
+        if (folders > 0) lines.Add(Tr.Format("Recycle.ConfirmFolders", folders));
         lines.Add("");
-        lines.Add("之后可在 " + FolderName + " 里选中它按「还原」，回到原来的目录；");
-        lines.Add($"原名已被占用时会自动改成“名称 (1)”而不是盖掉那一份。");
+        lines.Add(Tr.Format("Recycle.ConfirmHowToRestore", FolderName));
+        lines.Add(Tr.F("Recycle.ConfirmRename"));
         lines.Add("");
-        lines.Add($"要真正释放空间，就得再进 {FolderName} 用「删除」，或直接用「清空回收站」。");
+        lines.Add(Tr.Format("Recycle.ConfirmFreeSpace", FolderName));
         lines.Add("");
-        lines.Add("确定移动？");
+        lines.Add(Tr.F("Recycle.ConfirmProceed"));
         return string.Join(Environment.NewLine, lines);
     }
 
     public static string Explain(CloudRecycleResult result) => result.Outcome switch
     {
         CloudRecycleOutcome.Moved =>
-            $"已把 {result.Placed.Count} 项移入 {FolderName}（项目仍在云端，空间未释放；还原请进入该文件夹）。"
+            Tr.Format("Recycle.Moved", result.Placed.Count, FolderName)
             + RenamedNote(result) + FailureNote(result),
         CloudRecycleOutcome.Restored =>
-            $"已还原 {result.Placed.Count} 项。" + RestoredNote(result) + FailureNote(result),
-        CloudRecycleOutcome.Declined => "已取消，云端没有任何东西被移动。",
-        CloudRecycleOutcome.InsideTrash => "这些项目已经在回收站里了，要彻底删掉请用「删除」。",
-        CloudRecycleOutcome.IsTrashFolder => "回收站文件夹本身不能移进回收站。",
-        CloudRecycleOutcome.NotInTrash => "这一项不在回收站里，没有可还原的来源。",
-        CloudRecycleOutcome.Failed => "回收站操作没有完成。" + (Why(result).Length > 0 ? " " + Why(result) : ""),
-        _ => "回收站操作没有完成。",
+            Tr.Format("Recycle.Restored", result.Placed.Count) + RestoredNote(result) + FailureNote(result),
+        CloudRecycleOutcome.Declined => Tr.F("Recycle.Declined"),
+        CloudRecycleOutcome.InsideTrash => Tr.F("Recycle.InsideTrash"),
+        CloudRecycleOutcome.IsTrashFolder => Tr.F("Recycle.IsTrashFolder"),
+        CloudRecycleOutcome.NotInTrash => Tr.F("Recycle.NotInTrash"),
+        CloudRecycleOutcome.Failed => Tr.F("Recycle.Failed") + (Why(result).Length > 0 ? " " + Why(result) : ""),
+        _ => Tr.F("Recycle.Failed"),
     };
 
     /// <summary>
@@ -220,7 +222,7 @@ public static class CloudRecycleBin
     {
         var names = result.Placed.Where(placement => placement.Renamed)
             .Select(placement => CloudFileManagerService.NameOf(placement.Destination)).ToList();
-        return names.Count == 0 ? "" : $"其中 {names.Count} 项在回收站里已有同名项目，改存为 {Join(names)}。";
+        return names.Count == 0 ? "" : Tr.Format("Recycle.RenamedOnMove", names.Count, Join(names));
     }
 
     /// <summary>
@@ -229,20 +231,22 @@ public static class CloudRecycleBin
     /// </summary>
     private static string RestoredNote(CloudRecycleResult result)
     {
-        if (result.Placed.Count == 1) return $"已回到 {result.Placed[0].Destination}。";
+        if (result.Placed.Count == 1) return Tr.Format("Recycle.RestoredTo", result.Placed[0].Destination);
         var renamed = result.Placed.Where(placement => placement.Renamed).ToList();
         return renamed.Count == 0
             ? ""
-            : $"其中 {renamed.Count} 项原名仍被占用，还原为 {Join(renamed.Select(placement => CloudFileManagerService.NameOf(placement.Destination)).ToList())}。";
+            : Tr.Format("Recycle.RenamedOnRestore", renamed.Count,
+                Join(renamed.Select(placement => CloudFileManagerService.NameOf(placement.Destination)).ToList()));
     }
 
     private static string FailureNote(CloudRecycleResult result) =>
-        result.Failed > 0 ? $" {result.Failed} 项没有成功：{Why(result)}" : "";
+        result.Failed > 0 ? Tr.Format("Recycle.SomeFailed", result.Failed, Why(result)) : "";
 
     /// <summary>The reason the cloud refused, when there is one; an empty string when the outcome needs no diagnosis.</summary>
     private static string Why(CloudRecycleResult result) => result.Detail ?? "";
 
-    private static string Join(IReadOnlyList<string> names) => string.Join("、", names.Take(3)) + (names.Count > 3 ? " 等" : "");
+    private static string Join(IReadOnlyList<string> names) =>
+        string.Join(Tr.F("Recycle.NameSeparator"), names.Take(3)) + (names.Count > 3 ? Tr.F("Recycle.AndMore") : "");
 
     private static string Trim(string path) => (path ?? "").Trim('/');
 
