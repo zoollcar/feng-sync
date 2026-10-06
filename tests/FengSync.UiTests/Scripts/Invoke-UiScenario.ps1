@@ -57,7 +57,15 @@ $script:activeSyncLabel = $null
 $script:activeSyncProgressCaptured = $false
 # A test has no reason to retain completed progress windows. This makes every
 # successful sync self-closing even before the explicit UI assertion below.
-[IO.File]::WriteAllText((Join-Path $appData 'FengSync.local.json'), '{"ShowCompleted":false}')
+# CloudGuideSeen is seeded because the E5 first-run guide is a *modal* dialog that
+# appears whenever the cloud manager opens with zero endpoints — which is exactly how
+# several scenarios set it up. Measured with the prompt up: a UIA WindowPattern.Close on
+# another window of the app returns without error and that window then survives the whole
+# 30s wait; with the guide seeded as seen the same scenario passes in ~2s. Seeding it is
+# also the state of a user who has already been onboarded, which is what these scenarios
+# are about — onboarding itself is pinned by CloudFirstRunGuideTests and the
+# ShowFirstRunGuide seam in UiFeatureBehaviorTests.
+[IO.File]::WriteAllText((Join-Path $appData 'FengSync.local.json'), '{"ShowCompleted":false,"CloudGuideSeen":true}')
 $scenarioTimer = [Diagnostics.Stopwatch]::StartNew()
 $harnessLog = Join-Path $root 'harness.log'
 function Write-HarnessTrace([string]$message) {
@@ -501,11 +509,12 @@ function Open-SettingsCenter {
   return Find-WindowById 'SettingsWindow'
 }
 function Close-Window([System.Windows.Automation.AutomationElement]$window) {
-  if ($null -eq $window) { return }
+  if ($null -eq $window) { Write-HarnessTrace 'Close-Window: the element was null, so nothing was closed.'; return }
   $pattern = $null
   if ($window.TryGetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern, [ref]$pattern)) {
-    try { $pattern.Close() } catch { }
-  }
+    try { $pattern.Close(); Write-HarnessTrace ("Close-Window: requested the close of '" + $window.Current.AutomationId + "'.") }
+    catch { Write-HarnessTrace ('Close-Window: the close request failed: ' + $_.Exception.Message) }
+  } else { Write-HarnessTrace ('Close-Window: the element does not expose WindowPattern: ' + $window.Current.AutomationId) }
 }
 # ModeComboBox items are plain text now ("双向同步", "镜像到右侧", "更新到右侧").
 function Select-Mode($main, [string]$name) {
