@@ -90,7 +90,7 @@ public sealed class LiveTextAccessibilityTests
     }
 
     private static readonly Regex BrowserListElement = new(
-        @"<ListView\b[^>]*AutomationProperties\.Name=""当前目录中的文件""[^>]*>(?<body>[\s\S]*?)</ListView>",
+        @"<ListView\b[^>]*x:Name=""FileList""[^>]*>(?<body>[\s\S]*?)</ListView>",
         RegexOptions.CultureInvariant);
 
     private static readonly Regex SetterOnRowStyle = new(

@@ -19,6 +19,8 @@ public sealed class UiConsistencyGuardrailTests
     private static readonly Regex ButtonTemplate = new(@"<Button\.Template\b|<ControlTemplate\b[^>]*\bTargetType\s*=\s*""(?:\{x:Type\s+)?Button\}?""", RegexOptions.CultureInvariant);
     private static readonly Regex PageLocalButtonVisual = new(@"\b(?:Height|MinHeight|Padding|FontSize|Background|Foreground|BorderBrush)\s*=", RegexOptions.CultureInvariant);
     private static readonly Regex TextOrContentAttribute = new(@"(?<property>Content|Text)\s*=\s*""(?<value>[^""]*)""", RegexOptions.CultureInvariant);
+    // Bindings live inside Content/Text values; the symbol scan only matters for literal text.
+    private static readonly Regex BindingValue = new(@"^\s*\{(?:Binding|StaticResource|DynamicResource|x:Static).*\}\s*$", RegexOptions.CultureInvariant | RegexOptions.Singleline);
 
     // Page code may use only these shared button variants. Unstyled controls remain allowed
     // during migration because Controls.xaml supplies the shared default Button style.
@@ -115,6 +117,7 @@ public sealed class UiConsistencyGuardrailTests
     {
         var violations = ProductionXamlFiles()
             .SelectMany(file => TextOrContentAttribute.Matches(file.Content).Cast<Match>()
+                .Where(match => !BindingValue.IsMatch(match.Groups["value"].Value))
                 .Where(match => ContainsSymbolGlyph(match.Groups["value"].Value))
                 .Where(match => !ApprovedSymbolUses.Contains(new SymbolUse(
                     file.RelativePath,
