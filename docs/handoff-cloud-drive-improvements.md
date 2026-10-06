@@ -1,7 +1,8 @@
 # 云盘管理改进 —— 交接文档
 
 > **给接手这条线的人（或下一轮会话）。**
-> 分支：`dev`（领先 `origin/dev` **N** 个已提交，未 push）。工作区**干净**。
+> 分支：`dev`（领先 `origin/dev` **N** 个已提交，未 push）。工作区**有未提交的 F 批次改动**：
+> i18n 迁移 + 两个**已提交回归**的修复，见 §2 的 F 与 §2 的「F 收尾时暴露的两个已提交回归」。
 > 最后更新：2026-10-06。
 >
 > 本文是这条线**唯一的权威文档**：路线图（§5）、需求盘点的判断依据、已实证的事实（§4）与项目约定（§7）都在这里。
@@ -14,6 +15,18 @@
 > - E3：诊断导出（`AskDiagnosticsFile` 接缝 + `CloudDiagnosticsReport`，永远不导出 `rclone.conf`）
 > - E4：i18n 骨架（`Tr.F` / `{l:Lang}` 绑定 + 资源文件 + `AppLanguageContext` 切换 zh-CN / en）
 > - E5：首启引导（`ShowFirstRunGuide` 接缝 + `CloudFirstRunPrompt`，仅在端点数为 0 时出现）
+>
+> **F 组（i18n 债务清零）已收尾**（2026-10-06）。`MainWindow.xaml.cs` 与 `Views/RemoteEndpointManagerWindow.xaml.cs`
+> 里 **392 处**用户可见的中文字面量已全部迁进资源表（新增 **319** 个键，复用 19 个既有键），
+> `LanguageCoverageTests.DeferredMigrationFiles` 这份例外清单已删除 —— 现在这两份文件与新文件受**同一条**规则约束，
+> WPF shell 里不再有任何用户可见的中文硬编码。见 §2 的 F。
+>
+> **F 收尾跑门禁时暴露了两个已提交的回归**（都不在 F 的改动范围内，是 E 组之前就进 `dev` 的）：
+> 1. **`AppLanguageStartup.ApplySavedLanguage()` 在 UI 线程上 sync-over-async，磁盘上一旦有
+>    `FengSync.local.json` 就死锁**。进程活着、无窗口、CPU 0 —— 桌面应用等于起不来。
+> 2. **`MainWindow.xaml` 里两个 `TextBox.Text` 绑到只读索引器 `{l:Lang}`，默认 TwoWay 直接
+>    `XamlParseException`**（提交基线根本开不了窗口）。
+> 两个都已修复并有回归测试；见 §2 的「F 收尾时暴露的两个已提交回归」。
 
 ---
 
@@ -22,10 +35,10 @@
 | | |
 | --- | --- |
 | **在做什么** | 把云盘功能缺口盘点里的 P1 剩余 17 项 + P2 全部 21 项 + 技术债 7 项（共 45 项）补齐，拆成 6 个子批次：**0 → A → B → C → D → E**。每个子批次独立跑门禁、独立提交（**只提交不 push**）。 |
-| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0–B11**（队列泛化 + 文件浏览器 11 项）、**C1–C7**（传输队列：限速/排序/归档/诊断/计划/完成后动作/右键菜单）、**D1–D6**（挂载：高级选项/恢复/容量/重连/缓存/UNC）、**E1–E5**（联动 + 设置 + 诊断 + i18n + 首启引导）。见 §2。 |
-| **未提交** | 无。 |
-| **下一步** | 全部批次收尾。下一轮从 `git push origin dev` 同步远端，并把 `MainWindow.xaml.cs` 与 `RemoteEndpointManagerWindow.xaml.cs` 里仍是中文硬编码的字面量迁移到资源文件（`LanguageCoverageTests.DeferredMigrationFiles` 标记的债务）。 |
-| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；`core/bwlimit` 是 daemon 全局而非 per-fs；UNC 挂载点 rclone 收下但回的是 Windows 分配的盘符；`ComboBoxItem.Content` 绑定到 `Tr.F(...)` 必须显式 `Mode=OneWay`（默认 TwoWay 会让只读索引器抛 XamlParseException）；`operations/size` 的 `remote` 字段**静默忽略**导致子树字节数变成整个端点。 |
+| **已提交** | 批次 **0**（技术债 7 项）、**A0**（Provider descriptor 重构）、**A1**（OneDrive/Dropbox/Box/WebDAV + S3 provider 目录）、**A2**（端点重命名）、**A3+A4**（端点搜索/排序 + 测试全部）、**A5**（代理）、**A6**（分组/标签）、**A7**（端点导出/导入）、**B0–B11**（队列泛化 + 文件浏览器 11 项）、**C1–C7**（传输队列：限速/排序/归档/诊断/计划/完成后动作/右键菜单）、**D1–D6**（挂载：高级选项/恢复/容量/重连/缓存/UNC）、**E1–E5**（联动 + 设置 + 诊断 + i18n + 首启引导）、**F**（i18n 债务清零）。见 §2。 |
+| **未提交** | **F 批次**（i18n 迁移：2 个 tsv + 2 个 resx + 2 个被迁移的 `.xaml.cs` + `LanguageCoverageTests`），加上 **F 收尾时发现的两个已提交回归的修复**（`SettingsStore` 同步读 + `AppLanguageStartup` 改用它 + `MainWindow.xaml` 两处 `Mode=OneWay` + `AppLanguageTests` 新回归测试）。见 §2。 |
+| **下一步** | 门禁绿后按 `feat` / `test` / `docs` 粒度提交（显式路径 `git add`，只提交不 push）。`.arts/`、`.serena/`、`verify.py` 是未跟踪草稿，不是交付物。 |
+| **最容易踩的坑** | 挂载选项键名拼错会被 rclone **静默忽略**；`config/create` 对 OAuth 后端会**重新要求浏览器授权**；rclone **不读 `ALL_PROXY`**；`core/bwlimit` 是 daemon 全局而非 per-fs；UNC 挂载点 rclone 收下但回的是 Windows 分配的盘符；`operations/size` 的 `remote` 字段**静默忽略**导致子树字节数变成整个端点；**绑定到 `{l:Lang}` 的属性只要默认模式是 TwoWay（`TextBox.Text`、`ToggleButton.IsChecked`、`Selector.SelectedItem/SelectedValue/SelectedIndex`、`RangeBase.Value`…）就必须显式 `Mode=OneWay`，否则只读索引器抛 `XamlParseException`**（`ComboBoxItem.Content` 只是其中一个实例）；**UI 线程上不许 sync-over-async** —— `App.OnStartup` 里 `.GetAwaiter().GetResult()` 一个带 `await` 的读盘方法会死锁成「进程活着但没窗口」，而且事件日志里什么都没有。 |
 
 ---
 
@@ -75,6 +88,9 @@ A7 的代码与测试已完成（见 §2 的 A7，设计与安全规则留档在
 | `6d2001d` | A6 | `test(endpoints): cover grouping, tagging and the heading each row carries` |
 | （待提交） | A7 | `feat(endpoints): export and import endpoints without their credentials` |
 | （待提交） | A7 | `test(endpoints): cover the export shape and the import file's validation` |
+| （待提交） | F | `feat(i18n): move the shell's remaining Chinese literals into the resource tables` |
+| （待提交） | F | `test(i18n): drop the deferred migration list now that it is empty` |
+| （待提交） | F | `docs: record the i18n batch and retire the deferred migration note` |
 
 ### 批次 0 —— 技术债 7 项（`88c7a15`）
 
@@ -200,6 +216,116 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
 - 测试：`CloudEndpointPortabilityTests`（11 纯函数：导出形状、不含凭据、往返、版本、坏 JSON、注入名、未知类型、
   坏参数名、重名、`UniqueName`）；`UiFeatureBehaviorTests` +2 STA（draft 预填 SFTP 与 S3）；`sftp-ui` 场景的
   工具条矩形断言加上两个新控件。
+
+### 批次 F —— i18n 债务清零
+
+E4 留下的最后一笔债：`MainWindow.xaml.cs` 与 `Views/RemoteEndpointManagerWindow.xaml.cs` 是**最早写的中文界面**，
+当时整份文件都是中文字面量，所以 E4 把它们放进 `LanguageCoverageTests.DeferredMigrationFiles` 豁免掉，
+只让新代码受规则约束。F 把这份豁免清单**删掉**，并把两份文件里的字面量全部迁进资源表。
+
+- 规模：**392 处**用户可见中文字面量（`MainWindow.xaml.cs` 175、`RemoteEndpointManagerWindow.xaml.cs` 217），
+  去重后 **338** 个模板；新增 **319** 个键（`Main.*` 139 个进 `80-main.tsv`，`Mgr.*` 180 个进 `30-cloud-manager.tsv`），
+  另外 **19** 个复用既有键（`Settings.Ok`、`Profile.SideLeft/SideRight`、`SyncWizard.LocalFolder`、`Mgr.Delete`、
+  `Mgr.Rename`、`Mgr.NewFolder`、`Mgr.MoveToTrash`、`Mgr.Unmount`、`Mgr.FavoriteThisDirectory`、`Mgr.GridView`、
+  `Endpoint.Saving`、`Schedule.Deleting`、`Settings.LogTitle`、`Settings.NoIncompleteLogs`、`Main.NoEndpoint`、
+  `Main.NoProfileSelected`、`Main.ProfileWorkspace`、`Main.EmptyPickEndpoints`）。
+- **踩到的两个坑（都值得记住）**：
+  1. **门禁自己的字面量正则会截断带嵌套字符串的插值串**。`LanguageCoverageTests.StringLiteral` 是
+     `(?<value>@?"(?:[^"\\]|\\.)*"?)`，遇到 `$"已{(mode == Cut ? "剪切" : "复制")} …"` 会在内层第一个 `"`
+     就收尾，于是报告里出现的是**截断片段**。所以**不能拿门禁的违规清单去驱动改写**，要另写一个懂 C# 字面量
+     语法的扫描器（常规 / 逐字 / 插值 / 插值逐字，洞里的嵌套字面量递归处理）。
+  2. **`string.Format` 的格式说明符必须留在资源串里，不能留在实参里**。`$"{DateTime.Now:yyyy-MM-dd HH:mm}"`
+     要变成 `Tr.Format("Main.LastRun", DateTime.Now)` 配 `上次运行 · {0:yyyy-MM-dd HH:mm}`；把 `:yyyy-MM-dd HH:mm`
+     留在实参里会直接编译不过。同理 `{fingerprint.Size:N0}` → `Tr.Format(..., fingerprint.Size)` 配 `{3:N0}`。
+- **一处不能机械替换**：`OperationSeverity` 原来是 `OperationLabel switch { "上传" => … }` ——
+  **switch 的模式标签必须是编译期常量**，换成 `Tr.F(...)` 编译不过。已改成 `OperationLabel == Tr.F("Main.KindUpload") ? … : …`
+  的链式比较，语义与原来逐字等价。
+- **一处只能靠删掉才成立**：`OperationLabel` 是**显示字符串**，而 `ApplyRowFilter` / `OperationSeverity` 拿它做比较。
+  迁移后两侧必须用**同一个键**（都用 `Main.KindUpload` 这一族），否则英文界面下筛选会静默失效。
+- 顺带：`localization/*.tsv` 必须保持 **LF**。本机 `core.autocrlf=true`，`git checkout -- <tsv>` 会把工作区文件
+  写成 CRLF，而 `LanguageCoverageTests` 只 `TrimEnd('\r')`，空行会变成 `'\r'`（1 列）→ 报
+  「a row must have three tab separated columns, found 1」。改写 tsv 后要确认行尾仍是 LF。
+
+### F 收尾时暴露的两个已提交回归
+
+F 的迁移本身是绿的（`LanguageCoverageTests` 5/5），但**把 `DeferredMigrationFiles` 例外清单删掉之后**门禁才真正
+开始跑 WPF UI 场景，于是暴露出两个与 F 无关、但一直躺在 `dev` 上的回归。两个都**只在「应用能不能起来」这一步**
+失败，症状都是「进程活着但没有窗口」，所以一开始很容易被当成测试基础设施问题。
+
+**① 启动时 sync-over-async 死锁（E 组引入，`c89d9a7`）**
+
+`AppLanguageStartup.ApplySavedLanguage()`（`src/FengSync/Localization/AppLanguageStartup.cs`）在
+`App.OnStartup` 里用 `new SettingsStore().LoadAsync().GetAwaiter().GetResult()` 阻塞读设置。`OnStartup` 跑在
+dispatcher 帧里，此时 `SynchronizationContext.Current` 已经是 `DispatcherSynchronizationContext` —— 于是
+`LoadAsync` 里 `await` 之后的续体被投回**那个正在被 `GetResult()` 阻塞的线程**。
+
+- 关键在 `SettingsStore.LoadAsync` 的第一行：`if (!File.Exists(_path)) return new(new ApplicationSettings());`
+  —— 文件不存在时整个方法**同步返回**，没有续体，所以「空数据目录」恰好不炸。磁盘上**有**设置文件时才会
+  `await`，于是 100% 死锁。这就是为什么它在开发机上时灵时不灵、而每个真实用户都必然踩到。
+- 症状：进程存活、`MainWindowHandle == 0`、`tasklist /V` 的 Window Title 是 `N/A`、CPU 时间 0。事件日志里
+  **没有任何崩溃记录**（它没崩，是卡住了）。
+- 修法：给 `SettingsStore` 加一个**真正同步**的 `Load()` / `Save()`（`File.ReadAllText` +
+  `JsonSerializer.Deserialize`），启动路径改用它。没有用 `Task.Run(...).GetAwaiter().GetResult()` 绕过 ——
+  那只是把 sync-over-async 挪到线程池上，注释里写着「blocking on purpose」的地方应该真的同步读。
+  迁移 / 备份 / 损坏隔离的规则抽成 `Migrate(...)` 一处，`Load` 与 `LoadAsync` 共用，行为逐字不变
+  （`ConfigurationTests` 里那两个备份/迁移用例仍然绿）。
+- 回归测试：`AppLanguageTests.The_startup_language_read_returns_on_a_thread_that_owns_a_dispatcher` —— 在
+  **装了 `DispatcherSynchronizationContext` 且不 pump** 的 STA 线程上调用 `ApplySavedLanguage()`，用
+  `ManualResetEventSlim.Wait(15s)` 兜底，所以失败是一条断言而不是挂住的测试套件。注意**原来那个
+  `The_language_survives_a_save_and_a_reload` 抓不到这个 bug**：它是 async 测试，跑在 xunit 的线程池线程上，
+  那里没有 dispatcher 上下文，恰好绕开了唯一的失败条件。
+
+**② `TextBox.Text` 绑到只读索引器（更早的 E4 之前就进了 `dev`）**
+
+`MainWindow.xaml` 的 `LeftPath` / `RightPath` 两个 `TextBox` 把 `Text` 绑到 `{l:Lang}`：
+
+```xml
+<!-- 错：TextBox.Text 默认 TwoWay，而 AppLanguageContext.Current 是只读索引器 -->
+Text="{Binding [Main.ChooseEndpoint], Source={l:Lang}}"
+<!-- 对 -->
+Text="{Binding [Main.ChooseEndpoint], Source={l:Lang}, Mode=OneWay}"
+```
+
+`XamlParseException: 设置属性"System.Windows.Controls.TextBox.Text"时引发了异常。行号为"209"，行位置为"361"`
+→ 内层 `InvalidOperationException: 无法对"FengSync.Localization.AppLanguageContext"类型的只读属性"Item"进行
+TwoWay 或 OneWayToSource 绑定`。窗口构造时抛在 `Application.Run` 里 → 进程**被终止**（这个才会进事件日志）。
+
+- 这条坑在 §0 的「最容易踩的坑」里原本只写了 `ComboBoxItem.Content`。**实际规则更宽**：凡是绑定到
+  `{l:Lang}` 的属性，只要它的**默认绑定模式是 TwoWay**（`TextBox.Text`、`ToggleButton.IsChecked`、
+  `Selector.SelectedItem/SelectedValue/SelectedIndex`、`RangeBase.Value`…），都必须显式 `Mode=OneWay`。
+  已全仓核对过一遍：541 处 `{l:Lang}` 里，绑定 `Text=` 的 `TextBox` 只有这两个，其余 `TextBox` 上的
+  `{l:Lang}` 都是 `AutomationProperties.Name` / `ToolTip`（默认 OneWay），所以没有第三个。
+- 排查手法值得记住：**这类崩溃只在事件日志里看得见**（`Get-WinEvent -LogName Application` 里
+  `.NET Runtime` 提供程序 + `Application: FengSync.exe` + `XamlParseException`），UI 场景日志只会说
+  「Main window shell did not become ready」，因为 `Start-App` 等的是 `$p.MainWindowHandle`。
+
+**一个把上面两条都放大的测试基础设施问题**：`Invoke-UiScenario.ps1` 里
+`$launch = Start-App; $process = $launch[0]` —— `Start-App` 一旦在 `Wait-Until` 里抛（应用没起来），
+`$launch` 就没被赋值，`$process` 保持 `$null`，`finally` 里的 `Stop-App $null` 直接返回，**应用成为孤儿**。
+而它继承了 xunit 宿主重定向的 stdout 管道，于是 `ReadToEndAsync` 永远等不到 EOF，整个 UI 阶段会**挂到
+15 分钟超时才报错**（日志停在 `A total of 1 test files matched the specified pattern.`）。看到这个症状时先查
+`tasklist` 里有没有残留的 `FengSync.exe`，不要先怀疑测试本身。
+
+### E5 的模态首启引导 vs. UI 场景（测试夹具问题，不是回归）
+
+上面两条修完之后 `cloud-transfers` 仍然红，但换了个位置：**「The transfer window did not close.」**（跑三次都红；
+如果把 `Close-Window` 加长诊断，有时变成「The cloud manager did not close.」）。查下来是 E5 新加的
+`CloudFirstRunPrompt` 造成的：
+
+- `MaybeShowFirstRunGuideAsync()` 在管理器初始化最后调用，`ShouldShow(guideSeen, endpointCount)` 为真时
+  走 `AskFirstRunGuide()` → `new CloudFirstRunPrompt { Owner = this }.ShowDialog()`，**是模态的**。
+- 而 `cloud-transfers` 的设定正是「**云盘管理器在没有任何端点时打开**」——E5 之前这个状态没有对话框，所以这个
+  场景一直能用；E5 之后它必然弹一个模态框出来。
+- 现象很有迷惑性：`WindowPattern.Close()`（`Close-Window` 用的）**调用成功、不抛异常**，但窗口在 30 秒里纹丝不动。
+  期间 UIA 读窗口属性一直是通的（UI 线程在泵消息），所以不像卡死。逐层排除后确认变量只有一个：
+  **把 `CloudGuideSeen` 置为 true、不弹这个模态框，场景 2.1 秒全绿**，两个窗口都干净关闭。
+- 判定：模态框本身是 E5 的设计（它有自己的 `CloudFirstRunGuideTests` 与 `ShowFirstRunGuide` 接缝），
+  **不是产品缺陷**；缺陷在测试夹具——它给应用造了一个「首次运行」的数据根，而这几条场景讲的都不是新手引导。
+- 修法：夹具写 `FengSync.local.json` 时一并种下 `"CloudGuideSeen":true`，并在脚本里写清为什么。这既让场景
+  回到「已经引导过的用户」这个常态，也顺手把 `sftp-ui` 从「靠 `InvokePattern` 绕过模态去点一个被禁用的管理器」
+  变成了正常交互。
+- 顺带把 `Close-Window` 的 `catch { }` 改成往 harness.log 记一行「请求关闭了哪个窗口 / 请求本身是否失败」。
+  原来它把原因吞掉，于是失败只能表现为 30 秒后的一句「did not close」，这一条日志本该一开始就有。
 
 ---
 
@@ -372,7 +498,7 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 
 **E 组的接缝全部就位**：`EditSyncProfile` / `ShowSyncWizard` / `AskDiagnosticsFile` / `ShowFirstRunGuide` / `MaybeShowFirstRunGuideAsync` / `AskEndpoint` / `AskLocalFolder` —— 任何一个没装都走真窗，装了却答 `null` 一律是用户取消（**不是**「没装接缝」，`??` 兜到真弹窗会在测试里挂一个无人可答的模态框）。
 
-**Deferred migration debt**（写在 `LanguageCoverageTests.DeferredMigrationFiles`，门禁不挡）：`MainWindow.xaml.cs` 与 `Views/RemoteEndpointManagerWindow.xaml.cs` 仍带中文硬编码。这两份是最早写的中文界面，本批先把 E 组的新边界（E1–E5 的窗口 + 弹窗 + 状态行 + 资源键）走通；旧的留作下批迁移。新文件若仍出现中文硬编码，门禁**会**报。
+**Deferred migration debt —— ✅ 已清零（批次 F，2026-10-06）**：`LanguageCoverageTests.DeferredMigrationFiles` 这份例外清单**已删除**，`MainWindow.xaml.cs` 与 `Views/RemoteEndpointManagerWindow.xaml.cs` 里 392 处中文字面量已迁进资源表。现在 shell 里**任何**用户可见的中文硬编码都会被门禁报出来，没有豁免名单。做法与两个坑见 §2 的「批次 F」。
 
 ### 明确降级 / 不做（避免假装完成）
 
