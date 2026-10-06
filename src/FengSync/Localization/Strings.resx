@@ -785,11 +785,26 @@ Rclone：MIT License</value>
   <data name="Main.Action" xml:space="preserve">
     <value>操作</value>
   </data>
+  <data name="Main.AnalysisDone" xml:space="preserve">
+    <value>分析完成：{0} 项差异，正在生成同步计划…</value>
+  </data>
   <data name="Main.Batch" xml:space="preserve">
     <value>批处理</value>
   </data>
+  <data name="Main.BatchOpened" xml:space="preserve">
+    <value>已打开批处理作业“{0}”（{1} 个 Profile）。</value>
+  </data>
+  <data name="Main.BatchSaved" xml:space="preserve">
+    <value>批处理作业已保存（{0} 个 Profile）。</value>
+  </data>
+  <data name="Main.BothChanged" xml:space="preserve">
+    <value>两侧自上次同步后都发生了更改。{0}{1}{2}{3}</value>
+  </data>
   <data name="Main.ChangeActionMenu" xml:space="preserve">
     <value>变更操作菜单</value>
+  </data>
+  <data name="Main.ChangesExported" xml:space="preserve">
+    <value>已导出 {0} 行变更：{1}</value>
   </data>
   <data name="Main.ChooseEndpoint" xml:space="preserve">
     <value>选择一个端点</value>
@@ -800,17 +815,72 @@ Rclone：MIT License</value>
   <data name="Main.CloudManagement" xml:space="preserve">
     <value>云盘管理</value>
   </data>
+  <data name="Main.CloudNotStarted" xml:space="preserve">
+    <value>云端连接未启动。</value>
+  </data>
   <data name="Main.Compare" xml:space="preserve">
     <value>比较</value>
+  </data>
+  <data name="Main.CompareCancelled" xml:space="preserve">
+    <value>比较已取消。</value>
+  </data>
+  <data name="Main.CompareDone" xml:space="preserve">
+    <value>{0} 比较完成：左侧 {1} 项  ·  右侧 {2} 项  ·  {3} 个差异/提示（其中 {4} 项已忽略）。</value>
+  </data>
+  <data name="Main.ConcurrentSuffix" xml:space="preserve">
+    <value> 路</value>
+  </data>
+  <data name="Main.ConfidenceHigh" xml:space="preserve">
+    <value>高</value>
+  </data>
+  <data name="Main.ConfidenceLow" xml:space="preserve">
+    <value>不足</value>
+  </data>
+  <data name="Main.ConfidenceMedium" xml:space="preserve">
+    <value>中等（仅依据文件大小和修改时间推断）</value>
+  </data>
+  <data name="Main.ConfirmRemoveProfile" xml:space="preserve">
+    <value>从 Feng Sync 的配置列表移除“{0}”？
+已导出的配置文件不会被删除。</value>
   </data>
   <data name="Main.ConflictSummaryEmpty" xml:space="preserve">
     <value>冲突 0 项</value>
   </data>
+  <data name="Main.ConflictTooltip" xml:space="preserve">
+    <value>冲突原因：{0}{1}左侧修改时间：{2}{3}右侧修改时间：{4}</value>
+  </data>
   <data name="Main.Delete" xml:space="preserve">
     <value>删除</value>
   </data>
+  <data name="Main.DeleteLeftItem" xml:space="preserve">
+    <value>删除左侧项目{0}{1}</value>
+  </data>
+  <data name="Main.DeleteRightItem" xml:space="preserve">
+    <value>删除右侧项目{0}{1}</value>
+  </data>
   <data name="Main.DeleteSummaryEmpty" xml:space="preserve">
     <value>删除 0 项</value>
+  </data>
+  <data name="Main.DirectionLeftToRight" xml:space="preserve">
+    <value>左 → 右</value>
+  </data>
+  <data name="Main.DirectionMoveLeft" xml:space="preserve">
+    <value>左侧移动</value>
+  </data>
+  <data name="Main.DirectionMoveRight" xml:space="preserve">
+    <value>右侧移动</value>
+  </data>
+  <data name="Main.DirectionRightToDash" xml:space="preserve">
+    <value>右 → —</value>
+  </data>
+  <data name="Main.DirectionRightToLeft" xml:space="preserve">
+    <value>右 → 左</value>
+  </data>
+  <data name="Main.DirectionToLeft" xml:space="preserve">
+    <value>— → 左</value>
+  </data>
+  <data name="Main.DirectoryNoTimestamp" xml:space="preserve">
+    <value>目录（无修改时间）</value>
   </data>
   <data name="Main.DownloadSummaryEmpty" xml:space="preserve">
     <value>下载 0 项</value>
@@ -830,8 +900,47 @@ Rclone：MIT License</value>
   <data name="Main.EnableFile" xml:space="preserve">
     <value>重新启用此文件</value>
   </data>
+  <data name="Main.EndpointAddedToSide" xml:space="preserve">
+    <value>已将云端端点添加到{0}侧：{1}</value>
+  </data>
+  <data name="Main.EntryDirectory" xml:space="preserve">
+    <value>{0}目录：{1}</value>
+  </data>
+  <data name="Main.EntryFile" xml:space="preserve">
+    <value>{0}文件：{1}{2}大小：{3:N0} B{4}修改时间：{5:yyyy-MM-dd HH:mm:ss}</value>
+  </data>
+  <data name="Main.EntryItem" xml:space="preserve">
+    <value>{0}项目：{1}</value>
+  </data>
+  <data name="Main.ExcludedByProfileFilter" xml:space="preserve">
+    <value>已被 Profile 过滤规则排除{0}{1}</value>
+  </data>
+  <data name="Main.ExitingToInstall" xml:space="preserve">
+    <value>正在退出并安装更新…</value>
+  </data>
   <data name="Main.Export" xml:space="preserve">
     <value>导出…</value>
+  </data>
+  <data name="Main.ExportFailed" xml:space="preserve">
+    <value>导出失败：</value>
+  </data>
+  <data name="Main.FileEnabled" xml:space="preserve">
+    <value>该文件已启用。</value>
+  </data>
+  <data name="Main.FileFilteredByProfile" xml:space="preserve">
+    <value>该文件被 Profile 过滤规则排除；请在 Profile 中修改长期过滤规则。</value>
+  </data>
+  <data name="Main.FileIgnored" xml:space="preserve">
+    <value>该文件已忽略。</value>
+  </data>
+  <data name="Main.FileReenabled" xml:space="preserve">
+    <value>已重新启用该文件。</value>
+  </data>
+  <data name="Main.FileTemporarilyIgnored" xml:space="preserve">
+    <value>已临时忽略该文件；仅影响本次同步。</value>
+  </data>
+  <data name="Main.FillBothEndpoints" xml:space="preserve">
+    <value>请先填写两个端点。</value>
   </data>
   <data name="Main.FilterConflicts" xml:space="preserve">
     <value>筛选冲突变更</value>
@@ -842,11 +951,17 @@ Rclone：MIT License</value>
   <data name="Main.FilterDownloads" xml:space="preserve">
     <value>筛选下载变更</value>
   </data>
+  <data name="Main.FilterStatus" xml:space="preserve">
+    <value>当前显示：{0}变更。</value>
+  </data>
   <data name="Main.FilterUploads" xml:space="preserve">
     <value>筛选上传变更</value>
   </data>
   <data name="Main.IgnoreFile" xml:space="preserve">
     <value>忽略此文件</value>
+  </data>
+  <data name="Main.IgnoredForThisSync" xml:space="preserve">
+    <value>本次同步已忽略{0}{1}</value>
   </data>
   <data name="Main.Import" xml:space="preserve">
     <value>导入…</value>
@@ -854,11 +969,55 @@ Rclone：MIT License</value>
   <data name="Main.ItemCountEmpty" xml:space="preserve">
     <value>0 项</value>
   </data>
+  <data name="Main.JobHeader" xml:space="preserve">
+    <value>作业 {0}
+开始：{1:yyyy-MM-dd HH:mm:ss}
+</value>
+  </data>
   <data name="Main.KeepLeft" xml:space="preserve">
     <value>左侧覆盖右侧</value>
   </data>
   <data name="Main.KeepRight" xml:space="preserve">
     <value>右侧覆盖左侧</value>
+  </data>
+  <data name="Main.KindAll" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="Main.KindBlocked" xml:space="preserve">
+    <value>阻断</value>
+  </data>
+  <data name="Main.KindConflict" xml:space="preserve">
+    <value>冲突</value>
+  </data>
+  <data name="Main.KindDelete" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="Main.KindDownload" xml:space="preserve">
+    <value>下载</value>
+  </data>
+  <data name="Main.KindFile" xml:space="preserve">
+    <value>文件</value>
+  </data>
+  <data name="Main.KindFiltered" xml:space="preserve">
+    <value>已过滤</value>
+  </data>
+  <data name="Main.KindFolder" xml:space="preserve">
+    <value>文件夹</value>
+  </data>
+  <data name="Main.KindIgnored" xml:space="preserve">
+    <value>已忽略</value>
+  </data>
+  <data name="Main.KindMove" xml:space="preserve">
+    <value>移动</value>
+  </data>
+  <data name="Main.KindUnknown" xml:space="preserve">
+    <value>未知</value>
+  </data>
+  <data name="Main.KindUpload" xml:space="preserve">
+    <value>上传</value>
+  </data>
+  <data name="Main.LastRun" xml:space="preserve">
+    <value>上次运行 · {0:yyyy-MM-dd HH:mm}</value>
   </data>
   <data name="Main.LeftEndpointPath" xml:space="preserve">
     <value>左侧端点路径</value>
@@ -866,32 +1025,104 @@ Rclone：MIT License</value>
   <data name="Main.LeftRelativePath" xml:space="preserve">
     <value>左侧相对路径</value>
   </data>
+  <data name="Main.LeftScanDone" xml:space="preserve">
+    <value>左侧扫描完成：{0} 项。正在等待右侧…</value>
+  </data>
+  <data name="Main.LinkedFolderItems" xml:space="preserve">
+    <value>（已联动 {0} 个文件夹内项目）</value>
+  </data>
+  <data name="Main.Loaded" xml:space="preserve">
+    <value>已载入：{0}</value>
+  </data>
   <data name="Main.LoadingSettings" xml:space="preserve">
     <value>正在加载设置…</value>
   </data>
   <data name="Main.Local" xml:space="preserve">
     <value>本地</value>
   </data>
+  <data name="Main.MissingOrDeleted" xml:space="preserve">
+    <value>不存在或已删除</value>
+  </data>
+  <data name="Main.ModeCustomArrow" xml:space="preserve">
+    <value>自定义 →</value>
+  </data>
+  <data name="Main.ModeDefault" xml:space="preserve">
+    <value>默认</value>
+  </data>
   <data name="Main.ModeMirror" xml:space="preserve">
     <value>镜像到右侧</value>
+  </data>
+  <data name="Main.ModeMirrorArrow" xml:space="preserve">
+    <value>镜像 →</value>
   </data>
   <data name="Main.ModeTwoWay" xml:space="preserve">
     <value>双向同步</value>
   </data>
+  <data name="Main.ModeTwoWayArrow" xml:space="preserve">
+    <value>双向 ↔</value>
+  </data>
   <data name="Main.ModeUpdate" xml:space="preserve">
     <value>更新到右侧</value>
+  </data>
+  <data name="Main.ModeUpdateArrow" xml:space="preserve">
+    <value>更新 →</value>
+  </data>
+  <data name="Main.MoveIn" xml:space="preserve">
+    <value>在{0}移动{1}{2}{3}{4}</value>
+  </data>
+  <data name="Main.MoveLowConfidence" xml:space="preserve">
+    <value>{0}此移动的识别置信度为{1}，低于自动执行阈值，因此默认未勾选；请确认路径后手动勾选。</value>
+  </data>
+  <data name="Main.MoveMissingPaths" xml:space="preserve">
+    <value>移动操作缺少路径信息</value>
+  </data>
+  <data name="Main.MovedToSamePlace" xml:space="preserve">
+    <value>两侧{0}已移动到相同位置，无需执行；同步后仅更新基线。{1}{2}</value>
   </data>
   <data name="Main.NewSync" xml:space="preserve">
     <value>新建同步</value>
   </data>
+  <data name="Main.NoActionNeeded" xml:space="preserve">
+    <value>无需操作{0}{1}</value>
+  </data>
+  <data name="Main.NoChangesToExport" xml:space="preserve">
+    <value>没有可导出的变更。</value>
+  </data>
+  <data name="Main.NoDifferences" xml:space="preserve">
+    <value>没有需要同步的差异</value>
+  </data>
   <data name="Main.NoEndpoint" xml:space="preserve">
     <value>未选择端点</value>
+  </data>
+  <data name="Main.NoProfileInFile" xml:space="preserve">
+    <value>该文件没有可打开的 Profile。</value>
   </data>
   <data name="Main.NoProfileSelected" xml:space="preserve">
     <value>未选择同步配置</value>
   </data>
+  <data name="Main.NoRunnableProfile" xml:space="preserve">
+    <value>没有可运行的 Profile。</value>
+  </data>
+  <data name="Main.OperationBlocked" xml:space="preserve">
+    <value>此操作已阻断{0}{1}{2}{3}</value>
+  </data>
+  <data name="Main.OverwriteChanged" xml:space="preserve">
+    <value>已修改 {0} 项；{1}</value>
+  </data>
+  <data name="Main.OverwriteSet" xml:space="preserve">
+    <value>已将 {0} 项设置为{1}{2}。</value>
+  </data>
+  <data name="Main.PickEndpointsBelow" xml:space="preserve">
+    <value>请在下方选择两个端点后点击比较</value>
+  </data>
   <data name="Main.PickEndpointsToCompare" xml:space="preserve">
     <value>选择左右端点后即可比较</value>
+  </data>
+  <data name="Main.PickEndpointsToCompareFull" xml:space="preserve">
+    <value>选择左右端点后即可比较。</value>
+  </data>
+  <data name="Main.PickEndpointsToComparePeriod" xml:space="preserve">
+    <value>选择左右端点后点击“比较”。</value>
   </data>
   <data name="Main.PickLeftCloud" xml:space="preserve">
     <value>选择左侧云端端点</value>
@@ -905,8 +1136,35 @@ Rclone：MIT License</value>
   <data name="Main.PickRightLocal" xml:space="preserve">
     <value>选择右侧本地端点</value>
   </data>
+  <data name="Main.PreparingComparison" xml:space="preserve">
+    <value>正在准备比较：{0} ↔ {1}</value>
+  </data>
+  <data name="Main.ProfileCopiedAs" xml:space="preserve">
+    <value>已复制为 “{0}”。</value>
+  </data>
+  <data name="Main.ProfileCopySuffix" xml:space="preserve">
+    <value> 副本</value>
+  </data>
+  <data name="Main.ProfileCreated" xml:space="preserve">
+    <value>已新建配置档案。</value>
+  </data>
+  <data name="Main.ProfileNeedsRepair" xml:space="preserve">
+    <value>Profile 需要修复：{0}</value>
+  </data>
+  <data name="Main.ProfileNeedsRepairPrefix" xml:space="preserve">
+    <value>该 Profile 需要修复：</value>
+  </data>
   <data name="Main.ProfileRefreshFailed" xml:space="preserve">
     <value>刷新 Profile 列表失败：{0}</value>
+  </data>
+  <data name="Main.ProfileRemoved" xml:space="preserve">
+    <value>配置已从本项目移除。</value>
+  </data>
+  <data name="Main.ProfileSavedToFile" xml:space="preserve">
+    <value>Profile 已保存为文件。</value>
+  </data>
+  <data name="Main.ProfileSettingsSaved" xml:space="preserve">
+    <value>Profile 设置已保存。</value>
   </data>
   <data name="Main.ProfileSyncedFromCloud" xml:space="preserve">
     <value>已同步 Profile“{0}”。</value>
@@ -914,17 +1172,80 @@ Rclone：MIT License</value>
   <data name="Main.ProfileWorkspace" xml:space="preserve">
     <value>Profile 工作区</value>
   </data>
+  <data name="Main.ProfilesOpened" xml:space="preserve">
+    <value>已打开 {0} 个 Profile。</value>
+  </data>
+  <data name="Main.Ready" xml:space="preserve">
+    <value>准备就绪</value>
+  </data>
+  <data name="Main.RemoveProfile" xml:space="preserve">
+    <value>移除配置</value>
+  </data>
+  <data name="Main.ResolveConflictsFirst" xml:space="preserve">
+    <value>请先选择操作并裁决所有冲突，然后重新比较。</value>
+  </data>
+  <data name="Main.ReverseDeleteBlocked" xml:space="preserve">
+    <value>无法反向删除文件夹：其下项目“{0}”被 Profile 过滤。请先调整过滤规则并重新比较。</value>
+  </data>
   <data name="Main.RightEndpointPath" xml:space="preserve">
     <value>右侧端点路径</value>
   </data>
   <data name="Main.RightRelativePath" xml:space="preserve">
     <value>右侧相对路径</value>
   </data>
+  <data name="Main.RightScanDone" xml:space="preserve">
+    <value>右侧扫描完成：{0} 项。正在分析差异…</value>
+  </data>
+  <data name="Main.SafetyAdvice" xml:space="preserve">
+    <value>建议先比较并确认变更，再执行同步。</value>
+  </data>
+  <data name="Main.SafetyBlocked" xml:space="preserve">
+    <value>安全检查：阻断</value>
+  </data>
+  <data name="Main.SafetyBlockedDetail" xml:space="preserve">
+    <value>删除阈值被触发或目标空间不足，请在同步确认窗口中处理。</value>
+  </data>
+  <data name="Main.SafetyPassed" xml:space="preserve">
+    <value>安全检查通过</value>
+  </data>
+  <data name="Main.SafetyWarning" xml:space="preserve">
+    <value>安全检查：警告</value>
+  </data>
+  <data name="Main.SafetyWarningDetail" xml:space="preserve">
+    <value>本次同步将覆盖大量文件；建议先确认差异。</value>
+  </data>
   <data name="Main.SaveAsBatchJob" xml:space="preserve">
     <value>保存为批处理作业…</value>
   </data>
+  <data name="Main.ScanDone" xml:space="preserve">
+    <value>扫描完成：左侧 {0} 项  ·  右侧 {1} 项，正在分析差异…</value>
+  </data>
+  <data name="Main.ScanningEndpoints" xml:space="preserve">
+    <value>正在扫描端点：左 {0}  ·  右 {1}</value>
+  </data>
+  <data name="Main.ScanningLeft" xml:space="preserve">
+    <value>正在扫描左侧：已发现 {0} 项{1}</value>
+  </data>
+  <data name="Main.ScanningRight" xml:space="preserve">
+    <value>正在扫描右侧：已发现 {0} 项{1}</value>
+  </data>
   <data name="Main.ScheduleTasks" xml:space="preserve">
     <value>计划任务</value>
+  </data>
+  <data name="Main.SelectAProfile" xml:space="preserve">
+    <value>请先选择一个 Profile。</value>
+  </data>
+  <data name="Main.SelectProfileToCopy" xml:space="preserve">
+    <value>请先选择要复制的 Profile。</value>
+  </data>
+  <data name="Main.SelectProfileToRemove" xml:space="preserve">
+    <value>请选择要移除的配置。</value>
+  </data>
+  <data name="Main.SelectRowsToChange" xml:space="preserve">
+    <value>请选择要修改的行。</value>
+  </data>
+  <data name="Main.SelectRowsToOverwrite" xml:space="preserve">
+    <value>请选择要修改覆盖方向的行。</value>
   </data>
   <data name="Main.SelectedPrefix" xml:space="preserve">
     <value>已选择 </value>
@@ -938,8 +1259,23 @@ Rclone：MIT License</value>
   <data name="Main.SettingsApplied" xml:space="preserve">
     <value>程序设置已应用。</value>
   </data>
+  <data name="Main.SettingsCorrupt" xml:space="preserve">
+    <value>设置文件已损坏，已备份到：{0}</value>
+  </data>
+  <data name="Main.SettingsLoadFailed" xml:space="preserve">
+    <value>无法加载程序设置：</value>
+  </data>
+  <data name="Main.SettingsMigrated" xml:space="preserve">
+    <value>程序设置已从 schema v{0} 迁移；原文件备份在：{1}</value>
+  </data>
   <data name="Main.ShowAllChanges" xml:space="preserve">
     <value>显示全部变更</value>
+  </data>
+  <data name="Main.SideLeftShort" xml:space="preserve">
+    <value>左</value>
+  </data>
+  <data name="Main.SideRightShort" xml:space="preserve">
+    <value>右</value>
   </data>
   <data name="Main.Size" xml:space="preserve">
     <value>大小</value>
@@ -947,17 +1283,101 @@ Rclone：MIT License</value>
   <data name="Main.StartSync" xml:space="preserve">
     <value>开始同步</value>
   </data>
+  <data name="Main.SummaryConflict" xml:space="preserve">
+    <value>冲突 {0} 项</value>
+  </data>
+  <data name="Main.SummaryDelete" xml:space="preserve">
+    <value>删除 {0} 项</value>
+  </data>
+  <data name="Main.SummaryDownload" xml:space="preserve">
+    <value>下载 {0} 项</value>
+  </data>
+  <data name="Main.SummaryTotal" xml:space="preserve">
+    <value>{0} 项</value>
+  </data>
+  <data name="Main.SummaryUpload" xml:space="preserve">
+    <value>上传 {0} 项</value>
+  </data>
   <data name="Main.SwapEndpoints" xml:space="preserve">
     <value>交换左右端点</value>
   </data>
+  <data name="Main.SyncAwaitingConfirmation" xml:space="preserve">
+    <value>等待确认高风险同步操作…</value>
+  </data>
+  <data name="Main.SyncBuildingBaseline" xml:space="preserve">
+    <value>正在建立双向同步基线…</value>
+  </data>
+  <data name="Main.SyncCancelled" xml:space="preserve">
+    <value>同步已取消。</value>
+  </data>
+  <data name="Main.SyncConcurrent" xml:space="preserve">
+    <value>正在以 {0} 路并发同步…</value>
+  </data>
+  <data name="Main.SyncConfirmationCancelled" xml:space="preserve">
+    <value>已取消高风险同步确认。</value>
+  </data>
+  <data name="Main.SyncConfirmingSnapshot" xml:space="preserve">
+    <value>正在确认已捕获的比较快照…</value>
+  </data>
+  <data name="Main.SyncDone" xml:space="preserve">
+    <value>所有选中的操作已完成；双向基线已安全提交。</value>
+  </data>
+  <data name="Main.SyncDoneBaselineUnchanged" xml:space="preserve">
+    <value>同步完成；基线状态未变化，已跳过数据库写入。</value>
+  </data>
+  <data name="Main.SyncDoneBaselineWritten" xml:space="preserve">
+    <value>同步完成；sync.fengdb 已更新为 v3。</value>
+  </data>
+  <data name="Main.SyncFailedDetail" xml:space="preserve">
+    <value>{0} 个操作失败。可查看错误详情、保存日志，或重试可重试失败项。</value>
+  </data>
+  <data name="Main.SyncFailedInterrupted" xml:space="preserve">
+    <value>同步失败：操作意外中断。</value>
+  </data>
+  <data name="Main.SyncFailedPrefix" xml:space="preserve">
+    <value>同步失败：</value>
+  </data>
+  <data name="Main.SyncHasFailures" xml:space="preserve">
+    <value>同步存在失败操作。</value>
+  </data>
+  <data name="Main.SyncPartiallyFailed" xml:space="preserve">
+    <value>同步部分失败：{0} 个操作失败；基线未变更。</value>
+  </data>
+  <data name="Main.SyncPreparing" xml:space="preserve">
+    <value>正在准备同步…</value>
+  </data>
+  <data name="Main.SyncPreparingPlan" xml:space="preserve">
+    <value>正在准备同步计划…</value>
+  </data>
   <data name="Main.SyncProfiles" xml:space="preserve">
     <value>同步配置</value>
+  </data>
+  <data name="Main.SyncSafetyChecks" xml:space="preserve">
+    <value>正在进行删除阈值和目标空间安全检查…</value>
+  </data>
+  <data name="Main.TemporaryProfile" xml:space="preserve">
+    <value>临时</value>
   </data>
   <data name="Main.ThisRunChanges" xml:space="preserve">
     <value>本次变更</value>
   </data>
   <data name="Main.TotalPending" xml:space="preserve">
     <value>总计（待传输）</value>
+  </data>
+  <data name="Main.TransfersRestored" xml:space="preserve">
+    <value>已恢复 {0} 项上次未完成的云盘传输，可在“工具 → 云盘管理 → 查看传输”中继续。</value>
+  </data>
+  <data name="Main.TwoWayReadyTitle" xml:space="preserve">
+    <value>双向同步 · 准备比较</value>
+  </data>
+  <data name="Main.UnnamedProfile" xml:space="preserve">
+    <value>未命名配置</value>
+  </data>
+  <data name="Main.UnnamedProfileSuffix" xml:space="preserve">
+    <value>未命名配置 </value>
+  </data>
+  <data name="Main.UpdatedFrom" xml:space="preserve">
+    <value>已从 {0} 更新到 {1}</value>
   </data>
   <data name="Main.UploadSummaryEmpty" xml:space="preserve">
     <value>上传 0 项</value>
@@ -998,6 +1418,12 @@ Rclone：MIT License</value>
   <data name="Mgr.BookmarksLoadFailed" xml:space="preserve">
     <value>无法读取收藏与最近访问：{0}</value>
   </data>
+  <data name="Mgr.BookmarksSaveFailed" xml:space="preserve">
+    <value>无法保存收藏与最近访问：</value>
+  </data>
+  <data name="Mgr.BrowserOpenFailed" xml:space="preserve">
+    <value>没能打开浏览器：</value>
+  </data>
   <data name="Mgr.BrowserTitle" xml:space="preserve">
     <value>文件浏览器</value>
   </data>
@@ -1037,11 +1463,35 @@ Rclone：MIT License</value>
   <data name="Mgr.CannotReconnectProvider" xml:space="preserve">
     <value>只有需要浏览器授权的端点可以重新登录；{0} 请直接编辑端点参数。</value>
   </data>
+  <data name="Mgr.CheckDoneAllConnected" xml:space="preserve">
+    <value>检查结束：{0} 个端点全部连接正常。</value>
+  </data>
+  <data name="Mgr.CheckDoneNoneConnected" xml:space="preserve">
+    <value>检查结束：{0} 个端点都无法连接，请检查网络或端点参数。</value>
+  </data>
+  <data name="Mgr.CheckDonePartial" xml:space="preserve">
+    <value>检查结束：{0}/{1} 个端点连接正常，{2} 个未能完成检查。</value>
+  </data>
+  <data name="Mgr.CheckDoneSomeNeedLogin" xml:space="preserve">
+    <value>检查结束：{0}/{1} 个端点连接正常，其余需要重新登录或无法连接。</value>
+  </data>
   <data name="Mgr.CheckEndpoint" xml:space="preserve">
     <value>检查连接</value>
   </data>
   <data name="Mgr.CheckEndpointName" xml:space="preserve">
     <value>检查所选云盘端点的连接与容量</value>
+  </data>
+  <data name="Mgr.Checking" xml:space="preserve">
+    <value>正在检查…</value>
+  </data>
+  <data name="Mgr.CheckingEndpoint" xml:space="preserve">
+    <value>正在检查“{0}”…</value>
+  </data>
+  <data name="Mgr.CheckingEndpoints" xml:space="preserve">
+    <value>正在检查 {0} 个端点…</value>
+  </data>
+  <data name="Mgr.CheckingProgress" xml:space="preserve">
+    <value>正在检查… 已完成 {0}/{1}</value>
   </data>
   <data name="Mgr.Clear" xml:space="preserve">
     <value>清除</value>
@@ -1067,6 +1517,12 @@ Rclone：MIT License</value>
   <data name="Mgr.ClearingCache" xml:space="preserve">
     <value>正在清理挂载缓存…</value>
   </data>
+  <data name="Mgr.ClipboardEmpty" xml:space="preserve">
+    <value>剪贴板是空的：先选中项目，再用右键菜单的“复制”或“剪切”。</value>
+  </data>
+  <data name="Mgr.CollectingDiagnostics" xml:space="preserve">
+    <value>正在收集诊断信息…</value>
+  </data>
   <data name="Mgr.ColumnModified" xml:space="preserve">
     <value>修改时间</value>
   </data>
@@ -1079,32 +1535,172 @@ Rclone：MIT License</value>
   <data name="Mgr.ColumnType" xml:space="preserve">
     <value>类型</value>
   </data>
+  <data name="Mgr.ConfirmDeleteEndpoint" xml:space="preserve">
+    <value>删除云端端点“{0}”？本地 Profile 不会被删除。</value>
+  </data>
+  <data name="Mgr.ConfirmDeleteItems" xml:space="preserve">
+    <value>即将删除 {0} 项，其中文件夹会连同其全部内容一起删除。
+
+确定继续？</value>
+  </data>
+  <data name="Mgr.ConfirmDeleteTitle" xml:space="preserve">
+    <value>再次确认删除</value>
+  </data>
+  <data name="Mgr.ConfirmUnmount" xml:space="preserve">
+    <value>确定取消挂载？
+
+{0}</value>
+  </data>
+  <data name="Mgr.CopiedSourceKept" xml:space="preserve">
+    <value>“{0}”已复制但源未删除：{1}</value>
+  </data>
+  <data name="Mgr.Copy" xml:space="preserve">
+    <value>复制</value>
+  </data>
+  <data name="Mgr.CopyIncomplete" xml:space="preserve">
+    <value>“{0}”没有复制完成，源文件仍然保留。</value>
+  </data>
+  <data name="Mgr.CopyShareLink" xml:space="preserve">
+    <value>复制分享链接…</value>
+  </data>
   <data name="Mgr.CreateSyncTask" xml:space="preserve">
     <value>创建同步任务</value>
   </data>
   <data name="Mgr.CreateSyncTaskName" xml:space="preserve">
     <value>从所选云盘端点创建同步任务</value>
   </data>
+  <data name="Mgr.CreatingFolder" xml:space="preserve">
+    <value>正在创建文件夹“{0}”…</value>
+  </data>
+  <data name="Mgr.Cut" xml:space="preserve">
+    <value>剪切</value>
+  </data>
+  <data name="Mgr.CutConfirmBody" xml:space="preserve">
+    <value>粘贴会先复制到目标端点，复制成功后再删除下面这些源文件。
+
+{0}</value>
+  </data>
+  <data name="Mgr.CutConfirmPrompt" xml:space="preserve">
+    <value>即将在复制成功后删除 {0} 项源文件。
+
+确定继续？</value>
+  </data>
+  <data name="Mgr.CutDeletesSourceTitle" xml:space="preserve">
+    <value>剪切后删除源</value>
+  </data>
+  <data name="Mgr.CutTo" xml:space="preserve">
+    <value>已剪切到 {0}：{1}</value>
+  </data>
+  <data name="Mgr.CutWarning" xml:space="preserve">
+    <value>复制成功后源文件会被删除，云端删除无法恢复。</value>
+  </data>
   <data name="Mgr.Delete" xml:space="preserve">
     <value>删除</value>
+  </data>
+  <data name="Mgr.DeleteEllipsis" xml:space="preserve">
+    <value>删除…</value>
   </data>
   <data name="Mgr.DeleteEndpointName" xml:space="preserve">
     <value>删除所选云盘端点</value>
   </data>
+  <data name="Mgr.DeleteEndpointTitle" xml:space="preserve">
+    <value>删除端点</value>
+  </data>
+  <data name="Mgr.DeleteEndpointWithMounts" xml:space="preserve">
+    <value>端点“{0}”仍有 {1} 个挂载：
+{2}
+
+继续删除端点？</value>
+  </data>
   <data name="Mgr.DeleteItemsName" xml:space="preserve">
     <value>删除所选项目</value>
+  </data>
+  <data name="Mgr.DeleteSelected" xml:space="preserve">
+    <value>删除所选的 {0} 项…</value>
+  </data>
+  <data name="Mgr.DeletingEndpoint" xml:space="preserve">
+    <value>正在删除端点“{0}”…</value>
   </data>
   <data name="Mgr.Descending" xml:space="preserve">
     <value>降序</value>
   </data>
+  <data name="Mgr.DiagnosticsExportCancelled" xml:space="preserve">
+    <value>已取消导出诊断。</value>
+  </data>
+  <data name="Mgr.DiagnosticsExported" xml:space="preserve">
+    <value>诊断报告已导出：{0}。</value>
+  </data>
+  <data name="Mgr.DiagnosticsWriteFailed" xml:space="preserve">
+    <value>无法写入诊断文件：</value>
+  </data>
+  <data name="Mgr.DirectoryReadFailed" xml:space="preserve">
+    <value>无法读取目录：</value>
+  </data>
   <data name="Mgr.Download" xml:space="preserve">
     <value>下载</value>
+  </data>
+  <data name="Mgr.DownloadEllipsis" xml:space="preserve">
+    <value>下载…</value>
+  </data>
+  <data name="Mgr.DownloadFileTitle" xml:space="preserve">
+    <value>下载文件</value>
   </data>
   <data name="Mgr.DownloadName" xml:space="preserve">
     <value>下载所选文件</value>
   </data>
+  <data name="Mgr.DownloadSelected" xml:space="preserve">
+    <value>下载所选的 {0} 项…</value>
+  </data>
+  <data name="Mgr.DownloadingToOpen" xml:space="preserve">
+    <value>正在下载以打开：</value>
+  </data>
+  <data name="Mgr.DragOutDone" xml:space="preserve">
+    <value>已拖出：</value>
+  </data>
+  <data name="Mgr.DragOutDownloading" xml:space="preserve">
+    <value>正在下载“{0}”的 {1} 个文件…</value>
+  </data>
+  <data name="Mgr.DragOutFileReady" xml:space="preserve">
+    <value>“{0}”已下载完成，把它从打开的文件夹拖到目标位置即可。</value>
+  </data>
+  <data name="Mgr.DragOutFolderDone" xml:space="preserve">
+    <value>已拖出整个文件夹：{0}</value>
+  </data>
+  <data name="Mgr.DragOutFolderFailed" xml:space="preserve">
+    <value>“{0}”有 {1} 个文件没能下载，没有拖出整个文件夹。</value>
+  </data>
+  <data name="Mgr.DragOutFolderPreparing" xml:space="preserve">
+    <value>正在准备拖出文件夹…</value>
+  </data>
+  <data name="Mgr.DragOutFolderReadFailed" xml:space="preserve">
+    <value>无法读取这个文件夹的内容：</value>
+  </data>
+  <data name="Mgr.DragOutFolderReady" xml:space="preserve">
+    <value>文件夹“{0}”已下载完成，把它拖到目标位置即可。</value>
+  </data>
+  <data name="Mgr.DragOutFolderReadyAgain" xml:space="preserve">
+    <value>“{0}”已经全部下载好了，再拖一次即可。</value>
+  </data>
+  <data name="Mgr.DragOutIncomplete" xml:space="preserve">
+    <value>“{0}”没有下载完整，请再拖一次。</value>
+  </data>
+  <data name="Mgr.DragOutReadyAgain" xml:space="preserve">
+    <value>“{0}”已经下载好了，再拖一次即可。</value>
+  </data>
+  <data name="Mgr.DragOutRefused" xml:space="preserve">
+    <value>无法拖出“{0}”：</value>
+  </data>
+  <data name="Mgr.DraggingOut" xml:space="preserve">
+    <value>正在拖出：</value>
+  </data>
+  <data name="Mgr.DropNoUploadable" xml:space="preserve">
+    <value>拖入的内容中没有可上传的文件。</value>
+  </data>
   <data name="Mgr.DropToUpload" xml:space="preserve">
     <value>松开鼠标即可上传</value>
+  </data>
+  <data name="Mgr.DropToUploadHint" xml:space="preserve">
+    <value>上传到 {0}:/{1}</value>
   </data>
   <data name="Mgr.EditEndpoint" xml:space="preserve">
     <value>编辑端点</value>
@@ -1115,6 +1711,9 @@ Rclone：MIT License</value>
   <data name="Mgr.EmptyTrash" xml:space="preserve">
     <value>清空回收站</value>
   </data>
+  <data name="Mgr.EmptyTrashEllipsis" xml:space="preserve">
+    <value>清空回收站…</value>
+  </data>
   <data name="Mgr.EmptyTrashName" xml:space="preserve">
     <value>永久删除回收站里的全部内容</value>
   </data>
@@ -1124,11 +1723,20 @@ Rclone：MIT License</value>
   <data name="Mgr.EndpointCreated" xml:space="preserve">
     <value>已创建端点：{0}。</value>
   </data>
+  <data name="Mgr.EndpointDeleted" xml:space="preserve">
+    <value>已删除端点：{0}。</value>
+  </data>
   <data name="Mgr.EndpointListFailed" xml:space="preserve">
     <value>无法读取云端端点：{0}</value>
   </data>
   <data name="Mgr.EndpointListName" xml:space="preserve">
     <value>云盘端点列表</value>
+  </data>
+  <data name="Mgr.EndpointRenamed" xml:space="preserve">
+    <value>已将端点“{0}”重命名为“{1}”。</value>
+  </data>
+  <data name="Mgr.EndpointRenamedWithProfiles" xml:space="preserve">
+    <value>已将端点“{0}”重命名为“{1}”，并更新了 {2} 个同步任务的路径。</value>
   </data>
   <data name="Mgr.EndpointSortByName" xml:space="preserve">
     <value>云盘端点排序依据</value>
@@ -1144,6 +1752,9 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.EndpointUpdated" xml:space="preserve">
     <value>已更新端点：{0}。</value>
+  </data>
+  <data name="Mgr.EndpointsExported" xml:space="preserve">
+    <value>已导出 {0} 个端点的非敏感配置；凭据未写入文件。</value>
   </data>
   <data name="Mgr.EndpointsFiltered" xml:space="preserve">
     <value>已按“{0}”过滤，显示 {1} / {2} 个端点。</value>
@@ -1163,8 +1774,23 @@ Rclone：MIT License</value>
   <data name="Mgr.ExportDiagnosticsName" xml:space="preserve">
     <value>导出一份不含凭据的诊断报告</value>
   </data>
+  <data name="Mgr.ExportDiagnosticsTitle" xml:space="preserve">
+    <value>导出诊断报告</value>
+  </data>
+  <data name="Mgr.ExportEndpointsTitle" xml:space="preserve">
+    <value>导出云盘端点</value>
+  </data>
+  <data name="Mgr.Exporting" xml:space="preserve">
+    <value>正在导出…</value>
+  </data>
+  <data name="Mgr.ExternalMountManaged" xml:space="preserve">
+    <value>该挂载由外部程序管理。Feng Sync 只读显示外部挂载，不会结束其进程或代为卸载。</value>
+  </data>
   <data name="Mgr.ExternalMountNotice" xml:space="preserve">
     <value>该挂载由外部程序管理。Feng Sync 只读显示外部挂载，不会结束其进程，也不会代为重新挂载。</value>
+  </data>
+  <data name="Mgr.Favorite" xml:space="preserve">
+    <value>收藏</value>
   </data>
   <data name="Mgr.FavoriteJumpName" xml:space="preserve">
     <value>跳到收藏的目录</value>
@@ -1172,8 +1798,23 @@ Rclone：MIT License</value>
   <data name="Mgr.FavoriteThisDirectory" xml:space="preserve">
     <value>收藏此目录</value>
   </data>
+  <data name="Mgr.FileExistsPrompt" xml:space="preserve">
+    <value>“{0}”已存在，是否覆盖？</value>
+  </data>
+  <data name="Mgr.FileExistsTitle" xml:space="preserve">
+    <value>文件已存在</value>
+  </data>
   <data name="Mgr.FileListName" xml:space="preserve">
     <value>当前目录中的文件</value>
+  </data>
+  <data name="Mgr.FileReadFailed" xml:space="preserve">
+    <value>无法读取文件：</value>
+  </data>
+  <data name="Mgr.FolderCreated" xml:space="preserve">
+    <value>已创建文件夹：{0}</value>
+  </data>
+  <data name="Mgr.FolderHasNoVersions" xml:space="preserve">
+    <value>文件夹没有历史版本：版本是针对单个文件的。</value>
   </data>
   <data name="Mgr.Forward" xml:space="preserve">
     <value>前进</value>
@@ -1190,6 +1831,9 @@ Rclone：MIT License</value>
   <data name="Mgr.GuideSeenSaveFailed" xml:space="preserve">
     <value>无法记住引导状态：{0}</value>
   </data>
+  <data name="Mgr.HiddenEntries" xml:space="preserve">
+    <value>已隐藏 {0} 条{1}，因为对应端点当前不在列表里。</value>
+  </data>
   <data name="Mgr.HistoryBackName" xml:space="preserve">
     <value>后退到上一个访问过的目录</value>
   </data>
@@ -1199,20 +1843,73 @@ Rclone：MIT License</value>
   <data name="Mgr.Import" xml:space="preserve">
     <value>导入…</value>
   </data>
+  <data name="Mgr.ImportColumnCount" xml:space="preserve">
+    <value>条数</value>
+  </data>
+  <data name="Mgr.ImportColumnLatest" xml:space="preserve">
+    <value>最近一条</value>
+  </data>
+  <data name="Mgr.ImportColumnSucceeded" xml:space="preserve">
+    <value>其中成功</value>
+  </data>
+  <data name="Mgr.ImportConfirm" xml:space="preserve">
+    <value>将导入 {0} 个端点。每个端点都需要补填凭据，填写后取消的会被跳过。
+
+继续吗？</value>
+  </data>
+  <data name="Mgr.ImportDone" xml:space="preserve">
+    <value>导入完成：{0} 个成功，{1} 个跳过。</value>
+  </data>
+  <data name="Mgr.ImportEndpointsTitle" xml:space="preserve">
+    <value>导入云盘端点</value>
+  </data>
+  <data name="Mgr.ImportFileEmpty" xml:space="preserve">
+    <value>导出文件里没有端点。</value>
+  </data>
+  <data name="Mgr.ImportFileProblem" xml:space="preserve">
+    <value>导入文件有问题</value>
+  </data>
   <data name="Mgr.ImportName" xml:space="preserve">
     <value>从导出文件导入云盘端点</value>
+  </data>
+  <data name="Mgr.Importing" xml:space="preserve">
+    <value>正在导入…</value>
   </data>
   <data name="Mgr.IncludeSubfolders" xml:space="preserve">
     <value>包含子目录</value>
   </data>
+  <data name="Mgr.ItemCount" xml:space="preserve">
+    <value>共 {0} 项</value>
+  </data>
+  <data name="Mgr.ItemCountFiltered" xml:space="preserve">
+    <value>显示 {0} / {1} 项</value>
+  </data>
+  <data name="Mgr.ItemsDeleted" xml:space="preserve">
+    <value>已删除 {0} 项。</value>
+  </data>
+  <data name="Mgr.ItemsDeletedPartial" xml:space="preserve">
+    <value>已删除 {0} 项，{1} 项失败：{2}</value>
+  </data>
+  <data name="Mgr.JsonFileFilter" xml:space="preserve">
+    <value>JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*</value>
+  </data>
   <data name="Mgr.Jump" xml:space="preserve">
     <value>跳转</value>
+  </data>
+  <data name="Mgr.JumpEndpointMissing" xml:space="preserve">
+    <value>端点“{0}”已不在列表里，无法跳转。</value>
+  </data>
+  <data name="Mgr.ListView" xml:space="preserve">
+    <value>列表视图</value>
   </data>
   <data name="Mgr.LoadingEndpointParams" xml:space="preserve">
     <value>正在读取端点参数…</value>
   </data>
   <data name="Mgr.LoadingEndpoints" xml:space="preserve">
     <value>正在读取云端端点列表…</value>
+  </data>
+  <data name="Mgr.MountAction" xml:space="preserve">
+    <value>挂载</value>
   </data>
   <data name="Mgr.MountCount" xml:space="preserve">
     <value>共发现 {0} 个挂载，其中 {1} 个由本应用启动。</value>
@@ -1223,6 +1920,9 @@ Rclone：MIT License</value>
   <data name="Mgr.MountEndpointName" xml:space="preserve">
     <value>挂载所选云盘端点</value>
   </data>
+  <data name="Mgr.MountFailed" xml:space="preserve">
+    <value>挂载失败：</value>
+  </data>
   <data name="Mgr.MountHealthy" xml:space="preserve">
     <value>挂载点 {0} 当前可用，无需重新挂载。</value>
   </data>
@@ -1232,17 +1932,26 @@ Rclone：MIT License</value>
   <data name="Mgr.MountReconnectFailed" xml:space="preserve">
     <value>重新挂载失败：{0}</value>
   </data>
+  <data name="Mgr.MountRefreshFailed" xml:space="preserve">
+    <value>刷新挂载失败：</value>
+  </data>
   <data name="Mgr.MountRestoreFailed" xml:space="preserve">
     <value>恢复挂载失败：{0}</value>
   </data>
   <data name="Mgr.MountScanFailed" xml:space="preserve">
     <value>扫描挂载失败：{0}</value>
   </data>
+  <data name="Mgr.Mounting" xml:space="preserve">
+    <value>正在挂载 {0} → {1}…</value>
+  </data>
   <data name="Mgr.MountsGroup" xml:space="preserve">
     <value>挂载管理</value>
   </data>
   <data name="Mgr.MoveToTrash" xml:space="preserve">
     <value>移到回收站</value>
+  </data>
+  <data name="Mgr.MovedItems" xml:space="preserve">
+    <value>已移动 {0} 项</value>
   </data>
   <data name="Mgr.NewEndpoint" xml:space="preserve">
     <value>新建端点</value>
@@ -1253,11 +1962,29 @@ Rclone：MIT License</value>
   <data name="Mgr.NewFolder" xml:space="preserve">
     <value>新建文件夹</value>
   </data>
+  <data name="Mgr.NewFolderEllipsis" xml:space="preserve">
+    <value>新建文件夹…</value>
+  </data>
+  <data name="Mgr.NewFolderFailedTitle" xml:space="preserve">
+    <value>新建文件夹失败</value>
+  </data>
   <data name="Mgr.NewFolderName" xml:space="preserve">
     <value>在当前目录新建文件夹</value>
   </data>
+  <data name="Mgr.NewFolderPrompt" xml:space="preserve">
+    <value>在当前目录 {0} 下新建文件夹，名称：</value>
+  </data>
+  <data name="Mgr.NoEndpointForPreview" xml:space="preserve">
+    <value>没有选中的云盘端点，读不到任何内容。</value>
+  </data>
   <data name="Mgr.NoEndpoints" xml:space="preserve">
     <value>尚无云端端点。点击“新建端点”创建一个。</value>
+  </data>
+  <data name="Mgr.NoEndpointsToCheck" xml:space="preserve">
+    <value>没有可检查的端点。</value>
+  </data>
+  <data name="Mgr.NoEndpointsToExport" xml:space="preserve">
+    <value>没有可导出的端点。</value>
   </data>
   <data name="Mgr.NoMountRecordStore" xml:space="preserve">
     <value>本进程没有挂载记录存储，无法设置自动挂载。</value>
@@ -1268,11 +1995,29 @@ Rclone：MIT License</value>
   <data name="Mgr.NoMountsToRestore" xml:space="preserve">
     <value>没有需要恢复的挂载。</value>
   </data>
+  <data name="Mgr.NothingToPaste" xml:space="preserve">
+    <value>没有可粘贴的项目。</value>
+  </data>
+  <data name="Mgr.NothingToUpload" xml:space="preserve">
+    <value>没有可上传的文件。</value>
+  </data>
+  <data name="Mgr.Open" xml:space="preserve">
+    <value>打开</value>
+  </data>
+  <data name="Mgr.OpenFailed" xml:space="preserve">
+    <value>打开失败：</value>
+  </data>
   <data name="Mgr.OpenTransfersName" xml:space="preserve">
     <value>打开云盘传输窗口</value>
   </data>
   <data name="Mgr.OpenTrashName" xml:space="preserve">
     <value>打开该端点的回收站文件夹</value>
+  </data>
+  <data name="Mgr.OpenedPrefix" xml:space="preserve">
+    <value>已打开：</value>
+  </data>
+  <data name="Mgr.OpeningImportWizard" xml:space="preserve">
+    <value>正在打开导入向导…</value>
   </data>
   <data name="Mgr.OpeningNewEndpointWindow" xml:space="preserve">
     <value>正在打开新建端点窗口…</value>
@@ -1289,20 +2034,59 @@ Rclone：MIT License</value>
   <data name="Mgr.Paste" xml:space="preserve">
     <value>粘贴</value>
   </data>
+  <data name="Mgr.PasteCancelled" xml:space="preserve">
+    <value>已取消粘贴。</value>
+  </data>
+  <data name="Mgr.PasteDone" xml:space="preserve">
+    <value>已{0} {1} 项，进入目标目录后点“粘贴”。</value>
+  </data>
+  <data name="Mgr.PasteFailed" xml:space="preserve">
+    <value>{0} 项失败：{1}</value>
+  </data>
+  <data name="Mgr.PasteFoldersNotPasted" xml:space="preserve">
+    <value>其中 {0} 个文件夹不会被粘贴：粘贴的单位是文件。</value>
+  </data>
   <data name="Mgr.PasteFoldersSkipped" xml:space="preserve">
     <value>{0} 个文件夹没有被复制：粘贴的单位是文件，请先进入文件夹再选择其中的文件。</value>
   </data>
   <data name="Mgr.PasteName" xml:space="preserve">
     <value>把剪贴板中的项目粘贴到当前目录</value>
   </data>
+  <data name="Mgr.PasteRenamed" xml:space="preserve">
+    <value>{0} 个同名文件改名为保留两者</value>
+  </data>
   <data name="Mgr.PasteSameName" xml:space="preserve">
     <value>“{0}”已经在目标目录里。</value>
+  </data>
+  <data name="Mgr.PasteSelectPrefix" xml:space="preserve">
+    <value>请先选择要</value>
+  </data>
+  <data name="Mgr.PasteSelectSuffix" xml:space="preserve">
+    <value>的项目。</value>
+  </data>
+  <data name="Mgr.PasteSkipped" xml:space="preserve">
+    <value>已跳过 {0} 个同名项目。</value>
   </data>
   <data name="Mgr.PathNavigationName" xml:space="preserve">
     <value>当前路径导航</value>
   </data>
   <data name="Mgr.PathWithPrefix" xml:space="preserve">
     <value>{0}:/{1}    （前缀 /{2}，由 rclone 强制，无法越界）</value>
+  </data>
+  <data name="Mgr.PickCloud" xml:space="preserve">
+    <value>请选择一个云盘</value>
+  </data>
+  <data name="Mgr.PickCloudDirectory" xml:space="preserve">
+    <value>请先选择一个云盘的目录。</value>
+  </data>
+  <data name="Mgr.PickCloudEndpointFirst" xml:space="preserve">
+    <value>请先选择云端端点。</value>
+  </data>
+  <data name="Mgr.PickCloudFirst" xml:space="preserve">
+    <value>请先选择云盘。</value>
+  </data>
+  <data name="Mgr.PickDownloadFolder" xml:space="preserve">
+    <value>选择下载目录</value>
   </data>
   <data name="Mgr.PickEndpoint" xml:space="preserve">
     <value>请先选择一个端点。</value>
@@ -1313,11 +2097,53 @@ Rclone：MIT License</value>
   <data name="Mgr.PickEndpointToEdit" xml:space="preserve">
     <value>请先选择要编辑的端点。</value>
   </data>
+  <data name="Mgr.PickFilesToUpload" xml:space="preserve">
+    <value>选择要上传的文件</value>
+  </data>
+  <data name="Mgr.PickFolderToUpload" xml:space="preserve">
+    <value>选择要上传的文件夹</value>
+  </data>
   <data name="Mgr.PickMountToReconnect" xml:space="preserve">
     <value>请先选择要重新挂载的挂载点。</value>
   </data>
   <data name="Mgr.PreparingSyncTask" xml:space="preserve">
     <value>正在准备同步任务…</value>
+  </data>
+  <data name="Mgr.Preview" xml:space="preserve">
+    <value>预览</value>
+  </data>
+  <data name="Mgr.PreviewPrefix" xml:space="preserve">
+    <value>预览 · </value>
+  </data>
+  <data name="Mgr.Properties" xml:space="preserve">
+    <value>属性</value>
+  </data>
+  <data name="Mgr.PropertiesPrefix" xml:space="preserve">
+    <value>属性 · </value>
+  </data>
+  <data name="Mgr.QueuedCopy" xml:space="preserve">
+    <value>已排队复制 {0} 个文件</value>
+  </data>
+  <data name="Mgr.QueuedFiles" xml:space="preserve">
+    <value>已加入传输队列：{0} 个文件。</value>
+  </data>
+  <data name="Mgr.QueuedPrefix" xml:space="preserve">
+    <value>已加入传输队列：</value>
+  </data>
+  <data name="Mgr.ReadDetails" xml:space="preserve">
+    <value>读取详情</value>
+  </data>
+  <data name="Mgr.ReadingDirectory" xml:space="preserve">
+    <value>正在读取目录…</value>
+  </data>
+  <data name="Mgr.ReadingEndpointConfig" xml:space="preserve">
+    <value>正在读取端点配置…</value>
+  </data>
+  <data name="Mgr.ReadingMounts" xml:space="preserve">
+    <value>正在读取挂载状态…</value>
+  </data>
+  <data name="Mgr.Recent" xml:space="preserve">
+    <value>最近访问</value>
   </data>
   <data name="Mgr.RecentJumpName" xml:space="preserve">
     <value>跳到最近访问的目录</value>
@@ -1355,8 +2181,14 @@ Rclone：MIT License</value>
   <data name="Mgr.ReconnectingMount" xml:space="preserve">
     <value>正在重新挂载 {0}…</value>
   </data>
+  <data name="Mgr.RecycleEllipsis" xml:space="preserve">
+    <value>移到回收站…</value>
+  </data>
   <data name="Mgr.RecycleItemName" xml:space="preserve">
     <value>把所选项目移入该端点的回收站</value>
+  </data>
+  <data name="Mgr.RecycleSelected" xml:space="preserve">
+    <value>把所选的 {0} 项移到回收站…</value>
   </data>
   <data name="Mgr.Refresh" xml:space="preserve">
     <value>刷新</value>
@@ -1373,17 +2205,47 @@ Rclone：MIT License</value>
   <data name="Mgr.RefreshMountsName" xml:space="preserve">
     <value>刷新挂载列表</value>
   </data>
+  <data name="Mgr.RemoteEndpointsTitle" xml:space="preserve">
+    <value>远程端点</value>
+  </data>
   <data name="Mgr.Rename" xml:space="preserve">
     <value>重命名</value>
+  </data>
+  <data name="Mgr.RenameEllipsis" xml:space="preserve">
+    <value>重命名…</value>
   </data>
   <data name="Mgr.RenameEndpointName" xml:space="preserve">
     <value>重命名所选云盘端点</value>
   </data>
+  <data name="Mgr.RenameEndpointPrompt" xml:space="preserve">
+    <value>端点“{0}”的新名称（只能包含字母、数字、下划线或连字符）：</value>
+  </data>
+  <data name="Mgr.RenameEndpointTitle" xml:space="preserve">
+    <value>重命名端点</value>
+  </data>
+  <data name="Mgr.RenameFailedTitle" xml:space="preserve">
+    <value>重命名失败</value>
+  </data>
   <data name="Mgr.RenameItemName" xml:space="preserve">
     <value>重命名所选项目</value>
   </data>
+  <data name="Mgr.RenamePrompt" xml:space="preserve">
+    <value>“{0}”的新名称：</value>
+  </data>
+  <data name="Mgr.Renamed" xml:space="preserve">
+    <value>已重命名为：{0}</value>
+  </data>
+  <data name="Mgr.Renaming" xml:space="preserve">
+    <value>正在重命名…</value>
+  </data>
+  <data name="Mgr.RenamingItem" xml:space="preserve">
+    <value>正在重命名“{0}”…</value>
+  </data>
   <data name="Mgr.Restore" xml:space="preserve">
     <value>还原</value>
+  </data>
+  <data name="Mgr.RestoreEllipsis" xml:space="preserve">
+    <value>还原…</value>
   </data>
   <data name="Mgr.RestoreItemsName" xml:space="preserve">
     <value>把所选的回收站项目还原到原目录</value>
@@ -1401,8 +2263,14 @@ Rclone：MIT License</value>
   <data name="Mgr.RestoreMountsTitle" xml:space="preserve">
     <value>恢复挂载</value>
   </data>
+  <data name="Mgr.RestoreSelected" xml:space="preserve">
+    <value>还原所选的 {0} 项…</value>
+  </data>
   <data name="Mgr.RestoringMounts" xml:space="preserve">
     <value>正在恢复 {0} 个挂载…</value>
+  </data>
+  <data name="Mgr.SavingOrganization" xml:space="preserve">
+    <value>正在保存分组与标签…</value>
   </data>
   <data name="Mgr.ScanningMounts" xml:space="preserve">
     <value>正在扫描系统全部 rclone 挂载…</value>
@@ -1419,11 +2287,69 @@ Rclone：MIT License</value>
   <data name="Mgr.SearchEndpointsName" xml:space="preserve">
     <value>按名称、类型或前缀搜索云盘端点</value>
   </data>
+  <data name="Mgr.SearchFailedTitle" xml:space="preserve">
+    <value>搜索失败</value>
+  </data>
+  <data name="Mgr.SearchFound" xml:space="preserve">
+    <value>找到 {0} 项</value>
+  </data>
+  <data name="Mgr.SearchNoMatch" xml:space="preserve">
+    <value>没有匹配“{0}”的内容。</value>
+  </data>
   <data name="Mgr.SearchRecursiveName" xml:space="preserve">
     <value>搜索包含子目录</value>
   </data>
+  <data name="Mgr.SearchTruncated" xml:space="preserve">
+    <value>（已达上限 {0} 项，请缩小范围）</value>
+  </data>
+  <data name="Mgr.SearchingIn" xml:space="preserve">
+    <value>正在“{0}”内搜索“{1}”…</value>
+  </data>
+  <data name="Mgr.SelectEndpointToCheck" xml:space="preserve">
+    <value>请先选择要检查的端点。</value>
+  </data>
+  <data name="Mgr.SelectEndpointToDelete" xml:space="preserve">
+    <value>请先选择要删除的端点。</value>
+  </data>
+  <data name="Mgr.SelectEndpointToMount" xml:space="preserve">
+    <value>请先选择要挂载的端点。</value>
+  </data>
+  <data name="Mgr.SelectEndpointToOrganize" xml:space="preserve">
+    <value>请先选择要设置分组与标签的端点。</value>
+  </data>
+  <data name="Mgr.SelectEndpointToRename" xml:space="preserve">
+    <value>请先选择要重命名的端点。</value>
+  </data>
+  <data name="Mgr.SelectFilesToDownload" xml:space="preserve">
+    <value>请先选择要下载的文件；文件夹请先进入后再选择其中的文件。</value>
+  </data>
+  <data name="Mgr.SelectItemsToDelete" xml:space="preserve">
+    <value>请先选择要删除的项目。</value>
+  </data>
+  <data name="Mgr.SelectItemsToRecycle" xml:space="preserve">
+    <value>请先选择要移到回收站的项目。</value>
+  </data>
+  <data name="Mgr.SelectItemsToRestore" xml:space="preserve">
+    <value>请先选择要还原的项目。</value>
+  </data>
+  <data name="Mgr.SelectMountToUnmount" xml:space="preserve">
+    <value>请先选择要取消的挂载。</value>
+  </data>
+  <data name="Mgr.SelectSingleItemToRename" xml:space="preserve">
+    <value>请先选择要重命名的单个项目。</value>
+  </data>
+  <data name="Mgr.SelectTargetCloud" xml:space="preserve">
+    <value>请先选择要粘贴到的云盘。</value>
+  </data>
+  <data name="Mgr.SelectionProperties" xml:space="preserve">
+    <value>所选项目的属性</value>
+  </data>
   <data name="Mgr.SettingsLoadFailed" xml:space="preserve">
     <value>无法读取设置：{0}</value>
+  </data>
+  <data name="Mgr.SomeMountsUnfinished" xml:space="preserve">
+    <value>部分挂载未完成：
+</value>
   </data>
   <data name="Mgr.Sort" xml:space="preserve">
     <value>排序</value>
@@ -1461,11 +2387,17 @@ Rclone：MIT License</value>
   <data name="Mgr.SyncWizardTaskCreated" xml:space="preserve">
     <value>已创建双向同步任务“{0}”：{1} ↔ {2}</value>
   </data>
+  <data name="Mgr.TargetReadFailed" xml:space="preserve">
+    <value>无法读取目标目录</value>
+  </data>
   <data name="Mgr.TestAll" xml:space="preserve">
     <value>测试全部</value>
   </data>
   <data name="Mgr.TestAllName" xml:space="preserve">
     <value>检查全部云盘端点的连接与容量</value>
+  </data>
+  <data name="Mgr.TextFileFilter" xml:space="preserve">
+    <value>文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*</value>
   </data>
   <data name="Mgr.ToggleEndpointSortDirectionName" xml:space="preserve">
     <value>切换云盘端点列表的升降序</value>
@@ -1476,11 +2408,20 @@ Rclone：MIT License</value>
   <data name="Mgr.ToggleViewName" xml:space="preserve">
     <value>在列表视图与网格视图之间切换</value>
   </data>
+  <data name="Mgr.TransferIncomplete" xml:space="preserve">
+    <value>传输未完成。</value>
+  </data>
   <data name="Mgr.TransferProgressName" xml:space="preserve">
     <value>文件传输进度</value>
   </data>
   <data name="Mgr.Trash" xml:space="preserve">
     <value>回收站</value>
+  </data>
+  <data name="Mgr.TrashEmpty" xml:space="preserve">
+    <value>回收站是空的，没有可删除的项目。</value>
+  </data>
+  <data name="Mgr.TrashOpenFailed" xml:space="preserve">
+    <value>无法打开回收站</value>
   </data>
   <data name="Mgr.TypeFile" xml:space="preserve">
     <value>文件</value>
@@ -1488,17 +2429,32 @@ Rclone：MIT License</value>
   <data name="Mgr.TypeFolder" xml:space="preserve">
     <value>文件夹</value>
   </data>
+  <data name="Mgr.Unfavorite" xml:space="preserve">
+    <value>取消收藏</value>
+  </data>
   <data name="Mgr.Unmount" xml:space="preserve">
     <value>取消挂载</value>
   </data>
+  <data name="Mgr.UnmountFailed" xml:space="preserve">
+    <value>取消挂载失败：</value>
+  </data>
   <data name="Mgr.UnmountName" xml:space="preserve">
     <value>取消所选挂载</value>
+  </data>
+  <data name="Mgr.Unmounted" xml:space="preserve">
+    <value>已取消挂载：{0}。</value>
+  </data>
+  <data name="Mgr.Unmounting" xml:space="preserve">
+    <value>正在取消挂载：{0}…</value>
   </data>
   <data name="Mgr.UpLevel" xml:space="preserve">
     <value>上一级</value>
   </data>
   <data name="Mgr.UpLevelName" xml:space="preserve">
     <value>返回上一级目录</value>
+  </data>
+  <data name="Mgr.UploadCancelled" xml:space="preserve">
+    <value>已取消上传。</value>
   </data>
   <data name="Mgr.UploadFiles" xml:space="preserve">
     <value>上传文件</value>
@@ -1511,6 +2467,24 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.UploadFolderName" xml:space="preserve">
     <value>上传文件夹到当前目录</value>
+  </data>
+  <data name="Mgr.UploadRenamed" xml:space="preserve">
+    <value>其中 {0} 个同名文件改名为保留两者。</value>
+  </data>
+  <data name="Mgr.UploadSkipped" xml:space="preserve">
+    <value>已跳过 {0} 个同名文件。</value>
+  </data>
+  <data name="Mgr.UploadSkippedAll" xml:space="preserve">
+    <value>已跳过全部同名文件。</value>
+  </data>
+  <data name="Mgr.UploadTargetReadFailed" xml:space="preserve">
+    <value>无法读取目标目录：</value>
+  </data>
+  <data name="Mgr.ViewPreferenceSaveFailed" xml:space="preserve">
+    <value>无法记住视图选择：</value>
+  </data>
+  <data name="Mgr.ViewPropertiesSelected" xml:space="preserve">
+    <value>查看所选 {0} 项的属性</value>
   </data>
   <data name="Mgr.ViewTransfers" xml:space="preserve">
     <value>查看传输</value>

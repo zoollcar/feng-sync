@@ -867,8 +867,8 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     private async void Check_Click(object sender, RoutedEventArgs e)
     {
-        if (EndpointList.SelectedItem is not CloudEndpointRow row) { StatusText.Text = "请先选择要检查的端点。"; return; }
-        await RunBusyAsync(CheckButton, "正在检查…", $"正在检查“{row.Account.Name}”…", async () =>
+        if (EndpointList.SelectedItem is not CloudEndpointRow row) { StatusText.Text = Tr.F("Mgr.SelectEndpointToCheck"); return; }
+        await RunBusyAsync(CheckButton, Tr.F("Mgr.Checking"), Tr.Format("Mgr.CheckingEndpoint", row.Account.Name), async () =>
         {
             row.Status = new CloudEndpointStatus(CloudEndpointHealth.Checking, "");
             row.Status = await CloudEndpointStatusService.ProbeAsync(row.Account);
@@ -882,15 +882,15 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     private async void RenameEndpoint_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择要重命名的端点。"; return; }
-        await RunBusyAsync(RenameEndpointButton, "正在重命名…", "正在读取挂载状态…", async () =>
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.SelectEndpointToRename"); return; }
+        await RunBusyAsync(RenameEndpointButton, Tr.F("Mgr.Renaming"), Tr.F("Mgr.ReadingMounts"), async () =>
         {
             // Scanned fresh rather than reused from the list: a mount that appeared since the last refresh
             // would be stranded by the rename, and the check is the only thing standing in the way.
             var mounted = (await _mountService.ScanAsync()).Select(mount => mount.RemoteName).ToList();
             var context = await CloudEndpointRename.InspectAsync(mounted);
-            var requested = TextPrompt.Ask(this, "重命名端点",
-                $"端点“{account.Name}”的新名称（只能包含字母、数字、下划线或连字符）：",
+            var requested = TextPrompt.Ask(this, Tr.F("Mgr.RenameEndpointTitle"),
+                Tr.Format("Mgr.RenameEndpointPrompt", account.Name),
                 account.Name,
                 text => CloudEndpointRename.Validate(text, account.Name, context));
             if (requested is null) return;
@@ -912,10 +912,10 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     private async void OrganizeEndpoint_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择要设置分组与标签的端点。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.SelectEndpointToOrganize"); return; }
         var row = _accounts.FirstOrDefault(candidate => candidate.Account.Name == account.Name);
         if (row is null) return;
-        await RunBusyAsync(OrganizeEndpointButton, "正在保存…", "正在保存分组与标签…", async () =>
+        await RunBusyAsync(OrganizeEndpointButton, Tr.F("Endpoint.Saving"), Tr.F("Mgr.SavingOrganization"), async () =>
         {
             var dialog = new CloudEndpointOrganizationWindow(account.Name, account.Metadata?.Group,
                 account.Metadata?.Tags, _loaded.Select(other => other.Group).Where(group => group.Length > 0)) { Owner = this };
@@ -943,8 +943,8 @@ public partial class RemoteEndpointManagerWindow : Window
 
     /// <summary>What the status line says after a rename, kept separate so the wording is testable.</summary>
     internal static string DescribeRename(CloudEndpointRenameResult result) => result.RewrittenProfiles == 0
-        ? $"已将端点“{result.OldName}”重命名为“{result.NewName}”。"
-        : $"已将端点“{result.OldName}”重命名为“{result.NewName}”，并更新了 {result.RewrittenProfiles} 个同步任务的路径。";
+        ? Tr.Format("Mgr.EndpointRenamed", result.OldName, result.NewName)
+        : Tr.Format("Mgr.EndpointRenamedWithProfiles", result.OldName, result.NewName, result.RewrittenProfiles);
 
     /// <summary>
     /// Probes every endpoint the list is showing, bounded so a long list does not fire one request per
@@ -957,7 +957,7 @@ public partial class RemoteEndpointManagerWindow : Window
         // make the progress readout or the summary count a different set than the one that was probed.
         var rows = _accounts.ToList();
         if (rows.Count == 0) { StatusText.Text = DescribeCheckAll(0, 0, 0); return; }
-        await RunBusyAsync(CheckAllButton, "正在检查…", $"正在检查 {rows.Count} 个端点…", async () =>
+        await RunBusyAsync(CheckAllButton, Tr.F("Mgr.Checking"), Tr.Format("Mgr.CheckingEndpoints", rows.Count), async () =>
         {
             foreach (var row in rows) row.Status = new CloudEndpointStatus(CloudEndpointHealth.Checking, "");
             var done = 0;
@@ -969,7 +969,7 @@ public partial class RemoteEndpointManagerWindow : Window
                     {
                         row.Status = status;
                         done++;
-                        StatusText.Text = $"正在检查… 已完成 {done}/{rows.Count}";
+                        StatusText.Text = Tr.Format("Mgr.CheckingProgress", done, rows.Count);
                     });
                 });
             var connected = rows.Count(row => row.Health == CloudEndpointHealth.Connected);
@@ -984,11 +984,11 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     internal static string DescribeCheckAll(int total, int connected, int failed) => (total, connected, failed) switch
     {
-        (0, _, _) => "没有可检查的端点。",
-        (_, _, > 0) => $"检查结束：{connected}/{total} 个端点连接正常，{failed} 个未能完成检查。",
-        var (count, all, _) when all == count => $"检查结束：{count} 个端点全部连接正常。",
-        var (count, none, _) when none == 0 => $"检查结束：{count} 个端点都无法连接，请检查网络或端点参数。",
-        var (count, some, _) => $"检查结束：{some}/{count} 个端点连接正常，其余需要重新登录或无法连接。"
+        (0, _, _) => Tr.F("Mgr.NoEndpointsToCheck"),
+        (_, _, > 0) => Tr.Format("Mgr.CheckDonePartial", connected, total, failed),
+        var (count, all, _) when all == count => Tr.Format("Mgr.CheckDoneAllConnected", count),
+        var (count, none, _) when none == 0 => Tr.Format("Mgr.CheckDoneNoneConnected", count),
+        var (count, some, _) => Tr.Format("Mgr.CheckDoneSomeNeedLogin", some, count)
     };
 
     /// <summary>
@@ -997,21 +997,21 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     private async void ExportEndpoints_Click(object sender, RoutedEventArgs e)
     {
-        await RunBusyAsync(ExportEndpointsButton, "正在导出…", "正在读取端点配置…", async () =>
+        await RunBusyAsync(ExportEndpointsButton, Tr.F("Mgr.Exporting"), Tr.F("Mgr.ReadingEndpointConfig"), async () =>
         {
             var accounts = await CloudEndpointService.LoadEndpointAccountsAsync();
-            if (accounts.Count == 0) { StatusText.Text = "没有可导出的端点。"; return; }
+            if (accounts.Count == 0) { StatusText.Text = Tr.F("Mgr.NoEndpointsToExport"); return; }
             var dialog = new SaveFileDialog
             {
-                Title = "导出云盘端点",
+                Title = Tr.F("Mgr.ExportEndpointsTitle"),
                 FileName = "fengsync-endpoints.json",
                 DefaultExt = ".json",
-                Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*"
+                Filter = Tr.F("Mgr.JsonFileFilter")
             };
             if (dialog.ShowDialog(this) != true) return;
             var bundle = await CloudEndpointService.BuildExportBundleAsync(accounts, DateTimeOffset.Now);
             await File.WriteAllTextAsync(dialog.FileName, CloudEndpointPortability.Serialize(bundle));
-            StatusText.Text = $"已导出 {bundle.Endpoints.Count} 个端点的非敏感配置；凭据未写入文件。";
+            StatusText.Text = Tr.Format("Mgr.EndpointsExported", bundle.Endpoints.Count);
         });
     }
 
@@ -1034,17 +1034,17 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     private async void ExportDiagnostics_Click(object sender, RoutedEventArgs e)
     {
-        await RunBusyAsync(ExportDiagnosticsButton, "正在导出…", "正在收集诊断信息…", async () =>
+        await RunBusyAsync(ExportDiagnosticsButton, Tr.F("Mgr.Exporting"), Tr.F("Mgr.CollectingDiagnostics"), async () =>
         {
             var now = _transfers.Clock();
             var snapshot = await CollectDiagnosticsAsync(now);
             var report = CloudDiagnosticsReport.Compose(snapshot);
             var defaultName = CloudDiagnosticsReport.DefaultFileName(now);
             var path = AskDiagnosticsFile is { } ask ? ask(defaultName) : AskDiagnosticsPath(defaultName);
-            if (path is not { Length: > 0 }) { StatusText.Text = "已取消导出诊断。"; return; }
+            if (path is not { Length: > 0 }) { StatusText.Text = Tr.F("Mgr.DiagnosticsExportCancelled"); return; }
             try { await File.WriteAllTextAsync(path, report, new System.Text.UTF8Encoding(false)); }
-            catch (Exception ex) { StatusText.Text = "无法写入诊断文件：" + RcloneUiError.Describe(ex, "diagnostics-write"); return; }
-            StatusText.Text = $"诊断报告已导出：{path}。";
+            catch (Exception ex) { StatusText.Text = Tr.F("Mgr.DiagnosticsWriteFailed") + RcloneUiError.Describe(ex, "diagnostics-write"); return; }
+            StatusText.Text = Tr.Format("Mgr.DiagnosticsExported", path);
         });
     }
 
@@ -1052,11 +1052,11 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         var dialog = new SaveFileDialog
         {
-            Title = "导出诊断报告",
+            Title = Tr.F("Mgr.ExportDiagnosticsTitle"),
             FileName = defaultName,
             DefaultExt = ".txt",
             AddExtension = true,
-            Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*"
+            Filter = Tr.F("Mgr.TextFileFilter")
         };
         return dialog.ShowDialog(this) == true ? dialog.FileName : null;
     }
@@ -1097,9 +1097,9 @@ public partial class RemoteEndpointManagerWindow : Window
         var succeeded = history.Count(entry => entry.Succeeded);
         return
         [
-            new("条数", history.Count.ToString()),
-            new("其中成功", succeeded.ToString()),
-            new("最近一条", $"{history[0].ArchivedUtc.LocalDateTime:yyyy-MM-dd HH:mm} · {CloudTransferHistorySummary.Describe(history[0])}")
+            new(Tr.F("Mgr.ImportColumnCount"), history.Count.ToString()),
+            new(Tr.F("Mgr.ImportColumnSucceeded"), succeeded.ToString()),
+            new(Tr.F("Mgr.ImportColumnLatest"), $"{history[0].ArchivedUtc.LocalDateTime:yyyy-MM-dd HH:mm} · {CloudTransferHistorySummary.Describe(history[0])}")
         ];
     }
 
@@ -1119,28 +1119,28 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         var dialog = new OpenFileDialog
         {
-            Title = "导入云盘端点",
+            Title = Tr.F("Mgr.ImportEndpointsTitle"),
             DefaultExt = ".json",
-            Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*"
+            Filter = Tr.F("Mgr.JsonFileFilter")
         };
         if (dialog.ShowDialog(this) != true) return;
 
         string json;
         try { json = await File.ReadAllTextAsync(dialog.FileName); }
-        catch (Exception ex) { StatusText.Text = "无法读取文件：" + ex.Message; return; }
+        catch (Exception ex) { StatusText.Text = Tr.F("Mgr.FileReadFailed") + ex.Message; return; }
 
         var import = CloudEndpointPortability.Parse(json);
         if (import.Errors.Count > 0)
         {
-            MessageBox.Show(this, string.Join("\n", import.Errors), "导入文件有问题", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, string.Join("\n", import.Errors), Tr.F("Mgr.ImportFileProblem"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        if (import.Endpoints.Count == 0) { StatusText.Text = "导出文件里没有端点。"; return; }
+        if (import.Endpoints.Count == 0) { StatusText.Text = Tr.F("Mgr.ImportFileEmpty"); return; }
         if (MessageBox.Show(this,
-                $"将导入 {import.Endpoints.Count} 个端点。每个端点都需要补填凭据，填写后取消的会被跳过。\n\n继续吗？",
-                "导入云盘端点", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                Tr.Format("Mgr.ImportConfirm", import.Endpoints.Count),
+                Tr.F("Mgr.ImportEndpointsTitle"), MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
 
-        await RunBusyAsync(ImportEndpointsButton, "正在导入…", "正在打开导入向导…", async () =>
+        await RunBusyAsync(ImportEndpointsButton, Tr.F("Mgr.Importing"), Tr.F("Mgr.OpeningImportWizard"), async () =>
         {
             var taken = (await CloudEndpointService.LoadEndpointAccountsAsync())
                 .Select(account => account.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -1156,21 +1156,21 @@ public partial class RemoteEndpointManagerWindow : Window
                 imported++;
             }
             await RefreshAsync();
-            StatusText.Text = $"导入完成：{imported} 个成功，{skipped} 个跳过。";
+            StatusText.Text = Tr.Format("Mgr.ImportDone", imported, skipped);
         });
     }
 
     private async void Delete_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择要删除的端点。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.SelectEndpointToDelete"); return; }
         var relatedMounts = _mounts.Where(m => string.Equals(m.RemoteName, account.Name, StringComparison.OrdinalIgnoreCase)).ToList();
         if (relatedMounts.Count > 0)
         {
             var detail = string.Join("\n", relatedMounts.Select(m => " · " + m.Display));
-            if (!TextPrompt.Confirm(this, "删除端点", $"端点“{account.Name}”仍有 {relatedMounts.Count} 个挂载：\n{detail}\n\n继续删除端点？", danger: true)) return;
+            if (!TextPrompt.Confirm(this, Tr.F("Mgr.DeleteEndpointTitle"), Tr.Format("Mgr.DeleteEndpointWithMounts", account.Name, relatedMounts.Count, detail), danger: true)) return;
         }
-        else if (!TextPrompt.Confirm(this, "删除端点", $"删除云端端点“{account.Name}”？本地 Profile 不会被删除。", danger: true)) return;
-        await RunBusyAsync(DeleteButton, "正在删除…", $"正在删除端点“{account.Name}”…", async () => { await CloudEndpointService.DeleteAsync(account.Name); await RefreshAsync(); StatusText.Text = $"已删除端点：{account.Name}。"; });
+        else if (!TextPrompt.Confirm(this, Tr.F("Mgr.DeleteEndpointTitle"), Tr.Format("Mgr.ConfirmDeleteEndpoint", account.Name), danger: true)) return;
+        await RunBusyAsync(DeleteButton, Tr.F("Schedule.Deleting"), Tr.Format("Mgr.DeletingEndpoint", account.Name), async () => { await CloudEndpointService.DeleteAsync(account.Name); await RefreshAsync(); StatusText.Text = Tr.Format("Mgr.EndpointDeleted", account.Name); });
     }
 
     private async Task RunBusyAsync(Button button, string busyText, string status, Func<Task> action)
@@ -1183,7 +1183,7 @@ public partial class RemoteEndpointManagerWindow : Window
         {
             var message = RcloneUiError.Describe(ex, "endpoint-manager-action");
             StatusText.Text = message;
-            MessageBox.Show(message, "远程端点", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(message, Tr.F("Mgr.RemoteEndpointsTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally { button.IsEnabled = true; button.Content = original; _busy = false; }
     }
@@ -1194,13 +1194,13 @@ public partial class RemoteEndpointManagerWindow : Window
         _mountBusy = true;
         UpdateMountButtons();
         try { await RefreshMountsAsync(); }
-        catch (Exception ex) { MountStatus.Text = "刷新挂载失败：" + RcloneUiError.Describe(ex, "mount-refresh"); }
+        catch (Exception ex) { MountStatus.Text = Tr.F("Mgr.MountRefreshFailed") + RcloneUiError.Describe(ex, "mount-refresh"); }
         finally { _mountBusy = false; UpdateMountButtons(); }
     }
 
     private async void MountSelectedEndpoint_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not CloudEndpointAccount account) { MountStatus.Text = "请先选择要挂载的端点。"; return; }
+        if (Selected is not CloudEndpointAccount account) { MountStatus.Text = Tr.F("Mgr.SelectEndpointToMount"); return; }
         if (_mountBusy) return;
         var provider = CloudEndpointService.DisplayName(CloudEndpointService.KindFromRcloneType(account.Type));
         var dialog = new MountPickerDialog(
@@ -1210,7 +1210,7 @@ public partial class RemoteEndpointManagerWindow : Window
         var request = new MountRequest(dialog.SelectedTarget!, dialog.SelectedOptions);
         _mountBusy = true;
         UpdateMountButtons();
-        MountStatus.Text = $"正在挂载 {account.Name} → {request.Target.MountPoint}…";
+        MountStatus.Text = Tr.Format("Mgr.Mounting", account.Name, request.Target.MountPoint);
         try
         {
             var result = await _mountService.MountAsync(request);
@@ -1220,8 +1220,8 @@ public partial class RemoteEndpointManagerWindow : Window
         catch (Exception ex)
         {
             var message = RcloneUiError.Describe(ex, "mount-create");
-            MountStatus.Text = "挂载失败：" + message;
-            MessageBox.Show(message, "挂载", MessageBoxButton.OK, MessageBoxImage.Error);
+            MountStatus.Text = Tr.F("Mgr.MountFailed") + message;
+            MessageBox.Show(message, Tr.F("Mgr.MountAction"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally { _mountBusy = false; UpdateMountButtons(); }
     }
@@ -1237,34 +1237,34 @@ public partial class RemoteEndpointManagerWindow : Window
     private async void UnmountMount_Click(object sender, RoutedEventArgs e)
     {
         var mount = SelectedMount;
-        if (mount is null) { MountStatus.Text = "请先选择要取消的挂载。"; return; }
+        if (mount is null) { MountStatus.Text = Tr.F("Mgr.SelectMountToUnmount"); return; }
         if (_mountBusy) return;
         if (!mount.CanUnmount)
         {
-            MessageBox.Show("该挂载由外部程序管理。Feng Sync 只读显示外部挂载，不会结束其进程或代为卸载。", "取消挂载", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(Tr.F("Mgr.ExternalMountManaged"), Tr.F("Mgr.Unmount"), MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (!TextPrompt.Confirm(this, "取消挂载", $"确定取消挂载？\n\n{mount.Display}", danger: true)) return;
+        if (!TextPrompt.Confirm(this, Tr.F("Mgr.Unmount"), Tr.Format("Mgr.ConfirmUnmount", mount.Display), danger: true)) return;
         _mountBusy = true;
         UpdateMountButtons();
-        MountStatus.Text = $"正在取消挂载：{mount.MountPoint}…";
+        MountStatus.Text = Tr.Format("Mgr.Unmounting", mount.MountPoint);
         try
         {
             var result = await _mountService.UnmountAsync(mount);
-            if (result.AllStopped) { MountStatus.Text = $"已取消挂载：{mount.MountPoint}。"; }
+            if (result.AllStopped) { MountStatus.Text = Tr.Format("Mgr.Unmounted", mount.MountPoint); }
             else
             {
                 var detail = string.Join("\n", result.Failures.Select(f => $" · {f.MountPoint}（PID {f.Pid}）：{f.Reason}"));
-                MountStatus.Text = "部分挂载未完成：\n" + detail;
-                MessageBox.Show("部分挂载未完成：\n" + detail, "取消挂载", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MountStatus.Text = Tr.F("Mgr.SomeMountsUnfinished") + detail;
+                MessageBox.Show(Tr.F("Mgr.SomeMountsUnfinished") + detail, Tr.F("Mgr.Unmount"), MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             await RefreshMountsAsync();
         }
         catch (Exception ex)
         {
             var message = RcloneUiError.Describe(ex, "mount-remove");
-            MountStatus.Text = "取消挂载失败：" + message;
-            MessageBox.Show(message, "取消挂载", MessageBoxButton.OK, MessageBoxImage.Error);
+            MountStatus.Text = Tr.F("Mgr.UnmountFailed") + message;
+            MessageBox.Show(message, Tr.F("Mgr.Unmount"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally { _mountBusy = false; UpdateMountButtons(); }
     }
@@ -1276,7 +1276,7 @@ public partial class RemoteEndpointManagerWindow : Window
         if (Selected is not CloudEndpointAccount account) { ClearListing(); return; }
         try
         {
-            StatusText.Text = "正在读取目录…";
+            StatusText.Text = Tr.F("Mgr.ReadingDirectory");
             var items = await _files.ListAsync(account.Name, _currentPath);
             BackButton.IsEnabled = !_currentPath.Equals(account.RootPath, StringComparison.OrdinalIgnoreCase);
             ShowListing(_currentPath, items);
@@ -1284,7 +1284,7 @@ public partial class RemoteEndpointManagerWindow : Window
             // in the status line, not as somewhere the user can jump back to.
             await RecordVisitAsync(account.Name, _currentPath);
         }
-        catch (Exception ex) { StatusText.Text = "无法读取目录：" + RcloneUiError.Describe(ex, "cloud-file-list"); }
+        catch (Exception ex) { StatusText.Text = Tr.F("Mgr.DirectoryReadFailed") + RcloneUiError.Describe(ex, "cloud-file-list"); }
     }
 
     private void ClearListing()
@@ -1292,7 +1292,7 @@ public partial class RemoteEndpointManagerWindow : Window
         _listed.Clear();
         _entries.Clear();
         _listingIsSearchResult = false;
-        PathText.Text = "请选择一个云盘";
+        PathText.Text = Tr.F("Mgr.PickCloud");
         AddressBox.Text = "";
         Breadcrumbs.ItemsSource = null;
         ViewSummary.Text = "";
@@ -1334,7 +1334,7 @@ public partial class RemoteEndpointManagerWindow : Window
         foreach (var entry in visible) _entries.Add(entry);
         ViewSummary.Text = _listed.Count == 0
             ? ""
-            : visible.Count == _listed.Count ? $"共 {_listed.Count} 项" : $"显示 {visible.Count} / {_listed.Count} 项";
+            : visible.Count == _listed.Count ? Tr.Format("Mgr.ItemCount", _listed.Count) : Tr.Format("Mgr.ItemCountFiltered", visible.Count, _listed.Count);
         if (ViewSummary.Text.Length > 0) StatusText.Text = ViewSummary.Text + "。";
         UpdateFileButtons();
         // The rows a search or a sort change left on screen are the only ones worth pulling pictures for.
@@ -1391,8 +1391,8 @@ public partial class RemoteEndpointManagerWindow : Window
         var names = _accounts.Select(row => row.Account.Name).ToList();
         FavoriteJumpBox.ItemsSource = CloudBrowserBookmarks.JumpItems(_favorites, names);
         RecentJumpBox.ItemsSource = CloudBrowserBookmarks.JumpItems(_recent, names);
-        DescribeHidden(FavoriteJumpBox, _favorites, names, "收藏");
-        DescribeHidden(RecentJumpBox, _recent, names, "最近访问");
+        DescribeHidden(FavoriteJumpBox, _favorites, names, Tr.F("Mgr.Favorite"));
+        DescribeHidden(RecentJumpBox, _recent, names, Tr.F("Mgr.Recent"));
         UpdateFavoriteToggle();
     }
 
@@ -1403,7 +1403,7 @@ public partial class RemoteEndpointManagerWindow : Window
     private static void DescribeHidden(ComboBox box, IReadOnlyList<CloudBookmark> places, IReadOnlyCollection<string> names, string what)
     {
         var hidden = CloudBrowserBookmarks.HiddenCount(places, names);
-        box.ToolTip = hidden == 0 ? null : $"已隐藏 {hidden} 条{what}，因为对应端点当前不在列表里。";
+        box.ToolTip = hidden == 0 ? null : Tr.Format("Mgr.HiddenEntries", hidden, what);
     }
 
     /// <summary>
@@ -1415,8 +1415,8 @@ public partial class RemoteEndpointManagerWindow : Window
         var place = CurrentPlace();
         FavoriteToggleButton.IsEnabled = place is not null;
         FavoriteToggleButton.Content = place is not null && CloudBrowserBookmarks.IsFavorite(_favorites, place)
-            ? "取消收藏"
-            : "收藏此目录";
+            ? Tr.F("Mgr.Unfavorite")
+            : Tr.F("Mgr.FavoriteThisDirectory");
     }
 
     /// <summary>The directory on screen as a place worth remembering, or nothing when there is nothing to remember.</summary>
@@ -1431,7 +1431,7 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         if (CurrentPlace() is not { } place)
         {
-            StatusText.Text = "请先选择一个云盘的目录。";
+            StatusText.Text = Tr.F("Mgr.PickCloudDirectory");
             return;
         }
 
@@ -1459,7 +1459,7 @@ public partial class RemoteEndpointManagerWindow : Window
     private async Task SaveBookmarksAsync()
     {
         try { await _bookmarks.SaveAsync(_favorites, _recent); }
-        catch (Exception ex) { StatusText.Text = "无法保存收藏与最近访问：" + RcloneUiError.Describe(ex, "cloud-bookmarks-save"); }
+        catch (Exception ex) { StatusText.Text = Tr.F("Mgr.BookmarksSaveFailed") + RcloneUiError.Describe(ex, "cloud-bookmarks-save"); }
     }
 
     private async void BookmarkJump_Changed(object sender, SelectionChangedEventArgs e)
@@ -1487,7 +1487,7 @@ public partial class RemoteEndpointManagerWindow : Window
         {
             // The jump list only offers places whose endpoint this window loaded, so arriving here means it went
             // away between the pick and this line — a refresh, or a keystroke in the search box.
-            StatusText.Text = $"端点“{item.Bookmark.Remote}”已不在列表里，无法跳转。";
+            StatusText.Text = Tr.Format("Mgr.JumpEndpointMissing", item.Bookmark.Remote);
             return false;
         }
 
@@ -1544,7 +1544,7 @@ public partial class RemoteEndpointManagerWindow : Window
             _settings = loaded.Settings with { CloudBrowserView = chosen };
             await store.SaveAsync(_settings);
         }
-        catch (Exception ex) { StatusText.Text = "无法记住视图选择：" + RcloneUiError.Describe(ex, "cloud-view-choice"); }
+        catch (Exception ex) { StatusText.Text = Tr.F("Mgr.ViewPreferenceSaveFailed") + RcloneUiError.Describe(ex, "cloud-view-choice"); }
     }
 
     /// <summary>
@@ -1572,7 +1572,7 @@ public partial class RemoteEndpointManagerWindow : Window
             FileList.ClearValue(ItemsControl.ItemTemplateProperty);
             FileList.ClearValue(ItemsControl.ItemsPanelProperty);
         }
-        ViewToggleButton.Content = grid ? "列表视图" : "网格视图";
+        ViewToggleButton.Content = grid ? Tr.F("Mgr.ListView") : Tr.F("Mgr.GridView");
         RestartTileRound();
     }
 
@@ -1700,7 +1700,7 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     internal async Task NavigateToAsync(string path, bool record = true)
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择云盘。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
         var target = CloudBrowse.Normalize(path, account.RootPath);
         if (record) PushHistory(target);
         _currentPath = target;
@@ -1828,22 +1828,22 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     private async Task RunSearchAsync()
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择云盘。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
         var query = SearchBox.Text.Trim();
         if (!SearchRecursiveBox.IsChecked.GetValueOrDefault() || query.Length == 0) { await BrowseAsync(); return; }
         try
         {
-            StatusText.Text = $"正在“{account.Name}”内搜索“{query}”…";
+            StatusText.Text = Tr.Format("Mgr.SearchingIn", account.Name, query);
             var results = await _files.SearchAsync(account.Name, _currentPath, query);
             // Search results come from many directories, so each row has to carry its own path.
             ShowListing(_currentPath, results.Select(entry => entry with { ShowFullPath = true }), isSearchResult: true);
             StatusText.Text = results.Count == 0
-                ? $"没有匹配“{query}”的内容。"
-                : $"找到 {results.Count} 项"
-                  + (results.Count >= CloudFileManagerService.SearchResultLimit ? $"（已达上限 {CloudFileManagerService.SearchResultLimit} 项，请缩小范围）" : "")
+                ? Tr.Format("Mgr.SearchNoMatch", query)
+                : Tr.Format("Mgr.SearchFound", results.Count)
+                  + (results.Count >= CloudFileManagerService.SearchResultLimit ? Tr.Format("Mgr.SearchTruncated", CloudFileManagerService.SearchResultLimit) : "")
                   + "。";
         }
-        catch (Exception ex) { ReportFailure("搜索失败", ex, "cloud-file-search"); }
+        catch (Exception ex) { ReportFailure(Tr.F("Mgr.SearchFailedTitle"), ex, "cloud-file-search"); }
     }
 
     private async void SearchClear_Click(object sender, RoutedEventArgs e)
@@ -1859,8 +1859,8 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private async Task PromptNewFolderAsync()
     {
-        if (Selected is null) { StatusText.Text = "请先选择云盘。"; return; }
-        var name = TextPrompt.Ask(this, "新建文件夹", $"在当前目录 {_currentPath} 下新建文件夹，名称：", "", CloudFileNames.Validate);
+        if (Selected is null) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
+        var name = TextPrompt.Ask(this, Tr.F("Mgr.NewFolder"), Tr.Format("Mgr.NewFolderPrompt", _currentPath), "", CloudFileNames.Validate);
         if (name is null) return;
         await CreateFolderAsync(name);
     }
@@ -1874,13 +1874,13 @@ public partial class RemoteEndpointManagerWindow : Window
         var target = CloudFileManagerService.Join(_currentPath, name);
         try
         {
-            StatusText.Text = $"正在创建文件夹“{name}”…";
+            StatusText.Text = Tr.Format("Mgr.CreatingFolder", name);
             await _files.CreateDirectoryAsync(account.Name, target);
             await BrowseAsync();
-            StatusText.Text = $"已创建文件夹：{target}";
+            StatusText.Text = Tr.Format("Mgr.FolderCreated", target);
             return true;
         }
-        catch (Exception ex) { ReportFailure("新建文件夹失败", ex, "cloud-mkdir"); return false; }
+        catch (Exception ex) { ReportFailure(Tr.F("Mgr.NewFolderFailedTitle"), ex, "cloud-mkdir"); return false; }
     }
 
     private async void Rename_Click(object sender, RoutedEventArgs e) => await RenameSelectedAsync();
@@ -1893,14 +1893,14 @@ public partial class RemoteEndpointManagerWindow : Window
     internal async Task RenameSelectedAsync()
     {
         var selected = SelectedEntries();
-        if (selected.Count != 1) { StatusText.Text = "请先选择要重命名的单个项目。"; return; }
+        if (selected.Count != 1) { StatusText.Text = Tr.F("Mgr.SelectSingleItemToRename"); return; }
         await PromptRenameAsync(selected[0]);
     }
 
     private async Task PromptRenameAsync(CloudFileEntry entry)
     {
-        var name = (PromptRename ?? (target => TextPrompt.Ask(this, "重命名",
-            $"“{target.Name}”的新名称：", target.Name, CloudFileNames.Validate)))(entry);
+        var name = (PromptRename ?? (target => TextPrompt.Ask(this, Tr.F("Mgr.Rename"),
+            Tr.Format("Mgr.RenamePrompt", target.Name), target.Name, CloudFileNames.Validate)))(entry);
         if (name is null || name == entry.Name) return;
         await RenameEntryAsync(entry, name);
     }
@@ -1913,13 +1913,13 @@ public partial class RemoteEndpointManagerWindow : Window
         if (reason is not null) { StatusText.Text = reason; return false; }
         try
         {
-            StatusText.Text = $"正在重命名“{entry.Name}”…";
+            StatusText.Text = Tr.Format("Mgr.RenamingItem", entry.Name);
             await _files.RenameAsync(account.Name, entry.Path, newName, entry.IsDirectory);
             await BrowseAsync();
-            StatusText.Text = $"已重命名为：{newName}";
+            StatusText.Text = Tr.Format("Mgr.Renamed", newName);
             return true;
         }
-        catch (Exception ex) { ReportFailure("重命名失败", ex, "cloud-rename"); return false; }
+        catch (Exception ex) { ReportFailure(Tr.F("Mgr.RenameFailedTitle"), ex, "cloud-rename"); return false; }
     }
 
     private async void DeleteEntries_Click(object sender, RoutedEventArgs e) => await DeleteSelectedAsync();
@@ -1933,7 +1933,7 @@ public partial class RemoteEndpointManagerWindow : Window
     internal async Task DeleteSelectedAsync()
     {
         var selected = SelectedEntries();
-        if (selected.Count == 0) { StatusText.Text = "请先选择要删除的项目。"; return; }
+        if (selected.Count == 0) { StatusText.Text = Tr.F("Mgr.SelectItemsToDelete"); return; }
         var insideTrash = Selected is { } account && CloudRecycleBin.IsTrashView(account.RootPath, _currentPath);
         await ConfirmAndDeleteAsync(selected, insideTrash);
     }
@@ -1953,10 +1953,10 @@ public partial class RemoteEndpointManagerWindow : Window
     private async Task ConfirmAndDeleteAsync(IReadOnlyList<CloudFileEntry> entries, bool insideRecycleBin = false)
     {
         var confirmation = CloudDeleteSafety.Describe(entries, CloudDeleteSafety.SupportsTrash(KindOf(Selected)), insideRecycleBin);
-        if (!Ask(confirmation.Message, "删除")) return;
+        if (!Ask(confirmation.Message, Tr.F("Mgr.Delete"))) return;
         if (confirmation.IsBulk && !Ask(
-                $"即将删除 {entries.Count} 项，其中文件夹会连同其全部内容一起删除。\n\n确定继续？",
-                "再次确认删除")) return;
+                Tr.Format("Mgr.ConfirmDeleteItems", entries.Count),
+                Tr.F("Mgr.ConfirmDeleteTitle"))) return;
         await DeleteEntriesAsync(entries);
 
         bool Ask(string message, string title) =>
@@ -1979,9 +1979,9 @@ public partial class RemoteEndpointManagerWindow : Window
         }
         await BrowseAsync();
         StatusText.Text = failures.Count == 0
-            ? $"已删除 {removed} 项。"
-            : $"已删除 {removed} 项，{failures.Count} 项失败：{string.Join("；", failures.Take(3))}";
-        if (failures.Count > 0) MessageBox.Show(StatusText.Text, "删除", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ? Tr.Format("Mgr.ItemsDeleted", removed)
+            : Tr.Format("Mgr.ItemsDeletedPartial", removed, failures.Count, string.Join("；", failures.Take(3)));
+        if (failures.Count > 0) MessageBox.Show(StatusText.Text, Tr.F("Mgr.Delete"), MessageBoxButton.OK, MessageBoxImage.Warning);
         return removed;
     }
 
@@ -2007,14 +2007,14 @@ public partial class RemoteEndpointManagerWindow : Window
     internal async Task RecycleSelectedAsync()
     {
         var selected = SelectedEntries();
-        if (selected.Count == 0) { StatusText.Text = "请先选择要移到回收站的项目。"; return; }
+        if (selected.Count == 0) { StatusText.Text = Tr.F("Mgr.SelectItemsToRecycle"); return; }
         await RecycleAsync(selected);
     }
 
     private async void Restore_Click(object sender, RoutedEventArgs e)
     {
         var selected = SelectedEntries();
-        if (selected.Count == 0) { StatusText.Text = "请先选择要还原的项目。"; return; }
+        if (selected.Count == 0) { StatusText.Text = Tr.F("Mgr.SelectItemsToRestore"); return; }
         await RestoreAsync(selected);
     }
 
@@ -2031,7 +2031,7 @@ public partial class RemoteEndpointManagerWindow : Window
         if (Selected is not CloudEndpointAccount account) return Say(Failed());
         var (movable, refusal) = CloudRecycleBin.SelectForMove(account.RootPath, entries);
         if (refusal is { } denied) return Say(new CloudRecycleResult(denied, []));
-        if ((ConfirmRecycle ?? (targets => TextPrompt.Confirm(this, "移到回收站", CloudRecycleBin.ConfirmFor(targets))))(movable))
+        if ((ConfirmRecycle ?? (targets => TextPrompt.Confirm(this, Tr.F("Mgr.MoveToTrash"), CloudRecycleBin.ConfirmFor(targets))))(movable))
             return Say(await MoveTowardTrashAsync(account, movable, restore: false));
         return Say(new CloudRecycleResult(CloudRecycleOutcome.Declined, []));
     }
@@ -2056,9 +2056,9 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     internal async Task EmptyTrashAsync()
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择云盘。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
         var entries = await _files.ListOrEmptyAsync(account.Name, CloudRecycleBin.RootOf(account.RootPath));
-        if (entries.Count == 0) { StatusText.Text = "回收站是空的，没有可删除的项目。"; return; }
+        if (entries.Count == 0) { StatusText.Text = Tr.F("Mgr.TrashEmpty"); return; }
         await ConfirmAndDeleteAsync(entries, insideRecycleBin: true);
     }
 
@@ -2070,10 +2070,10 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     internal async Task OpenTrashAsync()
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择云盘。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
         var trash = CloudRecycleBin.RootOf(account.RootPath);
         try { await _files.CreateDirectoryAsync(account.Name, trash); }
-        catch (Exception ex) { ReportFailure("无法打开回收站", ex, "cloud-trash-open"); return; }
+        catch (Exception ex) { ReportFailure(Tr.F("Mgr.TrashOpenFailed"), ex, "cloud-trash-open"); return; }
         await NavigateToAsync(trash);
     }
 
@@ -2130,7 +2130,7 @@ public partial class RemoteEndpointManagerWindow : Window
     }
 
     private static CloudRecycleResult Failed() =>
-        new(CloudRecycleOutcome.Failed, [], Detail: "请先选择云端端点。");
+        new(CloudRecycleOutcome.Failed, [], Detail: Tr.F("Mgr.PickCloudEndpointFirst"));
 
     /// <summary>Says which outcome a recycle or restore batch produced, in the sentence that fact belongs to.</summary>
     private CloudRecycleResult Say(CloudRecycleResult result)
@@ -2148,16 +2148,16 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     internal void SetClipboard(CloudClipboardMode mode, IReadOnlyList<CloudFileEntry> entries)
     {
-        if (Selected is not { } account) { StatusText.Text = "请先选择云盘。"; return; }
-        if (entries.Count == 0) { StatusText.Text = "请先选择要" + (mode == CloudClipboardMode.Cut ? "剪切" : "复制") + "的项目。"; return; }
+        if (Selected is not { } account) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
+        if (entries.Count == 0) { StatusText.Text = Tr.F("Mgr.PasteSelectPrefix") + (mode == CloudClipboardMode.Cut ? Tr.F("Mgr.Cut") : Tr.F("Mgr.Copy")) + Tr.F("Mgr.PasteSelectSuffix"); return; }
         _clipboard.Clear();
         _clipboard.AddRange(entries.Select(entry => new CloudClipboardItem(account, entry)));
         _clipboardMode = mode;
         UpdateFileButtons();
         var folders = entries.Count(entry => entry.IsDirectory);
-        StatusText.Text = $"已{(mode == CloudClipboardMode.Cut ? "剪切" : "复制")} {entries.Count} 项，进入目标目录后点“粘贴”。"
-            + (folders > 0 ? $"其中 {folders} 个文件夹不会被粘贴：粘贴的单位是文件。" : "")
-            + (mode == CloudClipboardMode.Cut ? "复制成功后源文件会被删除，云端删除无法恢复。" : "");
+        StatusText.Text = Tr.Format("Mgr.PasteDone", (mode == CloudClipboardMode.Cut ? Tr.F("Mgr.Cut") : Tr.F("Mgr.Copy")), entries.Count)
+            + (folders > 0 ? Tr.Format("Mgr.PasteFoldersNotPasted", folders) : "")
+            + (mode == CloudClipboardMode.Cut ? Tr.F("Mgr.CutWarning") : "");
     }
 
     /// <summary>
@@ -2174,7 +2174,7 @@ public partial class RemoteEndpointManagerWindow : Window
             return new CloudPasteOffer(CloudPastePlanner.Build([.. _clipboard], account, _currentPath, listing),
                 listing.Select(entry => entry.Name).ToArray());
         }
-        catch (Exception ex) { ReportFailure("无法读取目标目录", ex, "cloud-paste-conflict"); return null; }
+        catch (Exception ex) { ReportFailure(Tr.F("Mgr.TargetReadFailed"), ex, "cloud-paste-conflict"); return null; }
     }
 
     /// <summary>
@@ -2276,7 +2276,7 @@ public partial class RemoteEndpointManagerWindow : Window
         }
         if (targets.Count == 0)
         {
-            StatusText.Text = $"已跳过 {plan.Conflicts} 个同名项目。";
+            StatusText.Text = Tr.Format("Mgr.PasteSkipped", plan.Conflicts);
             return 0;
         }
         var cutting = _clipboardMode == CloudClipboardMode.Cut;
@@ -2307,10 +2307,10 @@ public partial class RemoteEndpointManagerWindow : Window
         if (cutting)
             foreach (var (task, item) in copies) DeleteSourceWhenCopied(task, item, account);
         var parts = new List<string>();
-        if (moved > 0) parts.Add($"已移动 {moved} 项");
-        if (copies.Count > 0) parts.Add($"已排队复制 {copies.Count} 个文件");
-        if (renamed > 0) parts.Add($"{renamed} 个同名文件改名为保留两者");
-        if (failures.Count > 0) parts.Add($"{failures.Count} 项失败：{string.Join("；", failures.Take(3))}");
+        if (moved > 0) parts.Add(Tr.Format("Mgr.MovedItems", moved));
+        if (copies.Count > 0) parts.Add(Tr.Format("Mgr.QueuedCopy", copies.Count));
+        if (renamed > 0) parts.Add(Tr.Format("Mgr.PasteRenamed", renamed));
+        if (failures.Count > 0) parts.Add(Tr.Format("Mgr.PasteFailed", failures.Count, string.Join("；", failures.Take(3))));
         if (plan.Skipped.Count > 0) parts.Add(string.Join(" ", plan.Skipped));
         StatusText.Text = string.Join("。", parts) + "。";
         return moved + copies.Count;
@@ -2332,19 +2332,19 @@ public partial class RemoteEndpointManagerWindow : Window
             string message;
             var refreshed = false;
             if (!await _transfers.WaitForAsync(task))
-                message = $"“{item.Entry.Name}”没有复制完成，源文件仍然保留。";
+                message = Tr.Format("Mgr.CopyIncomplete", item.Entry.Name);
             else
             {
                 try
                 {
                     await _files.DeleteAsync(item.Source.Name, item.Entry.Path, false);
-                    message = $"已剪切到 {destination.Name}：{item.Entry.Name}";
+                    message = Tr.Format("Mgr.CutTo", destination.Name, item.Entry.Name);
                 }
                 catch (Exception ex)
                 {
                     // The copy landed and the source is still there, so the user now has two files. Saying
                     // "已复制但源未删除" is the whole report; calling it a success would hide the duplicate.
-                    message = $"“{item.Entry.Name}”已复制但源未删除：{RcloneUiError.Describe(ex, "cloud-delete")}";
+                    message = Tr.Format("Mgr.CopiedSourceKept", item.Entry.Name, RcloneUiError.Describe(ex, "cloud-delete"));
                 }
                 // The copy only lands in the directory on screen once the job has finished, so this is the
                 // moment the listing needs to be re-read.
@@ -2376,9 +2376,9 @@ public partial class RemoteEndpointManagerWindow : Window
         var entries = sources.Select(item => item.Entry).ToList();
         // Whether the delete can be undone is the source endpoint's answer, not the destination's.
         var confirmation = CloudDeleteSafety.Describe(entries, CloudDeleteSafety.SupportsTrash(KindOf(sources[0].Source)));
-        if (!TextPrompt.Confirm(this, "剪切后删除源", $"粘贴会先复制到目标端点，复制成功后再删除下面这些源文件。\n\n{confirmation.Message}", danger: true)) return false;
+        if (!TextPrompt.Confirm(this, Tr.F("Mgr.CutDeletesSourceTitle"), Tr.Format("Mgr.CutConfirmBody", confirmation.Message), danger: true)) return false;
         return !confirmation.IsBulk
-            || TextPrompt.Confirm(this, "再次确认删除", $"即将在复制成功后删除 {entries.Count} 项源文件。\n\n确定继续？", danger: true);
+            || TextPrompt.Confirm(this, Tr.F("Mgr.ConfirmDeleteTitle"), Tr.Format("Mgr.CutConfirmPrompt", entries.Count), danger: true);
     }
 
     private async void Paste_Click(object sender, RoutedEventArgs e) => await PasteAsync();
@@ -2391,41 +2391,41 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     internal async Task PasteAsync()
     {
-        if (_clipboard.Count == 0) { StatusText.Text = "剪贴板是空的：先选中项目，再用右键菜单的“复制”或“剪切”。"; return; }
-        if (Selected is null) { StatusText.Text = "请先选择要粘贴到的云盘。"; return; }
+        if (_clipboard.Count == 0) { StatusText.Text = Tr.F("Mgr.ClipboardEmpty"); return; }
+        if (Selected is null) { StatusText.Text = Tr.F("Mgr.SelectTargetCloud"); return; }
         var offer = await PlanPasteAsync();
         if (offer is null) return;
         var plan = offer.Plan;
-        if (plan.Targets.Count == 0) { StatusText.Text = "没有可粘贴的项目。" + string.Join(" ", plan.Skipped); return; }
+        if (plan.Targets.Count == 0) { StatusText.Text = Tr.F("Mgr.NothingToPaste") + string.Join(" ", plan.Skipped); return; }
         var taken = new HashSet<string>(offer.TakenNames, StringComparer.OrdinalIgnoreCase);
         var placed = PlaceDestinations([.. plan.Targets.Select(target => target.DestinationPath)],
             [.. plan.Targets.Where(target => target.OverwritesExisting).Select(target => target.DestinationPath)],
             _ => taken);
-        if (placed is null) { StatusText.Text = "已取消粘贴。"; return; }
+        if (placed is null) { StatusText.Text = Tr.F("Mgr.PasteCancelled"); return; }
         var placements = Indexed(placed);
-        if (placements.Count == 0) { StatusText.Text = $"已跳过 {plan.Conflicts} 个同名项目。"; return; }
-        if (_clipboardMode == CloudClipboardMode.Cut && !ConfirmCut(plan, placements)) { StatusText.Text = "已取消粘贴。"; return; }
+        if (placements.Count == 0) { StatusText.Text = Tr.Format("Mgr.PasteSkipped", plan.Conflicts); return; }
+        if (_clipboardMode == CloudClipboardMode.Cut && !ConfirmCut(plan, placements)) { StatusText.Text = Tr.F("Mgr.PasteCancelled"); return; }
         await ExecutePasteAsync(plan, placements);
     }
 
     /// <summary>Queues every selected file, asking for a destination only when there is no usable default.</summary>
     internal async Task DownloadSelectionAsync()
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择云盘。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
         var files = SelectedEntries().Where(entry => !entry.IsDirectory).ToList();
-        if (files.Count == 0) { StatusText.Text = "请先选择要下载的文件；文件夹请先进入后再选择其中的文件。"; return; }
+        if (files.Count == 0) { StatusText.Text = Tr.F("Mgr.SelectFilesToDownload"); return; }
         if (files.Count == 1) { await DownloadAsync(files[0]); return; }
 
         var directory = _settings.CloudDownloadDirectory;
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
         {
-            var dialog = new OpenFolderDialog { Title = "选择下载目录" };
+            var dialog = new OpenFolderDialog { Title = Tr.F("Mgr.PickDownloadFolder") };
             if (dialog.ShowDialog(this) != true) return;
             directory = dialog.FolderName;
         }
         foreach (var file in files)
             _transfers.Enqueue(CloudTransferDirection.Download, EndpointUri(account), CloudFileManagerService.RelativeToEndpoint(account, file.Path), Path.Combine(directory, file.Name), file.Size);
-        StatusText.Text = $"已加入传输队列：{files.Count} 个文件。";
+        StatusText.Text = Tr.Format("Mgr.QueuedFiles", files.Count);
         ShowTransferWindow();
     }
 
@@ -2440,16 +2440,16 @@ public partial class RemoteEndpointManagerWindow : Window
             // A default directory makes downloading one click, which also makes overwriting one click; the
             // confirmation is what keeps that from silently replacing a file the user already had.
             if (File.Exists(destination)
-                && !TextPrompt.Confirm(this, "文件已存在", $"“{destination}”已存在，是否覆盖？", danger: true)) return;
+                && !TextPrompt.Confirm(this, Tr.F("Mgr.FileExistsTitle"), Tr.Format("Mgr.FileExistsPrompt", destination), danger: true)) return;
         }
         else
         {
-            var dialog = new SaveFileDialog { FileName = entry.Name, Title = "下载文件" };
+            var dialog = new SaveFileDialog { FileName = entry.Name, Title = Tr.F("Mgr.DownloadFileTitle") };
             if (dialog.ShowDialog(this) != true) return;
             destination = dialog.FileName;
         }
         _transfers.Enqueue(CloudTransferDirection.Download, EndpointUri(account), CloudFileManagerService.RelativeToEndpoint(account, entry.Path), destination, entry.Size);
-        StatusText.Text = "已加入传输队列：" + entry.Name;
+        StatusText.Text = Tr.F("Mgr.QueuedPrefix") + entry.Name;
         ShowTransferWindow();
         await Task.CompletedTask;
     }
@@ -2461,14 +2461,14 @@ public partial class RemoteEndpointManagerWindow : Window
         var local = Path.Combine(folder, entry.Name);
         var task = _transfers.Enqueue(CloudTransferDirection.Download, EndpointUri(account), CloudFileManagerService.RelativeToEndpoint(account, entry.Path), local, entry.Size);
         ShowTransferWindow();
-        StatusText.Text = "正在下载以打开：" + entry.Name;
+        StatusText.Text = Tr.F("Mgr.DownloadingToOpen") + entry.Name;
         if (!await _transfers.WaitForAsync(task))
         {
-            StatusText.Text = "打开失败：" + (task.Error ?? "传输未完成。");
+            StatusText.Text = Tr.F("Mgr.OpenFailed") + (task.Error ?? Tr.F("Mgr.TransferIncomplete"));
             return;
         }
         Process.Start(new ProcessStartInfo(local) { UseShellExecute = true });
-        StatusText.Text = "已打开：" + entry.Name;
+        StatusText.Text = Tr.F("Mgr.OpenedPrefix") + entry.Name;
     }
 
     /// <summary>
@@ -2495,7 +2495,7 @@ public partial class RemoteEndpointManagerWindow : Window
         {
             stat = await _files.StatAsync(account.Name, entry.Path, withHash ? CloudItemDetails.HashPreference : null);
         }
-        catch (Exception ex) { failure = new CloudDetailRow("读取详情", RcloneUiError.Describe(ex, "cloud-stat")); }
+        catch (Exception ex) { failure = new CloudDetailRow(Tr.F("Mgr.ReadDetails"), RcloneUiError.Describe(ex, "cloud-stat")); }
         // Only a directory the backend still claims is worth walking: the panel offers no other case, and a read
         // that this method made on its own would be a second representation of that rule.
         if (withSize && stat is { IsDirectory: true, Exists: true })
@@ -2518,11 +2518,11 @@ public partial class RemoteEndpointManagerWindow : Window
         var panel = await DetailsAsync(entry);
         // The menu item stays available either way: a folder's 属性 and a gone object's 属性 are exactly the
         // two answers the user needs, and a panel with nothing left to read shows no button.
-        CloudDetailsPrompt.Show(this, "属性 · " + entry.Name, panel.Rows, panel.Action);
+        CloudDetailsPrompt.Show(this, Tr.F("Mgr.PropertiesPrefix") + entry.Name, panel.Rows, panel.Action);
     }
 
     private void ShowSelectionDetails() =>
-        CloudDetailsPrompt.Show(this, "所选项目的属性", CloudItemDetails.ForSelection(Selection, Selected));
+        CloudDetailsPrompt.Show(this, Tr.F("Mgr.SelectionProperties"), CloudItemDetails.ForSelection(Selection, Selected));
 
     /// <summary>
     /// The panel 预览 shows for one row, behind a seam because a test cannot sit through a modal. Whether a row
@@ -2537,7 +2537,7 @@ public partial class RemoteEndpointManagerWindow : Window
         if (!CloudBrowserPreview.IsPaintable(decision))
             return CloudPreviewPanel.Refused(decision, CloudBrowserPreview.ReasonFor(decision, entry));
         if (Selected is not { } account)
-            return CloudPreviewPanel.Refused(CloudPreviewOutcome.Failed, "没有选中的云盘端点，读不到任何内容。");
+            return CloudPreviewPanel.Refused(CloudPreviewOutcome.Failed, Tr.F("Mgr.NoEndpointForPreview"));
         RcloneObjectRead read;
         try
         {
@@ -2568,7 +2568,7 @@ public partial class RemoteEndpointManagerWindow : Window
     }
 
     private async Task ShowPreviewAsync(CloudFileEntry entry) =>
-        CloudPreviewPrompt.Show(this, "预览 · " + entry.Name, entry, await PreviewAsync(entry));
+        CloudPreviewPrompt.Show(this, Tr.F("Mgr.PreviewPrefix") + entry.Name, entry, await PreviewAsync(entry));
 
     /// <summary>
     /// The question a share link asks before anything is created, behind a seam because a test cannot answer a
@@ -2598,7 +2598,7 @@ public partial class RemoteEndpointManagerWindow : Window
                 CloudShareLinks.ConfirmationFor(target), danger: true)))(entry))
         {
             var account = Selected;
-            if (account is null) return new CloudShareLinkResult(CloudShareLinkOutcome.Failed, Detail: "请先选择云端端点。");
+            if (account is null) return new CloudShareLinkResult(CloudShareLinkOutcome.Failed, Detail: Tr.F("Mgr.PickCloudEndpointFirst"));
             CloudShareLinkResult result;
             try { result = CloudShareLinks.FromAnswer(await _files.PublicLinkAsync(account.Name, entry.Path)); }
             catch (Exception ex) { result = CloudShareLinks.FromFailure(ex); }
@@ -2638,7 +2638,7 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         if (!CloudVersionHistory.Offers(entry))
         {
-            StatusText.Text = "文件夹没有历史版本：版本是针对单个文件的。";
+            StatusText.Text = Tr.F("Mgr.FolderHasNoVersions");
             return;
         }
         if (Selected is not CloudEndpointAccount account) return;
@@ -2651,7 +2651,7 @@ public partial class RemoteEndpointManagerWindow : Window
             {
                 // The history is still where it was, so this is a browser problem and says so — it must not
                 // read as "this file has no history".
-                StatusText.Text = "没能打开浏览器：" + RcloneUiError.Describe(ex, "cloud-version-console");
+                StatusText.Text = Tr.F("Mgr.BrowserOpenFailed") + RcloneUiError.Describe(ex, "cloud-version-console");
                 return;
             }
         }
@@ -2683,20 +2683,20 @@ public partial class RemoteEndpointManagerWindow : Window
             var entry = selected[0];
             if (entry.IsDirectory)
             {
-                Add(menu, "打开", async () => await NavigateToAsync(entry.Path));
+                Add(menu, Tr.F("Mgr.Open"), async () => await NavigateToAsync(entry.Path));
             }
             else
             {
                 // 预览 only for a row it can actually paint: a command that can only refuse is noise, not a
                 // shortcut — the same rule that keeps 还原 off a row that did not come from the trash.
                 if (CloudBrowserPreview.OffersPreview(entry))
-                    Add(menu, "预览", async () => await ShowPreviewAsync(entry));
-                Add(menu, "下载…", async () => await DownloadAsync(entry));
-                Add(menu, "打开", async () => await OpenAsync(entry));
+                    Add(menu, Tr.F("Mgr.Preview"), async () => await ShowPreviewAsync(entry));
+                Add(menu, Tr.F("Mgr.DownloadEllipsis"), async () => await DownloadAsync(entry));
+                Add(menu, Tr.F("Mgr.Open"), async () => await OpenAsync(entry));
                 // A link is the one command here that gives somebody else access, so it is offered per file and
                 // never for a folder: the backend's own answer for a prefix is 404, and a folder would grant a
                 // whole subtree the selection never named.
-                Add(menu, "复制分享链接…", async () => await ShareAsync(entry));
+                Add(menu, Tr.F("Mgr.CopyShareLink"), async () => await ShareAsync(entry));
                 // The last thing the cloud cannot do: it exposes no version list, so this item names the trip
                 // to where the history is rather than a feature the browser does not have. Its tooltip carries
                 // the reason, so the answer is reachable without clicking — and the endpoint the rows came from
@@ -2710,33 +2710,33 @@ public partial class RemoteEndpointManagerWindow : Window
                 }
             }
             menu.Items.Add(new Separator());
-            Add(menu, "重命名…", async () => await PromptRenameAsync(entry));
+            Add(menu, Tr.F("Mgr.RenameEllipsis"), async () => await PromptRenameAsync(entry));
         }
         else
         {
-            Add(menu, $"下载所选的 {selected.Count} 项…", DownloadSelectionAsync);
+            Add(menu, Tr.Format("Mgr.DownloadSelected", selected.Count), DownloadSelectionAsync);
             menu.Items.Add(new Separator());
         }
         // Both commands hold the whole selection, exactly as Explorer's do, and the difference between them is
         // only visible at the destination: a cut deletes once its copy lands.
-        Add(menu, "复制", () => { SetClipboard(CloudClipboardMode.Copy, selected); return Task.CompletedTask; });
-        Add(menu, "剪切", () => { SetClipboard(CloudClipboardMode.Cut, selected); return Task.CompletedTask; });
+        Add(menu, Tr.F("Mgr.Copy"), () => { SetClipboard(CloudClipboardMode.Copy, selected); return Task.CompletedTask; });
+        Add(menu, Tr.F("Mgr.Cut"), () => { SetClipboard(CloudClipboardMode.Cut, selected); return Task.CompletedTask; });
         // Which of the three move-commands a selection earns is decided by the same rules that run it: 还原 only
         // for rows that came out of the trash, 移到回收站 only for rows the trash can still accept, 清空回收站
         // only while looking at the trash. An item that would only refuse is noise, not a shortcut.
         var root = Selected?.RootPath ?? "";
         if (CloudRecycleBin.SelectForRestore(root, selected).Count > 0)
-            Add(menu, selected.Count == 1 ? "还原…" : $"还原所选的 {selected.Count} 项…", async () => await RestoreAsync(selected));
+            Add(menu, selected.Count == 1 ? Tr.F("Mgr.RestoreEllipsis") : Tr.Format("Mgr.RestoreSelected", selected.Count), async () => await RestoreAsync(selected));
         if (CloudRecycleBin.SelectForMove(root, selected).Refusal is null)
-            Add(menu, selected.Count == 1 ? "移到回收站…" : $"把所选的 {selected.Count} 项移到回收站…", async () => await RecycleAsync(selected));
-        Add(menu, selected.Count == 1 ? "删除…" : $"删除所选的 {selected.Count} 项…", DeleteSelectedAsync);
+            Add(menu, selected.Count == 1 ? Tr.F("Mgr.RecycleEllipsis") : Tr.Format("Mgr.RecycleSelected", selected.Count), async () => await RecycleAsync(selected));
+        Add(menu, selected.Count == 1 ? Tr.F("Mgr.DeleteEllipsis") : Tr.Format("Mgr.DeleteSelected", selected.Count), DeleteSelectedAsync);
         if (CloudRecycleBin.IsTrashView(root, _currentPath))
-            Add(menu, "清空回收站…", EmptyTrashAsync);
-        Add(menu, "新建文件夹…", PromptNewFolderAsync);
+            Add(menu, Tr.F("Mgr.EmptyTrashEllipsis"), EmptyTrashAsync);
+        Add(menu, Tr.F("Mgr.NewFolderEllipsis"), PromptNewFolderAsync);
         // 属性 is last and after a separator, like Explorer's: it is the read-only answer, and the one that
         // must never be mistaken for an action that changes the cloud.
         menu.Items.Add(new Separator());
-        Add(menu, selected.Count == 1 ? "属性" : $"查看所选 {selected.Count} 项的属性",
+        Add(menu, selected.Count == 1 ? Tr.F("Mgr.Properties") : Tr.Format("Mgr.ViewPropertiesSelected", selected.Count),
             selected.Count == 1 ? new Func<Task>(() => ShowDetailsAsync(selected[0])) : () => { ShowSelectionDetails(); return Task.CompletedTask; });
         return menu;
 
@@ -2801,7 +2801,7 @@ public partial class RemoteEndpointManagerWindow : Window
         e.Effects = acceptable ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
         if (!acceptable) { DropHint.Visibility = Visibility.Collapsed; return; }
-        DropHintText.Text = $"上传到 {Selected!.Name}:/{_currentPath}";
+        DropHintText.Text = Tr.Format("Mgr.DropToUploadHint", Selected!.Name, _currentPath);
         DropHint.Visibility = Visibility.Visible;
     }
 
@@ -2810,26 +2810,26 @@ public partial class RemoteEndpointManagerWindow : Window
     private async void FileBrowser_Drop(object sender, DragEventArgs e)
     {
         DropHint.Visibility = Visibility.Collapsed;
-        if (Selected is null) { StatusText.Text = "请先选择云盘。"; return; }
+        if (Selected is null) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
         if (e.Data.GetData(DataFormats.FileDrop) is not string[] dropped || dropped.Length == 0) return;
         e.Handled = true;
         var items = CloudDropPlanner.Expand(dropped, _currentPath);
-        if (items.Count == 0) { StatusText.Text = "拖入的内容中没有可上传的文件。"; return; }
+        if (items.Count == 0) { StatusText.Text = Tr.F("Mgr.DropNoUploadable"); return; }
         await EnqueueUploadsAsync(items);
     }
 
     private async void UploadFiles_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is null) { StatusText.Text = "请先选择云盘。"; return; }
-        var dialog = new OpenFileDialog { Multiselect = true, Title = "选择要上传的文件" };
+        if (Selected is null) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
+        var dialog = new OpenFileDialog { Multiselect = true, Title = Tr.F("Mgr.PickFilesToUpload") };
         if (dialog.ShowDialog(this) != true) return;
         await EnqueueUploadsAsync(CloudDropPlanner.Expand(dialog.FileNames, _currentPath));
     }
 
     private async void UploadFolder_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is null) { StatusText.Text = "请先选择云盘。"; return; }
-        var dialog = new OpenFolderDialog { Title = "选择要上传的文件夹" };
+        if (Selected is null) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
+        var dialog = new OpenFolderDialog { Title = Tr.F("Mgr.PickFolderToUpload") };
         if (dialog.ShowDialog(this) != true) return;
         await EnqueueUploadsAsync(CloudDropPlanner.Expand([dialog.FolderName], _currentPath));
     }
@@ -2843,8 +2843,8 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     private async Task EnqueueUploadsAsync(IReadOnlyList<CloudDropPlanner.UploadItem> items)
     {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = "请先选择云盘。"; return; }
-        if (items.Count == 0) { StatusText.Text = "没有可上传的文件。"; return; }
+        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
+        if (items.Count == 0) { StatusText.Text = Tr.F("Mgr.NothingToUpload"); return; }
 
         // One listing per destination directory: a dropped tree would otherwise list a directory per file.
         var listings = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
@@ -2859,7 +2859,7 @@ public partial class RemoteEndpointManagerWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = "无法读取目标目录：" + RcloneUiError.Describe(ex, "cloud-upload-conflict");
+            StatusText.Text = Tr.F("Mgr.UploadTargetReadFailed") + RcloneUiError.Describe(ex, "cloud-upload-conflict");
             return;
         }
 
@@ -2868,7 +2868,7 @@ public partial class RemoteEndpointManagerWindow : Window
             .Where(path => listings[CloudTransferQueue.ParentOf(path)].Contains(CloudTransferTask.NameOf(path)))
             .ToArray();
         var placements = PlaceDestinations(destinations, conflicts, directory => listings[directory]);
-        if (placements is null) { StatusText.Text = "已取消上传。"; return; }
+        if (placements is null) { StatusText.Text = Tr.F("Mgr.UploadCancelled"); return; }
         var accepted = new List<CloudDropPlanner.UploadItem>();
         var renamed = 0;
         var skipped = 0;
@@ -2881,15 +2881,15 @@ public partial class RemoteEndpointManagerWindow : Window
             if (placement.Destination != item.RemotePath) renamed++;
             accepted.Add(item with { RemotePath = placement.Destination });
         }
-        if (accepted.Count == 0) { StatusText.Text = "已跳过全部同名文件。"; return; }
+        if (accepted.Count == 0) { StatusText.Text = Tr.F("Mgr.UploadSkippedAll"); return; }
 
         var uri = EndpointUri(account);
         foreach (var item in accepted)
             _transfers.Enqueue(CloudTransferDirection.Upload, uri, CloudFileManagerService.RelativeToEndpoint(account, item.RemotePath), item.LocalPath, new FileInfo(item.LocalPath).Length);
 
-        StatusText.Text = $"已加入传输队列：{accepted.Count} 个文件。"
-            + (renamed > 0 ? $"其中 {renamed} 个同名文件改名为保留两者。" : "")
-            + (skipped > 0 ? $"已跳过 {skipped} 个同名文件。" : "");
+        StatusText.Text = Tr.Format("Mgr.QueuedFiles", accepted.Count)
+            + (renamed > 0 ? Tr.Format("Mgr.UploadRenamed", renamed) : "")
+            + (skipped > 0 ? Tr.Format("Mgr.UploadSkipped", skipped) : "");
         ShowTransferWindow();
         await BrowseAsync();
     }
@@ -2949,7 +2949,7 @@ public partial class RemoteEndpointManagerWindow : Window
         {
             if (HandOffToExplorer([local], entry.Name))
             {
-                StatusText.Text = "已拖出：" + entry.Name;
+                StatusText.Text = Tr.F("Mgr.DragOutDone") + entry.Name;
                 return;
             }
             if (task is null)
@@ -2958,7 +2958,7 @@ public partial class RemoteEndpointManagerWindow : Window
                 // for — so the honest answer is that it is ready for the next drag rather than a drop that never
                 // happened. (The folder path says the same thing; a cached file is the one case where the queue
                 // was never asked, so no transfer row exists to explain the silence.)
-                StatusText.Text = $"“{entry.Name}”已经下载好了，再拖一次即可。";
+                StatusText.Text = Tr.Format("Mgr.DragOutReadyAgain", entry.Name);
                 return;
             }
         }
@@ -2977,18 +2977,18 @@ public partial class RemoteEndpointManagerWindow : Window
         CloudFolderDrag.Plan plan;
         try
         {
-            StatusText.Text = "正在准备拖出文件夹…";
+            StatusText.Text = Tr.F("Mgr.DragOutFolderPreparing");
             plan = CloudFolderDrag.Build(account, folder, await _files.ListTreeAsync(account.Name, folder.Path));
         }
         catch (Exception ex)
         {
-            StatusText.Text = "无法读取这个文件夹的内容：" + RcloneUiError.Describe(ex, "cloud-folder-drag");
+            StatusText.Text = Tr.F("Mgr.DragOutFolderReadFailed") + RcloneUiError.Describe(ex, "cloud-folder-drag");
             return;
         }
 
         if (plan.IsRefused)
         {
-            StatusText.Text = $"无法拖出“{folder.Name}”：" + plan.Refusal;
+            StatusText.Text = Tr.Format("Mgr.DragOutRefused", folder.Name) + plan.Refusal;
             return;
         }
 
@@ -3000,7 +3000,7 @@ public partial class RemoteEndpointManagerWindow : Window
         if (pending.Length > 0)
         {
             ShowTransferWindow();
-            StatusText.Text = $"正在下载“{folder.Name}”的 {pending.Length} 个文件…";
+            StatusText.Text = Tr.Format("Mgr.DragOutDownloading", folder.Name, pending.Length);
             // One budget for the whole tree, the same one a single file gets: a small folder is often already
             // inside the gesture, and a big one is not — which is a decision to reveal, not to stall the drag.
             await Task.WhenAny(Task.WhenAll(pending.Select(_transfers.WaitForAsync)), Task.Delay(DragBudget));
@@ -3012,12 +3012,12 @@ public partial class RemoteEndpointManagerWindow : Window
             {
                 // What went to Explorer is named by its content, because a folder that arrived empty and a folder
                 // whose 300 files landed look identical on disk until someone opens them.
-                StatusText.Text = $"已拖出整个文件夹：{CloudFolderDrag.Describe(plan)}";
+                StatusText.Text = Tr.Format("Mgr.DragOutFolderDone", CloudFolderDrag.Describe(plan));
                 return;
             }
             // The mirror is whole but the drag cannot start: the gesture is already over, so the honest answer is
             // that everything is ready for the next one rather than a drop that never happened.
-            StatusText.Text = $"“{folder.Name}”已经全部下载好了，再拖一次即可。";
+            StatusText.Text = Tr.Format("Mgr.DragOutFolderReadyAgain", folder.Name);
             return;
         }
 
@@ -3048,7 +3048,7 @@ public partial class RemoteEndpointManagerWindow : Window
         // A drag that cannot start must not claim it did: the status line stays as it was and the caller falls
         // through to the reveal path instead.
         if (DragOutHandoff is null && Mouse.LeftButton != MouseButtonState.Pressed) return false;
-        StatusText.Text = "正在拖出：" + name;
+        StatusText.Text = Tr.F("Mgr.DraggingOut") + name;
         if (DragOutHandoff is { } handoff)
         {
             handoff(paths);
@@ -3073,7 +3073,7 @@ public partial class RemoteEndpointManagerWindow : Window
             var failed = settled.Count(x => !x);
             if (failed > 0)
             {
-                await Dispatcher.InvokeAsync(() => StatusText.Text = $"“{name}”有 {failed} 个文件没能下载，没有拖出整个文件夹。");
+                await Dispatcher.InvokeAsync(() => StatusText.Text = Tr.Format("Mgr.DragOutFolderFailed", name, failed));
                 return;
             }
             if (!await Task.Run(() => CloudFolderDrag.IsMirrorReady(plan)))
@@ -3083,12 +3083,12 @@ public partial class RemoteEndpointManagerWindow : Window
                 // 正在下载 on screen for a download that has already finished, so "done but not whole" is its
                 // own sentence — and dragging again really does fetch the short file, because IsReady compares
                 // each file against the length the cloud reported.
-                await Dispatcher.InvokeAsync(() => StatusText.Text = $"“{name}”没有下载完整，请再拖一次。");
+                await Dispatcher.InvokeAsync(() => StatusText.Text = Tr.Format("Mgr.DragOutIncomplete", name));
                 return;
             }
             await Dispatcher.InvokeAsync(() =>
             {
-                StatusText.Text = $"文件夹“{name}”已下载完成，把它拖到目标位置即可。";
+                StatusText.Text = Tr.Format("Mgr.DragOutFolderReady", name);
                 RevealInExplorer(plan.FolderLocalPath);
             });
         }
@@ -3107,7 +3107,7 @@ public partial class RemoteEndpointManagerWindow : Window
             if (!await _transfers.WaitForAsync(pending) || !File.Exists(path)) return;
             await Dispatcher.InvokeAsync(() =>
             {
-                StatusText.Text = $"“{Path.GetFileName(path)}”已下载完成，把它从打开的文件夹拖到目标位置即可。";
+                StatusText.Text = Tr.Format("Mgr.DragOutFileReady", Path.GetFileName(path));
                 RevealInExplorer(path);
             });
         }

@@ -785,11 +785,26 @@ Save anyway?</value>
   <data name="Main.Action" xml:space="preserve">
     <value>Action</value>
   </data>
+  <data name="Main.AnalysisDone" xml:space="preserve">
+    <value>Analysis finished: {0} differences; building the sync plan…</value>
+  </data>
   <data name="Main.Batch" xml:space="preserve">
     <value>Batch</value>
   </data>
+  <data name="Main.BatchOpened" xml:space="preserve">
+    <value>Opened the batch job “{0}” ({1} profiles).</value>
+  </data>
+  <data name="Main.BatchSaved" xml:space="preserve">
+    <value>The batch job was saved ({0} profiles).</value>
+  </data>
+  <data name="Main.BothChanged" xml:space="preserve">
+    <value>Both sides changed since the last sync.{0}{1}{2}{3}</value>
+  </data>
   <data name="Main.ChangeActionMenu" xml:space="preserve">
     <value>Change action menu</value>
+  </data>
+  <data name="Main.ChangesExported" xml:space="preserve">
+    <value>Exported {0} change rows to {1}</value>
   </data>
   <data name="Main.ChooseEndpoint" xml:space="preserve">
     <value>Choose an endpoint</value>
@@ -800,17 +815,72 @@ Save anyway?</value>
   <data name="Main.CloudManagement" xml:space="preserve">
     <value>Cloud management</value>
   </data>
+  <data name="Main.CloudNotStarted" xml:space="preserve">
+    <value>The cloud connection has not been started.</value>
+  </data>
   <data name="Main.Compare" xml:space="preserve">
     <value>Compare</value>
+  </data>
+  <data name="Main.CompareCancelled" xml:space="preserve">
+    <value>The comparison was cancelled.</value>
+  </data>
+  <data name="Main.CompareDone" xml:space="preserve">
+    <value>{0} comparison finished: left {1} items  ·  right {2} items  ·  {3} differences/hints ({4} ignored).</value>
+  </data>
+  <data name="Main.ConcurrentSuffix" xml:space="preserve">
+    <value> concurrent</value>
+  </data>
+  <data name="Main.ConfidenceHigh" xml:space="preserve">
+    <value>High</value>
+  </data>
+  <data name="Main.ConfidenceLow" xml:space="preserve">
+    <value>Low</value>
+  </data>
+  <data name="Main.ConfidenceMedium" xml:space="preserve">
+    <value>Medium (inferred from size and modification time only)</value>
+  </data>
+  <data name="Main.ConfirmRemoveProfile" xml:space="preserve">
+    <value>Remove “{0}” from Feng Sync's profile list?
+Exported profile files are not deleted.</value>
   </data>
   <data name="Main.ConflictSummaryEmpty" xml:space="preserve">
     <value>0 conflicts</value>
   </data>
+  <data name="Main.ConflictTooltip" xml:space="preserve">
+    <value>Conflict reason: {0}{1}Left modified: {2}{3}Right modified: {4}</value>
+  </data>
   <data name="Main.Delete" xml:space="preserve">
     <value>Delete</value>
   </data>
+  <data name="Main.DeleteLeftItem" xml:space="preserve">
+    <value>Delete the left item{0}{1}</value>
+  </data>
+  <data name="Main.DeleteRightItem" xml:space="preserve">
+    <value>Delete the right item{0}{1}</value>
+  </data>
   <data name="Main.DeleteSummaryEmpty" xml:space="preserve">
     <value>0 deletions</value>
+  </data>
+  <data name="Main.DirectionLeftToRight" xml:space="preserve">
+    <value>Left → right</value>
+  </data>
+  <data name="Main.DirectionMoveLeft" xml:space="preserve">
+    <value>Move on the left</value>
+  </data>
+  <data name="Main.DirectionMoveRight" xml:space="preserve">
+    <value>Move on the right</value>
+  </data>
+  <data name="Main.DirectionRightToDash" xml:space="preserve">
+    <value>Right → —</value>
+  </data>
+  <data name="Main.DirectionRightToLeft" xml:space="preserve">
+    <value>Right → left</value>
+  </data>
+  <data name="Main.DirectionToLeft" xml:space="preserve">
+    <value>— → left</value>
+  </data>
+  <data name="Main.DirectoryNoTimestamp" xml:space="preserve">
+    <value>Directory (no modification time)</value>
   </data>
   <data name="Main.DownloadSummaryEmpty" xml:space="preserve">
     <value>0 downloads</value>
@@ -830,8 +900,47 @@ Save anyway?</value>
   <data name="Main.EnableFile" xml:space="preserve">
     <value>Re-enable this file</value>
   </data>
+  <data name="Main.EndpointAddedToSide" xml:space="preserve">
+    <value>The cloud endpoint was added to the {0} side: {1}</value>
+  </data>
+  <data name="Main.EntryDirectory" xml:space="preserve">
+    <value>{0} directory: {1}</value>
+  </data>
+  <data name="Main.EntryFile" xml:space="preserve">
+    <value>{0} file: {1}{2}Size: {3:N0} B{4}Modified: {5:yyyy-MM-dd HH:mm:ss}</value>
+  </data>
+  <data name="Main.EntryItem" xml:space="preserve">
+    <value>{0} item: {1}</value>
+  </data>
+  <data name="Main.ExcludedByProfileFilter" xml:space="preserve">
+    <value>Excluded by the Profile's filter rules{0}{1}</value>
+  </data>
+  <data name="Main.ExitingToInstall" xml:space="preserve">
+    <value>Exiting to install the update…</value>
+  </data>
   <data name="Main.Export" xml:space="preserve">
     <value>Export…</value>
+  </data>
+  <data name="Main.ExportFailed" xml:space="preserve">
+    <value>Export failed: </value>
+  </data>
+  <data name="Main.FileEnabled" xml:space="preserve">
+    <value>This file is enabled.</value>
+  </data>
+  <data name="Main.FileFilteredByProfile" xml:space="preserve">
+    <value>This file is excluded by the Profile's filter rules; change the long term rules in the Profile.</value>
+  </data>
+  <data name="Main.FileIgnored" xml:space="preserve">
+    <value>This file is ignored.</value>
+  </data>
+  <data name="Main.FileReenabled" xml:space="preserve">
+    <value>This file is enabled again.</value>
+  </data>
+  <data name="Main.FileTemporarilyIgnored" xml:space="preserve">
+    <value>This file is ignored for now; it only affects this sync.</value>
+  </data>
+  <data name="Main.FillBothEndpoints" xml:space="preserve">
+    <value>Fill in both endpoints first.</value>
   </data>
   <data name="Main.FilterConflicts" xml:space="preserve">
     <value>Filter conflicts</value>
@@ -842,11 +951,17 @@ Save anyway?</value>
   <data name="Main.FilterDownloads" xml:space="preserve">
     <value>Filter downloads</value>
   </data>
+  <data name="Main.FilterStatus" xml:space="preserve">
+    <value>Showing {0} changes.</value>
+  </data>
   <data name="Main.FilterUploads" xml:space="preserve">
     <value>Filter uploads</value>
   </data>
   <data name="Main.IgnoreFile" xml:space="preserve">
     <value>Ignore this file</value>
+  </data>
+  <data name="Main.IgnoredForThisSync" xml:space="preserve">
+    <value>Ignored for this sync{0}{1}</value>
   </data>
   <data name="Main.Import" xml:space="preserve">
     <value>Import…</value>
@@ -854,11 +969,55 @@ Save anyway?</value>
   <data name="Main.ItemCountEmpty" xml:space="preserve">
     <value>0 items</value>
   </data>
+  <data name="Main.JobHeader" xml:space="preserve">
+    <value>Job {0}
+Started: {1:yyyy-MM-dd HH:mm:ss}
+</value>
+  </data>
   <data name="Main.KeepLeft" xml:space="preserve">
     <value>Left overwrites right</value>
   </data>
   <data name="Main.KeepRight" xml:space="preserve">
     <value>Right overwrites left</value>
+  </data>
+  <data name="Main.KindAll" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Main.KindBlocked" xml:space="preserve">
+    <value>Blocked</value>
+  </data>
+  <data name="Main.KindConflict" xml:space="preserve">
+    <value>Conflict</value>
+  </data>
+  <data name="Main.KindDelete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Main.KindDownload" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Main.KindFile" xml:space="preserve">
+    <value>File</value>
+  </data>
+  <data name="Main.KindFiltered" xml:space="preserve">
+    <value>Filtered</value>
+  </data>
+  <data name="Main.KindFolder" xml:space="preserve">
+    <value>Folder</value>
+  </data>
+  <data name="Main.KindIgnored" xml:space="preserve">
+    <value>Ignored</value>
+  </data>
+  <data name="Main.KindMove" xml:space="preserve">
+    <value>Move</value>
+  </data>
+  <data name="Main.KindUnknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="Main.KindUpload" xml:space="preserve">
+    <value>Upload</value>
+  </data>
+  <data name="Main.LastRun" xml:space="preserve">
+    <value>Last run · {0:yyyy-MM-dd HH:mm}</value>
   </data>
   <data name="Main.LeftEndpointPath" xml:space="preserve">
     <value>Left endpoint path</value>
@@ -866,32 +1025,104 @@ Save anyway?</value>
   <data name="Main.LeftRelativePath" xml:space="preserve">
     <value>Left relative path</value>
   </data>
+  <data name="Main.LeftScanDone" xml:space="preserve">
+    <value>The left scan finished: {0} items. Waiting for the right side…</value>
+  </data>
+  <data name="Main.LinkedFolderItems" xml:space="preserve">
+    <value>({0} items inside the folder were linked)</value>
+  </data>
+  <data name="Main.Loaded" xml:space="preserve">
+    <value>Loaded: {0}</value>
+  </data>
   <data name="Main.LoadingSettings" xml:space="preserve">
     <value>Loading settings…</value>
   </data>
   <data name="Main.Local" xml:space="preserve">
     <value>Local</value>
   </data>
+  <data name="Main.MissingOrDeleted" xml:space="preserve">
+    <value>Missing or deleted</value>
+  </data>
+  <data name="Main.ModeCustomArrow" xml:space="preserve">
+    <value>Custom →</value>
+  </data>
+  <data name="Main.ModeDefault" xml:space="preserve">
+    <value>Default</value>
+  </data>
   <data name="Main.ModeMirror" xml:space="preserve">
     <value>Mirror to the right</value>
+  </data>
+  <data name="Main.ModeMirrorArrow" xml:space="preserve">
+    <value>Mirror →</value>
   </data>
   <data name="Main.ModeTwoWay" xml:space="preserve">
     <value>Two-way sync</value>
   </data>
+  <data name="Main.ModeTwoWayArrow" xml:space="preserve">
+    <value>Two-way ↔</value>
+  </data>
   <data name="Main.ModeUpdate" xml:space="preserve">
     <value>Update to the right</value>
+  </data>
+  <data name="Main.ModeUpdateArrow" xml:space="preserve">
+    <value>Update →</value>
+  </data>
+  <data name="Main.MoveIn" xml:space="preserve">
+    <value>Move {1} on the {0}{2}{3}{4}</value>
+  </data>
+  <data name="Main.MoveLowConfidence" xml:space="preserve">
+    <value>{0}This move's confidence is {1}, below the automatic threshold, so it is unchecked by default; confirm the paths and check it by hand.</value>
+  </data>
+  <data name="Main.MoveMissingPaths" xml:space="preserve">
+    <value>The move has no path information</value>
+  </data>
+  <data name="Main.MovedToSamePlace" xml:space="preserve">
+    <value>Both sides{0}were moved to the same place, so nothing needs to run; the baseline is only updated after the sync.{1}{2}</value>
   </data>
   <data name="Main.NewSync" xml:space="preserve">
     <value>New sync</value>
   </data>
+  <data name="Main.NoActionNeeded" xml:space="preserve">
+    <value>No action needed{0}{1}</value>
+  </data>
+  <data name="Main.NoChangesToExport" xml:space="preserve">
+    <value>There are no changes to export.</value>
+  </data>
+  <data name="Main.NoDifferences" xml:space="preserve">
+    <value>Nothing needs syncing</value>
+  </data>
   <data name="Main.NoEndpoint" xml:space="preserve">
     <value>No endpoint selected</value>
+  </data>
+  <data name="Main.NoProfileInFile" xml:space="preserve">
+    <value>This file holds no profile that can be opened.</value>
   </data>
   <data name="Main.NoProfileSelected" xml:space="preserve">
     <value>No Profile selected</value>
   </data>
+  <data name="Main.NoRunnableProfile" xml:space="preserve">
+    <value>There is no profile that can run.</value>
+  </data>
+  <data name="Main.OperationBlocked" xml:space="preserve">
+    <value>This operation is blocked{0}{1}{2}{3}</value>
+  </data>
+  <data name="Main.OverwriteChanged" xml:space="preserve">
+    <value>Changed {0} items; {1}</value>
+  </data>
+  <data name="Main.OverwriteSet" xml:space="preserve">
+    <value>Set {0} items to {1}{2}.</value>
+  </data>
+  <data name="Main.PickEndpointsBelow" xml:space="preserve">
+    <value>Choose two endpoints below and click compare</value>
+  </data>
   <data name="Main.PickEndpointsToCompare" xml:space="preserve">
     <value>Choose the left and right endpoints to compare</value>
+  </data>
+  <data name="Main.PickEndpointsToCompareFull" xml:space="preserve">
+    <value>Choose the left and right endpoints and compare.</value>
+  </data>
+  <data name="Main.PickEndpointsToComparePeriod" xml:space="preserve">
+    <value>Choose the left and right endpoints and click “Compare”.</value>
   </data>
   <data name="Main.PickLeftCloud" xml:space="preserve">
     <value>Choose the left cloud endpoint</value>
@@ -905,8 +1136,35 @@ Save anyway?</value>
   <data name="Main.PickRightLocal" xml:space="preserve">
     <value>Choose the right local endpoint</value>
   </data>
+  <data name="Main.PreparingComparison" xml:space="preserve">
+    <value>Preparing the comparison: {0} ↔ {1}</value>
+  </data>
+  <data name="Main.ProfileCopiedAs" xml:space="preserve">
+    <value>Copied as “{0}”.</value>
+  </data>
+  <data name="Main.ProfileCopySuffix" xml:space="preserve">
+    <value> copy</value>
+  </data>
+  <data name="Main.ProfileCreated" xml:space="preserve">
+    <value>A new profile was created.</value>
+  </data>
+  <data name="Main.ProfileNeedsRepair" xml:space="preserve">
+    <value>The profile needs repair: {0}</value>
+  </data>
+  <data name="Main.ProfileNeedsRepairPrefix" xml:space="preserve">
+    <value>This profile needs repair: </value>
+  </data>
   <data name="Main.ProfileRefreshFailed" xml:space="preserve">
     <value>Refreshing the Profile list failed: {0}</value>
+  </data>
+  <data name="Main.ProfileRemoved" xml:space="preserve">
+    <value>The profile was removed from this project.</value>
+  </data>
+  <data name="Main.ProfileSavedToFile" xml:space="preserve">
+    <value>The profile was saved to a file.</value>
+  </data>
+  <data name="Main.ProfileSettingsSaved" xml:space="preserve">
+    <value>The profile settings were saved.</value>
   </data>
   <data name="Main.ProfileSyncedFromCloud" xml:space="preserve">
     <value>Synced Profile "{0}".</value>
@@ -914,17 +1172,80 @@ Save anyway?</value>
   <data name="Main.ProfileWorkspace" xml:space="preserve">
     <value>Profile workspace</value>
   </data>
+  <data name="Main.ProfilesOpened" xml:space="preserve">
+    <value>Opened {0} profiles.</value>
+  </data>
+  <data name="Main.Ready" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="Main.RemoveProfile" xml:space="preserve">
+    <value>Remove profile</value>
+  </data>
+  <data name="Main.ResolveConflictsFirst" xml:space="preserve">
+    <value>Choose an action and settle every conflict, then compare again.</value>
+  </data>
+  <data name="Main.ReverseDeleteBlocked" xml:space="preserve">
+    <value>The folder cannot be deleted in reverse: the item “{0}” under it is filtered by the Profile. Adjust the filter rules and compare again.</value>
+  </data>
   <data name="Main.RightEndpointPath" xml:space="preserve">
     <value>Right endpoint path</value>
   </data>
   <data name="Main.RightRelativePath" xml:space="preserve">
     <value>Right relative path</value>
   </data>
+  <data name="Main.RightScanDone" xml:space="preserve">
+    <value>The right scan finished: {0} items. Analysing the differences…</value>
+  </data>
+  <data name="Main.SafetyAdvice" xml:space="preserve">
+    <value>Compare and confirm the changes before running the sync.</value>
+  </data>
+  <data name="Main.SafetyBlocked" xml:space="preserve">
+    <value>Safety check: blocked</value>
+  </data>
+  <data name="Main.SafetyBlockedDetail" xml:space="preserve">
+    <value>The deletion threshold was reached or the destination is short of space; handle it in the sync confirmation window.</value>
+  </data>
+  <data name="Main.SafetyPassed" xml:space="preserve">
+    <value>Safety check passed</value>
+  </data>
+  <data name="Main.SafetyWarning" xml:space="preserve">
+    <value>Safety check: warning</value>
+  </data>
+  <data name="Main.SafetyWarningDetail" xml:space="preserve">
+    <value>This sync will overwrite a large number of files; confirm the differences first.</value>
+  </data>
   <data name="Main.SaveAsBatchJob" xml:space="preserve">
     <value>Save as a batch job…</value>
   </data>
+  <data name="Main.ScanDone" xml:space="preserve">
+    <value>Scan finished: left {0} items  ·  right {1} items; analysing the differences…</value>
+  </data>
+  <data name="Main.ScanningEndpoints" xml:space="preserve">
+    <value>Scanning the endpoints: left {0}  ·  right {1}</value>
+  </data>
+  <data name="Main.ScanningLeft" xml:space="preserve">
+    <value>Scanning the left side: {0} items found{1}</value>
+  </data>
+  <data name="Main.ScanningRight" xml:space="preserve">
+    <value>Scanning the right side: {0} items found{1}</value>
+  </data>
   <data name="Main.ScheduleTasks" xml:space="preserve">
     <value>Scheduled tasks</value>
+  </data>
+  <data name="Main.SelectAProfile" xml:space="preserve">
+    <value>Select a profile first.</value>
+  </data>
+  <data name="Main.SelectProfileToCopy" xml:space="preserve">
+    <value>Select the profile you want to copy.</value>
+  </data>
+  <data name="Main.SelectProfileToRemove" xml:space="preserve">
+    <value>Select the profile you want to remove.</value>
+  </data>
+  <data name="Main.SelectRowsToChange" xml:space="preserve">
+    <value>Select the rows you want to change.</value>
+  </data>
+  <data name="Main.SelectRowsToOverwrite" xml:space="preserve">
+    <value>Select the rows whose overwrite direction you want to change.</value>
   </data>
   <data name="Main.SelectedPrefix" xml:space="preserve">
     <value>Selected </value>
@@ -938,8 +1259,23 @@ Save anyway?</value>
   <data name="Main.SettingsApplied" xml:space="preserve">
     <value>Application settings applied.</value>
   </data>
+  <data name="Main.SettingsCorrupt" xml:space="preserve">
+    <value>The settings file was corrupt; it was backed up to {0}</value>
+  </data>
+  <data name="Main.SettingsLoadFailed" xml:space="preserve">
+    <value>Could not load the application settings: </value>
+  </data>
+  <data name="Main.SettingsMigrated" xml:space="preserve">
+    <value>The application settings were migrated from schema v{0}; the original file is backed up at {1}</value>
+  </data>
   <data name="Main.ShowAllChanges" xml:space="preserve">
     <value>Show all changes</value>
+  </data>
+  <data name="Main.SideLeftShort" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Main.SideRightShort" xml:space="preserve">
+    <value>R</value>
   </data>
   <data name="Main.Size" xml:space="preserve">
     <value>Size</value>
@@ -947,17 +1283,101 @@ Save anyway?</value>
   <data name="Main.StartSync" xml:space="preserve">
     <value>Start sync</value>
   </data>
+  <data name="Main.SummaryConflict" xml:space="preserve">
+    <value>{0} conflicts</value>
+  </data>
+  <data name="Main.SummaryDelete" xml:space="preserve">
+    <value>{0} to delete</value>
+  </data>
+  <data name="Main.SummaryDownload" xml:space="preserve">
+    <value>{0} to download</value>
+  </data>
+  <data name="Main.SummaryTotal" xml:space="preserve">
+    <value>{0} items</value>
+  </data>
+  <data name="Main.SummaryUpload" xml:space="preserve">
+    <value>{0} to upload</value>
+  </data>
   <data name="Main.SwapEndpoints" xml:space="preserve">
     <value>Swap the two endpoints</value>
   </data>
+  <data name="Main.SyncAwaitingConfirmation" xml:space="preserve">
+    <value>Waiting for confirmation of the high risk sync…</value>
+  </data>
+  <data name="Main.SyncBuildingBaseline" xml:space="preserve">
+    <value>Building the two-way sync baseline…</value>
+  </data>
+  <data name="Main.SyncCancelled" xml:space="preserve">
+    <value>The sync was cancelled.</value>
+  </data>
+  <data name="Main.SyncConcurrent" xml:space="preserve">
+    <value>Syncing with {0} concurrent copies…</value>
+  </data>
+  <data name="Main.SyncConfirmationCancelled" xml:space="preserve">
+    <value>The high risk sync confirmation was cancelled.</value>
+  </data>
+  <data name="Main.SyncConfirmingSnapshot" xml:space="preserve">
+    <value>Confirming the captured comparison snapshot…</value>
+  </data>
+  <data name="Main.SyncDone" xml:space="preserve">
+    <value>Every selected operation finished; the two-way baseline was committed safely.</value>
+  </data>
+  <data name="Main.SyncDoneBaselineUnchanged" xml:space="preserve">
+    <value>The sync finished; the baseline did not change, so the database write was skipped.</value>
+  </data>
+  <data name="Main.SyncDoneBaselineWritten" xml:space="preserve">
+    <value>The sync finished; sync.fengdb was updated to v3.</value>
+  </data>
+  <data name="Main.SyncFailedDetail" xml:space="preserve">
+    <value>{0} operations failed. You can view the error details, save the log, or retry the ones that can be retried.</value>
+  </data>
+  <data name="Main.SyncFailedInterrupted" xml:space="preserve">
+    <value>The sync failed: an operation was interrupted unexpectedly.</value>
+  </data>
+  <data name="Main.SyncFailedPrefix" xml:space="preserve">
+    <value>The sync failed: </value>
+  </data>
+  <data name="Main.SyncHasFailures" xml:space="preserve">
+    <value>The sync had operations that failed.</value>
+  </data>
+  <data name="Main.SyncPartiallyFailed" xml:space="preserve">
+    <value>The sync partly failed: {0} operations failed; the baseline was not changed.</value>
+  </data>
+  <data name="Main.SyncPreparing" xml:space="preserve">
+    <value>Preparing the sync…</value>
+  </data>
+  <data name="Main.SyncPreparingPlan" xml:space="preserve">
+    <value>Preparing the sync plan…</value>
+  </data>
   <data name="Main.SyncProfiles" xml:space="preserve">
     <value>Sync profiles</value>
+  </data>
+  <data name="Main.SyncSafetyChecks" xml:space="preserve">
+    <value>Running the deletion threshold and free space safety checks…</value>
+  </data>
+  <data name="Main.TemporaryProfile" xml:space="preserve">
+    <value>Temporary</value>
   </data>
   <data name="Main.ThisRunChanges" xml:space="preserve">
     <value>Changes in this run</value>
   </data>
   <data name="Main.TotalPending" xml:space="preserve">
     <value>Total (pending transfer)</value>
+  </data>
+  <data name="Main.TransfersRestored" xml:space="preserve">
+    <value>Restored {0} unfinished cloud transfers from last time; continue them under “Tools → Cloud management → View transfers”.</value>
+  </data>
+  <data name="Main.TwoWayReadyTitle" xml:space="preserve">
+    <value>Two-way sync · ready to compare</value>
+  </data>
+  <data name="Main.UnnamedProfile" xml:space="preserve">
+    <value>Unnamed profile</value>
+  </data>
+  <data name="Main.UnnamedProfileSuffix" xml:space="preserve">
+    <value>Unnamed profile </value>
+  </data>
+  <data name="Main.UpdatedFrom" xml:space="preserve">
+    <value>Updated from {0} to {1}</value>
   </data>
   <data name="Main.UploadSummaryEmpty" xml:space="preserve">
     <value>0 uploads</value>
@@ -998,6 +1418,12 @@ Save anyway?</value>
   <data name="Mgr.BookmarksLoadFailed" xml:space="preserve">
     <value>The favorites and recent items could not be read: {0}</value>
   </data>
+  <data name="Mgr.BookmarksSaveFailed" xml:space="preserve">
+    <value>Could not save the favorites and recent items: </value>
+  </data>
+  <data name="Mgr.BrowserOpenFailed" xml:space="preserve">
+    <value>Could not open the browser: </value>
+  </data>
   <data name="Mgr.BrowserTitle" xml:space="preserve">
     <value>File browser</value>
   </data>
@@ -1037,11 +1463,35 @@ Save anyway?</value>
   <data name="Mgr.CannotReconnectProvider" xml:space="preserve">
     <value>Only endpoints that need browser authorization can be signed in again; for {0}, edit the endpoint parameters directly.</value>
   </data>
+  <data name="Mgr.CheckDoneAllConnected" xml:space="preserve">
+    <value>Check finished: all {0} endpoints connected.</value>
+  </data>
+  <data name="Mgr.CheckDoneNoneConnected" xml:space="preserve">
+    <value>Check finished: none of the {0} endpoints could connect; check the network or the endpoint settings.</value>
+  </data>
+  <data name="Mgr.CheckDonePartial" xml:space="preserve">
+    <value>Check finished: {0}/{1} endpoints connected, {2} could not be checked.</value>
+  </data>
+  <data name="Mgr.CheckDoneSomeNeedLogin" xml:space="preserve">
+    <value>Check finished: {0}/{1} endpoints connected; the rest need signing in again or cannot be reached.</value>
+  </data>
   <data name="Mgr.CheckEndpoint" xml:space="preserve">
     <value>Check connection</value>
   </data>
   <data name="Mgr.CheckEndpointName" xml:space="preserve">
     <value>Check the connection and capacity of the selected cloud endpoint</value>
+  </data>
+  <data name="Mgr.Checking" xml:space="preserve">
+    <value>Checking…</value>
+  </data>
+  <data name="Mgr.CheckingEndpoint" xml:space="preserve">
+    <value>Checking “{0}”…</value>
+  </data>
+  <data name="Mgr.CheckingEndpoints" xml:space="preserve">
+    <value>Checking {0} endpoints…</value>
+  </data>
+  <data name="Mgr.CheckingProgress" xml:space="preserve">
+    <value>Checking… {0}/{1} done</value>
   </data>
   <data name="Mgr.Clear" xml:space="preserve">
     <value>Clear</value>
@@ -1067,6 +1517,12 @@ Save anyway?</value>
   <data name="Mgr.ClearingCache" xml:space="preserve">
     <value>Clearing the mount cache…</value>
   </data>
+  <data name="Mgr.ClipboardEmpty" xml:space="preserve">
+    <value>The clipboard is empty: select items and use “Copy” or “Cut” from the context menu.</value>
+  </data>
+  <data name="Mgr.CollectingDiagnostics" xml:space="preserve">
+    <value>Collecting diagnostics…</value>
+  </data>
   <data name="Mgr.ColumnModified" xml:space="preserve">
     <value>Modified</value>
   </data>
@@ -1079,32 +1535,172 @@ Save anyway?</value>
   <data name="Mgr.ColumnType" xml:space="preserve">
     <value>Type</value>
   </data>
+  <data name="Mgr.ConfirmDeleteEndpoint" xml:space="preserve">
+    <value>Delete the cloud endpoint “{0}”? Local profiles are not deleted.</value>
+  </data>
+  <data name="Mgr.ConfirmDeleteItems" xml:space="preserve">
+    <value>{0} items will be deleted; folders go with everything inside them.
+
+Continue?</value>
+  </data>
+  <data name="Mgr.ConfirmDeleteTitle" xml:space="preserve">
+    <value>Confirm the deletion again</value>
+  </data>
+  <data name="Mgr.ConfirmUnmount" xml:space="preserve">
+    <value>Unmount the mount?
+
+{0}</value>
+  </data>
+  <data name="Mgr.CopiedSourceKept" xml:space="preserve">
+    <value>“{0}” was copied but the source was not deleted: {1}</value>
+  </data>
+  <data name="Mgr.Copy" xml:space="preserve">
+    <value>copy</value>
+  </data>
+  <data name="Mgr.CopyIncomplete" xml:space="preserve">
+    <value>“{0}” did not finish copying, so the source file is still there.</value>
+  </data>
+  <data name="Mgr.CopyShareLink" xml:space="preserve">
+    <value>Copy share link…</value>
+  </data>
   <data name="Mgr.CreateSyncTask" xml:space="preserve">
     <value>Create sync job</value>
   </data>
   <data name="Mgr.CreateSyncTaskName" xml:space="preserve">
     <value>Create a sync job from the selected cloud endpoint</value>
   </data>
+  <data name="Mgr.CreatingFolder" xml:space="preserve">
+    <value>Creating the folder “{0}”…</value>
+  </data>
+  <data name="Mgr.Cut" xml:space="preserve">
+    <value>cut</value>
+  </data>
+  <data name="Mgr.CutConfirmBody" xml:space="preserve">
+    <value>Paste copies to the destination endpoint first, then deletes the source files below.
+
+{0}</value>
+  </data>
+  <data name="Mgr.CutConfirmPrompt" xml:space="preserve">
+    <value>{0} source files will be deleted once the copy succeeds.
+
+Continue?</value>
+  </data>
+  <data name="Mgr.CutDeletesSourceTitle" xml:space="preserve">
+    <value>Cut deletes the source</value>
+  </data>
+  <data name="Mgr.CutTo" xml:space="preserve">
+    <value>Cut to {0}: {1}</value>
+  </data>
+  <data name="Mgr.CutWarning" xml:space="preserve">
+    <value>The source files are deleted once the copy succeeds, and a cloud deletion cannot be undone.</value>
+  </data>
   <data name="Mgr.Delete" xml:space="preserve">
     <value>Delete</value>
+  </data>
+  <data name="Mgr.DeleteEllipsis" xml:space="preserve">
+    <value>Delete…</value>
   </data>
   <data name="Mgr.DeleteEndpointName" xml:space="preserve">
     <value>Delete the selected cloud endpoint</value>
   </data>
+  <data name="Mgr.DeleteEndpointTitle" xml:space="preserve">
+    <value>Delete endpoint</value>
+  </data>
+  <data name="Mgr.DeleteEndpointWithMounts" xml:space="preserve">
+    <value>The endpoint “{0}” still has {1} mounts:
+{2}
+
+Delete the endpoint anyway?</value>
+  </data>
   <data name="Mgr.DeleteItemsName" xml:space="preserve">
     <value>Delete the selected items</value>
+  </data>
+  <data name="Mgr.DeleteSelected" xml:space="preserve">
+    <value>Delete the {0} selected items…</value>
+  </data>
+  <data name="Mgr.DeletingEndpoint" xml:space="preserve">
+    <value>Deleting the endpoint “{0}”…</value>
   </data>
   <data name="Mgr.Descending" xml:space="preserve">
     <value>Descending</value>
   </data>
+  <data name="Mgr.DiagnosticsExportCancelled" xml:space="preserve">
+    <value>The diagnostics export was cancelled.</value>
+  </data>
+  <data name="Mgr.DiagnosticsExported" xml:space="preserve">
+    <value>The diagnostics report was exported to {0}.</value>
+  </data>
+  <data name="Mgr.DiagnosticsWriteFailed" xml:space="preserve">
+    <value>Could not write the diagnostics file: </value>
+  </data>
+  <data name="Mgr.DirectoryReadFailed" xml:space="preserve">
+    <value>Could not read the folder: </value>
+  </data>
   <data name="Mgr.Download" xml:space="preserve">
     <value>Download</value>
+  </data>
+  <data name="Mgr.DownloadEllipsis" xml:space="preserve">
+    <value>Download…</value>
+  </data>
+  <data name="Mgr.DownloadFileTitle" xml:space="preserve">
+    <value>Download file</value>
   </data>
   <data name="Mgr.DownloadName" xml:space="preserve">
     <value>Download the selected files</value>
   </data>
+  <data name="Mgr.DownloadSelected" xml:space="preserve">
+    <value>Download the {0} selected items…</value>
+  </data>
+  <data name="Mgr.DownloadingToOpen" xml:space="preserve">
+    <value>Downloading to open: </value>
+  </data>
+  <data name="Mgr.DragOutDone" xml:space="preserve">
+    <value>Dragged out: </value>
+  </data>
+  <data name="Mgr.DragOutDownloading" xml:space="preserve">
+    <value>Downloading the {1} files in “{0}”…</value>
+  </data>
+  <data name="Mgr.DragOutFileReady" xml:space="preserve">
+    <value>“{0}” has been downloaded; drag it from the open folder to where you want it.</value>
+  </data>
+  <data name="Mgr.DragOutFolderDone" xml:space="preserve">
+    <value>Dragged the whole folder out: {0}</value>
+  </data>
+  <data name="Mgr.DragOutFolderFailed" xml:space="preserve">
+    <value>{1} files in “{0}” could not be downloaded, so the folder was not dragged out.</value>
+  </data>
+  <data name="Mgr.DragOutFolderPreparing" xml:space="preserve">
+    <value>Preparing to drag the folder out…</value>
+  </data>
+  <data name="Mgr.DragOutFolderReadFailed" xml:space="preserve">
+    <value>Could not read what is inside this folder: </value>
+  </data>
+  <data name="Mgr.DragOutFolderReady" xml:space="preserve">
+    <value>The folder “{0}” has been downloaded; drag it to where you want it.</value>
+  </data>
+  <data name="Mgr.DragOutFolderReadyAgain" xml:space="preserve">
+    <value>Everything in “{0}” has been downloaded; drag it again.</value>
+  </data>
+  <data name="Mgr.DragOutIncomplete" xml:space="preserve">
+    <value>“{0}” did not download completely; drag it again.</value>
+  </data>
+  <data name="Mgr.DragOutReadyAgain" xml:space="preserve">
+    <value>“{0}” has been downloaded; drag it again.</value>
+  </data>
+  <data name="Mgr.DragOutRefused" xml:space="preserve">
+    <value>“{0}” cannot be dragged out: </value>
+  </data>
+  <data name="Mgr.DraggingOut" xml:space="preserve">
+    <value>Dragging out: </value>
+  </data>
+  <data name="Mgr.DropNoUploadable" xml:space="preserve">
+    <value>Nothing you dropped can be uploaded.</value>
+  </data>
   <data name="Mgr.DropToUpload" xml:space="preserve">
     <value>Release the mouse to upload</value>
+  </data>
+  <data name="Mgr.DropToUploadHint" xml:space="preserve">
+    <value>Upload to {0}:/{1}</value>
   </data>
   <data name="Mgr.EditEndpoint" xml:space="preserve">
     <value>Edit endpoint</value>
@@ -1115,6 +1711,9 @@ Save anyway?</value>
   <data name="Mgr.EmptyTrash" xml:space="preserve">
     <value>Empty recycle bin</value>
   </data>
+  <data name="Mgr.EmptyTrashEllipsis" xml:space="preserve">
+    <value>Empty the recycle bin…</value>
+  </data>
   <data name="Mgr.EmptyTrashName" xml:space="preserve">
     <value>Permanently delete everything in the recycle bin</value>
   </data>
@@ -1124,11 +1723,20 @@ Save anyway?</value>
   <data name="Mgr.EndpointCreated" xml:space="preserve">
     <value>Created the endpoint: {0}.</value>
   </data>
+  <data name="Mgr.EndpointDeleted" xml:space="preserve">
+    <value>Deleted the endpoint: {0}.</value>
+  </data>
   <data name="Mgr.EndpointListFailed" xml:space="preserve">
     <value>The cloud endpoints could not be read: {0}</value>
   </data>
   <data name="Mgr.EndpointListName" xml:space="preserve">
     <value>Cloud endpoint list</value>
+  </data>
+  <data name="Mgr.EndpointRenamed" xml:space="preserve">
+    <value>Renamed the endpoint “{0}” to “{1}”.</value>
+  </data>
+  <data name="Mgr.EndpointRenamedWithProfiles" xml:space="preserve">
+    <value>Renamed the endpoint “{0}” to “{1}” and updated the paths of {2} sync tasks.</value>
   </data>
   <data name="Mgr.EndpointSortByName" xml:space="preserve">
     <value>Cloud endpoint sort order</value>
@@ -1144,6 +1752,9 @@ Save anyway?</value>
   </data>
   <data name="Mgr.EndpointUpdated" xml:space="preserve">
     <value>Updated the endpoint: {0}.</value>
+  </data>
+  <data name="Mgr.EndpointsExported" xml:space="preserve">
+    <value>Exported the non-sensitive configuration of {0} endpoints; no credentials were written to the file.</value>
   </data>
   <data name="Mgr.EndpointsFiltered" xml:space="preserve">
     <value>Filtered by "{0}", showing {1} / {2} endpoints.</value>
@@ -1163,8 +1774,23 @@ Save anyway?</value>
   <data name="Mgr.ExportDiagnosticsName" xml:space="preserve">
     <value>Export a diagnostic report that contains no credentials</value>
   </data>
+  <data name="Mgr.ExportDiagnosticsTitle" xml:space="preserve">
+    <value>Export diagnostics report</value>
+  </data>
+  <data name="Mgr.ExportEndpointsTitle" xml:space="preserve">
+    <value>Export cloud endpoints</value>
+  </data>
+  <data name="Mgr.Exporting" xml:space="preserve">
+    <value>Exporting…</value>
+  </data>
+  <data name="Mgr.ExternalMountManaged" xml:space="preserve">
+    <value>This mount is managed by another program. Feng Sync shows it read-only and will not end its process or unmount it for you.</value>
+  </data>
   <data name="Mgr.ExternalMountNotice" xml:space="preserve">
     <value>This mount is managed by another program. Feng Sync shows external mounts read-only; it will not end their process or mount them again on their behalf.</value>
+  </data>
+  <data name="Mgr.Favorite" xml:space="preserve">
+    <value>Favorites</value>
   </data>
   <data name="Mgr.FavoriteJumpName" xml:space="preserve">
     <value>Jump to a favorite folder</value>
@@ -1172,8 +1798,23 @@ Save anyway?</value>
   <data name="Mgr.FavoriteThisDirectory" xml:space="preserve">
     <value>Add this folder to favorites</value>
   </data>
+  <data name="Mgr.FileExistsPrompt" xml:space="preserve">
+    <value>“{0}” already exists. Overwrite it?</value>
+  </data>
+  <data name="Mgr.FileExistsTitle" xml:space="preserve">
+    <value>The file already exists</value>
+  </data>
   <data name="Mgr.FileListName" xml:space="preserve">
     <value>Files in the current folder</value>
+  </data>
+  <data name="Mgr.FileReadFailed" xml:space="preserve">
+    <value>Could not read the file: </value>
+  </data>
+  <data name="Mgr.FolderCreated" xml:space="preserve">
+    <value>Created the folder: {0}</value>
+  </data>
+  <data name="Mgr.FolderHasNoVersions" xml:space="preserve">
+    <value>Folders have no version history: versions belong to a single file.</value>
   </data>
   <data name="Mgr.Forward" xml:space="preserve">
     <value>Forward</value>
@@ -1190,6 +1831,9 @@ Save anyway?</value>
   <data name="Mgr.GuideSeenSaveFailed" xml:space="preserve">
     <value>The guide state could not be remembered: {0}</value>
   </data>
+  <data name="Mgr.HiddenEntries" xml:space="preserve">
+    <value>Hid {0} {1} because their endpoint is not in the list right now.</value>
+  </data>
   <data name="Mgr.HistoryBackName" xml:space="preserve">
     <value>Go back to the previous folder you visited</value>
   </data>
@@ -1199,20 +1843,73 @@ Save anyway?</value>
   <data name="Mgr.Import" xml:space="preserve">
     <value>Import…</value>
   </data>
+  <data name="Mgr.ImportColumnCount" xml:space="preserve">
+    <value>Rows</value>
+  </data>
+  <data name="Mgr.ImportColumnLatest" xml:space="preserve">
+    <value>Latest</value>
+  </data>
+  <data name="Mgr.ImportColumnSucceeded" xml:space="preserve">
+    <value>Succeeded</value>
+  </data>
+  <data name="Mgr.ImportConfirm" xml:space="preserve">
+    <value>{0} endpoints will be imported. Each one needs its credentials filled in; any you cancel are skipped.
+
+Continue?</value>
+  </data>
+  <data name="Mgr.ImportDone" xml:space="preserve">
+    <value>Import finished: {0} succeeded, {1} skipped.</value>
+  </data>
+  <data name="Mgr.ImportEndpointsTitle" xml:space="preserve">
+    <value>Import cloud endpoints</value>
+  </data>
+  <data name="Mgr.ImportFileEmpty" xml:space="preserve">
+    <value>The export file holds no endpoints.</value>
+  </data>
+  <data name="Mgr.ImportFileProblem" xml:space="preserve">
+    <value>There is a problem with the import file</value>
+  </data>
   <data name="Mgr.ImportName" xml:space="preserve">
     <value>Import cloud endpoints from an exported file</value>
+  </data>
+  <data name="Mgr.Importing" xml:space="preserve">
+    <value>Importing…</value>
   </data>
   <data name="Mgr.IncludeSubfolders" xml:space="preserve">
     <value>Include subfolders</value>
   </data>
+  <data name="Mgr.ItemCount" xml:space="preserve">
+    <value>{0} items</value>
+  </data>
+  <data name="Mgr.ItemCountFiltered" xml:space="preserve">
+    <value>Showing {0} / {1} items</value>
+  </data>
+  <data name="Mgr.ItemsDeleted" xml:space="preserve">
+    <value>Deleted {0} items.</value>
+  </data>
+  <data name="Mgr.ItemsDeletedPartial" xml:space="preserve">
+    <value>Deleted {0} items; {1} failed: {2}</value>
+  </data>
+  <data name="Mgr.JsonFileFilter" xml:space="preserve">
+    <value>JSON files (*.json)|*.json|All files (*.*)|*.*</value>
+  </data>
   <data name="Mgr.Jump" xml:space="preserve">
     <value>Jump</value>
+  </data>
+  <data name="Mgr.JumpEndpointMissing" xml:space="preserve">
+    <value>The endpoint “{0}” is no longer in the list, so there is nowhere to jump.</value>
+  </data>
+  <data name="Mgr.ListView" xml:space="preserve">
+    <value>List view</value>
   </data>
   <data name="Mgr.LoadingEndpointParams" xml:space="preserve">
     <value>Reading the endpoint parameters…</value>
   </data>
   <data name="Mgr.LoadingEndpoints" xml:space="preserve">
     <value>Reading the list of cloud endpoints…</value>
+  </data>
+  <data name="Mgr.MountAction" xml:space="preserve">
+    <value>Mount</value>
   </data>
   <data name="Mgr.MountCount" xml:space="preserve">
     <value>Found {0} mounts, {1} of them started by this application.</value>
@@ -1223,6 +1920,9 @@ Save anyway?</value>
   <data name="Mgr.MountEndpointName" xml:space="preserve">
     <value>Mount the selected cloud endpoint</value>
   </data>
+  <data name="Mgr.MountFailed" xml:space="preserve">
+    <value>The mount failed: </value>
+  </data>
   <data name="Mgr.MountHealthy" xml:space="preserve">
     <value>The mount point {0} is working, so it does not need to be mounted again.</value>
   </data>
@@ -1232,17 +1932,26 @@ Save anyway?</value>
   <data name="Mgr.MountReconnectFailed" xml:space="preserve">
     <value>Remounting failed: {0}</value>
   </data>
+  <data name="Mgr.MountRefreshFailed" xml:space="preserve">
+    <value>Refreshing the mounts failed: </value>
+  </data>
   <data name="Mgr.MountRestoreFailed" xml:space="preserve">
     <value>Restoring the mounts failed: {0}</value>
   </data>
   <data name="Mgr.MountScanFailed" xml:space="preserve">
     <value>Scanning the mounts failed: {0}</value>
   </data>
+  <data name="Mgr.Mounting" xml:space="preserve">
+    <value>Mounting {0} → {1}…</value>
+  </data>
   <data name="Mgr.MountsGroup" xml:space="preserve">
     <value>Mount management</value>
   </data>
   <data name="Mgr.MoveToTrash" xml:space="preserve">
     <value>Move to recycle bin</value>
+  </data>
+  <data name="Mgr.MovedItems" xml:space="preserve">
+    <value>Moved {0} items</value>
   </data>
   <data name="Mgr.NewEndpoint" xml:space="preserve">
     <value>New endpoint</value>
@@ -1253,11 +1962,29 @@ Save anyway?</value>
   <data name="Mgr.NewFolder" xml:space="preserve">
     <value>New folder</value>
   </data>
+  <data name="Mgr.NewFolderEllipsis" xml:space="preserve">
+    <value>New folder…</value>
+  </data>
+  <data name="Mgr.NewFolderFailedTitle" xml:space="preserve">
+    <value>Creating the folder failed</value>
+  </data>
   <data name="Mgr.NewFolderName" xml:space="preserve">
     <value>Create a new folder in the current folder</value>
   </data>
+  <data name="Mgr.NewFolderPrompt" xml:space="preserve">
+    <value>New folder in {0}, name:</value>
+  </data>
+  <data name="Mgr.NoEndpointForPreview" xml:space="preserve">
+    <value>No cloud endpoint is selected, so there is nothing to read.</value>
+  </data>
   <data name="Mgr.NoEndpoints" xml:space="preserve">
     <value>There is no cloud endpoint yet. Click "New endpoint" to create one.</value>
+  </data>
+  <data name="Mgr.NoEndpointsToCheck" xml:space="preserve">
+    <value>There are no endpoints to check.</value>
+  </data>
+  <data name="Mgr.NoEndpointsToExport" xml:space="preserve">
+    <value>There are no endpoints to export.</value>
   </data>
   <data name="Mgr.NoMountRecordStore" xml:space="preserve">
     <value>This process has no mount record store, so automatic mounting cannot be set up.</value>
@@ -1268,11 +1995,29 @@ Save anyway?</value>
   <data name="Mgr.NoMountsToRestore" xml:space="preserve">
     <value>There are no mounts to restore.</value>
   </data>
+  <data name="Mgr.NothingToPaste" xml:space="preserve">
+    <value>There is nothing to paste.</value>
+  </data>
+  <data name="Mgr.NothingToUpload" xml:space="preserve">
+    <value>There are no files to upload.</value>
+  </data>
+  <data name="Mgr.Open" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="Mgr.OpenFailed" xml:space="preserve">
+    <value>Opening failed: </value>
+  </data>
   <data name="Mgr.OpenTransfersName" xml:space="preserve">
     <value>Open the cloud transfer window</value>
   </data>
   <data name="Mgr.OpenTrashName" xml:space="preserve">
     <value>Open the recycle bin folder of this endpoint</value>
+  </data>
+  <data name="Mgr.OpenedPrefix" xml:space="preserve">
+    <value>Opened: </value>
+  </data>
+  <data name="Mgr.OpeningImportWizard" xml:space="preserve">
+    <value>Opening the import wizard…</value>
   </data>
   <data name="Mgr.OpeningNewEndpointWindow" xml:space="preserve">
     <value>Opening the new endpoint window…</value>
@@ -1289,20 +2034,59 @@ Save anyway?</value>
   <data name="Mgr.Paste" xml:space="preserve">
     <value>Paste</value>
   </data>
+  <data name="Mgr.PasteCancelled" xml:space="preserve">
+    <value>Paste cancelled.</value>
+  </data>
+  <data name="Mgr.PasteDone" xml:space="preserve">
+    <value>{0} {1} items; open the destination folder and click “Paste”.</value>
+  </data>
+  <data name="Mgr.PasteFailed" xml:space="preserve">
+    <value>{0} items failed: {1}</value>
+  </data>
+  <data name="Mgr.PasteFoldersNotPasted" xml:space="preserve">
+    <value>{0} folders will not be pasted: paste works on files, so open a folder and select the files inside it.</value>
+  </data>
   <data name="Mgr.PasteFoldersSkipped" xml:space="preserve">
     <value>{0} folders were not copied: a paste works on files, so open a folder first and select the files inside it.</value>
   </data>
   <data name="Mgr.PasteName" xml:space="preserve">
     <value>Paste the items on the clipboard into the current folder</value>
   </data>
+  <data name="Mgr.PasteRenamed" xml:space="preserve">
+    <value>{0} files with the same name were renamed to keep both</value>
+  </data>
   <data name="Mgr.PasteSameName" xml:space="preserve">
     <value>"{0}" is already in the destination folder.</value>
+  </data>
+  <data name="Mgr.PasteSelectPrefix" xml:space="preserve">
+    <value>Select the items you want to </value>
+  </data>
+  <data name="Mgr.PasteSelectSuffix" xml:space="preserve">
+    <value> first.</value>
+  </data>
+  <data name="Mgr.PasteSkipped" xml:space="preserve">
+    <value>Skipped {0} items with the same name.</value>
   </data>
   <data name="Mgr.PathNavigationName" xml:space="preserve">
     <value>Current path navigation</value>
   </data>
   <data name="Mgr.PathWithPrefix" xml:space="preserve">
     <value>{0}:/{1}    (prefix /{2}, enforced by rclone, cannot be stepped outside)</value>
+  </data>
+  <data name="Mgr.PickCloud" xml:space="preserve">
+    <value>Choose a cloud drive</value>
+  </data>
+  <data name="Mgr.PickCloudDirectory" xml:space="preserve">
+    <value>Choose a folder on a cloud drive first.</value>
+  </data>
+  <data name="Mgr.PickCloudEndpointFirst" xml:space="preserve">
+    <value>Choose a cloud endpoint first.</value>
+  </data>
+  <data name="Mgr.PickCloudFirst" xml:space="preserve">
+    <value>Choose a cloud drive first.</value>
+  </data>
+  <data name="Mgr.PickDownloadFolder" xml:space="preserve">
+    <value>Choose the download folder</value>
   </data>
   <data name="Mgr.PickEndpoint" xml:space="preserve">
     <value>Select an endpoint first.</value>
@@ -1313,11 +2097,53 @@ Save anyway?</value>
   <data name="Mgr.PickEndpointToEdit" xml:space="preserve">
     <value>Select the endpoint to edit first.</value>
   </data>
+  <data name="Mgr.PickFilesToUpload" xml:space="preserve">
+    <value>Choose the files to upload</value>
+  </data>
+  <data name="Mgr.PickFolderToUpload" xml:space="preserve">
+    <value>Choose the folder to upload</value>
+  </data>
   <data name="Mgr.PickMountToReconnect" xml:space="preserve">
     <value>Select the mount point to remount first.</value>
   </data>
   <data name="Mgr.PreparingSyncTask" xml:space="preserve">
     <value>Preparing the sync job…</value>
+  </data>
+  <data name="Mgr.Preview" xml:space="preserve">
+    <value>Preview</value>
+  </data>
+  <data name="Mgr.PreviewPrefix" xml:space="preserve">
+    <value>Preview · </value>
+  </data>
+  <data name="Mgr.Properties" xml:space="preserve">
+    <value>Properties</value>
+  </data>
+  <data name="Mgr.PropertiesPrefix" xml:space="preserve">
+    <value>Properties · </value>
+  </data>
+  <data name="Mgr.QueuedCopy" xml:space="preserve">
+    <value>Queued {0} files to copy</value>
+  </data>
+  <data name="Mgr.QueuedFiles" xml:space="preserve">
+    <value>Added {0} files to the transfer queue.</value>
+  </data>
+  <data name="Mgr.QueuedPrefix" xml:space="preserve">
+    <value>Added to the transfer queue: </value>
+  </data>
+  <data name="Mgr.ReadDetails" xml:space="preserve">
+    <value>Read details</value>
+  </data>
+  <data name="Mgr.ReadingDirectory" xml:space="preserve">
+    <value>Reading the folder…</value>
+  </data>
+  <data name="Mgr.ReadingEndpointConfig" xml:space="preserve">
+    <value>Reading the endpoint configuration…</value>
+  </data>
+  <data name="Mgr.ReadingMounts" xml:space="preserve">
+    <value>Reading the mount state…</value>
+  </data>
+  <data name="Mgr.Recent" xml:space="preserve">
+    <value>Recent</value>
   </data>
   <data name="Mgr.RecentJumpName" xml:space="preserve">
     <value>Jump to a recently visited folder</value>
@@ -1355,8 +2181,14 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.ReconnectingMount" xml:space="preserve">
     <value>Remounting {0}…</value>
   </data>
+  <data name="Mgr.RecycleEllipsis" xml:space="preserve">
+    <value>Move to recycle bin…</value>
+  </data>
   <data name="Mgr.RecycleItemName" xml:space="preserve">
     <value>Move the selected items into this endpoint's recycle bin</value>
+  </data>
+  <data name="Mgr.RecycleSelected" xml:space="preserve">
+    <value>Move the {0} selected items to the recycle bin…</value>
   </data>
   <data name="Mgr.Refresh" xml:space="preserve">
     <value>Refresh</value>
@@ -1373,17 +2205,47 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.RefreshMountsName" xml:space="preserve">
     <value>Refresh the mount list</value>
   </data>
+  <data name="Mgr.RemoteEndpointsTitle" xml:space="preserve">
+    <value>Remote endpoints</value>
+  </data>
   <data name="Mgr.Rename" xml:space="preserve">
     <value>Rename</value>
+  </data>
+  <data name="Mgr.RenameEllipsis" xml:space="preserve">
+    <value>Rename…</value>
   </data>
   <data name="Mgr.RenameEndpointName" xml:space="preserve">
     <value>Rename the selected cloud endpoint</value>
   </data>
+  <data name="Mgr.RenameEndpointPrompt" xml:space="preserve">
+    <value>New name for the endpoint “{0}” (letters, digits, underscore or hyphen only):</value>
+  </data>
+  <data name="Mgr.RenameEndpointTitle" xml:space="preserve">
+    <value>Rename endpoint</value>
+  </data>
+  <data name="Mgr.RenameFailedTitle" xml:space="preserve">
+    <value>Renaming failed</value>
+  </data>
   <data name="Mgr.RenameItemName" xml:space="preserve">
     <value>Rename the selected item</value>
   </data>
+  <data name="Mgr.RenamePrompt" xml:space="preserve">
+    <value>New name for “{0}”:</value>
+  </data>
+  <data name="Mgr.Renamed" xml:space="preserve">
+    <value>Renamed to: {0}</value>
+  </data>
+  <data name="Mgr.Renaming" xml:space="preserve">
+    <value>Renaming…</value>
+  </data>
+  <data name="Mgr.RenamingItem" xml:space="preserve">
+    <value>Renaming “{0}”…</value>
+  </data>
   <data name="Mgr.Restore" xml:space="preserve">
     <value>Restore</value>
+  </data>
+  <data name="Mgr.RestoreEllipsis" xml:space="preserve">
+    <value>Restore…</value>
   </data>
   <data name="Mgr.RestoreItemsName" xml:space="preserve">
     <value>Restore the selected recycle bin items to their original folder</value>
@@ -1401,8 +2263,14 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.RestoreMountsTitle" xml:space="preserve">
     <value>Restore mounts</value>
   </data>
+  <data name="Mgr.RestoreSelected" xml:space="preserve">
+    <value>Restore the {0} selected items…</value>
+  </data>
   <data name="Mgr.RestoringMounts" xml:space="preserve">
     <value>Restoring {0} mounts…</value>
+  </data>
+  <data name="Mgr.SavingOrganization" xml:space="preserve">
+    <value>Saving the group and tags…</value>
   </data>
   <data name="Mgr.ScanningMounts" xml:space="preserve">
     <value>Scanning every rclone mount on the system…</value>
@@ -1419,11 +2287,69 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.SearchEndpointsName" xml:space="preserve">
     <value>Search cloud endpoints by name, type or prefix</value>
   </data>
+  <data name="Mgr.SearchFailedTitle" xml:space="preserve">
+    <value>Search failed</value>
+  </data>
+  <data name="Mgr.SearchFound" xml:space="preserve">
+    <value>Found {0} items</value>
+  </data>
+  <data name="Mgr.SearchNoMatch" xml:space="preserve">
+    <value>Nothing matches “{0}”.</value>
+  </data>
   <data name="Mgr.SearchRecursiveName" xml:space="preserve">
     <value>Search including subfolders</value>
   </data>
+  <data name="Mgr.SearchTruncated" xml:space="preserve">
+    <value>(stopped at {0} items; narrow the search)</value>
+  </data>
+  <data name="Mgr.SearchingIn" xml:space="preserve">
+    <value>Searching “{0}” for “{1}”…</value>
+  </data>
+  <data name="Mgr.SelectEndpointToCheck" xml:space="preserve">
+    <value>Select the endpoint you want to check.</value>
+  </data>
+  <data name="Mgr.SelectEndpointToDelete" xml:space="preserve">
+    <value>Select the endpoint you want to delete.</value>
+  </data>
+  <data name="Mgr.SelectEndpointToMount" xml:space="preserve">
+    <value>Select the endpoint you want to mount.</value>
+  </data>
+  <data name="Mgr.SelectEndpointToOrganize" xml:space="preserve">
+    <value>Select the endpoint whose group and tags you want to set.</value>
+  </data>
+  <data name="Mgr.SelectEndpointToRename" xml:space="preserve">
+    <value>Select the endpoint you want to rename.</value>
+  </data>
+  <data name="Mgr.SelectFilesToDownload" xml:space="preserve">
+    <value>Select the files you want to download; to take files out of a folder, open it first.</value>
+  </data>
+  <data name="Mgr.SelectItemsToDelete" xml:space="preserve">
+    <value>Select the items you want to delete.</value>
+  </data>
+  <data name="Mgr.SelectItemsToRecycle" xml:space="preserve">
+    <value>Select the items you want to move to the recycle bin.</value>
+  </data>
+  <data name="Mgr.SelectItemsToRestore" xml:space="preserve">
+    <value>Select the items you want to restore.</value>
+  </data>
+  <data name="Mgr.SelectMountToUnmount" xml:space="preserve">
+    <value>Select the mount you want to unmount.</value>
+  </data>
+  <data name="Mgr.SelectSingleItemToRename" xml:space="preserve">
+    <value>Select the single item you want to rename.</value>
+  </data>
+  <data name="Mgr.SelectTargetCloud" xml:space="preserve">
+    <value>Choose the cloud drive you want to paste into.</value>
+  </data>
+  <data name="Mgr.SelectionProperties" xml:space="preserve">
+    <value>Properties of the selected items</value>
+  </data>
   <data name="Mgr.SettingsLoadFailed" xml:space="preserve">
     <value>The settings could not be read: {0}</value>
+  </data>
+  <data name="Mgr.SomeMountsUnfinished" xml:space="preserve">
+    <value>Some mounts were not unmounted:
+</value>
   </data>
   <data name="Mgr.Sort" xml:space="preserve">
     <value>Sort</value>
@@ -1461,11 +2387,17 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.SyncWizardTaskCreated" xml:space="preserve">
     <value>Created the two-way sync job "{0}": {1} ↔ {2}</value>
   </data>
+  <data name="Mgr.TargetReadFailed" xml:space="preserve">
+    <value>Could not read the destination folder</value>
+  </data>
   <data name="Mgr.TestAll" xml:space="preserve">
     <value>Test all</value>
   </data>
   <data name="Mgr.TestAllName" xml:space="preserve">
     <value>Check the connection and capacity of every cloud endpoint</value>
+  </data>
+  <data name="Mgr.TextFileFilter" xml:space="preserve">
+    <value>Text files (*.txt)|*.txt|All files (*.*)|*.*</value>
   </data>
   <data name="Mgr.ToggleEndpointSortDirectionName" xml:space="preserve">
     <value>Switch the cloud endpoint list between ascending and descending order</value>
@@ -1476,11 +2408,20 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.ToggleViewName" xml:space="preserve">
     <value>Switch between the list view and the grid view</value>
   </data>
+  <data name="Mgr.TransferIncomplete" xml:space="preserve">
+    <value>The transfer did not finish.</value>
+  </data>
   <data name="Mgr.TransferProgressName" xml:space="preserve">
     <value>File transfer progress</value>
   </data>
   <data name="Mgr.Trash" xml:space="preserve">
     <value>Recycle bin</value>
+  </data>
+  <data name="Mgr.TrashEmpty" xml:space="preserve">
+    <value>The recycle bin is empty, so there is nothing to delete.</value>
+  </data>
+  <data name="Mgr.TrashOpenFailed" xml:space="preserve">
+    <value>Could not open the recycle bin</value>
   </data>
   <data name="Mgr.TypeFile" xml:space="preserve">
     <value>File</value>
@@ -1488,17 +2429,32 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.TypeFolder" xml:space="preserve">
     <value>Folder</value>
   </data>
+  <data name="Mgr.Unfavorite" xml:space="preserve">
+    <value>Remove from favorites</value>
+  </data>
   <data name="Mgr.Unmount" xml:space="preserve">
     <value>Unmount</value>
   </data>
+  <data name="Mgr.UnmountFailed" xml:space="preserve">
+    <value>Unmounting failed: </value>
+  </data>
   <data name="Mgr.UnmountName" xml:space="preserve">
     <value>Unmount the selected mount</value>
+  </data>
+  <data name="Mgr.Unmounted" xml:space="preserve">
+    <value>Unmounted {0}.</value>
+  </data>
+  <data name="Mgr.Unmounting" xml:space="preserve">
+    <value>Unmounting {0}…</value>
   </data>
   <data name="Mgr.UpLevel" xml:space="preserve">
     <value>Up one level</value>
   </data>
   <data name="Mgr.UpLevelName" xml:space="preserve">
     <value>Go up to the parent folder</value>
+  </data>
+  <data name="Mgr.UploadCancelled" xml:space="preserve">
+    <value>Upload cancelled.</value>
   </data>
   <data name="Mgr.UploadFiles" xml:space="preserve">
     <value>Upload files</value>
@@ -1511,6 +2467,24 @@ It will be cancelled first and then mounted once more with the same settings.</v
   </data>
   <data name="Mgr.UploadFolderName" xml:space="preserve">
     <value>Upload a folder to the current folder</value>
+  </data>
+  <data name="Mgr.UploadRenamed" xml:space="preserve">
+    <value>{0} files with the same name were renamed to keep both.</value>
+  </data>
+  <data name="Mgr.UploadSkipped" xml:space="preserve">
+    <value>Skipped {0} files with the same name.</value>
+  </data>
+  <data name="Mgr.UploadSkippedAll" xml:space="preserve">
+    <value>Skipped every file with the same name.</value>
+  </data>
+  <data name="Mgr.UploadTargetReadFailed" xml:space="preserve">
+    <value>Could not read the destination folder: </value>
+  </data>
+  <data name="Mgr.ViewPreferenceSaveFailed" xml:space="preserve">
+    <value>Could not remember the view choice: </value>
+  </data>
+  <data name="Mgr.ViewPropertiesSelected" xml:space="preserve">
+    <value>View the properties of the {0} selected items</value>
   </data>
   <data name="Mgr.ViewTransfers" xml:space="preserve">
     <value>View transfers</value>

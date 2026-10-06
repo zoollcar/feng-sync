@@ -36,17 +36,6 @@ public sealed class LanguageCoverageTests
         "Trace.Trace", "Trace.Write", "Console.Write", "Debug.Write"
     ];
 
-    /// <summary>
-    /// Files whose migration to <see cref="Strings.resx"/> is deliberately deferred. Each entry is a known
-    /// migration debt, not a permission to leave new Chinese in source. New code in other files is held to
-    /// the full rule.
-    /// </summary>
-    private static readonly string[] DeferredMigrationFiles =
-    [
-        "MainWindow.xaml.cs",
-        "Views/RemoteEndpointManagerWindow.xaml.cs"
-    ];
-
     [Fact]
     public void Every_key_the_code_asks_for_exists_in_both_languages()
     {
@@ -73,7 +62,9 @@ public sealed class LanguageCoverageTests
         // themselves are written in the language they name.
         foreach (var (file, code) in Code().Where(entry => !entry.File.RelativePath.StartsWith("Localization/", StringComparison.Ordinal)))
         {
-            if (DeferredMigrationFiles.Contains(file.RelativePath, StringComparer.Ordinal)) continue;
+            // There is no per-file exception list any more: the last two deferred files were migrated, so a
+            // Chinese literal anywhere in the tree is a violation again. A future deferral has to be argued
+            // for by changing this test, which is the point.
             // XAML names its user-visible text in attributes. C# names it in every shape there is — an
             // initialiser, a MessageBox caption, an interpolated status line, a throw — so there is no
             // attribute to whitelist and every literal is checked. The exception is a line whose Chinese is

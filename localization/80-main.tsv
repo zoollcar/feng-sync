@@ -59,3 +59,144 @@ Main.SyncProfiles	同步配置	Sync profiles
 Main.ThisRunChanges	本次变更	Changes in this run
 Main.TotalPending	总计（待传输）	Total (pending transfer)
 Main.UploadSummaryEmpty	上传 0 项	0 uploads
+
+# ---- Migrated from RemoteEndpointManagerWindow.xaml.cs ----
+Main.AnalysisDone	分析完成：{0} 项差异，正在生成同步计划…	Analysis finished: {0} differences; building the sync plan…
+Main.BatchOpened	已打开批处理作业“{0}”（{1} 个 Profile）。	Opened the batch job “{0}” ({1} profiles).
+Main.BatchSaved	批处理作业已保存（{0} 个 Profile）。	The batch job was saved ({0} profiles).
+Main.BothChanged	两侧自上次同步后都发生了更改。{0}{1}{2}{3}	Both sides changed since the last sync.{0}{1}{2}{3}
+Main.ChangesExported	已导出 {0} 行变更：{1}	Exported {0} change rows to {1}
+Main.CloudNotStarted	云端连接未启动。	The cloud connection has not been started.
+Main.CompareCancelled	比较已取消。	The comparison was cancelled.
+Main.CompareDone	{0} 比较完成：左侧 {1} 项  ·  右侧 {2} 项  ·  {3} 个差异/提示（其中 {4} 项已忽略）。	{0} comparison finished: left {1} items  ·  right {2} items  ·  {3} differences/hints ({4} ignored).
+Main.ConcurrentSuffix	 路	 concurrent
+Main.ConfidenceHigh	高	High
+Main.ConfidenceLow	不足	Low
+Main.ConfidenceMedium	中等（仅依据文件大小和修改时间推断）	Medium (inferred from size and modification time only)
+Main.ConfirmRemoveProfile	从 Feng Sync 的配置列表移除“{0}”？\n已导出的配置文件不会被删除。	Remove “{0}” from Feng Sync's profile list?\nExported profile files are not deleted.
+Main.ConflictTooltip	冲突原因：{0}{1}左侧修改时间：{2}{3}右侧修改时间：{4}	Conflict reason: {0}{1}Left modified: {2}{3}Right modified: {4}
+Main.DeleteLeftItem	删除左侧项目{0}{1}	Delete the left item{0}{1}
+Main.DeleteRightItem	删除右侧项目{0}{1}	Delete the right item{0}{1}
+Main.DirectionLeftToRight	左 → 右	Left → right
+Main.DirectionMoveLeft	左侧移动	Move on the left
+Main.DirectionMoveRight	右侧移动	Move on the right
+Main.DirectionRightToDash	右 → —	Right → —
+Main.DirectionRightToLeft	右 → 左	Right → left
+Main.DirectionToLeft	— → 左	— → left
+Main.DirectoryNoTimestamp	目录（无修改时间）	Directory (no modification time)
+Main.EndpointAddedToSide	已将云端端点添加到{0}侧：{1}	The cloud endpoint was added to the {0} side: {1}
+Main.EntryDirectory	{0}目录：{1}	{0} directory: {1}
+Main.EntryFile	{0}文件：{1}{2}大小：{3:N0} B{4}修改时间：{5:yyyy-MM-dd HH:mm:ss}	{0} file: {1}{2}Size: {3:N0} B{4}Modified: {5:yyyy-MM-dd HH:mm:ss}
+Main.EntryItem	{0}项目：{1}	{0} item: {1}
+Main.ExcludedByProfileFilter	已被 Profile 过滤规则排除{0}{1}	Excluded by the Profile's filter rules{0}{1}
+Main.ExitingToInstall	正在退出并安装更新…	Exiting to install the update…
+Main.ExportFailed	导出失败：	Export failed: 
+Main.FileEnabled	该文件已启用。	This file is enabled.
+Main.FileFilteredByProfile	该文件被 Profile 过滤规则排除；请在 Profile 中修改长期过滤规则。	This file is excluded by the Profile's filter rules; change the long term rules in the Profile.
+Main.FileIgnored	该文件已忽略。	This file is ignored.
+Main.FileReenabled	已重新启用该文件。	This file is enabled again.
+Main.FileTemporarilyIgnored	已临时忽略该文件；仅影响本次同步。	This file is ignored for now; it only affects this sync.
+Main.FillBothEndpoints	请先填写两个端点。	Fill in both endpoints first.
+Main.FilterStatus	当前显示：{0}变更。	Showing {0} changes.
+Main.IgnoredForThisSync	本次同步已忽略{0}{1}	Ignored for this sync{0}{1}
+Main.JobHeader	作业 {0}\n开始：{1:yyyy-MM-dd HH:mm:ss}\n	Job {0}\nStarted: {1:yyyy-MM-dd HH:mm:ss}\n
+Main.KindAll	全部	All
+Main.KindBlocked	阻断	Blocked
+Main.KindConflict	冲突	Conflict
+Main.KindDelete	删除	Delete
+Main.KindDownload	下载	Download
+Main.KindFile	文件	File
+Main.KindFiltered	已过滤	Filtered
+Main.KindFolder	文件夹	Folder
+Main.KindIgnored	已忽略	Ignored
+Main.KindMove	移动	Move
+Main.KindUnknown	未知	Unknown
+Main.KindUpload	上传	Upload
+Main.LastRun	上次运行 · {0:yyyy-MM-dd HH:mm}	Last run · {0:yyyy-MM-dd HH:mm}
+Main.LeftScanDone	左侧扫描完成：{0} 项。正在等待右侧…	The left scan finished: {0} items. Waiting for the right side…
+Main.LinkedFolderItems	（已联动 {0} 个文件夹内项目）	({0} items inside the folder were linked)
+Main.Loaded	已载入：{0}	Loaded: {0}
+Main.MissingOrDeleted	不存在或已删除	Missing or deleted
+Main.ModeCustomArrow	自定义 →	Custom →
+Main.ModeDefault	默认	Default
+Main.ModeMirrorArrow	镜像 →	Mirror →
+Main.ModeTwoWayArrow	双向 ↔	Two-way ↔
+Main.ModeUpdateArrow	更新 →	Update →
+Main.MoveIn	在{0}移动{1}{2}{3}{4}	Move {1} on the {0}{2}{3}{4}
+Main.MoveLowConfidence	{0}此移动的识别置信度为{1}，低于自动执行阈值，因此默认未勾选；请确认路径后手动勾选。	{0}This move's confidence is {1}, below the automatic threshold, so it is unchecked by default; confirm the paths and check it by hand.
+Main.MoveMissingPaths	移动操作缺少路径信息	The move has no path information
+Main.MovedToSamePlace	两侧{0}已移动到相同位置，无需执行；同步后仅更新基线。{1}{2}	Both sides{0}were moved to the same place, so nothing needs to run; the baseline is only updated after the sync.{1}{2}
+Main.NoActionNeeded	无需操作{0}{1}	No action needed{0}{1}
+Main.NoChangesToExport	没有可导出的变更。	There are no changes to export.
+Main.NoDifferences	没有需要同步的差异	Nothing needs syncing
+Main.NoProfileInFile	该文件没有可打开的 Profile。	This file holds no profile that can be opened.
+Main.NoRunnableProfile	没有可运行的 Profile。	There is no profile that can run.
+Main.OperationBlocked	此操作已阻断{0}{1}{2}{3}	This operation is blocked{0}{1}{2}{3}
+Main.OverwriteChanged	已修改 {0} 项；{1}	Changed {0} items; {1}
+Main.OverwriteSet	已将 {0} 项设置为{1}{2}。	Set {0} items to {1}{2}.
+Main.PickEndpointsBelow	请在下方选择两个端点后点击比较	Choose two endpoints below and click compare
+Main.PickEndpointsToCompareFull	选择左右端点后即可比较。	Choose the left and right endpoints and compare.
+Main.PickEndpointsToComparePeriod	选择左右端点后点击“比较”。	Choose the left and right endpoints and click “Compare”.
+Main.PreparingComparison	正在准备比较：{0} ↔ {1}	Preparing the comparison: {0} ↔ {1}
+Main.ProfileCopiedAs	已复制为 “{0}”。	Copied as “{0}”.
+Main.ProfileCopySuffix	 副本	 copy
+Main.ProfileCreated	已新建配置档案。	A new profile was created.
+Main.ProfileNeedsRepair	Profile 需要修复：{0}	The profile needs repair: {0}
+Main.ProfileNeedsRepairPrefix	该 Profile 需要修复：	This profile needs repair: 
+Main.ProfileRemoved	配置已从本项目移除。	The profile was removed from this project.
+Main.ProfileSavedToFile	Profile 已保存为文件。	The profile was saved to a file.
+Main.ProfileSettingsSaved	Profile 设置已保存。	The profile settings were saved.
+Main.ProfilesOpened	已打开 {0} 个 Profile。	Opened {0} profiles.
+Main.Ready	准备就绪	Ready
+Main.RemoveProfile	移除配置	Remove profile
+Main.ResolveConflictsFirst	请先选择操作并裁决所有冲突，然后重新比较。	Choose an action and settle every conflict, then compare again.
+Main.ReverseDeleteBlocked	无法反向删除文件夹：其下项目“{0}”被 Profile 过滤。请先调整过滤规则并重新比较。	The folder cannot be deleted in reverse: the item “{0}” under it is filtered by the Profile. Adjust the filter rules and compare again.
+Main.RightScanDone	右侧扫描完成：{0} 项。正在分析差异…	The right scan finished: {0} items. Analysing the differences…
+Main.SafetyAdvice	建议先比较并确认变更，再执行同步。	Compare and confirm the changes before running the sync.
+Main.SafetyBlocked	安全检查：阻断	Safety check: blocked
+Main.SafetyBlockedDetail	删除阈值被触发或目标空间不足，请在同步确认窗口中处理。	The deletion threshold was reached or the destination is short of space; handle it in the sync confirmation window.
+Main.SafetyPassed	安全检查通过	Safety check passed
+Main.SafetyWarning	安全检查：警告	Safety check: warning
+Main.SafetyWarningDetail	本次同步将覆盖大量文件；建议先确认差异。	This sync will overwrite a large number of files; confirm the differences first.
+Main.ScanDone	扫描完成：左侧 {0} 项  ·  右侧 {1} 项，正在分析差异…	Scan finished: left {0} items  ·  right {1} items; analysing the differences…
+Main.ScanningEndpoints	正在扫描端点：左 {0}  ·  右 {1}	Scanning the endpoints: left {0}  ·  right {1}
+Main.ScanningLeft	正在扫描左侧：已发现 {0} 项{1}	Scanning the left side: {0} items found{1}
+Main.ScanningRight	正在扫描右侧：已发现 {0} 项{1}	Scanning the right side: {0} items found{1}
+Main.SelectAProfile	请先选择一个 Profile。	Select a profile first.
+Main.SelectProfileToCopy	请先选择要复制的 Profile。	Select the profile you want to copy.
+Main.SelectProfileToRemove	请选择要移除的配置。	Select the profile you want to remove.
+Main.SelectRowsToChange	请选择要修改的行。	Select the rows you want to change.
+Main.SelectRowsToOverwrite	请选择要修改覆盖方向的行。	Select the rows whose overwrite direction you want to change.
+Main.SettingsCorrupt	设置文件已损坏，已备份到：{0}	The settings file was corrupt; it was backed up to {0}
+Main.SettingsLoadFailed	无法加载程序设置：	Could not load the application settings: 
+Main.SettingsMigrated	程序设置已从 schema v{0} 迁移；原文件备份在：{1}	The application settings were migrated from schema v{0}; the original file is backed up at {1}
+Main.SideLeftShort	左	L
+Main.SideRightShort	右	R
+Main.SummaryConflict	冲突 {0} 项	{0} conflicts
+Main.SummaryDelete	删除 {0} 项	{0} to delete
+Main.SummaryDownload	下载 {0} 项	{0} to download
+Main.SummaryTotal	{0} 项	{0} items
+Main.SummaryUpload	上传 {0} 项	{0} to upload
+Main.SyncAwaitingConfirmation	等待确认高风险同步操作…	Waiting for confirmation of the high risk sync…
+Main.SyncBuildingBaseline	正在建立双向同步基线…	Building the two-way sync baseline…
+Main.SyncCancelled	同步已取消。	The sync was cancelled.
+Main.SyncConcurrent	正在以 {0} 路并发同步…	Syncing with {0} concurrent copies…
+Main.SyncConfirmationCancelled	已取消高风险同步确认。	The high risk sync confirmation was cancelled.
+Main.SyncConfirmingSnapshot	正在确认已捕获的比较快照…	Confirming the captured comparison snapshot…
+Main.SyncDone	所有选中的操作已完成；双向基线已安全提交。	Every selected operation finished; the two-way baseline was committed safely.
+Main.SyncDoneBaselineUnchanged	同步完成；基线状态未变化，已跳过数据库写入。	The sync finished; the baseline did not change, so the database write was skipped.
+Main.SyncDoneBaselineWritten	同步完成；sync.fengdb 已更新为 v3。	The sync finished; sync.fengdb was updated to v3.
+Main.SyncFailedDetail	{0} 个操作失败。可查看错误详情、保存日志，或重试可重试失败项。	{0} operations failed. You can view the error details, save the log, or retry the ones that can be retried.
+Main.SyncFailedInterrupted	同步失败：操作意外中断。	The sync failed: an operation was interrupted unexpectedly.
+Main.SyncFailedPrefix	同步失败：	The sync failed: 
+Main.SyncHasFailures	同步存在失败操作。	The sync had operations that failed.
+Main.SyncPartiallyFailed	同步部分失败：{0} 个操作失败；基线未变更。	The sync partly failed: {0} operations failed; the baseline was not changed.
+Main.SyncPreparing	正在准备同步…	Preparing the sync…
+Main.SyncPreparingPlan	正在准备同步计划…	Preparing the sync plan…
+Main.SyncSafetyChecks	正在进行删除阈值和目标空间安全检查…	Running the deletion threshold and free space safety checks…
+Main.TemporaryProfile	临时	Temporary
+Main.TransfersRestored	已恢复 {0} 项上次未完成的云盘传输，可在“工具 → 云盘管理 → 查看传输”中继续。	Restored {0} unfinished cloud transfers from last time; continue them under “Tools → Cloud management → View transfers”.
+Main.TwoWayReadyTitle	双向同步 · 准备比较	Two-way sync · ready to compare
+Main.UnnamedProfile	未命名配置	Unnamed profile
+Main.UnnamedProfileSuffix	未命名配置 	Unnamed profile 
+Main.UpdatedFrom	已从 {0} 更新到 {1}	Updated from {0} to {1}

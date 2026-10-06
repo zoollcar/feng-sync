@@ -231,3 +231,185 @@ Mgr.TypeFolder	文件夹	Folder
 Recycle.ConfirmProceed	确定移动？	Move them?
 Recycle.ConfirmRename	原名已被占用时会自动改成“名称 (1)”而不是盖掉那一份。	If the original name is taken, it is changed to "name (1)" instead of overwriting that copy.
 Recycle.NameSeparator	、	, 
+
+# ---- Migrated from RemoteEndpointManagerWindow.xaml.cs ----
+Mgr.BookmarksSaveFailed	无法保存收藏与最近访问：	Could not save the favorites and recent items: 
+Mgr.BrowserOpenFailed	没能打开浏览器：	Could not open the browser: 
+Mgr.CheckDoneAllConnected	检查结束：{0} 个端点全部连接正常。	Check finished: all {0} endpoints connected.
+Mgr.CheckDoneNoneConnected	检查结束：{0} 个端点都无法连接，请检查网络或端点参数。	Check finished: none of the {0} endpoints could connect; check the network or the endpoint settings.
+Mgr.CheckDonePartial	检查结束：{0}/{1} 个端点连接正常，{2} 个未能完成检查。	Check finished: {0}/{1} endpoints connected, {2} could not be checked.
+Mgr.CheckDoneSomeNeedLogin	检查结束：{0}/{1} 个端点连接正常，其余需要重新登录或无法连接。	Check finished: {0}/{1} endpoints connected; the rest need signing in again or cannot be reached.
+Mgr.Checking	正在检查…	Checking…
+Mgr.CheckingEndpoint	正在检查“{0}”…	Checking “{0}”…
+Mgr.CheckingEndpoints	正在检查 {0} 个端点…	Checking {0} endpoints…
+Mgr.CheckingProgress	正在检查… 已完成 {0}/{1}	Checking… {0}/{1} done
+Mgr.ClipboardEmpty	剪贴板是空的：先选中项目，再用右键菜单的“复制”或“剪切”。	The clipboard is empty: select items and use “Copy” or “Cut” from the context menu.
+Mgr.CollectingDiagnostics	正在收集诊断信息…	Collecting diagnostics…
+Mgr.ConfirmDeleteEndpoint	删除云端端点“{0}”？本地 Profile 不会被删除。	Delete the cloud endpoint “{0}”? Local profiles are not deleted.
+Mgr.ConfirmDeleteItems	即将删除 {0} 项，其中文件夹会连同其全部内容一起删除。\n\n确定继续？	{0} items will be deleted; folders go with everything inside them.\n\nContinue?
+Mgr.ConfirmDeleteTitle	再次确认删除	Confirm the deletion again
+Mgr.ConfirmUnmount	确定取消挂载？\n\n{0}	Unmount the mount?\n\n{0}
+Mgr.CopiedSourceKept	“{0}”已复制但源未删除：{1}	“{0}” was copied but the source was not deleted: {1}
+Mgr.Copy	复制	copy
+Mgr.CopyIncomplete	“{0}”没有复制完成，源文件仍然保留。	“{0}” did not finish copying, so the source file is still there.
+Mgr.CopyShareLink	复制分享链接…	Copy share link…
+Mgr.CreatingFolder	正在创建文件夹“{0}”…	Creating the folder “{0}”…
+Mgr.Cut	剪切	cut
+Mgr.CutConfirmBody	粘贴会先复制到目标端点，复制成功后再删除下面这些源文件。\n\n{0}	Paste copies to the destination endpoint first, then deletes the source files below.\n\n{0}
+Mgr.CutConfirmPrompt	即将在复制成功后删除 {0} 项源文件。\n\n确定继续？	{0} source files will be deleted once the copy succeeds.\n\nContinue?
+Mgr.CutDeletesSourceTitle	剪切后删除源	Cut deletes the source
+Mgr.CutTo	已剪切到 {0}：{1}	Cut to {0}: {1}
+Mgr.CutWarning	复制成功后源文件会被删除，云端删除无法恢复。	The source files are deleted once the copy succeeds, and a cloud deletion cannot be undone.
+Mgr.DeleteEllipsis	删除…	Delete…
+Mgr.DeleteEndpointTitle	删除端点	Delete endpoint
+Mgr.DeleteEndpointWithMounts	端点“{0}”仍有 {1} 个挂载：\n{2}\n\n继续删除端点？	The endpoint “{0}” still has {1} mounts:\n{2}\n\nDelete the endpoint anyway?
+Mgr.DeleteSelected	删除所选的 {0} 项…	Delete the {0} selected items…
+Mgr.DeletingEndpoint	正在删除端点“{0}”…	Deleting the endpoint “{0}”…
+Mgr.DiagnosticsExportCancelled	已取消导出诊断。	The diagnostics export was cancelled.
+Mgr.DiagnosticsExported	诊断报告已导出：{0}。	The diagnostics report was exported to {0}.
+Mgr.DiagnosticsWriteFailed	无法写入诊断文件：	Could not write the diagnostics file: 
+Mgr.DirectoryReadFailed	无法读取目录：	Could not read the folder: 
+Mgr.DownloadEllipsis	下载…	Download…
+Mgr.DownloadFileTitle	下载文件	Download file
+Mgr.DownloadSelected	下载所选的 {0} 项…	Download the {0} selected items…
+Mgr.DownloadingToOpen	正在下载以打开：	Downloading to open: 
+Mgr.DragOutDone	已拖出：	Dragged out: 
+Mgr.DragOutDownloading	正在下载“{0}”的 {1} 个文件…	Downloading the {1} files in “{0}”…
+Mgr.DragOutFileReady	“{0}”已下载完成，把它从打开的文件夹拖到目标位置即可。	“{0}” has been downloaded; drag it from the open folder to where you want it.
+Mgr.DragOutFolderDone	已拖出整个文件夹：{0}	Dragged the whole folder out: {0}
+Mgr.DragOutFolderFailed	“{0}”有 {1} 个文件没能下载，没有拖出整个文件夹。	{1} files in “{0}” could not be downloaded, so the folder was not dragged out.
+Mgr.DragOutFolderPreparing	正在准备拖出文件夹…	Preparing to drag the folder out…
+Mgr.DragOutFolderReadFailed	无法读取这个文件夹的内容：	Could not read what is inside this folder: 
+Mgr.DragOutFolderReady	文件夹“{0}”已下载完成，把它拖到目标位置即可。	The folder “{0}” has been downloaded; drag it to where you want it.
+Mgr.DragOutFolderReadyAgain	“{0}”已经全部下载好了，再拖一次即可。	Everything in “{0}” has been downloaded; drag it again.
+Mgr.DragOutIncomplete	“{0}”没有下载完整，请再拖一次。	“{0}” did not download completely; drag it again.
+Mgr.DragOutReadyAgain	“{0}”已经下载好了，再拖一次即可。	“{0}” has been downloaded; drag it again.
+Mgr.DragOutRefused	无法拖出“{0}”：	“{0}” cannot be dragged out: 
+Mgr.DraggingOut	正在拖出：	Dragging out: 
+Mgr.DropNoUploadable	拖入的内容中没有可上传的文件。	Nothing you dropped can be uploaded.
+Mgr.DropToUploadHint	上传到 {0}:/{1}	Upload to {0}:/{1}
+Mgr.EmptyTrashEllipsis	清空回收站…	Empty the recycle bin…
+Mgr.EndpointDeleted	已删除端点：{0}。	Deleted the endpoint: {0}.
+Mgr.EndpointRenamed	已将端点“{0}”重命名为“{1}”。	Renamed the endpoint “{0}” to “{1}”.
+Mgr.EndpointRenamedWithProfiles	已将端点“{0}”重命名为“{1}”，并更新了 {2} 个同步任务的路径。	Renamed the endpoint “{0}” to “{1}” and updated the paths of {2} sync tasks.
+Mgr.EndpointsExported	已导出 {0} 个端点的非敏感配置；凭据未写入文件。	Exported the non-sensitive configuration of {0} endpoints; no credentials were written to the file.
+Mgr.ExportDiagnosticsTitle	导出诊断报告	Export diagnostics report
+Mgr.ExportEndpointsTitle	导出云盘端点	Export cloud endpoints
+Mgr.Exporting	正在导出…	Exporting…
+Mgr.ExternalMountManaged	该挂载由外部程序管理。Feng Sync 只读显示外部挂载，不会结束其进程或代为卸载。	This mount is managed by another program. Feng Sync shows it read-only and will not end its process or unmount it for you.
+Mgr.Favorite	收藏	Favorites
+Mgr.FileExistsPrompt	“{0}”已存在，是否覆盖？	“{0}” already exists. Overwrite it?
+Mgr.FileExistsTitle	文件已存在	The file already exists
+Mgr.FileReadFailed	无法读取文件：	Could not read the file: 
+Mgr.FolderCreated	已创建文件夹：{0}	Created the folder: {0}
+Mgr.FolderHasNoVersions	文件夹没有历史版本：版本是针对单个文件的。	Folders have no version history: versions belong to a single file.
+Mgr.HiddenEntries	已隐藏 {0} 条{1}，因为对应端点当前不在列表里。	Hid {0} {1} because their endpoint is not in the list right now.
+Mgr.ImportColumnCount	条数	Rows
+Mgr.ImportColumnLatest	最近一条	Latest
+Mgr.ImportColumnSucceeded	其中成功	Succeeded
+Mgr.ImportConfirm	将导入 {0} 个端点。每个端点都需要补填凭据，填写后取消的会被跳过。\n\n继续吗？	{0} endpoints will be imported. Each one needs its credentials filled in; any you cancel are skipped.\n\nContinue?
+Mgr.ImportDone	导入完成：{0} 个成功，{1} 个跳过。	Import finished: {0} succeeded, {1} skipped.
+Mgr.ImportEndpointsTitle	导入云盘端点	Import cloud endpoints
+Mgr.ImportFileEmpty	导出文件里没有端点。	The export file holds no endpoints.
+Mgr.ImportFileProblem	导入文件有问题	There is a problem with the import file
+Mgr.Importing	正在导入…	Importing…
+Mgr.ItemCount	共 {0} 项	{0} items
+Mgr.ItemCountFiltered	显示 {0} / {1} 项	Showing {0} / {1} items
+Mgr.ItemsDeleted	已删除 {0} 项。	Deleted {0} items.
+Mgr.ItemsDeletedPartial	已删除 {0} 项，{1} 项失败：{2}	Deleted {0} items; {1} failed: {2}
+Mgr.JsonFileFilter	JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*	JSON files (*.json)|*.json|All files (*.*)|*.*
+Mgr.JumpEndpointMissing	端点“{0}”已不在列表里，无法跳转。	The endpoint “{0}” is no longer in the list, so there is nowhere to jump.
+Mgr.ListView	列表视图	List view
+Mgr.MountAction	挂载	Mount
+Mgr.MountFailed	挂载失败：	The mount failed: 
+Mgr.MountRefreshFailed	刷新挂载失败：	Refreshing the mounts failed: 
+Mgr.Mounting	正在挂载 {0} → {1}…	Mounting {0} → {1}…
+Mgr.MovedItems	已移动 {0} 项	Moved {0} items
+Mgr.NewFolderEllipsis	新建文件夹…	New folder…
+Mgr.NewFolderFailedTitle	新建文件夹失败	Creating the folder failed
+Mgr.NewFolderPrompt	在当前目录 {0} 下新建文件夹，名称：	New folder in {0}, name:
+Mgr.NoEndpointForPreview	没有选中的云盘端点，读不到任何内容。	No cloud endpoint is selected, so there is nothing to read.
+Mgr.NoEndpointsToCheck	没有可检查的端点。	There are no endpoints to check.
+Mgr.NoEndpointsToExport	没有可导出的端点。	There are no endpoints to export.
+Mgr.NothingToPaste	没有可粘贴的项目。	There is nothing to paste.
+Mgr.NothingToUpload	没有可上传的文件。	There are no files to upload.
+Mgr.Open	打开	Open
+Mgr.OpenFailed	打开失败：	Opening failed: 
+Mgr.OpenedPrefix	已打开：	Opened: 
+Mgr.OpeningImportWizard	正在打开导入向导…	Opening the import wizard…
+Mgr.PasteCancelled	已取消粘贴。	Paste cancelled.
+Mgr.PasteDone	已{0} {1} 项，进入目标目录后点“粘贴”。	{0} {1} items; open the destination folder and click “Paste”.
+Mgr.PasteFailed	{0} 项失败：{1}	{0} items failed: {1}
+Mgr.PasteFoldersNotPasted	其中 {0} 个文件夹不会被粘贴：粘贴的单位是文件。	{0} folders will not be pasted: paste works on files, so open a folder and select the files inside it.
+Mgr.PasteRenamed	{0} 个同名文件改名为保留两者	{0} files with the same name were renamed to keep both
+Mgr.PasteSelectPrefix	请先选择要	Select the items you want to 
+Mgr.PasteSelectSuffix	的项目。	 first.
+Mgr.PasteSkipped	已跳过 {0} 个同名项目。	Skipped {0} items with the same name.
+Mgr.PickCloud	请选择一个云盘	Choose a cloud drive
+Mgr.PickCloudDirectory	请先选择一个云盘的目录。	Choose a folder on a cloud drive first.
+Mgr.PickCloudEndpointFirst	请先选择云端端点。	Choose a cloud endpoint first.
+Mgr.PickCloudFirst	请先选择云盘。	Choose a cloud drive first.
+Mgr.PickDownloadFolder	选择下载目录	Choose the download folder
+Mgr.PickFilesToUpload	选择要上传的文件	Choose the files to upload
+Mgr.PickFolderToUpload	选择要上传的文件夹	Choose the folder to upload
+Mgr.Preview	预览	Preview
+Mgr.PreviewPrefix	预览 · 	Preview · 
+Mgr.Properties	属性	Properties
+Mgr.PropertiesPrefix	属性 · 	Properties · 
+Mgr.QueuedCopy	已排队复制 {0} 个文件	Queued {0} files to copy
+Mgr.QueuedFiles	已加入传输队列：{0} 个文件。	Added {0} files to the transfer queue.
+Mgr.QueuedPrefix	已加入传输队列：	Added to the transfer queue: 
+Mgr.ReadDetails	读取详情	Read details
+Mgr.ReadingDirectory	正在读取目录…	Reading the folder…
+Mgr.ReadingEndpointConfig	正在读取端点配置…	Reading the endpoint configuration…
+Mgr.ReadingMounts	正在读取挂载状态…	Reading the mount state…
+Mgr.Recent	最近访问	Recent
+Mgr.RecycleEllipsis	移到回收站…	Move to recycle bin…
+Mgr.RecycleSelected	把所选的 {0} 项移到回收站…	Move the {0} selected items to the recycle bin…
+Mgr.RemoteEndpointsTitle	远程端点	Remote endpoints
+Mgr.RenameEllipsis	重命名…	Rename…
+Mgr.RenameEndpointPrompt	端点“{0}”的新名称（只能包含字母、数字、下划线或连字符）：	New name for the endpoint “{0}” (letters, digits, underscore or hyphen only):
+Mgr.RenameEndpointTitle	重命名端点	Rename endpoint
+Mgr.RenameFailedTitle	重命名失败	Renaming failed
+Mgr.RenamePrompt	“{0}”的新名称：	New name for “{0}”:
+Mgr.Renamed	已重命名为：{0}	Renamed to: {0}
+Mgr.Renaming	正在重命名…	Renaming…
+Mgr.RenamingItem	正在重命名“{0}”…	Renaming “{0}”…
+Mgr.RestoreEllipsis	还原…	Restore…
+Mgr.RestoreSelected	还原所选的 {0} 项…	Restore the {0} selected items…
+Mgr.SavingOrganization	正在保存分组与标签…	Saving the group and tags…
+Mgr.SearchFailedTitle	搜索失败	Search failed
+Mgr.SearchFound	找到 {0} 项	Found {0} items
+Mgr.SearchNoMatch	没有匹配“{0}”的内容。	Nothing matches “{0}”.
+Mgr.SearchTruncated	（已达上限 {0} 项，请缩小范围）	(stopped at {0} items; narrow the search)
+Mgr.SearchingIn	正在“{0}”内搜索“{1}”…	Searching “{0}” for “{1}”…
+Mgr.SelectEndpointToCheck	请先选择要检查的端点。	Select the endpoint you want to check.
+Mgr.SelectEndpointToDelete	请先选择要删除的端点。	Select the endpoint you want to delete.
+Mgr.SelectEndpointToMount	请先选择要挂载的端点。	Select the endpoint you want to mount.
+Mgr.SelectEndpointToOrganize	请先选择要设置分组与标签的端点。	Select the endpoint whose group and tags you want to set.
+Mgr.SelectEndpointToRename	请先选择要重命名的端点。	Select the endpoint you want to rename.
+Mgr.SelectFilesToDownload	请先选择要下载的文件；文件夹请先进入后再选择其中的文件。	Select the files you want to download; to take files out of a folder, open it first.
+Mgr.SelectItemsToDelete	请先选择要删除的项目。	Select the items you want to delete.
+Mgr.SelectItemsToRecycle	请先选择要移到回收站的项目。	Select the items you want to move to the recycle bin.
+Mgr.SelectItemsToRestore	请先选择要还原的项目。	Select the items you want to restore.
+Mgr.SelectMountToUnmount	请先选择要取消的挂载。	Select the mount you want to unmount.
+Mgr.SelectSingleItemToRename	请先选择要重命名的单个项目。	Select the single item you want to rename.
+Mgr.SelectTargetCloud	请先选择要粘贴到的云盘。	Choose the cloud drive you want to paste into.
+Mgr.SelectionProperties	所选项目的属性	Properties of the selected items
+Mgr.SomeMountsUnfinished	部分挂载未完成：\n	Some mounts were not unmounted:\n
+Mgr.TargetReadFailed	无法读取目标目录	Could not read the destination folder
+Mgr.TextFileFilter	文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*	Text files (*.txt)|*.txt|All files (*.*)|*.*
+Mgr.TransferIncomplete	传输未完成。	The transfer did not finish.
+Mgr.TrashEmpty	回收站是空的，没有可删除的项目。	The recycle bin is empty, so there is nothing to delete.
+Mgr.TrashOpenFailed	无法打开回收站	Could not open the recycle bin
+Mgr.Unfavorite	取消收藏	Remove from favorites
+Mgr.UnmountFailed	取消挂载失败：	Unmounting failed: 
+Mgr.Unmounted	已取消挂载：{0}。	Unmounted {0}.
+Mgr.Unmounting	正在取消挂载：{0}…	Unmounting {0}…
+Mgr.UploadCancelled	已取消上传。	Upload cancelled.
+Mgr.UploadRenamed	其中 {0} 个同名文件改名为保留两者。	{0} files with the same name were renamed to keep both.
+Mgr.UploadSkipped	已跳过 {0} 个同名文件。	Skipped {0} files with the same name.
+Mgr.UploadSkippedAll	已跳过全部同名文件。	Skipped every file with the same name.
+Mgr.UploadTargetReadFailed	无法读取目标目录：	Could not read the destination folder: 
+Mgr.ViewPreferenceSaveFailed	无法记住视图选择：	Could not remember the view choice: 
+Mgr.ViewPropertiesSelected	查看所选 {0} 项的属性	View the properties of the {0} selected items
