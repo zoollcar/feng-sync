@@ -1738,6 +1738,9 @@ Delete the endpoint anyway?</value>
   <data name="Mgr.EndpointRenamedWithProfiles" xml:space="preserve">
     <value>Renamed the endpoint “{0}” to “{1}” and updated the paths of {2} sync tasks.</value>
   </data>
+  <data name="Mgr.EndpointRowLabel" xml:space="preserve">
+    <value>Endpoint</value>
+  </data>
   <data name="Mgr.EndpointSortByName" xml:space="preserve">
     <value>Cloud endpoint sort order</value>
   </data>
@@ -1759,7 +1762,7 @@ Delete the endpoint anyway?</value>
   <data name="Mgr.EndpointsFiltered" xml:space="preserve">
     <value>Filtered by "{0}", showing {1} / {2} endpoints.</value>
   </data>
-  <data name="Mgr.EndpointsGroup" xml:space="preserve">
+  <data name="Mgr.EndpointsTab" xml:space="preserve">
     <value>Cloud endpoints</value>
   </data>
   <data name="Mgr.Export" xml:space="preserve">
@@ -1809,6 +1812,9 @@ Delete the endpoint anyway?</value>
   </data>
   <data name="Mgr.FileReadFailed" xml:space="preserve">
     <value>Could not read the file: </value>
+  </data>
+  <data name="Mgr.FileRowLabel" xml:space="preserve">
+    <value>File</value>
   </data>
   <data name="Mgr.FolderCreated" xml:space="preserve">
     <value>Created the folder: {0}</value>
@@ -1899,6 +1905,9 @@ Continue?</value>
   <data name="Mgr.JumpEndpointMissing" xml:space="preserve">
     <value>The endpoint “{0}” is no longer in the list, so there is nowhere to jump.</value>
   </data>
+  <data name="Mgr.LeftTabsName" xml:space="preserve">
+    <value>Cloud endpoints and mount management</value>
+  </data>
   <data name="Mgr.ListView" xml:space="preserve">
     <value>List view</value>
   </data>
@@ -1944,7 +1953,7 @@ Continue?</value>
   <data name="Mgr.Mounting" xml:space="preserve">
     <value>Mounting {0} → {1}…</value>
   </data>
-  <data name="Mgr.MountsGroup" xml:space="preserve">
+  <data name="Mgr.MountsTab" xml:space="preserve">
     <value>Mount management</value>
   </data>
   <data name="Mgr.MoveToTrash" xml:space="preserve">
@@ -1952,6 +1961,9 @@ Continue?</value>
   </data>
   <data name="Mgr.MovedItems" xml:space="preserve">
     <value>Moved {0} items</value>
+  </data>
+  <data name="Mgr.NavigationRowLabel" xml:space="preserve">
+    <value>Navigate</value>
   </data>
   <data name="Mgr.NewEndpoint" xml:space="preserve">
     <value>New endpoint</value>
@@ -2030,6 +2042,9 @@ Continue?</value>
   </data>
   <data name="Mgr.OrganizeEndpointName" xml:space="preserve">
     <value>Set the group and tags of the selected cloud endpoint</value>
+  </data>
+  <data name="Mgr.OrganizeRowLabel" xml:space="preserve">
+    <value>Organize</value>
   </data>
   <data name="Mgr.Paste" xml:space="preserve">
     <value>Paste</value>
@@ -2180,6 +2195,9 @@ It will be cancelled first and then mounted once more with the same settings.</v
   </data>
   <data name="Mgr.ReconnectingMount" xml:space="preserve">
     <value>Remounting {0}…</value>
+  </data>
+  <data name="Mgr.RecoveryRowLabel" xml:space="preserve">
+    <value>Recover</value>
   </data>
   <data name="Mgr.RecycleEllipsis" xml:space="preserve">
     <value>Move to recycle bin…</value>
@@ -2369,6 +2387,9 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.Subtitle" xml:space="preserve">
     <value>Manage cloud endpoints and mounts, and browse and transfer files.</value>
   </data>
+  <data name="Mgr.SyncRowLabel" xml:space="preserve">
+    <value>Sync</value>
+  </data>
   <data name="Mgr.SyncTaskCancelled" xml:space="preserve">
     <value>Creating the sync job was cancelled.</value>
   </data>
@@ -2408,11 +2429,17 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.ToggleViewName" xml:space="preserve">
     <value>Switch between the list view and the grid view</value>
   </data>
+  <data name="Mgr.ToolsLabel" xml:space="preserve">
+    <value>Tools</value>
+  </data>
   <data name="Mgr.TransferIncomplete" xml:space="preserve">
     <value>The transfer did not finish.</value>
   </data>
   <data name="Mgr.TransferProgressName" xml:space="preserve">
     <value>File transfer progress</value>
+  </data>
+  <data name="Mgr.TransferRowLabel" xml:space="preserve">
+    <value>Transfer</value>
   </data>
   <data name="Mgr.Trash" xml:space="preserve">
     <value>Recycle bin</value>

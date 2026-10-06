@@ -1738,6 +1738,9 @@ Rclone：MIT License</value>
   <data name="Mgr.EndpointRenamedWithProfiles" xml:space="preserve">
     <value>已将端点“{0}”重命名为“{1}”，并更新了 {2} 个同步任务的路径。</value>
   </data>
+  <data name="Mgr.EndpointRowLabel" xml:space="preserve">
+    <value>端点</value>
+  </data>
   <data name="Mgr.EndpointSortByName" xml:space="preserve">
     <value>云盘端点排序依据</value>
   </data>
@@ -1759,7 +1762,7 @@ Rclone：MIT License</value>
   <data name="Mgr.EndpointsFiltered" xml:space="preserve">
     <value>已按“{0}”过滤，显示 {1} / {2} 个端点。</value>
   </data>
-  <data name="Mgr.EndpointsGroup" xml:space="preserve">
+  <data name="Mgr.EndpointsTab" xml:space="preserve">
     <value>云盘端点</value>
   </data>
   <data name="Mgr.Export" xml:space="preserve">
@@ -1809,6 +1812,9 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.FileReadFailed" xml:space="preserve">
     <value>无法读取文件：</value>
+  </data>
+  <data name="Mgr.FileRowLabel" xml:space="preserve">
+    <value>文件</value>
   </data>
   <data name="Mgr.FolderCreated" xml:space="preserve">
     <value>已创建文件夹：{0}</value>
@@ -1899,6 +1905,9 @@ Rclone：MIT License</value>
   <data name="Mgr.JumpEndpointMissing" xml:space="preserve">
     <value>端点“{0}”已不在列表里，无法跳转。</value>
   </data>
+  <data name="Mgr.LeftTabsName" xml:space="preserve">
+    <value>云盘端点和挂载管理</value>
+  </data>
   <data name="Mgr.ListView" xml:space="preserve">
     <value>列表视图</value>
   </data>
@@ -1944,7 +1953,7 @@ Rclone：MIT License</value>
   <data name="Mgr.Mounting" xml:space="preserve">
     <value>正在挂载 {0} → {1}…</value>
   </data>
-  <data name="Mgr.MountsGroup" xml:space="preserve">
+  <data name="Mgr.MountsTab" xml:space="preserve">
     <value>挂载管理</value>
   </data>
   <data name="Mgr.MoveToTrash" xml:space="preserve">
@@ -1952,6 +1961,9 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.MovedItems" xml:space="preserve">
     <value>已移动 {0} 项</value>
+  </data>
+  <data name="Mgr.NavigationRowLabel" xml:space="preserve">
+    <value>导航</value>
   </data>
   <data name="Mgr.NewEndpoint" xml:space="preserve">
     <value>新建端点</value>
@@ -2030,6 +2042,9 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.OrganizeEndpointName" xml:space="preserve">
     <value>设置所选云盘端点的分组与标签</value>
+  </data>
+  <data name="Mgr.OrganizeRowLabel" xml:space="preserve">
+    <value>整理</value>
   </data>
   <data name="Mgr.Paste" xml:space="preserve">
     <value>粘贴</value>
@@ -2180,6 +2195,9 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.ReconnectingMount" xml:space="preserve">
     <value>正在重新挂载 {0}…</value>
+  </data>
+  <data name="Mgr.RecoveryRowLabel" xml:space="preserve">
+    <value>恢复</value>
   </data>
   <data name="Mgr.RecycleEllipsis" xml:space="preserve">
     <value>移到回收站…</value>
@@ -2369,6 +2387,9 @@ Rclone：MIT License</value>
   <data name="Mgr.Subtitle" xml:space="preserve">
     <value>管理云盘端点与挂载，并浏览和传输文件。</value>
   </data>
+  <data name="Mgr.SyncRowLabel" xml:space="preserve">
+    <value>同步</value>
+  </data>
   <data name="Mgr.SyncTaskCancelled" xml:space="preserve">
     <value>已取消创建同步任务。</value>
   </data>
@@ -2408,11 +2429,17 @@ Rclone：MIT License</value>
   <data name="Mgr.ToggleViewName" xml:space="preserve">
     <value>在列表视图与网格视图之间切换</value>
   </data>
+  <data name="Mgr.ToolsLabel" xml:space="preserve">
+    <value>工具</value>
+  </data>
   <data name="Mgr.TransferIncomplete" xml:space="preserve">
     <value>传输未完成。</value>
   </data>
   <data name="Mgr.TransferProgressName" xml:space="preserve">
     <value>文件传输进度</value>
+  </data>
+  <data name="Mgr.TransferRowLabel" xml:space="preserve">
+    <value>传输</value>
   </data>
   <data name="Mgr.Trash" xml:space="preserve">
     <value>回收站</value>

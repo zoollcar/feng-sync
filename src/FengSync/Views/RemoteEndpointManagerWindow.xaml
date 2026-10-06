@@ -5,9 +5,9 @@
         xmlns:services="clr-namespace:FengSync.Services"
         xmlns:l="clr-namespace:FengSync.Localization"
         Title="{Binding [Mgr.WindowTitle], Source={l:Lang}}"
-        Width="1280"
-        Height="820"
-        MinWidth="1000"
+        Width="1440"
+        Height="860"
+        MinWidth="1080"
         MinHeight="640"
         WindowStartupLocation="CenterOwner"
         AutomationProperties.AutomationId="RemoteEndpointManagerWindow"
@@ -38,115 +38,198 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
+        <!-- The endpoint row, shared by the tab that lists the endpoints and the tab that mounts them. One
+             definition is what keeps the two drawings from drifting.
+             Four lines per row: the group heading when this row starts one, the endpoint, whether it still
+             answers, and its quota. The heading is part of the row rather than a WPF group header — grouping
+             through the view makes the selector's own items the group objects, and the file browser hangs off
+             the selected endpoint. The failure reason stays in the tooltip so a long error cannot stretch the
+             list. -->
+        <DataTemplate x:Key="EndpointRowTemplate">
+            <StackPanel Margin="0,3">
+                <TextBlock Text="{Binding GroupHeading}" Margin="0,6,0,2" FontWeight="SemiBold">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+                            <!-- Collapsed rather than empty: a blank line would still leave the gap. -->
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsGroupStart}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Text="{Binding Display}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding StatusText}" Style="{StaticResource CaptionTextStyle}" ToolTip="{Binding Detail}" />
+                <TextBlock Text="{Binding QuotaText}" Style="{StaticResource CaptionTextStyle}" />
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
     <Grid Margin="18">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="340" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+        <!-- Responsive left column. A fixed 340 px column cannot fit the endpoint actions: the widest
+             ("分组与标签…", measured at 134 px) plus its neighbours needs more than that, and the WrapPanel
+             then breaks a row that has nowhere to go. The width is therefore a fraction of the window,
+             clamped so it can never collapse (MinWidth) nor starve the browser (the 0.48 star also caps at
+             ~880 px on a very wide screen, where 48% would be wasteful).
+             MinWidth was raised from 360 to 420 when the tabs went in: the toolbar rows are WrapPanels, so a
+             column that is a little too narrow does not clip — it wraps, which is the "buttons stacked in a
+             pile" the report was about. Measured: at 360 px the four endpoint toolbar rows wrapped 3 times
+             (导出…/导入…/导出诊断… on one line, 删除 alone on the next). 420 is the narrowest that keeps each
+             of the four rows on one line, with the tab strip's own padding taken off first. -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="0.48*" MinWidth="420" MaxWidth="880" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" MinWidth="420" />
+        </Grid.ColumnDefinitions>
         <Grid Grid.Column="0">
-            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <!-- Two tabs, not two stacked groups, and that is the fix for「左侧现有显示不出来」.
+                 The column used to stack the endpoint manager and the mount manager vertically. Both are
+                 content-sized, and together they measure ~1300 px against the ~1010 px the tallest window on a
+                 1080p screen can give (working area 1020 px): whichever way the two are laid out, one of them
+                 ends up past the bottom edge with nothing able to reach it - a ScrollViewer cannot help,
+                 because the window itself is the clip rectangle.
+                 Stacking was also the wrong shape for the content. The two halves are separate jobs (which
+                 endpoints exist vs which of them are mounted right now), and neither is a footnote to the
+                 other, so the honest fix is to show one at a time. Each tab then gets the whole column height
+                 and neither can push the other off the screen. It also removes the "wall of buttons" the report
+                 was about: each tab shows only the toolbar for the thing it is about.
+                 Unlike the earlier attempt, there is no ScrollViewer around the whole column. It was tried and
+                 made things worse: a scrollbar takes width, which narrows the content, which pushes a
+                 fixed-width row out past the column edge. With one tab visible there is nothing to scroll. -->
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
             <StackPanel>
                 <TextBlock Text="{Binding [Mgr.WindowTitle], Source={l:Lang}}" Style="{StaticResource DisplayTitleTextStyle}" />
                 <TextBlock Text="{Binding [Mgr.Subtitle], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
             </StackPanel>
-            <GroupBox Grid.Row="1" Header="{Binding [Mgr.EndpointsGroup], Source={l:Lang}}" Margin="0,12,0,0">
-                <Grid>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                    <!-- A WrapPanel rather than a StackPanel: the left column is 340 px, and the endpoint
-                         actions must degrade to a second line instead of being clipped. -->
-                    <WrapPanel Margin="4,4,4,6">
-                        <TextBlock Text="{Binding [Mgr.Search], Source={l:Lang}}" VerticalAlignment="Center" />
-                        <TextBox x:Name="EndpointSearchBox" AutomationProperties.AutomationId="CloudEndpointSearch" AutomationProperties.Name="{Binding [Mgr.SearchEndpointsName], Source={l:Lang}}" Width="120" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="EndpointSearch_TextChanged" />
-                        <TextBlock Text="{Binding [Mgr.Sort], Source={l:Lang}}" VerticalAlignment="Center" Margin="12,0,0,0" />
-                        <ComboBox x:Name="EndpointSortBox" AutomationProperties.AutomationId="CloudEndpointSort" AutomationProperties.Name="{Binding [Mgr.EndpointSortByName], Source={l:Lang}}" Width="92" Margin="8,0,0,0" SelectionChanged="EndpointSort_Changed" />
-                        <Button x:Name="EndpointSortDirectionButton" AutomationProperties.AutomationId="CloudEndpointSortDirection" AutomationProperties.Name="{Binding [Mgr.ToggleEndpointSortDirectionName], Source={l:Lang}}" Content="{Binding [Mgr.Ascending], Source={l:Lang}}" Click="EndpointSortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                        <Button x:Name="CheckAllButton" AutomationProperties.AutomationId="CheckAllCloudEndpoints" AutomationProperties.Name="{Binding [Mgr.TestAllName], Source={l:Lang}}" Content="{Binding [Mgr.TestAll], Source={l:Lang}}" Click="CheckAll_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button x:Name="ExportEndpointsButton" AutomationProperties.AutomationId="ExportCloudEndpoints" AutomationProperties.Name="{Binding [Mgr.ExportAllName], Source={l:Lang}}" Content="{Binding [Mgr.Export], Source={l:Lang}}" Click="ExportEndpoints_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                        <Button x:Name="ImportEndpointsButton" AutomationProperties.AutomationId="ImportCloudEndpoints" AutomationProperties.Name="{Binding [Mgr.ImportName], Source={l:Lang}}" Content="{Binding [Mgr.Import], Source={l:Lang}}" Click="ImportEndpoints_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                        <!-- E3: a support report is a machine-level side effect (it asks rclone for its version
-                             and reads today's log), so the two answers it needs are both seams below. -->
-                        <Button x:Name="ExportDiagnosticsButton" AutomationProperties.AutomationId="ExportCloudDiagnostics" AutomationProperties.Name="{Binding [Mgr.ExportDiagnosticsName], Source={l:Lang}}" Content="{Binding [Mgr.ExportDiagnostics], Source={l:Lang}}" Click="ExportDiagnostics_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                    </WrapPanel>
-                    <ListBox Grid.Row="1" x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="{Binding [Mgr.EndpointListName], Source={l:Lang}}" BorderThickness="0" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <!-- Four lines per row: the group heading when this row starts one, the endpoint,
-                                     whether it still answers, and its quota. The heading is part of the row rather
-                                     than a WPF group header: grouping through the view makes the selector's own
-                                     items the group objects, and the file browser hangs off the selected endpoint.
-                                     The failure reason stays in the tooltip so a long error cannot stretch the list. -->
-                                <StackPanel Margin="0,3">
-                                    <TextBlock Text="{Binding GroupHeading}" Margin="0,6,0,2" FontWeight="SemiBold">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
-                                                <!-- Collapsed rather than empty: a blank line would still leave the gap. -->
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsGroupStart}" Value="True">
-                                                        <Setter Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <TextBlock Text="{Binding Display}" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource CaptionTextStyle}" ToolTip="{Binding Detail}" />
-                                    <TextBlock Text="{Binding QuotaText}" Style="{StaticResource CaptionTextStyle}" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Grid>
-            </GroupBox>
-            <StackPanel Grid.Row="2" Margin="0,10,0,0">
-                <StackPanel Orientation="Horizontal">
-                    <Button x:Name="NewButton" AutomationProperties.Name="{Binding [Mgr.NewEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.NewEndpoint], Source={l:Lang}}" Click="New_Click" Style="{StaticResource PrimaryButtonStyle}" />
-                    <Button x:Name="EditButton" AutomationProperties.AutomationId="EditCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.EditEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.EditEndpoint], Source={l:Lang}}" Click="Edit_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                    <Button x:Name="RefreshButton" AutomationProperties.Name="{Binding [Mgr.RefreshListName], Source={l:Lang}}" Content="{Binding [Mgr.RefreshList], Source={l:Lang}}" Click="Refresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                </StackPanel>
-                <WrapPanel Margin="0,8,0,0">
-                    <!-- Collapsed unless the selected endpoint is Google Drive: only that backend needs an
-                         interactive browser authorization, so for SFTP/S3 the button would lead nowhere. -->
-                    <Button x:Name="ReconnectButton" AutomationProperties.Name="{Binding [Mgr.ReconnectEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.ReconnectEndpoint], Source={l:Lang}}" Click="Reconnect_Click" Visibility="Collapsed" Style="{StaticResource SecondaryButtonStyle}" />
-                    <Button x:Name="CheckButton" AutomationProperties.AutomationId="CheckCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.CheckEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.CheckEndpoint], Source={l:Lang}}" Click="Check_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                    <Button x:Name="RenameEndpointButton" AutomationProperties.AutomationId="RenameCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.RenameEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.Rename], Source={l:Lang}}" Click="RenameEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                    <Button x:Name="OrganizeEndpointButton" AutomationProperties.AutomationId="OrganizeCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.OrganizeEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.OrganizeEndpoint], Source={l:Lang}}" Click="OrganizeEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                    <!-- E1: the one command that leaves endpoint management for sync management. The cloud side
-                         is filled from the directory the browser is on (see CloudSyncTask); the local side is
-                         deliberately left blank for the user to pick in the profile editor that opens. -->
-                    <Button x:Name="CreateSyncTaskButton" AutomationProperties.AutomationId="CreateCloudSyncTask" AutomationProperties.Name="{Binding [Mgr.CreateSyncTaskName], Source={l:Lang}}" Content="{Binding [Mgr.CreateSyncTask], Source={l:Lang}}" Click="CreateSyncTask_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                    <!-- E2: the same task with both sides chosen by hand. It needs no selected endpoint, which
-                         is why it lives here but is never disabled — the wizard is how a first cloud task gets
-                         made before any endpoint row has been picked. -->
-                    <Button x:Name="SyncWizardButton" AutomationProperties.AutomationId="OpenCloudSyncWizard" AutomationProperties.Name="{Binding [Mgr.SyncWizardName], Source={l:Lang}}" Content="{Binding [Mgr.SyncWizard], Source={l:Lang}}" Click="SyncWizard_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
-                    <Button x:Name="DeleteButton" AutomationProperties.Name="{Binding [Mgr.DeleteEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.Delete], Source={l:Lang}}" Click="Delete_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-                </WrapPanel>
-            </StackPanel>
-            <GroupBox Grid.Row="3" Header="{Binding [Mgr.MountsGroup], Source={l:Lang}}" Margin="0,14,0,0">
-                <StackPanel Margin="4">
-                    <ListBox x:Name="MountsList" AutomationProperties.Name="{Binding [Mgr.MountListName], Source={l:Lang}}" Height="110" SelectionChanged="MountsList_SelectionChanged" DisplayMemberPath="Display" />
-                    <WrapPanel Margin="0,8,0,0">
-                        <Button x:Name="RefreshMountsButton" AutomationProperties.Name="{Binding [Mgr.RefreshMountsName], Source={l:Lang}}" Content="{Binding [Mgr.Refresh], Source={l:Lang}}" Click="RefreshMounts_Click" Style="{StaticResource TertiaryButtonStyle}" />
-                        <Button x:Name="MountSelectedEndpointButton" AutomationProperties.Name="{Binding [Mgr.MountEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.MountEndpoint], Source={l:Lang}}" Click="MountSelectedEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
-                        <Button x:Name="UnmountMountButton" AutomationProperties.Name="{Binding [Mgr.UnmountName], Source={l:Lang}}" Content="{Binding [Mgr.Unmount], Source={l:Lang}}" Click="UnmountMount_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-                        <Button x:Name="RestoreMountsButton" AutomationProperties.AutomationId="RestoreCloudMounts" AutomationProperties.Name="{Binding [Mgr.RestoreMountsName], Source={l:Lang}}" Content="{Binding [Mgr.RestoreMounts], Source={l:Lang}}" Click="RestoreMounts_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button x:Name="ReconnectMountButton" AutomationProperties.AutomationId="ReconnectCloudMount" AutomationProperties.Name="{Binding [Mgr.ReconnectMountName], Source={l:Lang}}" Content="{Binding [Mgr.ReconnectMount], Source={l:Lang}}" Click="ReconnectMount_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button x:Name="ClearMountCacheButton" AutomationProperties.AutomationId="ClearCloudMountCache" AutomationProperties.Name="{Binding [Mgr.ClearCacheName], Source={l:Lang}}" Content="{Binding [Mgr.ClearCache], Source={l:Lang}}" Click="ClearMountCache_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                    </WrapPanel>
-                    <CheckBox x:Name="AutoMountBox"
-                              AutomationProperties.AutomationId="CloudMountAutoMount"
-                              AutomationProperties.Name="{Binding [Mgr.AutoMountName], Source={l:Lang}}"
-                              Content="{Binding [Mgr.AutoMount], Source={l:Lang}}"
-                              Margin="0,8,0,0"
-                              Checked="AutoMount_Changed"
-                              Unchecked="AutoMount_Changed" />
-                    <TextBlock x:Name="MountPendingText" AutomationProperties.AutomationId="CloudMountPending" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
-                    <TextBlock x:Name="MountCacheText" AutomationProperties.AutomationId="CloudMountCache" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
-                    <TextBlock x:Name="MountStatus" AutomationProperties.AutomationId="CloudMountStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
-                </StackPanel>
-            </GroupBox>
+            <TabControl Grid.Row="1" x:Name="LeftTabs" Margin="0,12,0,0"
+                        AutomationProperties.AutomationId="CloudLeftTabs"
+                        AutomationProperties.Name="{Binding [Mgr.LeftTabsName], Source={l:Lang}}">
+                <TabItem Header="{Binding [Mgr.EndpointsTab], Source={l:Lang}}"
+                         AutomationProperties.AutomationId="CloudEndpointsTab"
+                         AutomationProperties.Name="{Binding [Mgr.EndpointsTab], Source={l:Lang}}">
+                    <Grid Margin="8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <!-- The query line: what the list is showing, and nothing that changes it. It used to
+                             also carry 测试全部 / 导入 / 导出 / 导出诊断, which is why it wrapped into three lines
+                             and pushed the widest action button into the next column. Those four moved to the
+                             工具 row below, where they are labels for a question rather than part of a query. -->
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding [Mgr.Search], Source={l:Lang}}" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" x:Name="EndpointSearchBox" AutomationProperties.AutomationId="CloudEndpointSearch" AutomationProperties.Name="{Binding [Mgr.SearchEndpointsName], Source={l:Lang}}" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="EndpointSearch_TextChanged" />
+                            <TextBlock Grid.Column="2" Text="{Binding [Mgr.Sort], Source={l:Lang}}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                            <ComboBox Grid.Column="3" x:Name="EndpointSortBox" AutomationProperties.AutomationId="CloudEndpointSort" AutomationProperties.Name="{Binding [Mgr.EndpointSortByName], Source={l:Lang}}" Margin="8,0,0,0" SelectionChanged="EndpointSort_Changed" />
+                            <Button Grid.Column="4" x:Name="EndpointSortDirectionButton" AutomationProperties.AutomationId="CloudEndpointSortDirection" AutomationProperties.Name="{Binding [Mgr.ToggleEndpointSortDirectionName], Source={l:Lang}}" Content="{Binding [Mgr.Ascending], Source={l:Lang}}" Click="EndpointSortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                        </Grid>
+                        <!-- The tab's own list, which takes whatever the four toolbar rows leave. Its row
+                             template is a shared resource: the mount tab draws the same four-line row for the
+                             endpoints it can mount, and one definition is what keeps the two from drifting. -->
+                        <ListBox Grid.Row="1" x:Name="EndpointList" AutomationProperties.AutomationId="CloudEndpointList" AutomationProperties.Name="{Binding [Mgr.EndpointListName], Source={l:Lang}}" BorderThickness="0" Margin="0,8,0,0" MinHeight="120" SelectionMode="Single" SelectionChanged="EndpointList_SelectionChanged" ItemTemplate="{StaticResource EndpointRowTemplate}" />
+                        <!-- The endpoint commands were one flat WrapPanel, which read as an undifferentiated
+                             pile and broke wherever the width happened to run out. They are now four labelled
+                             rows, each saying what its buttons have in common: a question about every endpoint
+                             (工具), one endpoint, filing them, and handing off to sync. Still WrapPanels, because
+                             the column is responsive and a row must be able to take a second line rather than be
+                             clipped. -->
+                        <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                            <!-- 工具 leads its own row rather than sitting inline: 测试全部 / 导出 / 导入 / 导出诊断
+                                 are the widest four labels in the column, and the label in front of them was the
+                                 thing that pushed 导出诊断 onto a second line at the narrow end. -->
+                            <TextBlock Text="{Binding [Mgr.ToolsLabel], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}" Margin="0,0,0,4" />
+                            <WrapPanel>
+                                <Button x:Name="CheckAllButton" AutomationProperties.AutomationId="CheckAllCloudEndpoints" AutomationProperties.Name="{Binding [Mgr.TestAllName], Source={l:Lang}}" Content="{Binding [Mgr.TestAll], Source={l:Lang}}" Click="CheckAll_Click" Style="{StaticResource SecondaryButtonStyle}" />
+                                <Button x:Name="ExportEndpointsButton" AutomationProperties.AutomationId="ExportCloudEndpoints" AutomationProperties.Name="{Binding [Mgr.ExportAllName], Source={l:Lang}}" Content="{Binding [Mgr.Export], Source={l:Lang}}" Click="ExportEndpoints_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                                <Button x:Name="ImportEndpointsButton" AutomationProperties.AutomationId="ImportCloudEndpoints" AutomationProperties.Name="{Binding [Mgr.ImportName], Source={l:Lang}}" Content="{Binding [Mgr.Import], Source={l:Lang}}" Click="ImportEndpoints_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                                <!-- E3: a support report is a machine-level side effect (it asks rclone for its
+                                     version and reads today's log), so the two answers it needs are both seams. -->
+                                <Button x:Name="ExportDiagnosticsButton" AutomationProperties.AutomationId="ExportCloudDiagnostics" AutomationProperties.Name="{Binding [Mgr.ExportDiagnosticsName], Source={l:Lang}}" Content="{Binding [Mgr.ExportDiagnostics], Source={l:Lang}}" Click="ExportDiagnostics_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                            </WrapPanel>
+                            <WrapPanel Margin="0,6,0,0">
+                                <TextBlock Text="{Binding [Mgr.EndpointRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
+                                <Button x:Name="NewButton" AutomationProperties.Name="{Binding [Mgr.NewEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.NewEndpoint], Source={l:Lang}}" Click="New_Click" Style="{StaticResource PrimaryButtonStyle}" />
+                                <Button x:Name="EditButton" AutomationProperties.AutomationId="EditCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.EditEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.EditEndpoint], Source={l:Lang}}" Click="Edit_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                                <Button x:Name="CheckButton" AutomationProperties.AutomationId="CheckCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.CheckEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.CheckEndpoint], Source={l:Lang}}" Click="Check_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                                <!-- Collapsed unless the selected endpoint is Google Drive: only that backend
+                                     needs an interactive browser authorization, so for SFTP/S3 the button would
+                                     lead nowhere. -->
+                                <Button x:Name="ReconnectButton" AutomationProperties.Name="{Binding [Mgr.ReconnectEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.ReconnectEndpoint], Source={l:Lang}}" Click="Reconnect_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                            </WrapPanel>
+                            <WrapPanel Margin="0,6,0,0">
+                                <TextBlock Text="{Binding [Mgr.OrganizeRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
+                                <Button x:Name="RenameEndpointButton" AutomationProperties.AutomationId="RenameCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.RenameEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.Rename], Source={l:Lang}}" Click="RenameEndpoint_Click" Style="{StaticResource SecondaryButtonStyle}" />
+                                <Button x:Name="OrganizeEndpointButton" AutomationProperties.AutomationId="OrganizeCloudEndpoint" AutomationProperties.Name="{Binding [Mgr.OrganizeEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.OrganizeEndpoint], Source={l:Lang}}" Click="OrganizeEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                                <Button x:Name="RefreshButton" AutomationProperties.Name="{Binding [Mgr.RefreshListName], Source={l:Lang}}" Content="{Binding [Mgr.RefreshList], Source={l:Lang}}" Click="Refresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                                <Button x:Name="DeleteButton" AutomationProperties.Name="{Binding [Mgr.DeleteEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.Delete], Source={l:Lang}}" Click="Delete_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+                            </WrapPanel>
+                            <!-- E1 and E2 leave endpoint management for sync management, which is a different kind
+                                 of act from the six above, so they sit under their own label. E2 needs no selected
+                                 endpoint, which is why it lives here but is never disabled - the wizard is how a
+                                 first cloud task gets made before any endpoint row has been picked. -->
+                            <WrapPanel Margin="0,6,0,0">
+                                <TextBlock Text="{Binding [Mgr.SyncRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
+                                <Button x:Name="SyncWizardButton" AutomationProperties.AutomationId="OpenCloudSyncWizard" AutomationProperties.Name="{Binding [Mgr.SyncWizardName], Source={l:Lang}}" Content="{Binding [Mgr.SyncWizard], Source={l:Lang}}" Click="SyncWizard_Click" Style="{StaticResource PrimaryButtonStyle}" />
+                                <!-- E1: the cloud side is filled from the directory the browser is on (see
+                                     CloudSyncTask); the local side is left blank for the user to pick. -->
+                                <Button x:Name="CreateSyncTaskButton" AutomationProperties.AutomationId="CreateCloudSyncTask" AutomationProperties.Name="{Binding [Mgr.CreateSyncTaskName], Source={l:Lang}}" Content="{Binding [Mgr.CreateSyncTask], Source={l:Lang}}" Click="CreateSyncTask_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
+                <TabItem Header="{Binding [Mgr.MountsTab], Source={l:Lang}}"
+                         AutomationProperties.AutomationId="CloudMountsTab"
+                         AutomationProperties.Name="{Binding [Mgr.MountsTab], Source={l:Lang}}">
+                    <Grid Margin="8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <ListBox Grid.Row="0" x:Name="MountsList" AutomationProperties.Name="{Binding [Mgr.MountListName], Source={l:Lang}}" MinHeight="110" SelectionChanged="MountsList_SelectionChanged" DisplayMemberPath="Display" />
+                        <StackPanel Grid.Row="1" Margin="0,10,0,0">
+                            <!-- 刷新 belongs with the list it refreshes rather than with the three repairs below,
+                                 so it stays on this row and the row that follows carries only recovery actions. -->
+                            <WrapPanel>
+                                <Button x:Name="RefreshMountsButton" AutomationProperties.Name="{Binding [Mgr.RefreshMountsName], Source={l:Lang}}" Content="{Binding [Mgr.Refresh], Source={l:Lang}}" Click="RefreshMounts_Click" Style="{StaticResource TertiaryButtonStyle}" />
+                                <Button x:Name="MountSelectedEndpointButton" AutomationProperties.Name="{Binding [Mgr.MountEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.MountEndpoint], Source={l:Lang}}" Click="MountSelectedEndpoint_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
+                                <Button x:Name="UnmountMountButton" AutomationProperties.Name="{Binding [Mgr.UnmountName], Source={l:Lang}}" Content="{Binding [Mgr.Unmount], Source={l:Lang}}" Click="UnmountMount_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+                            </WrapPanel>
+                            <WrapPanel Margin="0,6,0,0">
+                                <TextBlock Text="{Binding [Mgr.RecoveryRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
+                                <Button x:Name="RestoreMountsButton" AutomationProperties.AutomationId="RestoreCloudMounts" AutomationProperties.Name="{Binding [Mgr.RestoreMountsName], Source={l:Lang}}" Content="{Binding [Mgr.RestoreMounts], Source={l:Lang}}" Click="RestoreMounts_Click" Style="{StaticResource SecondaryButtonStyle}" />
+                                <Button x:Name="ReconnectMountButton" AutomationProperties.AutomationId="ReconnectCloudMount" AutomationProperties.Name="{Binding [Mgr.ReconnectMountName], Source={l:Lang}}" Content="{Binding [Mgr.ReconnectMount], Source={l:Lang}}" Click="ReconnectMount_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                                <Button x:Name="ClearMountCacheButton" AutomationProperties.AutomationId="ClearCloudMountCache" AutomationProperties.Name="{Binding [Mgr.ClearCacheName], Source={l:Lang}}" Content="{Binding [Mgr.ClearCache], Source={l:Lang}}" Click="ClearMountCache_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                            </WrapPanel>
+                            <CheckBox x:Name="AutoMountBox"
+                                      AutomationProperties.AutomationId="CloudMountAutoMount"
+                                      AutomationProperties.Name="{Binding [Mgr.AutoMountName], Source={l:Lang}}"
+                                      Content="{Binding [Mgr.AutoMount], Source={l:Lang}}"
+                                      Margin="0,8,0,0"
+                                      Checked="AutoMount_Changed"
+                                      Unchecked="AutoMount_Changed" />
+                            <TextBlock x:Name="MountPendingText" AutomationProperties.AutomationId="CloudMountPending" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                            <TextBlock x:Name="MountCacheText" AutomationProperties.AutomationId="CloudMountCache" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            <TextBlock x:Name="MountStatus" AutomationProperties.AutomationId="CloudMountStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
+            </TabControl>
         </Grid>
-
         <Grid Grid.Column="2" AllowDrop="True" DragOver="FileBrowser_DragOver" DragLeave="FileBrowser_DragLeave" Drop="FileBrowser_Drop" KeyDown="FileBrowser_KeyDown">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -171,26 +254,39 @@
                 <TextBox x:Name="AddressBox" AutomationProperties.AutomationId="CloudAddressBar" AutomationProperties.Name="{Binding [Mgr.AddressBarName], Source={l:Lang}}" KeyDown="AddressBox_KeyDown" Padding="8,6,8,6" />
             </DockPanel>
 
+            <!-- Three labelled rows instead of one flat pile. Measured: a single row of these controls laid
+                 out 1225 px inside 1092 px of usable width, and 查看传输 ended past the window edge with no
+                 bounds at all. The labels also make the shape of the group obvious at a glance — where you
+                 are, what you do to a file, what moves bytes — which a wrap point cannot express. -->
             <WrapPanel Grid.Row="3" Margin="0,10,0,0">
+                <TextBlock Text="{Binding [Mgr.NavigationRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
                 <Button x:Name="BackButton" AutomationProperties.Name="{Binding [Mgr.UpLevelName], Source={l:Lang}}" Content="{Binding [Mgr.UpLevel], Source={l:Lang}}" Click="Back_Click" Style="{StaticResource TertiaryButtonStyle}" />
                 <Button x:Name="HistoryBackButton" AutomationProperties.AutomationId="CloudHistoryBack" AutomationProperties.Name="{Binding [Mgr.HistoryBackName], Source={l:Lang}}" Content="{Binding [Mgr.Back], Source={l:Lang}}" Click="HistoryBack_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                 <Button x:Name="HistoryForwardButton" AutomationProperties.AutomationId="CloudHistoryForward" AutomationProperties.Name="{Binding [Mgr.HistoryForwardName], Source={l:Lang}}" Content="{Binding [Mgr.Forward], Source={l:Lang}}" Click="HistoryForward_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                 <Button AutomationProperties.Name="{Binding [Mgr.RefreshDirectoryName], Source={l:Lang}}" Content="{Binding [Mgr.Refresh], Source={l:Lang}}" Click="BrowseRefresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="NewFolderButton" AutomationProperties.AutomationId="CloudNewFolder" AutomationProperties.Name="{Binding [Mgr.NewFolderName], Source={l:Lang}}" Content="{Binding [Mgr.NewFolder], Source={l:Lang}}" Click="NewFolder_Click" Margin="20,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="ViewToggleButton" AutomationProperties.AutomationId="CloudViewToggle" AutomationProperties.Name="{Binding [Mgr.ToggleViewName], Source={l:Lang}}" Content="{Binding [Mgr.GridView], Source={l:Lang}}" Click="ViewToggle_Click" Margin="20,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                <TextBlock x:Name="ViewSummary" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Margin="12,0,0,0" />
+            </WrapPanel>
+            <WrapPanel Grid.Row="4" Margin="0,8,0,0">
+                <TextBlock Text="{Binding [Mgr.FileRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
+                <Button x:Name="NewFolderButton" AutomationProperties.AutomationId="CloudNewFolder" AutomationProperties.Name="{Binding [Mgr.NewFolderName], Source={l:Lang}}" Content="{Binding [Mgr.NewFolder], Source={l:Lang}}" Click="NewFolder_Click" Style="{StaticResource SecondaryButtonStyle}" />
                 <Button x:Name="RenameButton" AutomationProperties.AutomationId="CloudRename" AutomationProperties.Name="{Binding [Mgr.RenameItemName], Source={l:Lang}}" Content="{Binding [Mgr.Rename], Source={l:Lang}}" Click="Rename_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
                 <Button x:Name="RecycleButton" AutomationProperties.AutomationId="CloudRecycle" AutomationProperties.Name="{Binding [Mgr.RecycleItemName], Source={l:Lang}}" Content="{Binding [Mgr.MoveToTrash], Source={l:Lang}}" Click="Recycle_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
                 <Button x:Name="DeleteEntryButton" AutomationProperties.AutomationId="CloudDeleteEntries" AutomationProperties.Name="{Binding [Mgr.DeleteItemsName], Source={l:Lang}}" Content="{Binding [Mgr.Delete], Source={l:Lang}}" Click="DeleteEntries_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
+                <Button x:Name="OpenTrashButton" AutomationProperties.AutomationId="CloudOpenTrash" AutomationProperties.Name="{Binding [Mgr.OpenTrashName], Source={l:Lang}}" Content="{Binding [Mgr.Trash], Source={l:Lang}}" Click="OpenTrash_Click" Margin="20,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                 <Button x:Name="RestoreButton" AutomationProperties.AutomationId="CloudRestore" AutomationProperties.Name="{Binding [Mgr.RestoreItemsName], Source={l:Lang}}" Content="{Binding [Mgr.Restore], Source={l:Lang}}" Click="Restore_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
                 <Button x:Name="EmptyTrashButton" AutomationProperties.AutomationId="CloudEmptyTrash" AutomationProperties.Name="{Binding [Mgr.EmptyTrashName], Source={l:Lang}}" Content="{Binding [Mgr.EmptyTrash], Source={l:Lang}}" Click="EmptyTrash_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-                <Button x:Name="OpenTrashButton" AutomationProperties.AutomationId="CloudOpenTrash" AutomationProperties.Name="{Binding [Mgr.OpenTrashName], Source={l:Lang}}" Content="{Binding [Mgr.Trash], Source={l:Lang}}" Click="OpenTrash_Click" Margin="20,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="PasteButton" AutomationProperties.AutomationId="CloudPaste" AutomationProperties.Name="{Binding [Mgr.PasteName], Source={l:Lang}}" Content="{Binding [Mgr.Paste], Source={l:Lang}}" Click="Paste_Click" Margin="20,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+            </WrapPanel>
+            <WrapPanel Grid.Row="5" Margin="0,8,0,8">
+                <TextBlock Text="{Binding [Mgr.TransferRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
+                <Button x:Name="PasteButton" AutomationProperties.AutomationId="CloudPaste" AutomationProperties.Name="{Binding [Mgr.PasteName], Source={l:Lang}}" Content="{Binding [Mgr.Paste], Source={l:Lang}}" Click="Paste_Click" Style="{StaticResource SecondaryButtonStyle}" />
                 <Button x:Name="DownloadButton" AutomationProperties.AutomationId="CloudDownload" AutomationProperties.Name="{Binding [Mgr.DownloadName], Source={l:Lang}}" Content="{Binding [Mgr.Download], Source={l:Lang}}" Click="DownloadSelected_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button AutomationProperties.Name="{Binding [Mgr.UploadFilesName], Source={l:Lang}}" Content="{Binding [Mgr.UploadFiles], Source={l:Lang}}" Click="UploadFiles_Click" Margin="8,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
+                <Button AutomationProperties.Name="{Binding [Mgr.UploadFilesName], Source={l:Lang}}" Content="{Binding [Mgr.UploadFiles], Source={l:Lang}}" Click="UploadFiles_Click" Margin="20,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
                 <Button AutomationProperties.Name="{Binding [Mgr.UploadFolderName], Source={l:Lang}}" Content="{Binding [Mgr.UploadFolder], Source={l:Lang}}" Click="UploadFolder_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button AutomationProperties.AutomationId="OpenCloudTransfers" AutomationProperties.Name="{Binding [Mgr.OpenTransfersName], Source={l:Lang}}" Content="{Binding [Mgr.ViewTransfers], Source={l:Lang}}" Click="OpenTransfers_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                <Button AutomationProperties.AutomationId="OpenCloudTransfers" AutomationProperties.Name="{Binding [Mgr.OpenTransfersName], Source={l:Lang}}" Content="{Binding [Mgr.ViewTransfers], Source={l:Lang}}" Click="OpenTransfers_Click" Margin="20,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
             </WrapPanel>
 
-            <WrapPanel Grid.Row="4" Margin="0,10,0,8">
+            <WrapPanel Grid.Row="6" Margin="0,10,0,8">
                 <!-- 收藏 and 最近访问 are two jump lists rather than a menu: the shell has no menu bar, and a named
                      control is one a keyboard, a screen reader and the desktop scenario can all reach. Picking a row
                      names a destination rather than a filter, so the window acts on the choice and clears it — which
@@ -202,19 +298,22 @@
                 <ComboBox x:Name="FavoriteJumpBox" AutomationProperties.AutomationId="CloudFavoriteJumps" AutomationProperties.Name="{Binding [Mgr.FavoriteJumpName], Source={l:Lang}}" Width="220" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
                 <ComboBox x:Name="RecentJumpBox" AutomationProperties.AutomationId="CloudRecentJumps" AutomationProperties.Name="{Binding [Mgr.RecentJumpName], Source={l:Lang}}" Width="220" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
                 <Button x:Name="FavoriteToggleButton" AutomationProperties.AutomationId="CloudFavoriteToggle" Content="{Binding [Mgr.FavoriteThisDirectory], Source={l:Lang}}" Click="FavoriteToggle_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <TextBlock Text="{Binding [Mgr.Search], Source={l:Lang}}" VerticalAlignment="Center" Margin="20,0,0,0" />
-                <TextBox x:Name="SearchBox" AutomationProperties.AutomationId="CloudSearch" AutomationProperties.Name="{Binding [Mgr.SearchBoxName], Source={l:Lang}}" Width="200" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown" />
+            </WrapPanel>
+
+            <!-- The filter row used to share row 4 with the jump lists, so it broke wherever the two ran out
+                 of width and the 搜索 / 排序 labels drifted in front of controls they did not label. -->
+            <WrapPanel Grid.Row="7" Margin="0,0,0,8">
+                <TextBlock Text="{Binding [Mgr.Search], Source={l:Lang}}" VerticalAlignment="Center" />
+                <TextBox x:Name="SearchBox" AutomationProperties.AutomationId="CloudSearch" AutomationProperties.Name="{Binding [Mgr.SearchBoxName], Source={l:Lang}}" Width="180" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown" />
                 <CheckBox x:Name="SearchRecursiveBox" AutomationProperties.AutomationId="CloudSearchRecursive" AutomationProperties.Name="{Binding [Mgr.SearchRecursiveName], Source={l:Lang}}" Content="{Binding [Mgr.IncludeSubfolders], Source={l:Lang}}" Margin="12,0,0,0" VerticalAlignment="Center" />
                 <Button AutomationProperties.AutomationId="CloudSearchRun" AutomationProperties.Name="{Binding [Mgr.SearchEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.Search], Source={l:Lang}}" Click="Search_Click" Margin="12,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
                 <Button AutomationProperties.AutomationId="CloudSearchClear" AutomationProperties.Name="{Binding [Mgr.ClearSearchName], Source={l:Lang}}" Content="{Binding [Mgr.Clear], Source={l:Lang}}" Click="SearchClear_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
                 <TextBlock Text="{Binding [Mgr.Sort], Source={l:Lang}}" VerticalAlignment="Center" Margin="20,0,0,0" />
                 <ComboBox x:Name="SortBox" AutomationProperties.AutomationId="CloudSortColumn" AutomationProperties.Name="{Binding [Mgr.SortByName], Source={l:Lang}}" Width="110" Margin="8,0,0,0" SelectionChanged="Sort_Changed" />
                 <Button x:Name="SortDirectionButton" AutomationProperties.AutomationId="CloudSortDirection" AutomationProperties.Name="{Binding [Mgr.ToggleSortDirectionName], Source={l:Lang}}" Content="{Binding [Mgr.Ascending], Source={l:Lang}}" Click="SortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="ViewToggleButton" AutomationProperties.AutomationId="CloudViewToggle" AutomationProperties.Name="{Binding [Mgr.ToggleViewName], Source={l:Lang}}" Content="{Binding [Mgr.GridView], Source={l:Lang}}" Click="ViewToggle_Click" Margin="20,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <TextBlock x:Name="ViewSummary" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Margin="20,0,0,0" />
             </WrapPanel>
 
-            <ListView x:Name="FileList" Grid.Row="5" SelectionMode="Extended" SelectionChanged="FileList_SelectionChanged" AutomationProperties.Name="{Binding [Mgr.FileListName], Source={l:Lang}}" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening" PreviewMouseLeftButtonDown="FileList_PreviewMouseLeftButtonDown" PreviewMouseMove="FileList_PreviewMouseMove">
+            <ListView x:Name="FileList" Grid.Row="8" SelectionMode="Extended" SelectionChanged="FileList_SelectionChanged" AutomationProperties.Name="{Binding [Mgr.FileListName], Source={l:Lang}}" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening" PreviewMouseLeftButtonDown="FileList_PreviewMouseLeftButtonDown" PreviewMouseMove="FileList_PreviewMouseMove">
                 <ListView.ItemContainerStyle>
                     <!-- The row carries its own name, in both drawings. Measured against the real shell: a tile's
                          inner text never reaches the automation tree (the grid row has no children there at all),
@@ -235,14 +334,14 @@
                     <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnModified" Header="{Binding [Mgr.ColumnModified], Source={l:Lang}}" Width="150" DisplayMemberBinding="{Binding ModifiedDisplay}" />
                 </GridView></ListView.View>
             </ListView>
-            <Border x:Name="DropHint" Grid.Row="5" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="{StaticResource RadiusMedium}" Background="{DynamicResource AccentBrush}" Opacity="0.94" Margin="2">
+            <Border x:Name="DropHint" Grid.Row="8" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="{StaticResource RadiusMedium}" Background="{DynamicResource AccentBrush}" Opacity="0.94" Margin="2">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                     <TextBlock Text="{Binding [Mgr.DropToUpload], Source={l:Lang}}" Foreground="White" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
                     <TextBlock x:Name="DropHintText" Foreground="White" FontSize="13" Margin="0,8,0,0" HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center" />
                 </StackPanel>
             </Border>
 
-            <StackPanel Grid.Row="6" Margin="0,8,0,0">
+            <StackPanel Grid.Row="9" Margin="0,8,0,0">
                 <TextBlock x:Name="PathText" AutomationProperties.AutomationId="CloudCurrentPath" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
                 <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" AutomationProperties.Name="{Binding [Mgr.TransferProgressName], Source={l:Lang}}" Margin="0,6,0,0" />
                 <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="CloudFileStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,5,0,0" />

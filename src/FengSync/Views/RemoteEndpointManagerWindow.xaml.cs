@@ -161,6 +161,7 @@ public partial class RemoteEndpointManagerWindow : Window
         _transfers = transfers ?? AppServices.TryCurrent?.CloudTransfers ?? new CloudTransferQueue();
         _thumbnails = new CloudThumbnailStore(_files);
         InitializeComponent();
+        FitToWorkingArea();
         EndpointList.ItemsSource = _accounts;
         MountsList.ItemsSource = _mounts;
         FileList.ItemsSource = _entries;
@@ -181,6 +182,33 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private CloudEndpointAccount? Selected => (EndpointList.SelectedItem as CloudEndpointRow)?.Account;
     private MountInfo? SelectedMount => MountsList.SelectedItem as MountInfo;
+
+    /// <summary>
+    /// Shrinks the window to what the screen can actually give it, before it is shown.
+    /// </summary>
+    /// <remarks>
+    /// The window asks for 1280×900. On a 1920×1080 screen the working area is 1920×1020, so the requested
+    /// height is not available and Windows hands back a different one (measured: 1350×800, i.e. the requested
+    /// width and height are both silently replaced). The layout is then built for a window 100 px shorter than
+    /// the one it was designed against, and the left column's mount section — list, three recovery buttons,
+    /// 开机自动挂载 and three status lines, ~453 px in all — lands past the bottom edge where no amount of
+    /// scrolling helps, because the window itself is the clipping rectangle.
+    /// </remarks>
+    private void FitToWorkingArea()
+    {
+        // The work area of the monitor the window will open on, in device-independent pixels. Primary is the
+        // right one to ask: WindowStartupLocation is CenterOwner, and the owner (the main window) is on it.
+        var work = SystemParameters.WorkArea;
+        if (work.Width <= 0 || work.Height <= 0) return;
+        // A window placed by CenterOwner is sized first and centred second, so the margin is what keeps the
+        // title bar and the taskbar from overlapping it. Both are generous on purpose: a window that merely
+        // fits is still one the user cannot drag.
+        const double edgeMargin = 48;
+        const double minUsableWidth = 900;
+        const double minUsableHeight = 560;
+        if (work.Width - edgeMargin > minUsableWidth) Width = Math.Min(Width, work.Width - edgeMargin);
+        if (work.Height - edgeMargin > minUsableHeight) Height = Math.Min(Height, work.Height - edgeMargin);
+    }
 
     // ---- Test seams: the parts of the browser's state a test can inspect or drive without rclone ----
 

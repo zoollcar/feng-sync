@@ -54,13 +54,13 @@ Mgr.EndpointCount	共 {0} 个云端端点。	{0} cloud endpoints.
 Mgr.EndpointCreated	已创建端点：{0}。	Created the endpoint: {0}.
 Mgr.EndpointListFailed	无法读取云端端点：{0}	The cloud endpoints could not be read: {0}
 Mgr.EndpointListName	云盘端点列表	Cloud endpoint list
+Mgr.EndpointRowLabel	端点	Endpoint
 Mgr.EndpointSortByName	云盘端点排序依据	Cloud endpoint sort order
 Mgr.EndpointSortHealth	状态	Status
 Mgr.EndpointSortName	名称	Name
 Mgr.EndpointSortProvider	类型	Type
 Mgr.EndpointUpdated	已更新端点：{0}。	Updated the endpoint: {0}.
 Mgr.EndpointsFiltered	已按“{0}”过滤，显示 {1} / {2} 个端点。	Filtered by "{0}", showing {1} / {2} endpoints.
-Mgr.EndpointsGroup	云盘端点	Cloud endpoints
 Mgr.Export	导出…	Export…
 Mgr.ExportAllName	导出全部云盘端点的非敏感配置	Export the non-sensitive settings of every cloud endpoint
 Mgr.ExportDiagnostics	导出诊断…	Export diagnostics…
@@ -70,6 +70,7 @@ Mgr.FavoriteJumpName	跳到收藏的目录	Jump to a favorite folder
 Mgr.FavoriteThisDirectory	收藏此目录	Add this folder to favorites
 Mgr.FileListName	当前目录中的文件	Files in the current folder
 Mgr.Forward	前进	Forward
+Mgr.FileRowLabel	文件	File
 Mgr.Go	转到	Go
 Mgr.GoToName	转到输入的路径	Go to the path you typed
 Mgr.GridView	网格视图	Grid view
@@ -90,8 +91,11 @@ Mgr.MountListName	当前挂载列表	Current mount list
 Mgr.MountReconnectFailed	重新挂载失败：{0}	Remounting failed: {0}
 Mgr.MountRestoreFailed	恢复挂载失败：{0}	Restoring the mounts failed: {0}
 Mgr.MountScanFailed	扫描挂载失败：{0}	Scanning the mounts failed: {0}
-Mgr.MountsGroup	挂载管理	Mount management
+Mgr.EndpointsTab	云盘端点	Cloud endpoints
+Mgr.LeftTabsName	云盘端点和挂载管理	Cloud endpoints and mount management
+Mgr.MountsTab	挂载管理	Mount management
 Mgr.MoveToTrash	移到回收站	Move to recycle bin
+Mgr.NavigationRowLabel	导航	Navigate
 Mgr.NewEndpoint	新建端点	New endpoint
 Mgr.NewEndpointName	新建云盘端点	Create a cloud endpoint
 Mgr.NewFolder	新建文件夹	New folder
@@ -106,6 +110,7 @@ Mgr.OpeningNewEndpointWindow	正在打开新建端点窗口…	Opening the new e
 Mgr.OpeningSyncWizard	正在打开同步向导…	Opening the sync wizard…
 Mgr.OrganizeEndpoint	分组与标签…	Groups and tags…
 Mgr.OrganizeEndpointName	设置所选云盘端点的分组与标签	Set the group and tags of the selected cloud endpoint
+Mgr.OrganizeRowLabel	整理	Organize
 Mgr.Paste	粘贴	Paste
 Mgr.PasteName	把剪贴板中的项目粘贴到当前目录	Paste the items on the clipboard into the current folder
 Mgr.PathNavigationName	当前路径导航	Current path navigation
@@ -116,6 +121,7 @@ Mgr.PickEndpointToEdit	请先选择要编辑的端点。	Select the endpoint to 
 Mgr.PickMountToReconnect	请先选择要重新挂载的挂载点。	Select the mount point to remount first.
 Mgr.PreparingSyncTask	正在准备同步任务…	Preparing the sync job…
 Mgr.RecentJumpName	跳到最近访问的目录	Jump to a recently visited folder
+Mgr.RecoveryRowLabel	恢复	Recover
 Mgr.ReconnectAborted	重新挂载已中止：原挂载未能取消。\n	Remounting was stopped: the original mount could not be cancelled.\n
 Mgr.ReconnectEndpoint	重新登录	Sign in again
 Mgr.ReconnectEndpointName	重新登录所选云盘端点	Sign in to the selected cloud endpoint again
@@ -160,13 +166,16 @@ Mgr.SyncTaskCreated	已创建同步任务“{0}”：{1} → {2}	Created the syn
 Mgr.SyncTaskListFailed	无法读取同步任务列表：{0}	The sync job list could not be read: {0}
 Mgr.SyncWizard	同步向导	Sync wizard
 Mgr.SyncWizardName	打开一键双向同步向导	Open the one-tap two-way sync wizard
+Mgr.SyncRowLabel	同步	Sync
 Mgr.SyncWizardTaskCreated	已创建双向同步任务“{0}”：{1} ↔ {2}	Created the two-way sync job "{0}": {1} ↔ {2}
 Mgr.TestAll	测试全部	Test all
 Mgr.TestAllName	检查全部云盘端点的连接与容量	Check the connection and capacity of every cloud endpoint
+Mgr.ToolsLabel	工具	Tools
 Mgr.ToggleEndpointSortDirectionName	切换云盘端点列表的升降序	Switch the cloud endpoint list between ascending and descending order
 Mgr.ToggleSortDirectionName	切换升序或降序	Switch between ascending and descending order
 Mgr.ToggleViewName	在列表视图与网格视图之间切换	Switch between the list view and the grid view
 Mgr.TransferProgressName	文件传输进度	File transfer progress
+Mgr.TransferRowLabel	传输	Transfer
 Mgr.Trash	回收站	Recycle bin
 Mgr.Unmount	取消挂载	Unmount
 Mgr.UnmountName	取消所选挂载	Unmount the selected mount

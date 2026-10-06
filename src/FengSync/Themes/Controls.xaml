@@ -332,5 +332,75 @@
   <Setter Property="VerticalContentAlignment" Value="Center"/>
  </Style>
  <Style TargetType="ListBox"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/><Setter Property="BorderThickness" Value="1"/></Style>
+ <!-- Tabs, styled so the header reads as something to click. WPF's default template draws a raised 3D
+      tab that looks nothing like the rest of this shell; more importantly the *unselected* header must
+      still look selectable, because the cloud window uses tabs for a left column where a row of plain
+      labels would be mistaken for a caption. Selection is shown by the accent underline plus a bolder
+      label, the same two signals the sidebar uses for the current page. -->
+ <Style x:Key="TabItemStyle" TargetType="TabItem">
+  <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>
+  <Setter Property="FontSize" Value="13"/>
+  <Setter Property="FontWeight" Value="Normal"/>
+  <Setter Property="Padding" Value="12,8"/>
+  <Setter Property="Margin" Value="0,0,4,0"/>
+  <Setter Property="Cursor" Value="Hand"/>
+  <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisualStyle}"/>
+  <Setter Property="Template">
+   <Setter.Value>
+    <ControlTemplate TargetType="TabItem">
+     <Border x:Name="Root" Background="Transparent" BorderBrush="Transparent" BorderThickness="0,0,0,2"
+             Padding="{TemplateBinding Padding}">
+      <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        TextElement.Foreground="{TemplateBinding Foreground}" />
+     </Border>
+     <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+       <Setter TargetName="Root" Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
+      </Trigger>
+      <Trigger Property="IsSelected" Value="True">
+       <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+       <Setter Property="FontWeight" Value="SemiBold"/>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+       <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}"/>
+      </Trigger>
+     </ControlTemplate.Triggers>
+    </ControlTemplate>
+   </Setter.Value>
+  </Setter>
+ </Style>
+ <Style TargetType="TabControl">
+  <Setter Property="Background" Value="Transparent"/>
+  <Setter Property="BorderThickness" Value="0"/>
+  <Setter Property="Padding" Value="0"/>
+  <!-- The content pane is a plain surface with only a top rule, so a tab's body is visually attached to its
+       header instead of floating in the default raised frame. -->
+  <Setter Property="Template">
+   <Setter.Value>
+    <ControlTemplate TargetType="TabControl">
+     <Grid>
+      <Grid.RowDefinitions>
+       <RowDefinition Height="Auto"/>
+       <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <Border Grid.Row="0" BorderBrush="{DynamicResource BorderDividerBrush}" BorderThickness="0,0,0,1">
+       <TabPanel IsItemsHost="True" Margin="0" Panel.ZIndex="1"/>
+      </Border>
+      <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}"
+              BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1,0,1,1">
+       <!-- The name matters: TabControl finds its selected-content presenter by this exact part name and
+            moves the selected TabItem's content into it. Without it the presenter stays empty and every
+            control inside every tab disappears from the tree — measured: all 21 tab controls reported ABSENT
+            while the browser beside them was fine. -->
+       <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent"/>
+      </Border>
+     </Grid>
+    </ControlTemplate>
+   </Setter.Value>
+  </Setter>
+ </Style>
+ <Style TargetType="TabItem" BasedOn="{StaticResource TabItemStyle}"/>
  <Style TargetType="Separator"><Setter Property="Background" Value="{DynamicResource BorderSubtleBrush}"/></Style>
 </ResourceDictionary>
