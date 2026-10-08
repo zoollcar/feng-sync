@@ -84,6 +84,10 @@ Write-HarnessTrace $(if ($ShowOnScreen) { 'Input mode: on screen (windows raised
 #   1. no window is ever raised or activated, so the user's foreground window keeps focus;
 #   2. the physical cursor never moves, so no real mouse input is synthesized;
 #   3. every Feng Sync window is parked outside the visible desktop, so nothing is drawn over the user's work.
+#      A window that is moved after it has been shown has still been seen, and the shell spends seconds
+#      becoming ready before anything in this script can act — so the application is told to open its own
+#      windows off screen as well (FENGSYNC_OFFSCREEN_WINDOWS, set in Start-App). Parking here is the
+#      belt-and-braces for a window the application did not place itself.
 # Input is delivered instead through UI Automation patterns, and — for the few gestures WPF only produces
 # from a real window message, such as opening a ContextMenu — through PostMessage straight to the window's
 # message queue. Both work while the window sits off screen and while it is not the active window.
@@ -927,9 +931,22 @@ function Compare-Ui {
 function Start-App {
   $start = [Diagnostics.ProcessStartInfo]::new($AppPath); $start.UseShellExecute = $false; $start.Arguments = "--fengsync-test-run-id $stamp"; $start.EnvironmentVariables['FENGSYNC_DATA_DIR'] = $appData; $start.EnvironmentVariables['FENGSYNC_DISABLE_UPDATE_CHECK'] = '1'
   $start.EnvironmentVariables['FENGSYNC_FORCE_SOFTWARE_RENDERING'] = if ($Scenario -eq 'ui-shell-software') { '1' } else { '0' }
+  # A desktop-free run has to keep the shell off the user's desktop from its first frame. Moving it after it
+  # has been shown is too late — it is on screen, and in the foreground, for as long as this process takes to
+  # notice it, and the shell spends seconds becoming ready — so the application is told to open its own
+  # windows outside the visible desktop. An on-screen run leaves the application alone, which is exactly what
+  # -ShowOnScreen is for.
+  $start.EnvironmentVariables['FENGSYNC_OFFSCREEN_WINDOWS'] = if ($script:showOnScreen) { '0' } else { '1' }
   $null = Write-HarnessTrace ("Launching Feng Sync with rendering mode: {0}" -f $(if ($Scenario -eq 'ui-shell-software') { 'software' } else { 'native-default' }))
   $p = [Diagnostics.Process]::Start($start)
+  # Every parking helper keys off $script:process, and the caller does not assign it until this function has
+  # returned — so it has to be recorded here. Without this the park below is a silent no-op and the shell
+  # stays on the visible desktop for the whole scenario.
+  $script:process = $p
   $main = Wait-Until {
+    # Park as soon as the HWND exists rather than once the shell is ready: the shell can take seconds to
+    # become ready, and the window is on the visible desktop for every one of them.
+    $null = Park-AllAppWindows
     if ($p.MainWindowHandle -eq 0) { return $null }
     $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
     $profileList = $candidate.FindFirst(
@@ -940,8 +957,8 @@ function Start-App {
     if ($profileList) { return $candidate }
     return $null
   } 'Main window shell did not become ready'
-  # As early as possible: a desktop-free run moves the shell out of the visible desktop before any step can
-  # raise it, so the user never sees the window at all.
+  # Belt and braces: the application parks its own shell from the first frame, and this still catches a
+  # window the application did not place itself.
   Initialize-TestWindowPlacement
   return @($p, $main)
 }
@@ -1230,6 +1247,11 @@ try {
       $main = Get-LiveMain
       Assert-VisualMatrixGeometry $main 'maximized'
       Capture-Window $process '02-visual-maximized.png'
+      # Maximizing is the one gesture that puts a parked window back onto a monitor — Windows maximizes onto
+      # the display it chooses, not onto the window's current position. Restore and park it again, so the
+      # rest of the scenario does not run with the shell on the user's screen.
+      $windowPattern.SetWindowVisualState([System.Windows.Automation.WindowVisualState]::Normal)
+      Park-AllAppWindows
       Write-HarnessTrace 'Visual matrix verified: maximized.'
     }
     'update-settings' {
