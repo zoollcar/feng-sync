@@ -80,6 +80,47 @@ public sealed class DesktopFreeUiHarnessTests
         Assert.Contains("if (ShowOnScreen) start.ArgumentList.Add(\"-ShowOnScreen\");", tests, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void The_harness_records_the_process_before_it_tries_to_park_anything()
+    {
+        var script = ReadHarnessFile("tests", "FengSync.UiTests", "Scripts", "Invoke-UiScenario.ps1");
+
+        // Every parking helper keys off $script:process. Start-App used to call Initialize-TestWindowPlacement
+        // before its caller had assigned that variable, so the call was a silent no-op and the shell stayed on
+        // the visible desktop for the whole of its own startup — the one window a desktop-free run is about.
+        var recorded = script.IndexOf("$script:process = $p", StringComparison.Ordinal);
+        var park = script.IndexOf("$null = Park-AllAppWindows", StringComparison.Ordinal);
+        Assert.True(recorded >= 0, "Start-App no longer records the process it started, so every park it makes does nothing.");
+        Assert.True(park > recorded, "Start-App parks before it records the process, so that park does nothing.");
+    }
+
+    [Fact]
+    public void The_harness_tells_the_application_to_open_its_windows_off_screen()
+    {
+        var script = ReadHarnessFile("tests", "FengSync.UiTests", "Scripts", "Invoke-UiScenario.ps1");
+
+        // Moving a window after it has been shown is too late: it has already been seen, and the shell spends
+        // seconds becoming ready before this script can act. The application has to place its own windows.
+        Assert.Contains("$start.EnvironmentVariables['FENGSYNC_OFFSCREEN_WINDOWS']", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_shell_and_the_transfer_window_are_moved_off_screen_before_they_are_shown()
+    {
+        // Both windows call the same seam from their constructors — the last moment before WPF shows them.
+        // The shell is the window that would otherwise be on screen for the whole run; the transfer window is
+        // the one whose XAML centres it on the screen.
+        foreach (var window in new[]
+        {
+            new[] { "src", "FengSync", "MainWindow.xaml.cs" },
+            new[] { "src", "FengSync", "Views", "CloudTransferWindow.xaml.cs" },
+        })
+        {
+            var source = ReadHarnessFile(window);
+            Assert.Contains("TestWindowPlacement.Apply(this);", source, StringComparison.Ordinal);
+        }
+    }
+
     private static string ReadHarnessFile(params string[] segments)
     {
         var path = Path.Combine([RepositoryRoot(), .. segments]);
