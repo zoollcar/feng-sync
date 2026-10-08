@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FengSync.Services;
 using FengSync.Views;
 using Xunit;
@@ -132,6 +133,45 @@ public sealed class CloudTransferWindowBehaviorTests
 
             Assert.Equal(summary, window.SummaryText.Text);
         });
+    }
+
+    [Fact]
+    public void A_row_can_actually_be_drawn_without_WPF_refusing_its_progress_binding()
+    {
+        WithWindow((window, queue) =>
+        {
+            queue.Tasks.Add(Pending("docs/a.txt"));
+
+            // Laying the list out is what a shown window does, and it is the only thing that instantiates the
+            // row template — which is where its bindings are attached. RangeBase.Value is TwoWay by default,
+            // so a ProgressBar bound to the read-only CloudTransferTask.Percentage without an explicit
+            // Mode=OneWay throws XamlParseException at exactly this point. In the app that exception comes out
+            // of an async void handler with nothing to catch it, so the process dies the instant the transfer
+            // window is opened — which is what an upload does. A test that only builds the window never lays
+            // anything out and therefore never saw it.
+            Realise(window);
+
+            var bar = Descendants<ProgressBar>(window.TaskList).Single();
+            Assert.Equal(0d, bar.Value);
+            Assert.Equal(100d, bar.Maximum);
+        });
+    }
+
+    private static void Realise(CloudTransferWindow window)
+    {
+        window.TaskList.Measure(new Size(900, 300));
+        window.TaskList.Arrange(new Rect(0, 0, 900, 300));
+        window.TaskList.UpdateLayout();
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is T match) yield return match;
+            foreach (var nested in Descendants<T>(child)) yield return nested;
+        }
     }
 
     private static CloudTransferTask Pending(string remotePath) =>
