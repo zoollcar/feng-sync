@@ -1903,7 +1903,7 @@ public partial class RemoteEndpointManagerWindow : Window
         try
         {
             StatusText.Text = Tr.Format("Mgr.CreatingFolder", name);
-            await _files.CreateDirectoryAsync(account.Name, target);
+            await _files.CreateDirectoryAsync(account.Name, target, account.NeedsEmptyDirectoryMarker);
             await BrowseAsync();
             StatusText.Text = Tr.Format("Mgr.FolderCreated", target);
             return true;
@@ -2094,13 +2094,14 @@ public partial class RemoteEndpointManagerWindow : Window
     /// 回收站: opens the mirrored folder. It is created on the way in because it does not exist until the first
     /// object is recycled, and a first click answering "目录已不存在" would read as a broken feature; measured on
     /// v1.75.0, <c>operations/mkdir</c> creates missing parents, is idempotent, and refuses loudly to overwrite a
-    /// file that happens to carry the folder's name.
+    /// file that happens to carry the folder's name. A backend without directories of its own needs the marker
+    /// as well, or the folder it just "created" is the one the listing then fails to find.
     /// </summary>
     internal async Task OpenTrashAsync()
     {
         if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
         var trash = CloudRecycleBin.RootOf(account.RootPath);
-        try { await _files.CreateDirectoryAsync(account.Name, trash); }
+        try { await _files.CreateDirectoryAsync(account.Name, trash, account.NeedsEmptyDirectoryMarker); }
         catch (Exception ex) { ReportFailure(Tr.F("Mgr.TrashOpenFailed"), ex, "cloud-trash-open"); return; }
         await NavigateToAsync(trash);
     }

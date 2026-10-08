@@ -1,3 +1,4 @@
+using System.IO;
 using FengSync.Core;
 using FengSync.Core.Rclone.Diagnostics;
 using FengSync.Localization;
@@ -82,13 +83,58 @@ public sealed class CloudFileManagerService
     }
 
     /// <summary>
-    /// Creates one directory. rclone backends without real directories (S3) accept this as a marker and
-    /// simply report an empty listing, which is why the browser never depends on the folder appearing.
+    /// Creates one directory.
+    /// <para>
+    /// A backend with no directories of its own — S3 and the services compatible with it — answers
+    /// <c>operations/mkdir</c> with success and creates nothing: measured against the bundled v1.75.0,
+    /// <c>operations/mkdir</c> on an S3 endpoint returns <c>{}</c>, rclone logs "running mkdir on a remote
+    /// which can't have empty directories does nothing", and the listing afterwards is unchanged. Such a
+    /// backend persists an empty folder only as an object whose name ends with <c>/</c> — the shape rclone's
+    /// own <c>--s3-directory-markers</c> writes ("this option creates an empty object ending with '/', to
+    /// persist the folder"). <paramref name="persistEmptyDirectory"/> is what adds that marker, so
+    /// 新建文件夹 leaves something behind for the next listing to show instead of reporting a folder that
+    /// does not exist.
+    /// </para>
     /// </summary>
-    public async Task CreateDirectoryAsync(string remote, string path, CancellationToken ct = default)
+    public async Task CreateDirectoryAsync(string remote, string path, bool persistEmptyDirectory = false, CancellationToken ct = default)
     {
         var client = await _client(ct);
-        await client.MakeDirectoryAsync(FileSystem(remote), path.Trim('/'), ct);
+        var filesystem = FileSystem(remote);
+        var directory = path.Trim('/');
+        await client.MakeDirectoryAsync(filesystem, directory, ct);
+        if (persistEmptyDirectory && directory.Length > 0)
+            await WriteDirectoryMarkerAsync(client, filesystem, directory, ct);
+    }
+
+    /// <summary>The object name that persists one empty folder on a backend that has no directories.</summary>
+    internal static string DirectoryMarkerName(string path) => path.Trim('/') + "/";
+
+    /// <summary>
+    /// Writes the zero-byte object that keeps one empty folder alive on a backend that cannot hold
+    /// directories. The bytes come from a zero-byte file in this application's own data directory, because
+    /// the RC API can only put an object by copying from an existing fs: measured against v1.75.0,
+    /// <c>rc/list</c> registers <c>operations/copyfile</c> and <c>operations/copyurl</c> but no
+    /// <c>operations/put</c>, so a marker has to be copied from somewhere. The call is awaited through
+    /// <c>job/status</c>, so the object is there before the caller re-lists the directory.
+    /// </summary>
+    private static async Task WriteDirectoryMarkerAsync(RcloneRcClient client, string filesystem, string directory, CancellationToken ct)
+    {
+        var source = MarkerSourceFile();
+        await client.CopyFileAsync(Path.GetDirectoryName(source)!, Path.GetFileName(source),
+            filesystem, DirectoryMarkerName(directory), ct);
+    }
+
+    /// <summary>
+    /// The zero-byte file a directory marker is copied from. Kept under application data rather than beside
+    /// anything the user owns, and created once — a marker write must never depend on the user's filesystem.
+    /// </summary>
+    private static string MarkerSourceFile()
+    {
+        var directory = Path.Combine(AppDataPaths.Root, "cloud-marker");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "empty");
+        if (!File.Exists(path)) File.WriteAllBytes(path, []);
+        return path;
     }
 
     /// <summary>

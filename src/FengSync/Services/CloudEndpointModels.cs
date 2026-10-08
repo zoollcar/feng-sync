@@ -88,6 +88,16 @@ public sealed record CloudEndpointAccount(RcloneAccount Remote, CloudEndpointMet
     public string Prefix => Metadata?.Prefix ?? "";
     /// <summary>True when rclone enforces the prefix, so no path can address anything outside it.</summary>
     public bool PrefixIsEnforced => Metadata?.PrefixIsEnforced ?? false;
+
+    /// <summary>
+    /// True when this endpoint's backend has no directories of its own — S3 and the services compatible with
+    /// it — so an empty folder exists only as an object whose name ends with <c>/</c>. Creating one therefore
+    /// has to write that object: <c>operations/mkdir</c> succeeds on such a backend and creates nothing, which
+    /// is why 新建文件夹 and 回收站 would otherwise report a folder the next listing cannot see. The rclone
+    /// backend type is what decides, so an enforced-prefix endpoint is covered too — it is an <c>alias</c>
+    /// over an S3 store.
+    /// </summary>
+    public bool NeedsEmptyDirectoryMarker => EndpointSchemes.TypeForRcloneType(Type) is EndpointType.S3;
     public string Display => string.IsNullOrWhiteSpace(Prefix)
         ? Tr.Format("Endpoint.DisplayNoRoot", Remote.Display)
         : $"{Remote.Display}  ·  /{Prefix}";
