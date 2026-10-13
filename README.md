@@ -114,17 +114,22 @@ pwsh -File .\scripts\Test-All.ps1 -Level Online
 
 也可以单独运行 `dotnet test .\tests\FengSync.Tests` 或 `dotnet test .\tests\FengSync.UiTests`。线上服务 UI 用 `FENGSYNC_TEST_ONLINE_SERVICES=1` 启用；`-Level Online` 会自动设置并在结束后清除该环境变量。
 
-UI 测试默认**不占用你的桌面和鼠标**：每个窗口都被移到可见桌面之外，测试不会把窗口提到前台，也不会移动鼠标——所有交互都通过 UI Automation 模式或直接投递的窗口消息完成（少数只有真实输入才能触发的操作改用等价的键盘或 UI Automation 路径）。因此默认运行期间你可以照常使用电脑。想看测试实际跑起来，加 `-ShowOnScreen`：
+UI 测试默认**跑在私有桌面上**：测试宿主自己创建一个桌面对象，并在那个桌面上启动场景宿主，场景再启动的所有进程都会继承它。没有被显示的桌面不会被合成到任何显示器上，而且它有自己独立的输入队列和前台窗口——所以应用可以打开真实窗口、把窗口提到前台、接受真实鼠标点击，而这一切都到不了你的会话。本仓库实测：一次完整场景运行的 390 次采样里，可见桌面上属于应用的窗口数为 0，前台窗口全程未变。
 
 ```powershell
-# 默认：窗口在屏幕外，不抢鼠标，不抢前台
+# 默认：每个场景跑在自己的私有桌面上，不显示、不抢鼠标、不抢前台
 pwsh -File .\scripts\Test-All.ps1 -Level UiOffline
 
-# 需要观察时：窗口正常显示在前台，使用真实鼠标输入
+# 需要盯着看时：跑在当前桌面上，窗口正常显示，使用真实鼠标输入
 pwsh -File .\scripts\Test-All.ps1 -Level UiOffline -ShowOnScreen
 ```
 
-屏幕截图只在 `-ShowOnScreen` 下产生；默认运行会在清单里记录“已跳过（无桌面运行）”。
+改动测试脚本前有两点值得先知道：
+
+- **合成鼠标输入在私有桌面上根本无法工作**（实测对照：私有桌面上 `GetCursorPos` / `mouse_event` 返回 `ERROR_ACCESS_DENIED`、`SetCursorPos` 返回 false；可见桌面上三者都成功）。所以少数确实需要真实点击/悬停的步骤只在 `-ShowOnScreen` 下执行，默认路径改用 UI Automation 模式、投递按键和 `PostMessage`——它们直接进入窗口自己的消息队列，与窗口在哪个桌面无关。
+- **不要用 `Process.MainWindowHandle` 找主窗口**。它只是个启发式规则（进程拥有的第一个可见顶层窗口），而私有桌面上应用还拥有输入指示器覆盖窗口，它们会在启动几秒后出现并压在一切之上。请用 `Get-MainWindowHandle`，它按窗口本身的特征识别主窗口；`PrivateDesktopHarnessTests` 会在 `.MainWindowHandle` 回来时报错。
+
+私有桌面上没有屏幕可截，截图改由窗口自己渲染（`PrintWindow` + `PW_RENDERFULLCONTENT`），并让应用走受支持的软件渲染路径；`ui-shell-native` 有意保留原生渲染，其截图只有窗口框架，清单里会注明。
 
 ## 项目结构
 

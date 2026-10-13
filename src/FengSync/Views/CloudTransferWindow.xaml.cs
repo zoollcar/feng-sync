@@ -47,9 +47,6 @@ public partial class CloudTransferWindow : Window
         _notifier = new CloudCompletionNotifier(queue);
         _afterTransfer = new CloudPostTransferAction(queue);
         InitializeComponent();
-        // The one window in the application whose XAML centres it on the screen, so it is the one that
-        // would otherwise flash up in the middle of a desktop-free test run. See TestWindowPlacement.
-        TestWindowPlacement.Apply(this);
         TaskList.ItemsSource = _queue.Tasks;
         _queue.PropertyChanged += Queue_PropertyChanged;
         _notifier.Notified += Notifier_Notified;

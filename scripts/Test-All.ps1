@@ -80,9 +80,10 @@ try {
   if ($filter) { $arguments += @('--filter', $filter) }
   $uiName = if ($Level -eq 'UiOffline') { 'WPF UI acceptance tests (online services excluded)' } else { 'WPF UI acceptance tests (including online services)' }
   if ($Level -eq 'Online') { $env:FENGSYNC_TEST_ONLINE_SERVICES = '1' }
-  # The test host reads this to decide whether the scenario windows may be raised on screen.
+  # The test host reads this to decide where a scenario runs: a private Windows desktop by default, this one
+  # when the switch asks to watch.
   if ($ShowOnScreen) { $env:FENGSYNC_UI_SHOW_ON_SCREEN = '1' }
-  Write-Host ("UI scenarios will run {0}." -f $(if ($ShowOnScreen) { 'on screen, with real mouse input' } else { 'desktop-free: windows parked off screen, input delivered through UI Automation' })) -ForegroundColor DarkGray
+  Write-Host ("UI scenarios will run {0}." -f $(if ($ShowOnScreen) { 'on this desktop, with real mouse input, so you can watch them' } else { 'on a private desktop each: real windows and real UI Automation, never composited to a monitor and never touching your pointer, foreground or taskbar' })) -ForegroundColor DarkGray
   try { Invoke-Stage $uiName { & dotnet @arguments } }
   finally {
     Remove-Item Env:FENGSYNC_TEST_ONLINE_SERVICES -ErrorAction SilentlyContinue

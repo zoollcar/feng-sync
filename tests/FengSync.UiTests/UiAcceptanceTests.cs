@@ -13,10 +13,11 @@ public sealed class UiAcceptanceTests
     public UiAcceptanceTests(ITestOutputHelper output) => _output = output;
     private static bool OnlineServicesEnabled => string.Equals(Environment.GetEnvironmentVariable("FENGSYNC_TEST_ONLINE_SERVICES"), "1", StringComparison.Ordinal);
     /// <summary>
-    /// Off by default. A scenario normally parks its windows outside the visible desktop and delivers
-    /// input through UI Automation, so running the suite never covers the user's screen, never moves
-    /// their cursor and never steals their foreground window. Set <c>FENGSYNC_UI_SHOW_ON_SCREEN=1</c>
-    /// (or pass <c>-ShowOnScreen</c> to <c>scripts/Test-All.ps1</c>) to watch a scenario run instead.
+    /// Off by default. A scenario normally runs on a <see cref="PrivateDesktop"/>: a display space of its
+    /// own, where the application opens ordinary windows and the harness can raise them, move the pointer
+    /// and take the foreground without any of it reaching the user's session. Set
+    /// <c>FENGSYNC_UI_SHOW_ON_SCREEN=1</c> (or pass <c>-ShowOnScreen</c> to <c>scripts/Test-All.ps1</c>) to
+    /// run a scenario here, on the visible desktop, and watch it.
     /// </summary>
     private static bool ShowOnScreen => string.Equals(Environment.GetEnvironmentVariable("FENGSYNC_UI_SHOW_ON_SCREEN"), "1", StringComparison.Ordinal);
     [Fact]
@@ -148,40 +149,83 @@ public sealed class UiAcceptanceTests
         if (!File.Exists(script)) throw new FileNotFoundException("UI test scenario script was not found.", script);
         if (!File.Exists(app)) throw new FileNotFoundException("Feng Sync must be built before UI tests run.", app);
 
-        var start = new ProcessStartInfo("pwsh") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
-        start.ArgumentList.Add("-NoProfile"); start.ArgumentList.Add("-File"); start.ArgumentList.Add(script);
-        start.ArgumentList.Add("-Scenario"); start.ArgumentList.Add(scenario);
-        start.ArgumentList.Add("-AppPath"); start.ArgumentList.Add(app);
-        start.ArgumentList.Add("-Workspace"); start.ArgumentList.Add(root);
-        if (ShowOnScreen) start.ArgumentList.Add("-ShowOnScreen");
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Unable to start PowerShell UI test host.");
+        var arguments = new List<string> { "-NoProfile", "-File", script, "-Scenario", scenario, "-AppPath", app, "-Workspace", root };
+        if (ShowOnScreen) arguments.Add("-ShowOnScreen");
+
+        // One switch decides where the scenario runs, and nothing else does. The default is a private
+        // desktop, where the scenario is free to raise windows, move the pointer and take the foreground —
+        // all of it lands on a desktop the user is not looking at. Children inherit that desktop, so the
+        // application, rclone, schtasks and the CLI stay there too.
+        using var desktop = ShowOnScreen ? null : PrivateDesktop.Create();
+        var outputPath = desktop is null ? null : Path.Combine(Path.GetTempPath(), $"fengsync-ui-{scenario}-{Guid.NewGuid():N}.log");
+        using var process = desktop is null
+            ? Process.Start(RedirectedStartInfo(arguments)) ?? throw new InvalidOperationException("Unable to start PowerShell UI test host.")
+            : desktop.Start("pwsh", arguments, root, outputPath!);
+
         var timer = Stopwatch.StartNew();
-        var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
+        // A redirected pipe has to be drained while the scenario runs: one nobody reads fills up and then
+        // blocks the child. The private-desktop path writes to a file instead, so there is nothing to drain.
+        var stdout = desktop is null ? process.StandardOutput.ReadToEndAsync() : null;
+        var stderr = desktop is null ? process.StandardError.ReadToEndAsync() : null;
         // The opt-in Google Drive matrix makes three independent remote runs.
         var timeoutSeconds = scenario is "gdrive-volume" or "r2-volume" ? 30 * 60 : 15 * 60;
         var exited = process.WaitForExitAsync();
         if (await Task.WhenAny(exited, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds))) != exited)
         {
             await TerminateProcessTreeAsync(process);
-            var timedOutOutput = (await stdout) + Environment.NewLine + (await stderr);
-            _output.WriteLine($"UI scenario={scenario}; timeout={timeoutSeconds}s; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{timedOutOutput}");
+            var timedOutOutput = await ReadScenarioOutputAsync(outputPath, stdout, stderr);
+            _output.WriteLine($"UI scenario={scenario}; desktop={desktop?.Name ?? "visible"}; timeout={timeoutSeconds}s; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{timedOutOutput}");
             throw new TimeoutException($"UI scenario '{scenario}' exceeded {timeoutSeconds}s. Output:{Environment.NewLine}{timedOutOutput}");
         }
         timer.Stop();
-        var output = (await stdout) + Environment.NewLine + (await stderr);
-        _output.WriteLine($"UI scenario={scenario}; exit={process.ExitCode}; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{output}");
+        var output = await ReadScenarioOutputAsync(outputPath, stdout, stderr);
+        _output.WriteLine($"UI scenario={scenario}; desktop={desktop?.Name ?? "visible"}; exit={process.ExitCode}; elapsed={timer.Elapsed}; stdout/stderr:{Environment.NewLine}{output}");
         if (process.ExitCode == 77 && output.Contains("SKIPPED:", StringComparison.Ordinal))
             throw SkipException.ForSkip(output.Trim());
         Assert.True(process.ExitCode == 0, $"UI scenario '{scenario}' failed (exit {process.ExitCode}).{Environment.NewLine}{output}");
+        if (outputPath is not null) File.Delete(outputPath);
+    }
+
+    private static ProcessStartInfo RedirectedStartInfo(IReadOnlyList<string> arguments)
+    {
+        var start = new ProcessStartInfo("pwsh") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        return start;
+    }
+
+    /// <summary>
+    /// The scenario's output, from whichever stream the launch used. The file is written by the child and
+    /// closed when it exits, so a read can still race the last handle being released.
+    /// </summary>
+    private static async Task<string> ReadScenarioOutputAsync(string? path, Task<string>? stdout, Task<string>? stderr)
+    {
+        if (path is null)
+            return (stdout is null ? string.Empty : await stdout) + Environment.NewLine + (stderr is null ? string.Empty : await stderr);
+        for (var attempt = 0; ; attempt++)
+        {
+            try { return await File.ReadAllTextAsync(path); }
+            catch (IOException) when (attempt < 20) { await Task.Delay(100); }
+            catch (IOException) { return $"<the scenario output at '{path}' could not be read.>"; }
+        }
     }
 
     private static async Task TerminateProcessTreeAsync(Process process)
     {
         try
         {
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            if (!process.HasExited)
+            {
+                // taskkill walks the tree, which matters here: the harness's own children — the application,
+                // rclone, the CLI — are grandchildren of this process, and killing only the host would leave
+                // them for the next scenario's cleanup to find.
+                using var kill = Process.Start(new ProcessStartInfo("taskkill", $"/PID {process.Id} /T /F") { UseShellExecute = false, CreateNoWindow = true });
+                if (kill is not null) await kill.WaitForExitAsync();
+            }
         }
         catch (InvalidOperationException) { /* it exited between the check and kill */ }
+        catch (System.ComponentModel.Win32Exception) { /* taskkill could not be started */ }
+        try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+        catch (InvalidOperationException) { /* disposed/exited process */ }
         try { await process.WaitForExitAsync().ConfigureAwait(false); }
         catch (InvalidOperationException) { /* disposed/exited process */ }
     }

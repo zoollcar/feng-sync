@@ -147,9 +147,10 @@ S3 兼容的腾讯 COS / 阿里 OSS / 华为 OBS / 七牛 / 网易：**零代码
   `UiFeatureBehaviorTests` +2；`sftp-ui` 桌面场景加了「改名 → 再浏览 → 用新 URI 同步」。
 - `AGENTS.md` 里有一条对应的不变式（搜 `Renaming an endpoint cannot go through rclone`），改这块前先读它。
 
-**顺带修掉一个门禁 flake**（`23a945f`）：`Invoke-UiScenario.ps1` 的 `Capture-Element` 在桌面无关模式下仍先做
+**顺带修掉一个门禁 flake**（`23a945f`）：`Invoke-UiScenario.ps1` 的 `Capture-Element` 曾先做
 「元素必须有可见矩形」的检查，再判断「截图跳过」；一个完成太快的本地同步（进度窗正在收起、矩形已归零）
-会让整个套件失败（`local` 场景就这么挂过）。已把该检查移进真正的截图分支。
+会让整个套件失败（`local` 场景就这么挂过）。该检查已移进真正的截图分支。私有桌面改造后截图不再「跳过」，
+但同样的顺序仍然重要：元素矩形归零时 `PrintWindow` 的裁剪会算出零尺寸，所以检查留在分支内部。
 
 ### A3+A4 —— 端点搜索/排序 + 「测试全部」（`65de367` + `1264812`）
 
@@ -383,7 +384,7 @@ TwoWay 或 OneWayToSource 绑定`。窗口构造时抛在 `Application.Run` 里 
 | `UiConsistencyGuardrailTests.PageLocalButtonVisual` 的正则**只对 `<Button>` 元素的属性区**生效 | 给 `TextBox` 设 `Padding` 是安全的；`<Button>` 上一律不能写 `Height/MinHeight/Padding/FontSize/Background/Foreground/BorderBrush` |
 | `LiveTextAccessibilityTests` **只扫 `TextBlock`** | `TextBox`/`ComboBox`/`Button` 上的静态 `AutomationProperties.Name` 是允许的；动态文本 `TextBlock` 必须用 `AutomationId` |
 | 无桌面 WPF 测试模板 = `RunSta(Action)` + `EnsureApplicationResources()` + **从不 `Show()`** | 毫秒级，不需要前台会话 |
-| UI 测试**默认桌面无关**：窗口停 `-32000`，输入走 UIA pattern / posted 消息；`-ShowOnScreen` 恢复前台 | 不得引入合成鼠标移动（`DesktopFreeUiHarnessTests` 会拦） |
+| UI 测试**默认跑私有桌面**：`CreateDesktop` + `CreateProcessW(lpDesktop)`，应用照常开真实窗口、抢自己那个桌面的前台；`-ShowOnScreen` 才回到当前桌面 | 不得重新引入窗口停靠（`-32000`/`SetWindowPos`/`ShowWindow`）或应用侧 `TestWindowPlacement`；不得用 `Process.MainWindowHandle` 找主窗口（`PrivateDesktopHarnessTests` 三条都会拦） |
 | `RcloneLifecycleHost.GetClientAsync` **会真的起 rclone 进程**，而 `IAppServiceHost.RcloneHost` 是 **sealed 具体类**（无法替换） | 「不碰 rclone」的测试必须靠**不触发 `BrowseAsync`**，并用「`StatusText` 没被写过」来证明（`AssertNoDirectoryListing` 就是这个） |
 | 桌面场景里 `AutomationProperties.Name` 会**覆盖** `Content` 派生的名字 | 别想用 UIA 的 `Name` 去断言一个「标签会变」的按钮；改断言它的 `SelectionPattern` / 布局 |
 | WPF 跨进程 UIA 客户端拿不到 `TextBlock` 的 `TextPattern` | 断言文本要靠 `Name`（因此动态文本 `TextBlock` 必须**去掉**静态 `Name`） |

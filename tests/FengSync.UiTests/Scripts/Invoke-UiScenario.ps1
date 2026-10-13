@@ -3,10 +3,10 @@ param(
     [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'sftp-service', 'cloud-transfers', 'batch-run', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume', 'r2', 'r2-volume')][string]$Scenario,
     [Parameter(Mandatory)][string]$AppPath,
     [Parameter(Mandatory)][string]$Workspace,
-    # Off by default. See the "Desktop-free input" section below: a scenario normally parks its windows
-    # outside the visible desktop and drives them through UI Automation, so running the suite never covers
-    # the user's screen, never moves their cursor and never takes their foreground window. Pass this switch
-    # to watch a scenario run in the foreground with real mouse input.
+    # Off by default. See the "Where a scenario runs" section below: the test host normally starts this
+    # script on a private Windows desktop, where the scenario can raise windows, take the foreground and be
+    # clicked with a real mouse without any of it reaching whoever is using the machine. Pass this switch to
+    # run on the visible desktop instead, which is what a developer wants when watching a scenario by hand.
     [switch]$ShowOnScreen
 )
 
@@ -21,26 +21,29 @@ Add-Type @'
 using System;
 using System.Runtime.InteropServices;
 public struct FengSyncPoint { public int X; public int Y; }
+public struct FengSyncRect { public int Left; public int Top; public int Right; public int Bottom; }
 public static class FengSyncUiMouse {
   [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
   [DllImport("user32.dll")] public static extern void SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc proc, IntPtr lParam);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint procId);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-  [DllImport("user32.dll", EntryPoint="ShowWindow")] public static extern bool ShowWindowNative(IntPtr hWnd, int command);
-  [DllImport("user32.dll", EntryPoint="SetWindowPos")] public static extern bool SetWindowPosNative(IntPtr hWnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
-  // Desktop-free input: PostMessage delivers a gesture straight to a window's message queue, and
-  // ScreenToClient converts a UIA screen rectangle into that window's client space. Neither needs the
-  // window to be raised, and neither touches the physical cursor.
+  // PostMessage delivers a gesture straight to a window's message queue, and ScreenToClient converts a UIA
+  // screen rectangle into that window's client space. Neither needs the window to be raised, and neither
+  // touches the physical cursor.
   [DllImport("user32.dll", EntryPoint="PostMessage")] public static extern bool PostMessageNative(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool ScreenToClient(IntPtr hWnd, ref FengSyncPoint point);
+  // A window on a desktop that is not being displayed has no screen to copy from, so a capture is taken
+  // from the window itself. PW_RENDERFULLCONTENT is what makes a composited window render into the target
+  // device context instead of handing back an empty frame.
+  [DllImport("user32.dll", SetLastError=true)] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdc, uint flags);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, ref FengSyncRect rect);
   public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
   public const uint LEFTDOWN = 0x0002, LEFTUP = 0x0004, RIGHTDOWN = 0x0008, RIGHTUP = 0x0010;
-  public static readonly IntPtr TOPMOST = new IntPtr(-1), NOTOPMOST = new IntPtr(-2);
-  public const uint NOMOVE = 0x0002, NOSIZE = 0x0001, SHOWWINDOW = 0x0040, NOZORDER = 0x0004, NOACTIVATE = 0x0010;
-  public const int RESTORE = 9;
   public const uint WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205;
+  public const uint PW_RENDERFULLCONTENT = 0x00000002;
 }
 '@
 $AppPath = [IO.Path]::GetFullPath($AppPath); $Workspace = [IO.Path]::GetFullPath($Workspace)
@@ -77,93 +80,44 @@ function Write-HarnessTrace([string]$message) {
   Write-Host $message
 }
 Write-HarnessTrace "Starting scenario: $Scenario"
-Write-HarnessTrace $(if ($ShowOnScreen) { 'Input mode: on screen (windows raised, real mouse input).' } else { 'Input mode: desktop-free (windows parked off screen, input delivered through UI Automation).' })
+Write-HarnessTrace $(if ($ShowOnScreen) { 'Desktop: the visible one, because -ShowOnScreen was passed.' } else { 'Desktop: a private one, created by the test host for this scenario.' })
 
-# =================== Desktop-free input ===================
-# Default behaviour: a scenario must not disturb whoever is using the machine. Concretely that means
-#   1. no window is ever raised or activated, so the user's foreground window keeps focus;
-#   2. the physical cursor never moves, so no real mouse input is synthesized;
-#   3. every Feng Sync window is parked outside the visible desktop, so nothing is drawn over the user's work.
-#      A window that is moved after it has been shown has still been seen, and the shell spends seconds
-#      becoming ready before anything in this script can act — so the application is told to open its own
-#      windows off screen as well (FENGSYNC_OFFSCREEN_WINDOWS, set in Start-App). Parking here is the
-#      belt-and-braces for a window the application did not place itself.
-# Input is delivered instead through UI Automation patterns, and — for the few gestures WPF only produces
-# from a real window message, such as opening a ContextMenu — through PostMessage straight to the window's
-# message queue. Both work while the window sits off screen and while it is not the active window.
-# Pass -ShowOnScreen to get the historical behaviour back: windows restored, raised, and driven with real
-# mouse input. That mode exists for watching a scenario by hand, and is never the default.
+# =================== Where a scenario runs ===================
+# A scenario drives a real application through real windows, and the application has to be free to open
+# them, raise them, take the foreground, and — in the few steps that need it — be clicked with a real mouse.
+# What keeps that away from whoever is using the machine is not moving the windows but running them
+# somewhere else: the test host starts this script on a private Windows desktop (see PrivateDesktop.cs), and
+# every process this script starts in turn inherits that desktop. Windows on a desktop that is not being
+# displayed are never composited to a monitor, and that desktop has its own input queue and its own
+# foreground window — so none of it reaches the user's session, and nothing here has to avoid the pointer,
+# the foreground, or the screen.
+#
+# -ShowOnScreen is the one exception, and it is opt-in: the test host then starts this script on the visible
+# desktop instead, which is what a developer wants when watching a scenario by hand.
 $script:showOnScreen = [bool]$ShowOnScreen
-# Parked far outside every virtual desktop. SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE moves the window
-# without resizing it, without reordering it against other windows and without giving it focus.
-$script:offScreenOrigin = -32000
-
-function Initialize-TestWindowPlacement {
-  # Called as soon as the main window exists, before any interaction. A window parked here is still a
-  # normal, visible, fully rendered HWND: UI Automation sees it, WPF lays it out, and its BoundingRectangle
-  # stays correct — only its screen position changes. Every geometry assertion in this script compares
-  # rectangles inside the same window, so those all keep working.
-  if ($script:showOnScreen) { return }
-  if (-not $script:process -or $script:process.HasExited) { return }
-  foreach ($handle in Get-AppWindowHandles) { Park-WindowOffScreen $handle }
-}
-
-function Get-AppWindowHandles {
-  $handles = [System.Collections.Generic.List[IntPtr]]::new()
-  if (-not $script:process -or $script:process.HasExited) { return $handles }
-  $callback = {
-    param($hWnd, $lParam)
-    $procId = 0
-    [void][FengSyncUiMouse]::GetWindowThreadProcessId($hWnd, [ref]$procId)
-    if ($procId -eq $script:process.Id -and [FengSyncUiMouse]::IsWindowVisible($hWnd)) { $handles.Add($hWnd) }
-    return $true
-  }
-  [void][FengSyncUiMouse]::EnumWindows($callback, [IntPtr]::Zero)
-  return $handles
-}
-
-function Park-WindowOffScreen([IntPtr]$handle) {
-  if ($script:showOnScreen -or $handle -eq [IntPtr]::Zero) { return }
-  $flags = [FengSyncUiMouse]::NOSIZE -bor [FengSyncUiMouse]::NOZORDER -bor [FengSyncUiMouse]::NOACTIVATE
-  [void][FengSyncUiMouse]::SetWindowPosNative($handle, [IntPtr]::Zero, $script:offScreenOrigin, $script:offScreenOrigin, 0, 0, $flags)
-}
-
-# A window created after startup (a modal dialog, a message box) is parked as soon as it is seen, so the
-# user never catches a dialog flashing up in the middle of the screen.
-function Park-AllAppWindows {
-  if ($script:showOnScreen) { return }
-  foreach ($handle in Get-AppWindowHandles) { Park-WindowOffScreen $handle }
-}
+# Set properly by Start-App from the scenario; a capture taken before then would otherwise be described as
+# native-rendered, which is the one case where PrintWindow returns an empty client area.
+$script:softwareRendering = $true
 
 function Activate-TestWindow {
-  # Kept as the single "make the window ready for the next step" seam. Desktop-free mode deliberately does
-  # nothing here: the whole point is that the test never raises or focuses a window. Only -ShowOnScreen
-  # restores the restore/raise dance.
+  # The single "make the window ready for the next step" seam, and a no-op unless a developer asked to watch.
+  # Nothing is raised on the private desktop: a desktop that is not the input desktop refuses foreground
+  # changes anyway (measured: this desktop's foreground window stays 0x0 after the call), and the gestures this
+  # precedes reach WPF through focus and posted messages rather than through activation. The one case that
+  # genuinely needs a raised window is a real mouse click, and only -ShowOnScreen can make one.
   if (-not $script:showOnScreen) { return }
-  if (-not $script:process -or $script:process.HasExited -or $script:process.MainWindowHandle -eq 0) { return }
-  $handle = $script:process.MainWindowHandle
-  [void][FengSyncUiMouse]::ShowWindowNative($handle, [FengSyncUiMouse]::RESTORE)
-  $flags = [FengSyncUiMouse]::NOMOVE -bor [FengSyncUiMouse]::NOSIZE -bor [FengSyncUiMouse]::SHOWWINDOW
-  [void][FengSyncUiMouse]::SetWindowPosNative($handle, [FengSyncUiMouse]::TOPMOST, 0, 0, 0, 0, $flags)
-  [void][FengSyncUiMouse]::SetWindowPosNative($handle, [FengSyncUiMouse]::NOTOPMOST, 0, 0, 0, 0, $flags)
-  [void][FengSyncUiMouse]::SetForegroundWindow($handle)
+  try { [void][FengSyncUiMouse]::SetForegroundWindow((Get-MainWindowHandle)) } catch { }
 }
 
-# The narrow fallback for the gestures WPF only routes to an *active* window — opening a ContextMenu is the
-# one that matters here. It raises the window in the Z-order and takes the foreground so the posted message
-# reaches WPF's input system, but it never moves the window: it stays parked outside the visible desktop, so
-# the user still sees nothing, and the cursor is still never touched. Only the foreground window changes,
-# and only for the length of one gesture. Callers try the purely posted gesture first and fall back to this.
-function Focus-OffScreenWindow {
-  if ($script:showOnScreen) { Activate-TestWindow; return }
-  if (-not $script:process -or $script:process.HasExited -or $script:process.MainWindowHandle -eq 0) { return }
-  $handle = $script:process.MainWindowHandle
-  $flags = [FengSyncUiMouse]::NOMOVE -bor [FengSyncUiMouse]::NOSIZE -bor [FengSyncUiMouse]::SHOWWINDOW
-  [void][FengSyncUiMouse]::SetWindowPosNative($handle, [FengSyncUiMouse]::TOPMOST, 0, 0, 0, 0, $flags)
-  [void][FengSyncUiMouse]::SetWindowPosNative($handle, [FengSyncUiMouse]::NOTOPMOST, 0, 0, 0, 0, $flags)
-  $set = [FengSyncUiMouse]::SetForegroundWindow($handle)
-  Start-Sleep -Milliseconds 150
-  Write-HarnessTrace "raised the parked window into the foreground without moving it (hwnd=0x$($handle.ToInt64().ToString('X')), accepted=$set)."
+# Moves the physical pointer onto an element. Only -ShowOnScreen can do this: a desktop that is not the input
+# desktop denies cursor access outright (measured on this repository: GetCursorPos and mouse_event fail with
+# ERROR_ACCESS_DENIED and SetCursorPos returns false), so on the default private desktop this is a no-op by
+# construction. It is a function rather than an inline call so that every pointer call in this file sits in a
+# function that consults the switch — which is exactly what the guardrail test pins.
+function Move-PointerTo($element) {
+  if (-not $script:showOnScreen) { return }
+  $bounds = $element.Current.BoundingRectangle
+  [Windows.Forms.Cursor]::Position = [Drawing.Point]::new([int]($bounds.Left + ($bounds.Width / 2)), [int]($bounds.Top + ($bounds.Height / 2)))
 }
 
 # --- gesture helpers ---------------------------------------------------------------------------------
@@ -172,8 +126,7 @@ function Focus-OffScreenWindow {
 function Get-OwningWindowHandle($element) {
   $handle = [IntPtr]$element.Current.NativeWindowHandle
   if ($handle -ne [IntPtr]::Zero) { return $handle }
-  if ($script:process -and -not $script:process.HasExited -and $script:process.MainWindowHandle -ne 0) { return $script:process.MainWindowHandle }
-  return [IntPtr]::Zero
+  try { return Get-MainWindowHandle } catch { return [IntPtr]::Zero }
 }
 
 # The point inside an element that a gesture should target, in the owning window's client space. The
@@ -469,11 +422,57 @@ function Close-ContextMenuBestEffort {
     Start-Sleep -Milliseconds 120
   }
 }
-function Get-LiveMain {
+function Get-LiveMain { return [System.Windows.Automation.AutomationElement]::FromHandle((Get-MainWindowHandle)) }
+# Every visible top-level window this process owns, in the desktop's z-order. EnumWindows enumerates the
+# calling thread's own desktop, and the harness runs on the same private desktop as the application, so this
+# sees exactly the application's windows — nothing of the user's session is in scope.
+$script:appWindowHandles = $null
+function Get-AppWindowHandles {
+  if (-not $script:process -or $script:process.HasExited) { return @() }
+  $script:appWindowHandles = [System.Collections.Generic.List[IntPtr]]::new()
+  $callback = {
+    param($hWnd, $lParam)
+    $procId = 0
+    [void][FengSyncUiMouse]::GetWindowThreadProcessId($hWnd, [ref]$procId)
+    if ($procId -eq $script:process.Id -and [FengSyncUiMouse]::IsWindowVisible($hWnd)) {
+      $script:appWindowHandles.Add($hWnd)
+    }
+    return $true
+  }
+  [void][FengSyncUiMouse]::EnumWindows($callback, [IntPtr]::Zero)
+  return $script:appWindowHandles
+}
+# The application's main window, identified by what it is rather than by what the process reports.
+#
+# Process.MainWindowHandle is a heuristic: the first visible top-level window the process owns. On a private
+# desktop the application owns more than one, because the input-indicator overlays (UAC_InputIndicatorOverlayWnd
+# and UAC Input Indicator) are created in-process a few seconds in and sit above everything. MainWindowHandle
+# then returns one of those: a real window, just not the shell, so every lookup rooted at "the main window"
+# starts failing with a missing element while the shell is plainly still there. Measured on this repository:
+# at 3s MainWindowHandle already named the overlay, while the shell was still the visible top-level window of
+# ControlType Window that hosts ProfileList.
+#
+# So the main window is resolved structurally instead, and the answer is cached — the enumeration is cheap but
+# the UIA subtree search that confirms it is not, and callers poll this every 100ms.
+$script:mainWindowHandle = [IntPtr]::Zero
+function Get-MainWindowHandle {
   if (-not $script:process -or $script:process.HasExited) { throw 'Feng Sync exited before the current UI step completed.' }
-  $script:process.Refresh()
-  if ($script:process.MainWindowHandle -eq 0) { throw 'Feng Sync no longer has a main window.' }
-  return [System.Windows.Automation.AutomationElement]::FromHandle($script:process.MainWindowHandle)
+  if ($script:mainWindowHandle -ne [IntPtr]::Zero -and [FengSyncUiMouse]::IsWindow($script:mainWindowHandle) -and [FengSyncUiMouse]::IsWindowVisible($script:mainWindowHandle)) { return $script:mainWindowHandle }
+  $script:mainWindowHandle = [IntPtr]::Zero
+  foreach ($hwnd in (Get-AppWindowHandles)) {
+    try {
+      $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
+      if (-not $candidate) { continue }
+      # A dialog is a Window too, and it is above the shell in z-order, so being a Window is not enough on
+      # its own: the shell is the one that hosts the profile workspace, which every scenario depends on.
+      if ($candidate.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) { continue }
+      $shell = $candidate.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ProfileList'))
+      if (-not $shell) { continue }
+      $script:mainWindowHandle = $hwnd
+      return $hwnd
+    } catch { }
+  }
+  throw 'Feng Sync no longer has a main window.'
 }
 function Find-AppWindow([scriptblock]$predicate) {
   if (-not $script:process -or $script:process.HasExited) { return $null }
@@ -481,19 +480,7 @@ function Find-AppWindow([scriptblock]$predicate) {
   # RootElement.FindAll(Children/Ddescendants) while the main window is disabled —
   # UIA returns RPC_E_SERVERFAULT and omits the modal from the tree. Enumerate
   # top-level windows directly via Win32 and convert each HWND to a UIA element.
-  $script:windowHandles = [System.Collections.Generic.List[IntPtr]]::new()
-  $callback = {
-    param($hWnd, $lParam)
-    $procId = 0
-    [void][FengSyncUiMouse]::GetWindowThreadProcessId($hWnd, [ref]$procId)
-    if ($procId -eq $script:process.Id -and [FengSyncUiMouse]::IsWindowVisible($hWnd)) {
-      $script:windowHandles.Add($hWnd)
-    }
-    return $true
-  }
-  $script:windowHandles.Clear()
-  [void][FengSyncUiMouse]::EnumWindows($callback, [IntPtr]::Zero)
-  foreach ($hwnd in $script:windowHandles) {
+  foreach ($hwnd in (Get-AppWindowHandles)) {
     try {
       $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
       if ($candidate.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) { continue }
@@ -503,16 +490,10 @@ function Find-AppWindow([scriptblock]$predicate) {
   return $null
 }
 function Find-WindowLike([string]$titleFragment, [int]$seconds = 20) {
-  $window = Wait-Until { try { Find-AppWindow { param($window) $window.Current.Name -like "*$titleFragment*" } } catch { $null } } "Missing Feng Sync window containing: $titleFragment" $seconds
-  # A modal dialog opens centred on screen; a desktop-free run moves it away the moment it is located, so
-  # the user never catches it flashing up. Parking is idempotent, so repeating it per lookup is harmless.
-  Park-AllAppWindows
-  return $window
+  return Wait-Until { try { Find-AppWindow { param($window) $window.Current.Name -like "*$titleFragment*" } } catch { $null } } "Missing Feng Sync window containing: $titleFragment" $seconds
 }
 function Find-WindowById([string]$id, [int]$seconds = 20) {
-  $window = Wait-Until { try { Find-AppWindow { param($window) $window.Current.AutomationId -eq $id } } catch { $null } } "Missing Feng Sync window with id: $id" $seconds
-  Park-AllAppWindows
-  return $window
+  return Wait-Until { try { Find-AppWindow { param($window) $window.Current.AutomationId -eq $id } } catch { $null } } "Missing Feng Sync window with id: $id" $seconds
 }
 function Get-CloudDetailsValue($panel, [string]$label) {
   # 属性 面板的每一行是 CloudDetailsLabel{i} 和 CloudDetailsValue{i} 两个 TextBlock，行号由画它们的那个循环
@@ -682,11 +663,12 @@ function Open-ProfileContextMenu([string]$requiredItemId = 'ProfileContextEdit')
   $itemCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $requiredItemId)
   for ($attempt = 1; $attempt -le 3; $attempt++) {
     # Three routes, cheapest first: the context-menu key, the Shift+F10 chord, then the same key again with
-    # the window raised in the Z-order. None of them moves the pointer or unparks the window.
+    # the window activated first — WPF only routes a ContextMenu to an active window. Activating costs
+    # nothing here: the window is on this scenario's own desktop.
     switch ($attempt) {
       1 { Invoke-RightClickGesture $target }
-      2 { Focus-OffScreenWindow; Post-ContextMenuKeyChord (Get-OwningWindowHandle $target) }
-      default { Focus-OffScreenWindow; Invoke-RightClickGesture $target }
+      2 { Activate-TestWindow; Post-ContextMenuKeyChord (Get-OwningWindowHandle $target) }
+      default { Activate-TestWindow; Invoke-RightClickGesture $target }
     }
     $menu = $null
     $deadline = [DateTime]::UtcNow.AddSeconds(3)
@@ -715,7 +697,6 @@ function Delete-Profile-ThroughContextMenu {
   # (Escape / X) would answer No, which leaves the profile in the list. Walk the
   # dialog tree to find the Yes button by name and invoke it directly through UIA.
   $removeDialog = Wait-Until { try { Find-AppWindow { param($window) $window.Current.Name -like '*移除配置*' } } catch { $null } } 'Remove profile dialog did not appear' 30
-  Park-WindowOffScreen ([IntPtr]$removeDialog.Current.NativeWindowHandle)
   $yes = Wait-Until { try { Find-Name $removeDialog '是' 1 } catch { try { Find-Name $removeDialog 'Yes' 1 } catch { $null } } } 'Yes button did not appear on the remove dialog.' 5
   # A MessageBox is a native dialog, so its Yes button exposes no InvokePattern and — unlike the WPF windows
   # this harness drives — cannot be activated through one. It does answer the WM_COMMAND its own button
@@ -739,9 +720,8 @@ function Delete-Profile-ThroughContextMenu {
 function Set-ProfileConcurrency($main, [int]$value) {
   Click (Find-Id $main 'EditCurrentProfileButton')
   $editor = Find-WindowById 'ProfileEditorWindow'
-  Park-WindowOffScreen ([IntPtr]$editor.Current.NativeWindowHandle)
-  # Bring the concurrency field into view by scrolling, not by pressing End: the keyboard route needs a
-  # foreground window, and a scroll is the same state change through UI Automation.
+  # Bring the concurrency field into view by scrolling, not by pressing End: a scroll is the same state
+  # change through UI Automation and does not depend on which control holds keyboard focus.
   Scroll-ToBottom (Find-Id $editor 'ProfileSections')
   Start-Sleep -Milliseconds 200
   $useDefault = Find-Id $editor 'ProfileUseDefaultConcurrency'
@@ -800,8 +780,6 @@ function Wait-MainReadyAfterSync([int]$seconds) {
     Start-Sleep -Milliseconds 150
   } while ([DateTime]::UtcNow -lt $deadline)
   if (-not $mainReady) { throw 'The main window did not become interactive after synchronization.' }
-  # A finished sync can restore or activate the shell; put it back off screen before the next step.
-  Park-AllAppWindows
   $status = Assert-NoUiFailure 'Synchronization'
   Write-HarnessTrace "Application operation boundary reached. UI status: $status"
 }
@@ -809,7 +787,6 @@ $approvedConfirmations = [Collections.Generic.HashSet[string]]::new()
 function Approve-ConfirmationIfPresent {
   $confirm = try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'SyncConfirmationWindow' } } catch { $null }
   if ($confirm) {
-    Park-WindowOffScreen ([IntPtr]$confirm.Current.NativeWindowHandle)
     $id = [string]::Join('-', $confirm.GetRuntimeId())
     if ($approvedConfirmations.Add($id)) {
       Capture-Element $confirm ("sync-{0:D2}-confirmation.png" -f $script:syncScreenshotCount) 'sync-confirmation' $script:activeSyncLabel
@@ -840,7 +817,6 @@ function Wait-Sync { param($main, [string]$expectedFile, [int]$comparisonSeconds
       if (-not $script:activeSyncProgressCaptured) {
         $progress = try { Find-AppWindow { param($window) $window.Current.AutomationId -eq 'ProgressWindow' } } catch { $null }
         if ($progress) {
-          Park-WindowOffScreen ([IntPtr]$progress.Current.NativeWindowHandle)
           try {
             $bytesCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ProgressBytesText')
             $speedCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ProgressSpeedText')
@@ -950,41 +926,27 @@ function Compare-Ui {
 }
 function Start-App {
   $start = [Diagnostics.ProcessStartInfo]::new($AppPath); $start.UseShellExecute = $false; $start.Arguments = "--fengsync-test-run-id $stamp"; $start.EnvironmentVariables['FENGSYNC_DATA_DIR'] = $appData; $start.EnvironmentVariables['FENGSYNC_DISABLE_UPDATE_CHECK'] = '1'
-  $start.EnvironmentVariables['FENGSYNC_FORCE_SOFTWARE_RENDERING'] = if ($Scenario -eq 'ui-shell-software') { '1' } else { '0' }
-  # A desktop-free run has to keep the shell off the user's desktop from its first frame. Moving it after it
-  # has been shown is too late — it is on screen, and in the foreground, for as long as this process takes to
-  # notice it, and the shell spends seconds becoming ready — so the application is told to open its own
-  # windows outside the visible desktop. An on-screen run leaves the application alone, which is exactly what
-  # -ShowOnScreen is for.
-  $start.EnvironmentVariables['FENGSYNC_OFFSCREEN_WINDOWS'] = if ($script:showOnScreen) { '0' } else { '1' }
-  $null = Write-HarnessTrace ("Launching Feng Sync with rendering mode: {0}" -f $(if ($Scenario -eq 'ui-shell-software') { 'software' } else { 'native-default' }))
+  # A capture on a private desktop comes from the window itself (see Capture-Element), and WPF's default
+  # hardware path does not render into a device context that PrintWindow can read — so the scenarios ask the
+  # application for software rendering, which is a supported production path. The one exception is the
+  # scenario whose subject *is* the native rendering path: it keeps it, and its screenshots say so.
+  $script:softwareRendering = $Scenario -ne 'ui-shell-native'
+  $start.EnvironmentVariables['FENGSYNC_FORCE_SOFTWARE_RENDERING'] = if ($script:softwareRendering) { '1' } else { '0' }
+  $null = Write-HarnessTrace ("Launching Feng Sync with rendering mode: {0}" -f $(if ($script:softwareRendering) { 'software' } else { 'native-default' }))
   $p = [Diagnostics.Process]::Start($start)
-  # Every parking helper keys off $script:process, and the caller does not assign it until this function has
-  # returned — so it has to be recorded here. Without this the park below is a silent no-op and the shell
-  # stays on the visible desktop for the whole scenario.
   $script:process = $p
+  # The previous scenario's handle must not survive into this one, and the shell is resolved by what it is
+  # rather than through Process.MainWindowHandle (see Get-MainWindowHandle).
+  $script:mainWindowHandle = [IntPtr]::Zero
   $main = Wait-Until {
-    # Park as soon as the HWND exists rather than once the shell is ready: the shell can take seconds to
-    # become ready, and the window is on the visible desktop for every one of them.
-    $null = Park-AllAppWindows
-    if ($p.MainWindowHandle -eq 0) { return $null }
-    $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
-    $profileList = $candidate.FindFirst(
-      [System.Windows.Automation.TreeScope]::Descendants,
-      [System.Windows.Automation.PropertyCondition]::new(
-        [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
-        'ProfileList'))
-    if ($profileList) { return $candidate }
-    return $null
+    try { [System.Windows.Automation.AutomationElement]::FromHandle((Get-MainWindowHandle)) } catch { $null }
   } 'Main window shell did not become ready'
-  # Belt and braces: the application parks its own shell from the first frame, and this still catches a
-  # window the application did not place itself.
-  Initialize-TestWindowPlacement
   return @($p, $main)
 }
 function Stop-App {
   param($p)
   if (-not $p) { return }
+  $script:mainWindowHandle = [IntPtr]::Zero
   try {
     if (-not $p.HasExited) {
       try { $p.Kill($true) } catch { & taskkill.exe /PID $p.Id /T /F *> $null }
@@ -1004,23 +966,44 @@ function Capture-Element {
     [Parameter(Mandatory)][string]$category,
     [string]$context = ''
   )
-  if (-not $script:showOnScreen) {
-    # A screen copy is impossible for a window parked off screen — it would capture the desktop there. The
-    # geometry assertions that matter have already run against the same rectangles, so the run records that
-    # the evidence was not taken rather than pretending it was. The bounds guard below is deliberately not
-    # applied here: with no capture to protect it would only turn a window that happened to collapse between
-    # being located and being described — a fast local sync closing its progress surface — into a failure.
-    $screenshotManifest.Add([pscustomobject]@{ File = ''; Category = $category; Context = $context; CapturedUtc = [DateTimeOffset]::UtcNow; Note = "skipped: $name (desktop-free run; pass -ShowOnScreen to capture screenshots)" })
-    Write-HarnessTrace "Screenshot skipped (desktop-free run): $name [$category] $context"
-    return
-  }
   $bounds = $element.Current.BoundingRectangle
   if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw "Cannot capture '$name' because the UI element has no visible bounds." }
+  $target = Join-Path $artifacts $name
+  if (-not $script:showOnScreen) {
+    # A private desktop has no screen to copy from, so the capture comes from the window itself: PrintWindow
+    # renders the window into a bitmap, and the element's rectangle is cropped out of it. The element's
+    # rectangle is in screen coordinates and the window's is too, so the difference between them is the
+    # offset inside the window.
+    $handle = Get-OwningWindowHandle $element
+    if ($handle -eq [IntPtr]::Zero) { throw "Cannot capture '$name' because the element is not owned by a Feng Sync window." }
+    $window = New-Object FengSyncRect
+    if (-not [FengSyncUiMouse]::GetWindowRect($handle, [ref]$window)) { throw "Cannot capture '$name' because the owning window has no rectangle." }
+    $windowWidth = $window.Right - $window.Left; $windowHeight = $window.Bottom - $window.Top
+    if ($windowWidth -le 0 -or $windowHeight -le 0) { throw "Cannot capture '$name' because the owning window has no size." }
+    $full = [Drawing.Bitmap]::new($windowWidth, $windowHeight)
+    $graphics = [Drawing.Graphics]::FromImage($full)
+    $hdc = $graphics.GetHdc()
+    try { $null = [FengSyncUiMouse]::PrintWindow($handle, $hdc, [FengSyncUiMouse]::PW_RENDERFULLCONTENT) }
+    finally { $graphics.ReleaseHdc($hdc); $graphics.Dispose() }
+    $left = [Math]::Max(0, [int][Math]::Round($bounds.Left - $window.Left))
+    $top = [Math]::Max(0, [int][Math]::Round($bounds.Top - $window.Top))
+    $width = [Math]::Min($windowWidth - $left, [int][Math]::Ceiling($bounds.Width))
+    $height = [Math]::Min($windowHeight - $top, [int][Math]::Ceiling($bounds.Height))
+    if ($width -le 0 -or $height -le 0) { $full.Dispose(); throw "Cannot capture '$name' because the element is outside its window." }
+    $crop = New-Object Drawing.Rectangle($left, $top, $width, $height)
+    $image = $full.Clone($crop, $full.PixelFormat)
+    $full.Dispose()
+    try { $image.Save($target, [Drawing.Imaging.ImageFormat]::Png) } finally { $image.Dispose() }
+    if (-not (Test-Path -LiteralPath $target) -or (Get-Item -LiteralPath $target).Length -le 0) { throw "UI screenshot was not saved: $target" }
+    $note = if ($script:softwareRendering) { '' } else { 'native rendering: only the window frame is captured, because the hardware path does not render into PrintWindow' }
+    $screenshotManifest.Add([pscustomobject]@{ File = $name; Category = $category; Context = $context; CapturedUtc = [DateTimeOffset]::UtcNow; Note = $note })
+    Write-HarnessTrace "Screenshot captured from the window: $name [$category] $context"
+    return
+  }
   Activate-TestWindow
   $handle = [IntPtr]$element.Current.NativeWindowHandle
   if ($handle -ne [IntPtr]::Zero) { [void][FengSyncUiMouse]::SetForegroundWindow($handle) }
   Start-Sleep -Milliseconds 180
-  $target = Join-Path $artifacts $name
   $image = [Drawing.Bitmap]::new([int][Math]::Ceiling($bounds.Width), [int][Math]::Ceiling($bounds.Height))
   $graphics = [Drawing.Graphics]::FromImage($image)
   try {
@@ -1033,8 +1016,10 @@ function Capture-Element {
   Write-HarnessTrace "Screenshot captured: $name [$category] $context"
 }
 function Capture-Window { param($p, [string]$name, [string]$category = 'window', [string]$context = '')
-  if (-not $p -or $p.MainWindowHandle -eq 0) { throw "Cannot capture '$name' because Feng Sync has no main window." }
-  Capture-Element ([System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)) $name $category $context
+  if (-not $p) { throw "Cannot capture '$name' because Feng Sync is not running." }
+  $handle = try { Get-MainWindowHandle } catch { [IntPtr]::Zero }
+  if ($handle -eq [IntPtr]::Zero) { throw "Cannot capture '$name' because Feng Sync has no main window." }
+  Capture-Element ([System.Windows.Automation.AutomationElement]::FromHandle($handle)) $name $category $context
 }
 function Set-WindowSize { param($window, [double]$width, [double]$height, [string]$label)
   $windowPattern = $null
@@ -1231,8 +1216,7 @@ try {
       if ($action.Current.HelpText -notmatch '复制新项目到') { throw "Comparison action did not expose its hover explanation: $($action.Current.HelpText)" }
       if ($script:showOnScreen) {
         # Only a real hover makes WPF open the tooltip, so the screenshot of it needs the on-screen mode.
-        $actionBounds = $action.Current.BoundingRectangle
-        [Windows.Forms.Cursor]::Position = [Drawing.Point]::new([int]($actionBounds.Left + ($actionBounds.Width / 2)), [int]($actionBounds.Top + ($actionBounds.Height / 2)))
+        Move-PointerTo $action
         Start-Sleep -Milliseconds 1600
       }
       Capture-Window $process '03-shell-tooltip.png' 'comparison-detail' 'comparison action tooltip'
@@ -1242,10 +1226,9 @@ try {
       Click (Find-Id $main 'ChangeSummaryTotal')
       Wait-Until { $items = (Find-Id $main 'Comparison').FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)); $items.Count -eq 2 } 'Total summary button did not restore all comparison rows.' | Out-Null
       $screenshot = Join-Path $artifacts '02-shell.png'
-      # A desktop-free run records the screenshot as skipped, so only an on-screen run has a file to check.
-      if ($script:showOnScreen -and (-not (Test-Path -LiteralPath $screenshot) -or (Get-Item -LiteralPath $screenshot).Length -le 0)) { throw 'Shell screenshot was not saved.' }
+      if (-not (Test-Path -LiteralPath $screenshot) -or (Get-Item -LiteralPath $screenshot).Length -le 0) { throw 'Shell screenshot was not saved.' }
       if ($main.Current.BoundingRectangle.Width -le 0 -or $main.Current.BoundingRectangle.Height -le 0) { throw 'Main window is not visible after shell rendering.' }
-      Write-HarnessTrace ("Shell rendering verified for mode: {0}; screenshot: {1}" -f $(if ($Scenario -eq 'ui-shell-software') { 'software' } else { 'native-default' }), $(if ($script:showOnScreen) { $screenshot } else { 'skipped (desktop-free run)' }))
+      Write-HarnessTrace ("Shell rendering verified for mode: {0}; screenshot: {1}" -f $(if ($script:softwareRendering) { 'software' } else { 'native-default' }), $screenshot)
     }
     'ui-visual-matrix' {
       $sizes = @(
@@ -1267,11 +1250,7 @@ try {
       $main = Get-LiveMain
       Assert-VisualMatrixGeometry $main 'maximized'
       Capture-Window $process '02-visual-maximized.png'
-      # Maximizing is the one gesture that puts a parked window back onto a monitor — Windows maximizes onto
-      # the display it chooses, not onto the window's current position. Restore and park it again, so the
-      # rest of the scenario does not run with the shell on the user's screen.
       $windowPattern.SetWindowVisualState([System.Windows.Automation.WindowVisualState]::Normal)
-      Park-AllAppWindows
       Write-HarnessTrace 'Visual matrix verified: maximized.'
     }
     'update-settings' {

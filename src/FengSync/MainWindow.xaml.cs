@@ -57,10 +57,6 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        // A desktop-free test run must not draw the shell on the user's screen, and nothing outside this
-        // process can act before it has been drawn — so the window is moved out of the way here, before it
-        // is ever shown. See TestWindowPlacement.
-        TestWindowPlacement.Apply(this);
         Comparison.ItemsSource = _rows;
         ProfileList.ItemsSource = _profiles;
         Comparison.AddHandler(CheckBox.CheckedEvent, new RoutedEventHandler((_, _) => Dispatcher.BeginInvoke(RefreshSummary)));
