@@ -1421,6 +1421,12 @@ Rclone：MIT License</value>
   <data name="Mgr.BookmarksSaveFailed" xml:space="preserve">
     <value>无法保存收藏与最近访问：</value>
   </data>
+  <data name="Mgr.BrowserEmptyDetail" xml:space="preserve">
+    <value>选中一个端点后，这里会显示它的文件和目录。</value>
+  </data>
+  <data name="Mgr.BrowserEmptyHint" xml:space="preserve">
+    <value>请在左侧选择云盘端点</value>
+  </data>
   <data name="Mgr.BrowserOpenFailed" xml:space="preserve">
     <value>没能打开浏览器：</value>
   </data>
@@ -1612,9 +1618,6 @@ Rclone：MIT License</value>
 
 继续删除端点？</value>
   </data>
-  <data name="Mgr.DeleteItemsName" xml:space="preserve">
-    <value>删除所选项目</value>
-  </data>
   <data name="Mgr.DeleteSelected" xml:space="preserve">
     <value>删除所选的 {0} 项…</value>
   </data>
@@ -1708,14 +1711,8 @@ Rclone：MIT License</value>
   <data name="Mgr.EditEndpointName" xml:space="preserve">
     <value>编辑所选云盘端点</value>
   </data>
-  <data name="Mgr.EmptyTrash" xml:space="preserve">
-    <value>清空回收站</value>
-  </data>
   <data name="Mgr.EmptyTrashEllipsis" xml:space="preserve">
     <value>清空回收站…</value>
-  </data>
-  <data name="Mgr.EmptyTrashName" xml:space="preserve">
-    <value>永久删除回收站里的全部内容</value>
   </data>
   <data name="Mgr.EndpointCount" xml:space="preserve">
     <value>共 {0} 个云端端点。</value>
@@ -1801,6 +1798,9 @@ Rclone：MIT License</value>
   <data name="Mgr.FavoriteThisDirectory" xml:space="preserve">
     <value>收藏此目录</value>
   </data>
+  <data name="Mgr.Favorites" xml:space="preserve">
+    <value>收藏夹</value>
+  </data>
   <data name="Mgr.FileExistsPrompt" xml:space="preserve">
     <value>“{0}”已存在，是否覆盖？</value>
   </data>
@@ -1813,9 +1813,6 @@ Rclone：MIT License</value>
   <data name="Mgr.FileReadFailed" xml:space="preserve">
     <value>无法读取文件：</value>
   </data>
-  <data name="Mgr.FileRowLabel" xml:space="preserve">
-    <value>文件</value>
-  </data>
   <data name="Mgr.FolderCreated" xml:space="preserve">
     <value>已创建文件夹：{0}</value>
   </data>
@@ -1824,12 +1821,6 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.Forward" xml:space="preserve">
     <value>前进</value>
-  </data>
-  <data name="Mgr.Go" xml:space="preserve">
-    <value>转到</value>
-  </data>
-  <data name="Mgr.GoToName" xml:space="preserve">
-    <value>转到输入的路径</value>
   </data>
   <data name="Mgr.GridView" xml:space="preserve">
     <value>网格视图</value>
@@ -1899,9 +1890,6 @@ Rclone：MIT License</value>
   <data name="Mgr.JsonFileFilter" xml:space="preserve">
     <value>JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*</value>
   </data>
-  <data name="Mgr.Jump" xml:space="preserve">
-    <value>跳转</value>
-  </data>
   <data name="Mgr.JumpEndpointMissing" xml:space="preserve">
     <value>端点“{0}”已不在列表里，无法跳转。</value>
   </data>
@@ -1962,9 +1950,6 @@ Rclone：MIT License</value>
   <data name="Mgr.MovedItems" xml:space="preserve">
     <value>已移动 {0} 项</value>
   </data>
-  <data name="Mgr.NavigationRowLabel" xml:space="preserve">
-    <value>导航</value>
-  </data>
   <data name="Mgr.NewEndpoint" xml:space="preserve">
     <value>新建端点</value>
   </data>
@@ -1979,9 +1964,6 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.NewFolderFailedTitle" xml:space="preserve">
     <value>新建文件夹失败</value>
-  </data>
-  <data name="Mgr.NewFolderName" xml:space="preserve">
-    <value>在当前目录新建文件夹</value>
   </data>
   <data name="Mgr.NewFolderPrompt" xml:space="preserve">
     <value>在当前目录 {0} 下新建文件夹，名称：</value>
@@ -2022,8 +2004,8 @@ Rclone：MIT License</value>
   <data name="Mgr.OpenTransfersName" xml:space="preserve">
     <value>打开云盘传输窗口</value>
   </data>
-  <data name="Mgr.OpenTrashName" xml:space="preserve">
-    <value>打开该端点的回收站文件夹</value>
+  <data name="Mgr.OpenTrash" xml:space="preserve">
+    <value>打开回收站</value>
   </data>
   <data name="Mgr.OpenedPrefix" xml:space="preserve">
     <value>已打开：</value>
@@ -2202,9 +2184,6 @@ Rclone：MIT License</value>
   <data name="Mgr.RecycleEllipsis" xml:space="preserve">
     <value>移到回收站…</value>
   </data>
-  <data name="Mgr.RecycleItemName" xml:space="preserve">
-    <value>把所选项目移入该端点的回收站</value>
-  </data>
   <data name="Mgr.RecycleSelected" xml:space="preserve">
     <value>把所选的 {0} 项移到回收站…</value>
   </data>
@@ -2244,9 +2223,6 @@ Rclone：MIT License</value>
   <data name="Mgr.RenameFailedTitle" xml:space="preserve">
     <value>重命名失败</value>
   </data>
-  <data name="Mgr.RenameItemName" xml:space="preserve">
-    <value>重命名所选项目</value>
-  </data>
   <data name="Mgr.RenamePrompt" xml:space="preserve">
     <value>“{0}”的新名称：</value>
   </data>
@@ -2259,14 +2235,8 @@ Rclone：MIT License</value>
   <data name="Mgr.RenamingItem" xml:space="preserve">
     <value>正在重命名“{0}”…</value>
   </data>
-  <data name="Mgr.Restore" xml:space="preserve">
-    <value>还原</value>
-  </data>
   <data name="Mgr.RestoreEllipsis" xml:space="preserve">
     <value>还原…</value>
-  </data>
-  <data name="Mgr.RestoreItemsName" xml:space="preserve">
-    <value>把所选的回收站项目还原到原目录</value>
   </data>
   <data name="Mgr.RestoreMounts" xml:space="preserve">
     <value>一键恢复</value>
@@ -2346,9 +2316,6 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.SelectItemsToRecycle" xml:space="preserve">
     <value>请先选择要移到回收站的项目。</value>
-  </data>
-  <data name="Mgr.SelectItemsToRestore" xml:space="preserve">
-    <value>请先选择要还原的项目。</value>
   </data>
   <data name="Mgr.SelectMountToUnmount" xml:space="preserve">
     <value>请先选择要取消的挂载。</value>
@@ -2440,9 +2407,6 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.TransferRowLabel" xml:space="preserve">
     <value>传输</value>
-  </data>
-  <data name="Mgr.Trash" xml:space="preserve">
-    <value>回收站</value>
   </data>
   <data name="Mgr.TrashEmpty" xml:space="preserve">
     <value>回收站是空的，没有可删除的项目。</value>

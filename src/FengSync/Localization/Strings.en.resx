@@ -1421,6 +1421,12 @@ Started: {1:yyyy-MM-dd HH:mm:ss}
   <data name="Mgr.BookmarksSaveFailed" xml:space="preserve">
     <value>Could not save the favorites and recent items: </value>
   </data>
+  <data name="Mgr.BrowserEmptyDetail" xml:space="preserve">
+    <value>Once you select an endpoint, its files and folders appear here.</value>
+  </data>
+  <data name="Mgr.BrowserEmptyHint" xml:space="preserve">
+    <value>Select a cloud drive endpoint on the left</value>
+  </data>
   <data name="Mgr.BrowserOpenFailed" xml:space="preserve">
     <value>Could not open the browser: </value>
   </data>
@@ -1612,9 +1618,6 @@ Continue?</value>
 
 Delete the endpoint anyway?</value>
   </data>
-  <data name="Mgr.DeleteItemsName" xml:space="preserve">
-    <value>Delete the selected items</value>
-  </data>
   <data name="Mgr.DeleteSelected" xml:space="preserve">
     <value>Delete the {0} selected items…</value>
   </data>
@@ -1708,14 +1711,8 @@ Delete the endpoint anyway?</value>
   <data name="Mgr.EditEndpointName" xml:space="preserve">
     <value>Edit the selected cloud endpoint</value>
   </data>
-  <data name="Mgr.EmptyTrash" xml:space="preserve">
-    <value>Empty recycle bin</value>
-  </data>
   <data name="Mgr.EmptyTrashEllipsis" xml:space="preserve">
     <value>Empty the recycle bin…</value>
-  </data>
-  <data name="Mgr.EmptyTrashName" xml:space="preserve">
-    <value>Permanently delete everything in the recycle bin</value>
   </data>
   <data name="Mgr.EndpointCount" xml:space="preserve">
     <value>{0} cloud endpoints.</value>
@@ -1801,6 +1798,9 @@ Delete the endpoint anyway?</value>
   <data name="Mgr.FavoriteThisDirectory" xml:space="preserve">
     <value>Add this folder to favorites</value>
   </data>
+  <data name="Mgr.Favorites" xml:space="preserve">
+    <value>Favorites</value>
+  </data>
   <data name="Mgr.FileExistsPrompt" xml:space="preserve">
     <value>“{0}” already exists. Overwrite it?</value>
   </data>
@@ -1813,9 +1813,6 @@ Delete the endpoint anyway?</value>
   <data name="Mgr.FileReadFailed" xml:space="preserve">
     <value>Could not read the file: </value>
   </data>
-  <data name="Mgr.FileRowLabel" xml:space="preserve">
-    <value>File</value>
-  </data>
   <data name="Mgr.FolderCreated" xml:space="preserve">
     <value>Created the folder: {0}</value>
   </data>
@@ -1824,12 +1821,6 @@ Delete the endpoint anyway?</value>
   </data>
   <data name="Mgr.Forward" xml:space="preserve">
     <value>Forward</value>
-  </data>
-  <data name="Mgr.Go" xml:space="preserve">
-    <value>Go</value>
-  </data>
-  <data name="Mgr.GoToName" xml:space="preserve">
-    <value>Go to the path you typed</value>
   </data>
   <data name="Mgr.GridView" xml:space="preserve">
     <value>Grid view</value>
@@ -1899,9 +1890,6 @@ Continue?</value>
   <data name="Mgr.JsonFileFilter" xml:space="preserve">
     <value>JSON files (*.json)|*.json|All files (*.*)|*.*</value>
   </data>
-  <data name="Mgr.Jump" xml:space="preserve">
-    <value>Jump</value>
-  </data>
   <data name="Mgr.JumpEndpointMissing" xml:space="preserve">
     <value>The endpoint “{0}” is no longer in the list, so there is nowhere to jump.</value>
   </data>
@@ -1962,9 +1950,6 @@ Continue?</value>
   <data name="Mgr.MovedItems" xml:space="preserve">
     <value>Moved {0} items</value>
   </data>
-  <data name="Mgr.NavigationRowLabel" xml:space="preserve">
-    <value>Navigate</value>
-  </data>
   <data name="Mgr.NewEndpoint" xml:space="preserve">
     <value>New endpoint</value>
   </data>
@@ -1979,9 +1964,6 @@ Continue?</value>
   </data>
   <data name="Mgr.NewFolderFailedTitle" xml:space="preserve">
     <value>Creating the folder failed</value>
-  </data>
-  <data name="Mgr.NewFolderName" xml:space="preserve">
-    <value>Create a new folder in the current folder</value>
   </data>
   <data name="Mgr.NewFolderPrompt" xml:space="preserve">
     <value>New folder in {0}, name:</value>
@@ -2022,8 +2004,8 @@ Continue?</value>
   <data name="Mgr.OpenTransfersName" xml:space="preserve">
     <value>Open the cloud transfer window</value>
   </data>
-  <data name="Mgr.OpenTrashName" xml:space="preserve">
-    <value>Open the recycle bin folder of this endpoint</value>
+  <data name="Mgr.OpenTrash" xml:space="preserve">
+    <value>Open recycle bin</value>
   </data>
   <data name="Mgr.OpenedPrefix" xml:space="preserve">
     <value>Opened: </value>
@@ -2202,9 +2184,6 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.RecycleEllipsis" xml:space="preserve">
     <value>Move to recycle bin…</value>
   </data>
-  <data name="Mgr.RecycleItemName" xml:space="preserve">
-    <value>Move the selected items into this endpoint's recycle bin</value>
-  </data>
   <data name="Mgr.RecycleSelected" xml:space="preserve">
     <value>Move the {0} selected items to the recycle bin…</value>
   </data>
@@ -2244,9 +2223,6 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.RenameFailedTitle" xml:space="preserve">
     <value>Renaming failed</value>
   </data>
-  <data name="Mgr.RenameItemName" xml:space="preserve">
-    <value>Rename the selected item</value>
-  </data>
   <data name="Mgr.RenamePrompt" xml:space="preserve">
     <value>New name for “{0}”:</value>
   </data>
@@ -2259,14 +2235,8 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.RenamingItem" xml:space="preserve">
     <value>Renaming “{0}”…</value>
   </data>
-  <data name="Mgr.Restore" xml:space="preserve">
-    <value>Restore</value>
-  </data>
   <data name="Mgr.RestoreEllipsis" xml:space="preserve">
     <value>Restore…</value>
-  </data>
-  <data name="Mgr.RestoreItemsName" xml:space="preserve">
-    <value>Restore the selected recycle bin items to their original folder</value>
   </data>
   <data name="Mgr.RestoreMounts" xml:space="preserve">
     <value>Restore all</value>
@@ -2346,9 +2316,6 @@ It will be cancelled first and then mounted once more with the same settings.</v
   </data>
   <data name="Mgr.SelectItemsToRecycle" xml:space="preserve">
     <value>Select the items you want to move to the recycle bin.</value>
-  </data>
-  <data name="Mgr.SelectItemsToRestore" xml:space="preserve">
-    <value>Select the items you want to restore.</value>
   </data>
   <data name="Mgr.SelectMountToUnmount" xml:space="preserve">
     <value>Select the mount you want to unmount.</value>
@@ -2440,9 +2407,6 @@ It will be cancelled first and then mounted once more with the same settings.</v
   </data>
   <data name="Mgr.TransferRowLabel" xml:space="preserve">
     <value>Transfer</value>
-  </data>
-  <data name="Mgr.Trash" xml:space="preserve">
-    <value>Recycle bin</value>
   </data>
   <data name="Mgr.TrashEmpty" xml:space="preserve">
     <value>The recycle bin is empty, so there is nothing to delete.</value>

@@ -555,6 +555,32 @@ public sealed class CloudBrowserBookmarkTests
     }
 
     [Fact]
+    public async Task A_pick_from_the_address_bar_history_is_consumed_so_the_same_place_can_be_picked_again()
+    {
+        await WithWindow(async (window, standIn, _) =>
+        {
+            // Walking somewhere records the visit, and the address bar's dropdown is the only place 最近访问 is
+            // offered now — so the list is filled by the listing itself rather than by anything a test set up.
+            await window.NavigateToAsync(NasDocs);
+            Assert.Equal($"{Nas}  ·  /{NasDocs}", window.RecentJumps.Single().Label);
+
+            // Through the real control: the ListBox's own selection event is what a pick goes through, and a row
+            // left selected would read as a filter and offer nothing to pick twice.
+            window.AddressHistoryList.SelectedItem = window.RecentJumps.Single();
+            await WaitUntil(() => window.AddressHistoryList.SelectedItem is null
+                && standIn.Listed.Count(entry => entry == $"{Nas}:{NasDocs}") == 2, "the address history kept the pick");
+
+            await window.NavigateToAsync(NasRoot);
+            window.AddressHistoryList.SelectedItem = window.RecentJumps.Single(row => row.Bookmark == NasDocsPlace);
+            await WaitUntil(() => window.AddressHistoryList.SelectedItem is null
+                && window.CurrentPath == NasDocs, "the same place could not be jumped to twice");
+
+            Assert.Equal(NasDocs, window.CurrentPath);
+            Assert.Null(window.AddressHistoryList.SelectedItem);
+        });
+    }
+
+    [Fact]
     public async Task A_jump_refuses_a_place_whose_endpoint_went_away_after_the_list_was_built()
     {
         await WithWindow(async (window, standIn, _) =>

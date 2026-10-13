@@ -4,6 +4,7 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -173,6 +174,11 @@ public sealed class CloudBrowserShortcutTests
             };
             Select(window, FileA);
 
+            // The bar is a TextBox only while it is being edited, so the case opens it the way a click on the
+            // trail does rather than raising keystrokes at a box nobody is looking at.
+            window.BeginAddressEditForTest();
+            Assert.True(window.AddressEditing);
+
             // Two different lines of defence, and this case shows both are needed: the TextBox consumes Delete
             // itself, so the keystroke never reaches the pane at all — while F2 has no binding in a TextBox, so
             // it does bubble, and only the typing gate is left to decline it. Either way the browser sends
@@ -185,9 +191,38 @@ public sealed class CloudBrowserShortcutTests
             Assert.False(opened);
             Assert.False(standIn.AnythingSent());
 
+            // A listing puts the trail back, so the box is opened again before the refresh is asked for from
+            // inside it — which is the only state in which an address-bar keystroke exists at all.
             window.ShowListing(Root, [File($"{Root}/stale.txt", 1)]);
+            window.BeginAddressEditForTest();
             RaiseKey(window.AddressBox, Key.F5);
             await WaitUntil(() => window.VisibleEntries.Count == 4, "在地址栏里按 F5 没有刷新目录");
+        });
+    }
+
+    [Fact]
+    public async Task The_address_bar_blank_area_is_a_control_automation_can_reach_and_click()
+    {
+        await WithWindow((window, _) =>
+        {
+            // The blank area beside the trail is what the desktop scenario clicks to open the editor, so it has
+            // to exist in the automation tree. A Border never does: WPF builds that tree out of automation
+            // peers, a decorator has none, and an AutomationId written on one is silently invisible. The
+            // consequence is not only a harness that reports "Missing UI element" — a screen reader would have no
+            // way to open the address bar at all.
+            var peer = UIElementAutomationPeer.CreatePeerForElement(window.AddressBarButton);
+            Assert.NotNull(peer);
+            Assert.Equal("CloudAddressBarChrome", peer!.GetAutomationId());
+            Assert.Equal(AutomationControlType.Button, peer.GetAutomationControlType());
+
+            // And the gesture that peer exposes is the one that opens the editor: the bar is two controls in one
+            // cell, and swapping them is the whole action.
+            window.AddressBarButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, window.AddressBarButton));
+            Assert.True(window.AddressEditing);
+
+            // A listing puts the trail back, which is also what stands the deferred dropdown down.
+            window.ShowListing(Root, [File($"{Root}/stale.txt", 1)]);
+            Assert.False(window.AddressEditing);
         });
     }
 
@@ -369,8 +404,13 @@ public sealed class CloudBrowserShortcutTests
             Assert.Equal(3, window.Selection.Count);
             Assert.Equal([.. window.VisibleEntries.Select(entry => entry.Path).Order()],
                 [.. window.Selection.Select(entry => entry.Path).Order()]);
-            Assert.True(window.DeleteEntryButton.IsEnabled);
-            Assert.True(window.RecycleButton.IsEnabled);
+            // 文件 is no longer a row, so the selection's commands are the row menu's: what Ctrl+A selected is
+            // exactly what that menu offers 删除 and 移到回收站 for — and because the selection is a bulk one, the
+            // two items are the counted labels rather than the single-row ones.
+            var menu = window.BuildRowMenu()!.Items.OfType<MenuItem>()
+                .Select(item => item.Header?.ToString() ?? "").ToList();
+            Assert.Contains(menu, header => header.StartsWith("删除", StringComparison.Ordinal));
+            Assert.Contains(menu, header => header.EndsWith("移到回收站…", StringComparison.Ordinal));
         });
     }
 

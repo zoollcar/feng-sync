@@ -45,27 +45,26 @@ public sealed class CloudBrowserRecycleTests
     private const string TrashedReport = Trash + "/reports/a.pdf";
 
     [Fact]
-    public async Task The_trash_commands_carry_the_ids_a_desktop_scenario_looks_for_and_hide_until_the_trash_is_on_screen()
+    public async Task The_row_menu_is_where_the_trash_commands_live_now_that_the_file_row_is_gone()
     {
         await WithWindow((window, _) =>
         {
-            Assert.Equal("CloudRecycle", AutomationProperties.GetAutomationId(window.RecycleButton));
-            Assert.Equal("CloudRestore", AutomationProperties.GetAutomationId(window.RestoreButton));
-            Assert.Equal("CloudEmptyTrash", AutomationProperties.GetAutomationId(window.EmptyTrashButton));
-            Assert.Equal("CloudOpenTrash", AutomationProperties.GetAutomationId(window.OpenTrashButton));
-            Assert.False(window.RecycleButton.IsEnabled);
-            Select(window, FileA);
-            Assert.True(window.RecycleButton.IsEnabled);
-            // Standing in the endpoint's root, 还原 and 清空回收站 would be aimed at rows that were never
-            // recycled, so they appear only once the trash itself is the directory on screen.
-            Assert.Equal(Visibility.Collapsed, window.RestoreButton.Visibility);
-            Assert.Equal(Visibility.Collapsed, window.EmptyTrashButton.Visibility);
+            // 文件 stopped being a row, so its commands are the row menu's now — and the menu is rebuilt from the
+            // selection each time it opens, which is why an empty selection has no menu at all rather than a menu
+            // of disabled items.
+            Assert.Null(window.BuildRowMenu());
 
-            window.ShowListing(Trash, [File(TrashedFile, 1024)]);
-            Select(window, TrashedFile);
-            Assert.Equal(Visibility.Visible, window.RestoreButton.Visibility);
-            Assert.True(window.RestoreButton.IsEnabled);
-            Assert.Equal(Visibility.Visible, window.EmptyTrashButton.Visibility);
+            Select(window, FileA);
+            var menu = Headers(window.BuildRowMenu()!).ToList();
+            Assert.Contains("移到回收站…", menu);
+            Assert.Contains("删除…", menu);
+            // 打开回收站 came with them. It is the one command that row held which does not act on the selection —
+            // it walks to the trash folder — and with the button gone the menu is the only way in.
+            Assert.Contains("打开回收站", menu);
+            // Standing in the endpoint's root, 还原 and 清空回收站 would be aimed at rows that were never recycled,
+            // so they are absent until the trash itself is the directory on screen.
+            Assert.DoesNotContain("还原…", menu);
+            Assert.DoesNotContain("清空回收站…", menu);
         });
     }
 

@@ -331,9 +331,9 @@ public sealed class UiFeatureBehaviorTests
                 Click(window.EndpointSortDirectionButton);
                 Assert.Equal("降序", window.EndpointSortDirectionButton.Content);
                 Assert.Equal(["work", "nas", "archive"], VisibleNames(window));
-                // Re-ordering and filtering never move the browser off the endpoint it is showing: doing so
-                // would be one round trip to the cloud service per keystroke.
-                Assert.Equal("work", SelectedName(window));
+                // Re-ordering and filtering never select an endpoint on their own: a keystroke must not cost a
+                // round trip to the cloud service, and the browser follows only a row the user picked.
+                Assert.Null(SelectedName(window));
                 AssertNoDirectoryListing(window);
 
                 // A filter that matches nothing empties the list, the file pane, and the check-everything action
@@ -380,25 +380,59 @@ public sealed class UiFeatureBehaviorTests
                 Assert.Equal(["home", "work", "nas", "archive"], VisibleNames(window));
                 Assert.Equal(["alpha", "beta", "", "未分组"], window.VisibleEndpoints.Select(row => row.GroupHeading));
 
-                // The list always has a selection, so the file pane is never empty without a visible cause.
-                Assert.Equal("home", SelectedName(window));
+                // Installing the rows is not a gesture, so nothing is selected: the browser stays blank until
+                // the user picks a row, and the endpoint actions that need one are off.
+                Assert.Null(SelectedName(window));
                 Assert.Equal("OrganizeCloudEndpoint", AutomationProperties.GetAutomationId(window.OrganizeEndpointButton));
-                Assert.True(window.OrganizeEndpointButton.IsEnabled);
+                Assert.False(window.OrganizeEndpointButton.IsEnabled);
                 // Installing the rows is not a gesture, so nothing has asked the remote service for anything.
                 AssertNoDirectoryListing(window);
 
-                // Filtering selects a real endpoint rather than a heading, and clearing the filter leaves the
-                // selection where it was: a keystroke must never move the browser off the endpoint it shows.
+                // Filtering selects nothing, and clearing the filter selects nothing back: a keystroke is
+                // never the thing that decides which endpoint the browser is showing.
                 window.EndpointSearchBox.Text = "work";
-                Assert.Equal("work", SelectedName(window));
+                Assert.Equal(["work"], VisibleNames(window));
+                Assert.Null(SelectedName(window));
                 window.EndpointSearchBox.Text = "";
-                Assert.Equal("work", SelectedName(window));
+                Assert.Equal(["home", "work", "nas", "archive"], VisibleNames(window));
+                Assert.Null(SelectedName(window));
+                window.Close();
+            }
+            finally { AppServices.Install(previous); }
+        });
+    }
 
-                // A filter that hides the selected endpoint falls back to the first survivor rather than
-                // clearing the list.
-                window.EndpointSearchBox.Text = "archive";
+    [Fact]
+    public void The_browser_shows_a_blank_page_until_an_endpoint_is_picked()
+    {
+        RunSta(() =>
+        {
+            EnsureApplicationResources();
+            var previous = AppServices.TryCurrent;
+            AppServices.Install(new HeadlessShell());
+            try
+            {
+                var window = new RemoteEndpointManagerWindow();
+                CloudEndpointRow[] rows =
+                [
+                    EndpointRow("nas", "sftp", "SFTP", "team/docs", CloudEndpointHealth.Connected),
+                    EndpointRow("archive", "s3", "Cloudflare", "team/files", CloudEndpointHealth.Unknown)
+                ];
+
+                // Opening on the list leaves it unselected on purpose: the right pane is blank and says where
+                // the choice is made, rather than browsing an endpoint the user never asked for.
+                window.LoadEndpointsForTest(rows);
+                Assert.Null(SelectedName(window));
+                Assert.Equal(Visibility.Visible, window.BrowserEmptyPane.Visibility);
+                Assert.Equal(Visibility.Collapsed, window.BrowserPane.Visibility);
+                Assert.Equal("", window.CurrentPath);
+
+                // Picking a row — which is what a click does — is the only thing that takes the blank page away.
+                window.LoadEndpointsForTest(rows, selectName: "archive");
                 Assert.Equal("archive", SelectedName(window));
-                window.EndpointSearchBox.Text = "";
+                Assert.Equal(Visibility.Collapsed, window.BrowserEmptyPane.Visibility);
+                Assert.Equal(Visibility.Visible, window.BrowserPane.Visibility);
+
                 window.Close();
             }
             finally { AppServices.Install(previous); }

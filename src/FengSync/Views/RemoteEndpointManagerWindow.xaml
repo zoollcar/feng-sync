@@ -225,124 +225,192 @@
                 </TabItem>
             </TabControl>
         </Grid>
-        <Grid Grid.Column="2" AllowDrop="True" DragOver="FileBrowser_DragOver" DragLeave="FileBrowser_DragLeave" Drop="FileBrowser_Drop" KeyDown="FileBrowser_KeyDown">
+        <Grid Grid.Column="2">
+            <!-- Two rows, because the right column holds two different kinds of thing. Everything in the
+                 browser reads from the one endpoint the list has selected, so it has nothing to show until
+                 there is a selection; the transfer window and the progress it reports belong to the whole
+                 manager, so they stay put while the browser is blank. Putting the second kind below the
+                 first is what lets the browser be taken away whole rather than piece by piece. -->
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <TextBlock Text="{Binding [Mgr.BrowserTitle], Source={l:Lang}}" Style="{StaticResource DisplayTitleTextStyle}" />
+            <Grid x:Name="BrowserPane" Grid.Row="0" AllowDrop="True" DragOver="FileBrowser_DragOver" DragLeave="FileBrowser_DragLeave" Drop="FileBrowser_Drop" KeyDown="FileBrowser_KeyDown">
+                <!-- Five rows, down from nine. The address trail and the address box are one control now, so
+                     they are one row; 导航 and 文件 are gone because the icons beside the trail carry the four
+                     moves and the row menu carries every file command; 跳转 is gone because 收藏 sits with the
+                     other filters and the visits sit under the address bar. Each row here is a Grid rather than
+                     a WrapPanel, so nothing can wrap onto a second line and push a control past the edge. -->
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />  <!-- 0 标题 -->
+                    <RowDefinition Height="Auto" />  <!-- 1 地址栏 -->
+                    <RowDefinition Height="Auto" />  <!-- 2 传输 -->
+                    <RowDefinition Height="Auto" />  <!-- 3 搜索/排序 + 收藏夹 -->
+                    <RowDefinition Height="*" />     <!-- 4 文件列表 -->
+                </Grid.RowDefinitions>
+                <TextBlock Text="{Binding [Mgr.BrowserTitle], Source={l:Lang}}" Style="{StaticResource DisplayTitleTextStyle}" />
 
-            <ItemsControl x:Name="Breadcrumbs" Grid.Row="1" AutomationProperties.AutomationId="CloudBreadcrumbs" AutomationProperties.Name="{Binding [Mgr.PathNavigationName], Source={l:Lang}}" Margin="0,10,0,0">
-                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Button Content="{Binding Name}" Tag="{Binding Path}" Click="Breadcrumb_Click" Margin="0,0,4,4" Style="{StaticResource TertiaryButtonStyle}" />
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                <!-- The address bar, drawn the way Windows Explorer draws one. The four moves sit to the left of
+                     the trail as icons and the view toggle to its right, all on one Grid row so no width can
+                     wrap a control onto a second line. The trail and the editable box are the same control: the
+                     bar shows the breadcrumb, a click on its blank area swaps in the TextBox and drops the
+                     remembered visits underneath, and leaving the box navigates. There is deliberately no 转到
+                     button — a box that answers Enter and focus loss does not need a second way to say the same
+                     thing, and the button was the widest thing on the row. -->
+                <Grid Grid.Row="1" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" MinWidth="120" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" x:Name="HistoryBackButton" AutomationProperties.AutomationId="CloudHistoryBack" AutomationProperties.Name="{Binding [Mgr.HistoryBackName], Source={l:Lang}}" ToolTip="{Binding [Mgr.Back], Source={l:Lang}}" Click="HistoryBack_Click" Style="{StaticResource IconButtonStyle}">
+                        <fluent:FluentIcon Icon="ArrowLeft" Width="18" Height="18" FontSize="18" Style="{StaticResource LibraryIconStyle}" />
+                    </Button>
+                    <Button Grid.Column="1" x:Name="HistoryForwardButton" AutomationProperties.AutomationId="CloudHistoryForward" AutomationProperties.Name="{Binding [Mgr.HistoryForwardName], Source={l:Lang}}" ToolTip="{Binding [Mgr.Forward], Source={l:Lang}}" Click="HistoryForward_Click" Margin="2,0,0,0" Style="{StaticResource IconButtonStyle}">
+                        <fluent:FluentIcon Icon="ArrowRight" Width="18" Height="18" FontSize="18" Style="{StaticResource LibraryIconStyle}" />
+                    </Button>
+                    <Button Grid.Column="2" x:Name="BackButton" AutomationProperties.Name="{Binding [Mgr.UpLevelName], Source={l:Lang}}" ToolTip="{Binding [Mgr.UpLevel], Source={l:Lang}}" Click="Back_Click" Margin="2,0,0,0" Style="{StaticResource IconButtonStyle}">
+                        <fluent:FluentIcon Icon="ArrowUp" Width="18" Height="18" FontSize="18" Style="{StaticResource LibraryIconStyle}" />
+                    </Button>
+                    <Button Grid.Column="3" AutomationProperties.AutomationId="CloudRefresh" AutomationProperties.Name="{Binding [Mgr.RefreshDirectoryName], Source={l:Lang}}" ToolTip="{Binding [Mgr.Refresh], Source={l:Lang}}" Click="BrowseRefresh_Click" Margin="2,0,0,0" Style="{StaticResource IconButtonStyle}">
+                        <fluent:FluentIcon Icon="ArrowClockwise" Width="18" Height="18" FontSize="18" Style="{StaticResource LibraryIconStyle}" />
+                    </Button>
+                    <!-- The Border draws the bar's frame and anchors the popup; the blank area inside it is the
+                         Button layered underneath the trail. That target has to be a control with an automation
+                         peer rather than the Border itself — a Border is a decorator, WPF gives it no peer, and
+                         the bar would then be invisible to UI Automation, which is how the desktop scenario both
+                         measures it and clicks it. The trail paints over the Button and carries no background of
+                         its own, so a click that misses a segment falls through to the Button while a click on a
+                         segment is consumed by that segment. The trail is a horizontal StackPanel, not a
+                         WrapPanel: a long path is clipped by ClipToBounds rather than folded onto a second line
+                         inside the bar. -->
+                    <Border Grid.Column="4" x:Name="AddressBarChrome" MinHeight="{StaticResource ControlHeight}" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="{StaticResource RadiusMedium}" ClipToBounds="True">
+                        <Grid>
+                            <Button x:Name="AddressBarButton" AutomationProperties.AutomationId="CloudAddressBarChrome" AutomationProperties.Name="{Binding [Mgr.PathNavigationName], Source={l:Lang}}" Click="AddressBarButton_Click" Style="{StaticResource TertiaryButtonStyle}" />
+                            <ItemsControl x:Name="Breadcrumbs" AutomationProperties.AutomationId="CloudBreadcrumbs" VerticalAlignment="Center" Margin="2,0">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Content="{Binding Name}" Tag="{Binding Path}" Click="Breadcrumb_Click" Margin="0,0,2,0" Style="{StaticResource TertiaryButtonStyle}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <!-- Declared after the trail so it paints over it while editing; the outer Border
+                                 supplies the frame, so the box itself is borderless and transparent. -->
+                            <TextBox x:Name="AddressBox" Visibility="Collapsed" AutomationProperties.AutomationId="CloudAddressBar" AutomationProperties.Name="{Binding [Mgr.AddressBarName], Source={l:Lang}}" BorderThickness="0" Background="Transparent" VerticalContentAlignment="Center" Padding="8,0" KeyDown="AddressBox_KeyDown" LostFocus="AddressBox_LostFocus" />
+                        </Grid>
+                    </Border>
+                    <!-- 历史记录 lives here rather than on a row of its own: the bar is where a path is chosen, and
+                         the visits are the other way to name one. StaysOpen=False is what closes it when the
+                         click lands elsewhere; the ListBox rows are unfocusable so picking one does not pull
+                         focus out of the address box and fire its LostFocus first. -->
+                    <Popup x:Name="AddressHistoryPopup" Grid.Column="4" PlacementTarget="{Binding ElementName=AddressBarChrome}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border MinWidth="{Binding ActualWidth, ElementName=AddressBarChrome}" MaxHeight="320" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="{StaticResource RadiusMedium}">
+                            <ListBox x:Name="AddressHistoryList" AutomationProperties.AutomationId="CloudAddressHistory" AutomationProperties.Name="{Binding [Mgr.RecentJumpName], Source={l:Lang}}" DisplayMemberPath="Label" BorderThickness="0" Focusable="False" SelectionChanged="AddressHistory_SelectionChanged">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem"><Setter Property="Focusable" Value="False" /></Style>
+                                </ListBox.ItemContainerStyle>
+                            </ListBox>
+                        </Border>
+                    </Popup>
+                    <Button Grid.Column="5" x:Name="ViewToggleButton" AutomationProperties.AutomationId="CloudViewToggle" AutomationProperties.Name="{Binding [Mgr.ToggleViewName], Source={l:Lang}}" Content="{Binding [Mgr.GridView], Source={l:Lang}}" Click="ViewToggle_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                    <TextBlock Grid.Column="6" x:Name="ViewSummary" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                </Grid>
+                <!-- 文件 is no longer a row. Every command it held — 新建文件夹, 重命名, 移到回收站, 删除, 还原,
+                     清空回收站 — is on the file list's right-click menu, which is where a command that acts on a
+                     selection is looked for, and a permanent row of seven buttons was mostly disabled. 回收站
+                     (the way into the trash folder) joined that menu for the same reason. What stays is the row
+                     whose commands move bytes, which the row menu does not carry.
+                     查看传输 deliberately does not live on this row either: it is the only way into the
+                     transfer window, which reports work that outlives whichever endpoint is on screen, so it
+                     moved down to the strip that stays put when the browser is blank. -->
+                <WrapPanel Grid.Row="2" Margin="0,8,0,8">
+                    <TextBlock Text="{Binding [Mgr.TransferRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
+                    <Button x:Name="PasteButton" AutomationProperties.AutomationId="CloudPaste" AutomationProperties.Name="{Binding [Mgr.PasteName], Source={l:Lang}}" Content="{Binding [Mgr.Paste], Source={l:Lang}}" Click="Paste_Click" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="DownloadButton" AutomationProperties.AutomationId="CloudDownload" AutomationProperties.Name="{Binding [Mgr.DownloadName], Source={l:Lang}}" Content="{Binding [Mgr.Download], Source={l:Lang}}" Click="DownloadSelected_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button AutomationProperties.Name="{Binding [Mgr.UploadFilesName], Source={l:Lang}}" Content="{Binding [Mgr.UploadFiles], Source={l:Lang}}" Click="UploadFiles_Click" Margin="20,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
+                    <Button AutomationProperties.Name="{Binding [Mgr.UploadFolderName], Source={l:Lang}}" Content="{Binding [Mgr.UploadFolder], Source={l:Lang}}" Click="UploadFolder_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                </WrapPanel>
 
-            <DockPanel Grid.Row="2" Margin="0,6,0,0">
-                <Button DockPanel.Dock="Right" Content="{Binding [Mgr.Go], Source={l:Lang}}" Click="Go_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" AutomationProperties.AutomationId="CloudAddressGo" AutomationProperties.Name="{Binding [Mgr.GoToName], Source={l:Lang}}" />
-                <TextBox x:Name="AddressBox" AutomationProperties.AutomationId="CloudAddressBar" AutomationProperties.Name="{Binding [Mgr.AddressBarName], Source={l:Lang}}" KeyDown="AddressBox_KeyDown" Padding="8,6,8,6" />
-            </DockPanel>
+                <!-- The filter row, with 收藏 on the end of it. 收藏 used to be a jump list on a row of its own
+                     beside 最近访问; the visits moved under the address bar — the other place a path is named —
+                     and what was left is a question about the folder on screen, so it belongs here with the search
+                     box and the sort choice. The toggle deliberately carries no static AutomationProperties.Name:
+                     its content changes with the state it reports (收藏此目录 / 取消收藏), and a static name would
+                     replace that state as the accessible name, exactly as it does for a live TextBlock. -->
+                <WrapPanel Grid.Row="3" Margin="0,0,0,8">
+                    <TextBlock Text="{Binding [Mgr.Search], Source={l:Lang}}" VerticalAlignment="Center" />
+                    <TextBox x:Name="SearchBox" AutomationProperties.AutomationId="CloudSearch" AutomationProperties.Name="{Binding [Mgr.SearchBoxName], Source={l:Lang}}" Width="180" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown" />
+                    <CheckBox x:Name="SearchRecursiveBox" AutomationProperties.AutomationId="CloudSearchRecursive" AutomationProperties.Name="{Binding [Mgr.SearchRecursiveName], Source={l:Lang}}" Content="{Binding [Mgr.IncludeSubfolders], Source={l:Lang}}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                    <Button AutomationProperties.AutomationId="CloudSearchRun" AutomationProperties.Name="{Binding [Mgr.SearchEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.Search], Source={l:Lang}}" Click="Search_Click" Margin="12,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button AutomationProperties.AutomationId="CloudSearchClear" AutomationProperties.Name="{Binding [Mgr.ClearSearchName], Source={l:Lang}}" Content="{Binding [Mgr.Clear], Source={l:Lang}}" Click="SearchClear_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                    <TextBlock Text="{Binding [Mgr.Sort], Source={l:Lang}}" VerticalAlignment="Center" Margin="20,0,0,0" />
+                    <ComboBox x:Name="SortBox" AutomationProperties.AutomationId="CloudSortColumn" AutomationProperties.Name="{Binding [Mgr.SortByName], Source={l:Lang}}" Width="110" Margin="8,0,0,0" SelectionChanged="Sort_Changed" />
+                    <Button x:Name="SortDirectionButton" AutomationProperties.AutomationId="CloudSortDirection" AutomationProperties.Name="{Binding [Mgr.ToggleSortDirectionName], Source={l:Lang}}" Content="{Binding [Mgr.Ascending], Source={l:Lang}}" Click="SortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
+                    <TextBlock Text="{Binding [Mgr.Favorites], Source={l:Lang}}" VerticalAlignment="Center" Margin="20,0,0,0" />
+                    <ComboBox x:Name="FavoriteJumpBox" AutomationProperties.AutomationId="CloudFavoriteJumps" AutomationProperties.Name="{Binding [Mgr.FavoriteJumpName], Source={l:Lang}}" Width="180" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
+                    <Button x:Name="FavoriteToggleButton" AutomationProperties.AutomationId="CloudFavoriteToggle" Content="{Binding [Mgr.FavoriteThisDirectory], Source={l:Lang}}" Click="FavoriteToggle_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
+                </WrapPanel>
 
-            <!-- Three labelled rows instead of one flat pile. Measured: a single row of these controls laid
-                 out 1225 px inside 1092 px of usable width, and 查看传输 ended past the window edge with no
-                 bounds at all. The labels also make the shape of the group obvious at a glance — where you
-                 are, what you do to a file, what moves bytes — which a wrap point cannot express. -->
-            <WrapPanel Grid.Row="3" Margin="0,10,0,0">
-                <TextBlock Text="{Binding [Mgr.NavigationRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
-                <Button x:Name="BackButton" AutomationProperties.Name="{Binding [Mgr.UpLevelName], Source={l:Lang}}" Content="{Binding [Mgr.UpLevel], Source={l:Lang}}" Click="Back_Click" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="HistoryBackButton" AutomationProperties.AutomationId="CloudHistoryBack" AutomationProperties.Name="{Binding [Mgr.HistoryBackName], Source={l:Lang}}" Content="{Binding [Mgr.Back], Source={l:Lang}}" Click="HistoryBack_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="HistoryForwardButton" AutomationProperties.AutomationId="CloudHistoryForward" AutomationProperties.Name="{Binding [Mgr.HistoryForwardName], Source={l:Lang}}" Content="{Binding [Mgr.Forward], Source={l:Lang}}" Click="HistoryForward_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button AutomationProperties.Name="{Binding [Mgr.RefreshDirectoryName], Source={l:Lang}}" Content="{Binding [Mgr.Refresh], Source={l:Lang}}" Click="BrowseRefresh_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="ViewToggleButton" AutomationProperties.AutomationId="CloudViewToggle" AutomationProperties.Name="{Binding [Mgr.ToggleViewName], Source={l:Lang}}" Content="{Binding [Mgr.GridView], Source={l:Lang}}" Click="ViewToggle_Click" Margin="20,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <TextBlock x:Name="ViewSummary" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" Margin="12,0,0,0" />
-            </WrapPanel>
-            <WrapPanel Grid.Row="4" Margin="0,8,0,0">
-                <TextBlock Text="{Binding [Mgr.FileRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
-                <Button x:Name="NewFolderButton" AutomationProperties.AutomationId="CloudNewFolder" AutomationProperties.Name="{Binding [Mgr.NewFolderName], Source={l:Lang}}" Content="{Binding [Mgr.NewFolder], Source={l:Lang}}" Click="NewFolder_Click" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="RenameButton" AutomationProperties.AutomationId="CloudRename" AutomationProperties.Name="{Binding [Mgr.RenameItemName], Source={l:Lang}}" Content="{Binding [Mgr.Rename], Source={l:Lang}}" Click="Rename_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="RecycleButton" AutomationProperties.AutomationId="CloudRecycle" AutomationProperties.Name="{Binding [Mgr.RecycleItemName], Source={l:Lang}}" Content="{Binding [Mgr.MoveToTrash], Source={l:Lang}}" Click="Recycle_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="DeleteEntryButton" AutomationProperties.AutomationId="CloudDeleteEntries" AutomationProperties.Name="{Binding [Mgr.DeleteItemsName], Source={l:Lang}}" Content="{Binding [Mgr.Delete], Source={l:Lang}}" Click="DeleteEntries_Click" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-                <Button x:Name="OpenTrashButton" AutomationProperties.AutomationId="CloudOpenTrash" AutomationProperties.Name="{Binding [Mgr.OpenTrashName], Source={l:Lang}}" Content="{Binding [Mgr.Trash], Source={l:Lang}}" Click="OpenTrash_Click" Margin="20,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <Button x:Name="RestoreButton" AutomationProperties.AutomationId="CloudRestore" AutomationProperties.Name="{Binding [Mgr.RestoreItemsName], Source={l:Lang}}" Content="{Binding [Mgr.Restore], Source={l:Lang}}" Click="Restore_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="EmptyTrashButton" AutomationProperties.AutomationId="CloudEmptyTrash" AutomationProperties.Name="{Binding [Mgr.EmptyTrashName], Source={l:Lang}}" Content="{Binding [Mgr.EmptyTrash], Source={l:Lang}}" Click="EmptyTrash_Click" Visibility="Collapsed" Margin="8,0,0,0" Style="{StaticResource DangerButtonStyle}" />
-            </WrapPanel>
-            <WrapPanel Grid.Row="5" Margin="0,8,0,8">
-                <TextBlock Text="{Binding [Mgr.TransferRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
-                <Button x:Name="PasteButton" AutomationProperties.AutomationId="CloudPaste" AutomationProperties.Name="{Binding [Mgr.PasteName], Source={l:Lang}}" Content="{Binding [Mgr.Paste], Source={l:Lang}}" Click="Paste_Click" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="DownloadButton" AutomationProperties.AutomationId="CloudDownload" AutomationProperties.Name="{Binding [Mgr.DownloadName], Source={l:Lang}}" Content="{Binding [Mgr.Download], Source={l:Lang}}" Click="DownloadSelected_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button AutomationProperties.Name="{Binding [Mgr.UploadFilesName], Source={l:Lang}}" Content="{Binding [Mgr.UploadFiles], Source={l:Lang}}" Click="UploadFiles_Click" Margin="20,0,0,0" Style="{StaticResource PrimaryButtonStyle}" />
-                <Button AutomationProperties.Name="{Binding [Mgr.UploadFolderName], Source={l:Lang}}" Content="{Binding [Mgr.UploadFolder], Source={l:Lang}}" Click="UploadFolder_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button AutomationProperties.AutomationId="OpenCloudTransfers" AutomationProperties.Name="{Binding [Mgr.OpenTransfersName], Source={l:Lang}}" Content="{Binding [Mgr.ViewTransfers], Source={l:Lang}}" Click="OpenTransfers_Click" Margin="20,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-            </WrapPanel>
+                <ListView x:Name="FileList" Grid.Row="4" SelectionMode="Extended" SelectionChanged="FileList_SelectionChanged" AutomationProperties.Name="{Binding [Mgr.FileListName], Source={l:Lang}}" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening" PreviewMouseLeftButtonDown="FileList_PreviewMouseLeftButtonDown" PreviewMouseMove="FileList_PreviewMouseMove">
+                    <ListView.ItemContainerStyle>
+                        <!-- The row carries its own name, in both drawings. Measured against the real shell: a tile's
+                             inner text never reaches the automation tree (the grid row has no children there at all),
+                             and without this the row announces the whole CloudFileEntry record — so the only name a
+                             keyboard, a screen reader or a test can aim at is the one on the row itself. -->
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding NameDisplay}" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.View><GridView>
+                        <!-- AutomationId is the column's stable id, not its text: a GridViewColumn has no Tag
+                             (it is a DependencyObject, not a FrameworkElement), and ColumnHeader_Click matches on
+                             this id so the click handler still finds its column once the header is a localized
+                             label. The id is the same key the ordering list carries, so the two cannot drift. -->
+                        <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnName" Header="{Binding [Mgr.ColumnName], Source={l:Lang}}" Width="320"><GridViewColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="{Binding Icon}" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource LibraryIconStyle}" /><TextBlock Text="{Binding NameDisplay}" VerticalAlignment="Center" /></StackPanel></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
+                        <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnType" Header="{Binding [Mgr.ColumnType], Source={l:Lang}}" Width="80" DisplayMemberBinding="{Binding Type}" />
+                        <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnSize" Header="{Binding [Mgr.ColumnSize], Source={l:Lang}}" Width="100" DisplayMemberBinding="{Binding SizeDisplay}" />
+                        <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnModified" Header="{Binding [Mgr.ColumnModified], Source={l:Lang}}" Width="150" DisplayMemberBinding="{Binding ModifiedDisplay}" />
+                    </GridView></ListView.View>
+                </ListView>
+                <Border x:Name="DropHint" Grid.Row="4" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="{StaticResource RadiusMedium}" Background="{DynamicResource AccentBrush}" Opacity="0.94" Margin="2">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock Text="{Binding [Mgr.DropToUpload], Source={l:Lang}}" Foreground="White" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="DropHintText" Foreground="White" FontSize="13" Margin="0,8,0,0" HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </Grid>
 
-            <WrapPanel Grid.Row="6" Margin="0,10,0,8">
-                <!-- 收藏 and 最近访问 are two jump lists rather than a menu: the shell has no menu bar, and a named
-                     control is one a keyboard, a screen reader and the desktop scenario can all reach. Picking a row
-                     names a destination rather than a filter, so the window acts on the choice and clears it — which
-                     is also what lets the same place be jumped to twice in a row.
-                     The toggle deliberately carries no static AutomationProperties.Name: its content changes with the
-                     state it reports (收藏此目录 / 取消收藏), and a static name would replace that state as the
-                     accessible name, exactly as it does for a live TextBlock. -->
-                <TextBlock Text="{Binding [Mgr.Jump], Source={l:Lang}}" VerticalAlignment="Center" />
-                <ComboBox x:Name="FavoriteJumpBox" AutomationProperties.AutomationId="CloudFavoriteJumps" AutomationProperties.Name="{Binding [Mgr.FavoriteJumpName], Source={l:Lang}}" Width="220" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
-                <ComboBox x:Name="RecentJumpBox" AutomationProperties.AutomationId="CloudRecentJumps" AutomationProperties.Name="{Binding [Mgr.RecentJumpName], Source={l:Lang}}" Width="220" Margin="8,0,0,0" DisplayMemberPath="Label" SelectionChanged="BookmarkJump_Changed" />
-                <Button x:Name="FavoriteToggleButton" AutomationProperties.AutomationId="CloudFavoriteToggle" Content="{Binding [Mgr.FavoriteThisDirectory], Source={l:Lang}}" Click="FavoriteToggle_Click" Margin="8,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-            </WrapPanel>
-
-            <!-- The filter row used to share row 4 with the jump lists, so it broke wherever the two ran out
-                 of width and the 搜索 / 排序 labels drifted in front of controls they did not label. -->
-            <WrapPanel Grid.Row="7" Margin="0,0,0,8">
-                <TextBlock Text="{Binding [Mgr.Search], Source={l:Lang}}" VerticalAlignment="Center" />
-                <TextBox x:Name="SearchBox" AutomationProperties.AutomationId="CloudSearch" AutomationProperties.Name="{Binding [Mgr.SearchBoxName], Source={l:Lang}}" Width="180" Margin="8,0,0,0" Padding="8,6,8,6" TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown" />
-                <CheckBox x:Name="SearchRecursiveBox" AutomationProperties.AutomationId="CloudSearchRecursive" AutomationProperties.Name="{Binding [Mgr.SearchRecursiveName], Source={l:Lang}}" Content="{Binding [Mgr.IncludeSubfolders], Source={l:Lang}}" Margin="12,0,0,0" VerticalAlignment="Center" />
-                <Button AutomationProperties.AutomationId="CloudSearchRun" AutomationProperties.Name="{Binding [Mgr.SearchEndpointName], Source={l:Lang}}" Content="{Binding [Mgr.Search], Source={l:Lang}}" Click="Search_Click" Margin="12,0,0,0" Style="{StaticResource SecondaryButtonStyle}" />
-                <Button AutomationProperties.AutomationId="CloudSearchClear" AutomationProperties.Name="{Binding [Mgr.ClearSearchName], Source={l:Lang}}" Content="{Binding [Mgr.Clear], Source={l:Lang}}" Click="SearchClear_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-                <TextBlock Text="{Binding [Mgr.Sort], Source={l:Lang}}" VerticalAlignment="Center" Margin="20,0,0,0" />
-                <ComboBox x:Name="SortBox" AutomationProperties.AutomationId="CloudSortColumn" AutomationProperties.Name="{Binding [Mgr.SortByName], Source={l:Lang}}" Width="110" Margin="8,0,0,0" SelectionChanged="Sort_Changed" />
-                <Button x:Name="SortDirectionButton" AutomationProperties.AutomationId="CloudSortDirection" AutomationProperties.Name="{Binding [Mgr.ToggleSortDirectionName], Source={l:Lang}}" Content="{Binding [Mgr.Ascending], Source={l:Lang}}" Click="SortDirection_Click" Margin="8,0,0,0" Style="{StaticResource TertiaryButtonStyle}" />
-            </WrapPanel>
-
-            <ListView x:Name="FileList" Grid.Row="8" SelectionMode="Extended" SelectionChanged="FileList_SelectionChanged" AutomationProperties.Name="{Binding [Mgr.FileListName], Source={l:Lang}}" MouseDoubleClick="FileList_DoubleClick" ContextMenuOpening="FileList_ContextMenuOpening" PreviewMouseLeftButtonDown="FileList_PreviewMouseLeftButtonDown" PreviewMouseMove="FileList_PreviewMouseMove">
-                <ListView.ItemContainerStyle>
-                    <!-- The row carries its own name, in both drawings. Measured against the real shell: a tile's
-                         inner text never reaches the automation tree (the grid row has no children there at all),
-                         and without this the row announces the whole CloudFileEntry record — so the only name a
-                         keyboard, a screen reader or a test can aim at is the one on the row itself. -->
-                    <Style TargetType="ListViewItem">
-                        <Setter Property="AutomationProperties.Name" Value="{Binding NameDisplay}" />
-                    </Style>
-                </ListView.ItemContainerStyle>
-                <ListView.View><GridView>
-                    <!-- AutomationId is the column's stable id, not its text: a GridViewColumn has no Tag
-                         (it is a DependencyObject, not a FrameworkElement), and ColumnHeader_Click matches on
-                         this id so the click handler still finds its column once the header is a localized
-                         label. The id is the same key the ordering list carries, so the two cannot drift. -->
-                    <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnName" Header="{Binding [Mgr.ColumnName], Source={l:Lang}}" Width="320"><GridViewColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><fluent:FluentIcon Icon="{Binding Icon}" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource LibraryIconStyle}" /><TextBlock Text="{Binding NameDisplay}" VerticalAlignment="Center" /></StackPanel></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
-                    <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnType" Header="{Binding [Mgr.ColumnType], Source={l:Lang}}" Width="80" DisplayMemberBinding="{Binding Type}" />
-                    <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnSize" Header="{Binding [Mgr.ColumnSize], Source={l:Lang}}" Width="100" DisplayMemberBinding="{Binding SizeDisplay}" />
-                    <GridViewColumn AutomationProperties.AutomationId="Mgr.ColumnModified" Header="{Binding [Mgr.ColumnModified], Source={l:Lang}}" Width="150" DisplayMemberBinding="{Binding ModifiedDisplay}" />
-                </GridView></ListView.View>
-            </ListView>
-            <Border x:Name="DropHint" Grid.Row="8" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="{StaticResource RadiusMedium}" Background="{DynamicResource AccentBrush}" Opacity="0.94" Margin="2">
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="{Binding [Mgr.DropToUpload], Source={l:Lang}}" Foreground="White" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                    <TextBlock x:Name="DropHintText" Foreground="White" FontSize="13" Margin="0,8,0,0" HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center" />
+            <!-- The browser with nothing to browse. The file pane and the endpoint list are two views of one
+                 selection, so with no endpoint chosen there is no directory to list and no path to show; the
+                 endpoint list is where the choice is made, and this pane is what says so. It replaces the browser
+                 rather than sitting beside it — a pane still holding the previous endpoint's directory would read
+                 as though that endpoint were the one being browsed — and it is a plain blank page, which is what
+                 keeps "nothing selected" from looking like a failure. -->
+            <Grid x:Name="BrowserEmptyPane" Grid.Row="0" Visibility="Collapsed" Background="{DynamicResource AppCanvasBrush}"
+                  AutomationProperties.AutomationId="CloudBrowserEmpty"
+                  AutomationProperties.Name="{Binding [Mgr.BrowserEmptyHint], Source={l:Lang}}">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="420">
+                    <TextBlock Text="{Binding [Mgr.BrowserEmptyHint], Source={l:Lang}}"
+                               Style="{StaticResource SectionTitleTextStyle}" TextWrapping="Wrap" TextAlignment="Center" />
+                    <TextBlock Text="{Binding [Mgr.BrowserEmptyDetail], Source={l:Lang}}"
+                               Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,10,0,0" />
                 </StackPanel>
-            </Border>
+            </Grid>
 
-            <StackPanel Grid.Row="9" Margin="0,8,0,0">
+            <!-- The strip that outlives the selection. A transfer started from one endpoint keeps running while
+                 the user looks at another — or at nothing at all — so the way into the transfer window and the
+                 progress it reports cannot be part of the browser that goes away with the selection. -->
+            <StackPanel Grid.Row="1" Margin="0,10,0,0">
                 <TextBlock x:Name="PathText" AutomationProperties.AutomationId="CloudCurrentPath" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                <WrapPanel Margin="0,6,0,0">
+                    <TextBlock Text="{Binding [Mgr.TransferRowLabel], Source={l:Lang}}" VerticalAlignment="Center" MinWidth="34" Style="{StaticResource CaptionTextStyle}" />
+                    <Button AutomationProperties.AutomationId="OpenCloudTransfers" AutomationProperties.Name="{Binding [Mgr.OpenTransfersName], Source={l:Lang}}" Content="{Binding [Mgr.ViewTransfers], Source={l:Lang}}" Click="OpenTransfers_Click" Style="{StaticResource SecondaryButtonStyle}" />
+                </WrapPanel>
                 <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" AutomationProperties.Name="{Binding [Mgr.TransferProgressName], Source={l:Lang}}" Margin="0,6,0,0" />
                 <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="CloudFileStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,5,0,0" />
             </StackPanel>

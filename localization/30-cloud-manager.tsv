@@ -11,6 +11,8 @@ Mgr.AutoMountSaveFailed	保存自动挂载设置失败：{0}	Saving the automati
 Mgr.Back	后退	Back
 Mgr.BookmarksCorruptBackup	收藏文件读不出来，已备份为 {0}，收藏与最近访问从空列表开始。	The favorites file could not be read; it was backed up as {0}, and favorites and recent items start from an empty list.
 Mgr.BookmarksLoadFailed	无法读取收藏与最近访问：{0}	The favorites and recent items could not be read: {0}
+Mgr.BrowserEmptyDetail	选中一个端点后，这里会显示它的文件和目录。	Once you select an endpoint, its files and folders appear here.
+Mgr.BrowserEmptyHint	请在左侧选择云盘端点	Select a cloud drive endpoint on the left
 Mgr.BrowserTitle	文件浏览器	File browser
 Mgr.BulletField	 · {0}：{1}	 · {0}: {1}
 Mgr.BusyCreate	正在新建…	Creating…
@@ -41,15 +43,12 @@ Mgr.CreateSyncTask	创建同步任务	Create sync job
 Mgr.CreateSyncTaskName	从所选云盘端点创建同步任务	Create a sync job from the selected cloud endpoint
 Mgr.Delete	删除	Delete
 Mgr.DeleteEndpointName	删除所选云盘端点	Delete the selected cloud endpoint
-Mgr.DeleteItemsName	删除所选项目	Delete the selected items
 Mgr.Descending	降序	Descending
 Mgr.Download	下载	Download
 Mgr.DownloadName	下载所选文件	Download the selected files
 Mgr.DropToUpload	松开鼠标即可上传	Release the mouse to upload
 Mgr.EditEndpoint	编辑端点	Edit endpoint
 Mgr.EditEndpointName	编辑所选云盘端点	Edit the selected cloud endpoint
-Mgr.EmptyTrash	清空回收站	Empty recycle bin
-Mgr.EmptyTrashName	永久删除回收站里的全部内容	Permanently delete everything in the recycle bin
 Mgr.EndpointCount	共 {0} 个云端端点。	{0} cloud endpoints.
 Mgr.EndpointCreated	已创建端点：{0}。	Created the endpoint: {0}.
 Mgr.EndpointListFailed	无法读取云端端点：{0}	The cloud endpoints could not be read: {0}
@@ -68,11 +67,9 @@ Mgr.ExportDiagnosticsName	导出一份不含凭据的诊断报告	Export a diagn
 Mgr.ExternalMountNotice	该挂载由外部程序管理。Feng Sync 只读显示外部挂载，不会结束其进程，也不会代为重新挂载。	This mount is managed by another program. Feng Sync shows external mounts read-only; it will not end their process or mount them again on their behalf.
 Mgr.FavoriteJumpName	跳到收藏的目录	Jump to a favorite folder
 Mgr.FavoriteThisDirectory	收藏此目录	Add this folder to favorites
+Mgr.Favorites	收藏夹	Favorites
 Mgr.FileListName	当前目录中的文件	Files in the current folder
 Mgr.Forward	前进	Forward
-Mgr.FileRowLabel	文件	File
-Mgr.Go	转到	Go
-Mgr.GoToName	转到输入的路径	Go to the path you typed
 Mgr.GridView	网格视图	Grid view
 Mgr.GuideSeenSaveFailed	无法记住引导状态：{0}	The guide state could not be remembered: {0}
 Mgr.HistoryBackName	后退到上一个访问过的目录	Go back to the previous folder you visited
@@ -80,7 +77,6 @@ Mgr.HistoryForwardName	前进到下一个访问过的目录	Go forward to the ne
 Mgr.Import	导入…	Import…
 Mgr.ImportName	从导出文件导入云盘端点	Import cloud endpoints from an exported file
 Mgr.IncludeSubfolders	包含子目录	Include subfolders
-Mgr.Jump	跳转	Jump
 Mgr.LoadingEndpointParams	正在读取端点参数…	Reading the endpoint parameters…
 Mgr.LoadingEndpoints	正在读取云端端点列表…	Reading the list of cloud endpoints…
 Mgr.MountCount	共发现 {0} 个挂载，其中 {1} 个由本应用启动。	Found {0} mounts, {1} of them started by this application.
@@ -95,17 +91,15 @@ Mgr.EndpointsTab	云盘端点	Cloud endpoints
 Mgr.LeftTabsName	云盘端点和挂载管理	Cloud endpoints and mount management
 Mgr.MountsTab	挂载管理	Mount management
 Mgr.MoveToTrash	移到回收站	Move to recycle bin
-Mgr.NavigationRowLabel	导航	Navigate
 Mgr.NewEndpoint	新建端点	New endpoint
 Mgr.NewEndpointName	新建云盘端点	Create a cloud endpoint
 Mgr.NewFolder	新建文件夹	New folder
-Mgr.NewFolderName	在当前目录新建文件夹	Create a new folder in the current folder
 Mgr.NoEndpoints	尚无云端端点。点击“新建端点”创建一个。	There is no cloud endpoint yet. Click "New endpoint" to create one.
 Mgr.NoMountRecordStore	本进程没有挂载记录存储，无法设置自动挂载。	This process has no mount record store, so automatic mounting cannot be set up.
 Mgr.NoMounts	当前系统没有 rclone 挂载。	The system currently has no rclone mounts.
 Mgr.NoMountsToRestore	没有需要恢复的挂载。	There are no mounts to restore.
 Mgr.OpenTransfersName	打开云盘传输窗口	Open the cloud transfer window
-Mgr.OpenTrashName	打开该端点的回收站文件夹	Open the recycle bin folder of this endpoint
+Mgr.OpenTrash	打开回收站	Open recycle bin
 Mgr.OpeningNewEndpointWindow	正在打开新建端点窗口…	Opening the new endpoint window…
 Mgr.OpeningSyncWizard	正在打开同步向导…	Opening the sync wizard…
 Mgr.OrganizeEndpoint	分组与标签…	Groups and tags…
@@ -132,7 +126,6 @@ Mgr.ReconnectMountTitle	重新挂载	Remount
 Mgr.Reconnected	“{0}”已重新登录。	"{0}" has been signed in again.
 Mgr.ReconnectingInBrowser	正在重新登录，请在浏览器完成授权…	Signing in again; please finish the authorization in your browser…
 Mgr.ReconnectingMount	正在重新挂载 {0}…	Remounting {0}…
-Mgr.RecycleItemName	把所选项目移入该端点的回收站	Move the selected items into this endpoint's recycle bin
 Mgr.Refresh	刷新	Refresh
 Mgr.RefreshDirectoryName	刷新当前目录	Refresh the current folder
 Mgr.RefreshList	刷新列表	Refresh list
@@ -140,9 +133,6 @@ Mgr.RefreshListName	刷新云盘端点列表	Refresh the cloud endpoint list
 Mgr.RefreshMountsName	刷新挂载列表	Refresh the mount list
 Mgr.Rename	重命名	Rename
 Mgr.RenameEndpointName	重命名所选云盘端点	Rename the selected cloud endpoint
-Mgr.RenameItemName	重命名所选项目	Rename the selected item
-Mgr.Restore	还原	Restore
-Mgr.RestoreItemsName	把所选的回收站项目还原到原目录	Restore the selected recycle bin items to their original folder
 Mgr.RestoreMounts	一键恢复	Restore all
 Mgr.RestoreMountsName	恢复上次的挂载	Restore the mounts from last time
 Mgr.RestoreMountsPrompt	将恢复 {0} 个上次的挂载：\n{1}	This will restore {0} mounts from last time:\n{1}
@@ -176,7 +166,6 @@ Mgr.ToggleSortDirectionName	切换升序或降序	Switch between ascending and d
 Mgr.ToggleViewName	在列表视图与网格视图之间切换	Switch between the list view and the grid view
 Mgr.TransferProgressName	文件传输进度	File transfer progress
 Mgr.TransferRowLabel	传输	Transfer
-Mgr.Trash	回收站	Recycle bin
 Mgr.Unmount	取消挂载	Unmount
 Mgr.UnmountName	取消所选挂载	Unmount the selected mount
 Mgr.UpLevel	上一级	Up one level
@@ -400,7 +389,6 @@ Mgr.SelectEndpointToRename	请先选择要重命名的端点。	Select the endpo
 Mgr.SelectFilesToDownload	请先选择要下载的文件；文件夹请先进入后再选择其中的文件。	Select the files you want to download; to take files out of a folder, open it first.
 Mgr.SelectItemsToDelete	请先选择要删除的项目。	Select the items you want to delete.
 Mgr.SelectItemsToRecycle	请先选择要移到回收站的项目。	Select the items you want to move to the recycle bin.
-Mgr.SelectItemsToRestore	请先选择要还原的项目。	Select the items you want to restore.
 Mgr.SelectMountToUnmount	请先选择要取消的挂载。	Select the mount you want to unmount.
 Mgr.SelectSingleItemToRename	请先选择要重命名的单个项目。	Select the single item you want to rename.
 Mgr.SelectTargetCloud	请先选择要粘贴到的云盘。	Choose the cloud drive you want to paste into.

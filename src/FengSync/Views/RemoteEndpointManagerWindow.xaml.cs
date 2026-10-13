@@ -99,6 +99,12 @@ public partial class RemoteEndpointManagerWindow : Window
     private bool _dragArmed;
     private string _currentPath = "";
     /// <summary>
+    /// True while the address bar is showing an editable path box rather than the breadcrumb trail. The two share
+    /// one cell and swap on this flag, and it is also what stops the box's own LostFocus — raised while the window
+    /// hides it — from being read as the user leaving it.
+    /// </summary>
+    private bool _addressEditing;
+    /// <summary>
     /// The rows 复制 or 剪切 put on hold, and how they got there. Held here rather than in the system
     /// clipboard because a cloud listing row is not something another application could paste, and because
     /// the mode is the only thing that decides whether a paste ends in a delete.
@@ -138,6 +144,14 @@ public partial class RemoteEndpointManagerWindow : Window
     /// the remote directory over the network, which is one round trip to the cloud service per key.
     /// </summary>
     private string? _browsedEndpoint;
+    /// <summary>
+    /// The endpoint the user last picked, kept even while it is not on screen. The list is rebuilt on every
+    /// keystroke in its search box, and a filter that hides the chosen row leaves the list with nothing
+    /// selected — which is the point, because the browser is a view of that one choice and must not quietly
+    /// adopt another endpoint. Remembering the pick is what lets the choice come back when the filter that hid
+    /// it is cleared: the list restores a selection the user made, it never makes one.
+    /// </summary>
+    private string? _preferredEndpoint;
     /// <summary>
     /// True while the endpoint list is being rebuilt. Rebuilding clears the selection and sets it again, so
     /// the selection events raised on the way are not gestures the browser should follow; the re-arrange
@@ -233,9 +247,19 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <summary>The places remembered as favourites, in the order the user put them in, stale endpoint included.</summary>
     internal IReadOnlyList<CloudBookmark> FavoritePlaces => [.. _favorites];
     internal IReadOnlyList<CloudBookmark> RecentPlaces => [.. _recent];
-    /// <summary>The rows the two jump lists offer right now.</summary>
+    /// <summary>The rows the favourites list offers right now.</summary>
     internal IReadOnlyList<CloudJumpItem> FavoriteJumps => FavoriteJumpBox.ItemsSource as IReadOnlyList<CloudJumpItem> ?? [];
-    internal IReadOnlyList<CloudJumpItem> RecentJumps => RecentJumpBox.ItemsSource as IReadOnlyList<CloudJumpItem> ?? [];
+    /// <summary>The visits the address bar's dropdown offers right now.</summary>
+    internal IReadOnlyList<CloudJumpItem> RecentJumps => AddressHistoryList.ItemsSource as IReadOnlyList<CloudJumpItem> ?? [];
+    /// <summary>True while the address bar is an editable path box rather than the breadcrumb trail.</summary>
+    internal bool AddressEditing => _addressEditing;
+    /// <summary>True while the remembered visits are showing under the address bar.</summary>
+    internal bool AddressHistoryOpen => AddressHistoryPopup.IsOpen;
+    /// <summary>
+    /// Puts the address bar into its editing state without a click. A test cannot click a control that was never
+    /// shown, and the box's own handling of Delete and F5 is exactly what is under test.
+    /// </summary>
+    internal void BeginAddressEditForTest() => BeginAddressEdit(openHistory: false);
     /// <summary>What the favourite button says, which is the state it reports rather than a label it was given.</summary>
     internal string FavoriteToggleLabel => FavoriteToggleButton.Content as string ?? "";
     /// <summary>Where the remembered places are persisted, so a test can read the file it wrote.</summary>
@@ -389,7 +413,11 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </param>
     private void ApplyEndpointView(string? selectName = null, bool browse = true)
     {
-        selectName ??= Selected?.Name;
+        // The row to keep selected: the one the caller names, else the one already selected, else the last one
+        // the user actually picked. The last fallback is what brings the browser back when a filter that hid
+        // the chosen endpoint is cleared; with no pick at all there is nothing to restore and nothing is
+        // selected, which is what leaves the browser blank until the user chooses.
+        selectName ??= Selected?.Name ?? _preferredEndpoint;
         var rows = CloudEndpointList.Arrange(_loaded, EndpointSearchBox.Text, _endpointSortColumn, _endpointSortDescending);
         _rearranging = true;
         try
@@ -397,10 +425,13 @@ public partial class RemoteEndpointManagerWindow : Window
             _accounts.Clear();
             foreach (var row in rows) _accounts.Add(row);
             // By item rather than by index, so the selection cannot drift when the order changes.
-            // The first survivor is selected when the preferred name is gone — including when there was no
-            // preferred name at all: an empty file pane with no visible cause reads as a failure.
-            EndpointList.SelectedItem = (selectName is null ? null : rows.FirstOrDefault(row => row.Account.Name == selectName))
-                ?? rows.FirstOrDefault();
+            // Nothing is selected unless the caller names the row that should be: the list never picks an
+            // endpoint on the user's behalf, so a filter that hides the selected row clears the selection
+            // rather than quietly moving the browser to whichever row survived. The blank pane says why —
+            // see UpdateBrowserEmptyState — which is what keeps "nothing selected" from reading as a failure.
+            EndpointList.SelectedItem = selectName is null
+                ? null
+                : rows.FirstOrDefault(row => row.Account.Name == selectName);
         }
         finally { _rearranging = false; }
 
@@ -415,6 +446,7 @@ public partial class RemoteEndpointManagerWindow : Window
         RefreshBookmarkLists();
         UpdateEndpointButtons();
         UpdateMountButtons();
+        UpdateBrowserEmptyState();
         // Decided here rather than left to the selection event: re-arranging may have moved the selection to
         // another endpoint, and the events it raised along the way were about states nobody asked for.
         if (browse) _ = FollowSelectionAsync();
@@ -649,9 +681,13 @@ public partial class RemoteEndpointManagerWindow : Window
     {
         UpdateEndpointButtons();
         UpdateMountButtons();
+        UpdateBrowserEmptyState();
         // A re-arrange raises this event several times over, with a selection that is momentarily nothing at
         // all. Those are not gestures, and the re-arrange follows up on its own once it is finished.
         if (_rearranging || _applyingJump) return;
+        // A pick is remembered here rather than read back from the selection later: the selection is cleared
+        // whenever a filter hides the chosen row, and it is this field that brings the choice back.
+        _preferredEndpoint = Selected?.Name;
         await FollowSelectionAsync();
     }
 
@@ -1315,19 +1351,35 @@ public partial class RemoteEndpointManagerWindow : Window
         catch (Exception ex) { StatusText.Text = Tr.F("Mgr.DirectoryReadFailed") + RcloneUiError.Describe(ex, "cloud-file-list"); }
     }
 
+    /// <summary>
+    /// Shows the blank page over the browser whenever the endpoint list has nothing selected, and steps the
+    /// browser aside while it is there. The two panes are two views of one selection: with no endpoint chosen
+    /// there is no directory to list, so the browser has nothing honest to show. It is hidden rather than
+    /// merely covered, so a keyboard cannot land on a control that belongs to no endpoint.
+    /// </summary>
+    private void UpdateBrowserEmptyState()
+    {
+        var empty = Selected is null;
+        BrowserEmptyPane.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        BrowserPane.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     private void ClearListing()
     {
         _listed.Clear();
         _entries.Clear();
         _listingIsSearchResult = false;
         PathText.Text = Tr.F("Mgr.PickCloud");
+        CloseAddressEditor();
         AddressBox.Text = "";
         Breadcrumbs.ItemsSource = null;
+        AddressHistoryList.ItemsSource = null;
         ViewSummary.Text = "";
         BackButton.IsEnabled = false;
         UpdateHistoryButtons();
-        UpdateFileButtons();
+        UpdateTransferButtons();
         UpdateFavoriteToggle();
+        UpdateBrowserEmptyState();
     }
 
     /// <summary>
@@ -1339,6 +1391,9 @@ public partial class RemoteEndpointManagerWindow : Window
     internal void ShowListing(string path, IEnumerable<CloudFileEntry> entries, bool isSearchResult = false)
     {
         _currentPath = path;
+        // A listing always shows the trail again: a search, a refresh or a jump that lands here while the box was
+        // open must not leave an editable box describing a directory the browser has already left.
+        CloseAddressEditor();
         _listingIsSearchResult = isSearchResult;
         _listed.Clear();
         _listed.AddRange(entries);
@@ -1346,7 +1401,11 @@ public partial class RemoteEndpointManagerWindow : Window
         UpdateBreadcrumbs();
         AddressBox.Text = path;
         ApplyView();
-        UpdateFileButtons();
+        UpdateTransferButtons();
+        // The favourite button is a claim about the directory on screen, so it is re-decided here rather than
+        // left to RecordVisitAsync: a move back to a directory that is already the newest visit records
+        // nothing, and the button would then still be describing the directory the browser just left.
+        UpdateFavoriteToggle();
     }
 
     /// <summary>
@@ -1364,7 +1423,7 @@ public partial class RemoteEndpointManagerWindow : Window
             ? ""
             : visible.Count == _listed.Count ? Tr.Format("Mgr.ItemCount", _listed.Count) : Tr.Format("Mgr.ItemCountFiltered", visible.Count, _listed.Count);
         if (ViewSummary.Text.Length > 0) StatusText.Text = ViewSummary.Text + "。";
-        UpdateFileButtons();
+        UpdateTransferButtons();
         // The rows a search or a sort change left on screen are the only ones worth pulling pictures for.
         RestartTileRound();
     }
@@ -1376,22 +1435,14 @@ public partial class RemoteEndpointManagerWindow : Window
             : null;
     }
 
-    private void UpdateFileButtons()
+    /// <summary>
+    /// The two transfer buttons are the only selection-driven controls left in the browser chrome. Every command
+    /// that acts on a row now lives on the row menu, which is rebuilt from the selection each time it opens — so
+    /// there is nothing here to keep in step with 还原, 清空回收站 or which folder counts as the trash.
+    /// </summary>
+    private void UpdateTransferButtons()
     {
         var selected = SelectedEntries();
-        NewFolderButton.IsEnabled = Selected is not null;
-        RenameButton.IsEnabled = selected.Count == 1;
-        DeleteEntryButton.IsEnabled = selected.Count > 0;
-        RecycleButton.IsEnabled = selected.Count > 0;
-        // 还原 and 清空回收站 appear only in a trash view. Outside that folder the two commands would be aimed at
-        // objects that were never recycled, and a permanent third pair of buttons would crowd the row that
-        // already holds every other command.
-        var inTrash = Selected is { } account && CloudRecycleBin.IsTrashView(account.RootPath, _currentPath);
-        RestoreButton.Visibility = inTrash ? Visibility.Visible : Visibility.Collapsed;
-        RestoreButton.IsEnabled = inTrash && selected.Count > 0;
-        EmptyTrashButton.Visibility = inTrash ? Visibility.Visible : Visibility.Collapsed;
-        EmptyTrashButton.IsEnabled = Selected is not null;
-        OpenTrashButton.IsEnabled = Selected is not null;
         // A folder is downloaded by entering it and taking its files; the queue's unit is a file.
         DownloadButton.IsEnabled = selected.Count > 0 && selected.All(entry => !entry.IsDirectory);
         // The clipboard survives leaving the directory it came from, which is the point: pasting into another
@@ -1401,15 +1452,15 @@ public partial class RemoteEndpointManagerWindow : Window
 
     private IReadOnlyList<CloudFileEntry> SelectedEntries() => [.. FileList.SelectedItems.Cast<CloudFileEntry>()];
 
-    private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateFileButtons();
+    private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateTransferButtons();
 
     // ---- 收藏与最近访问 ----
 
     /// <summary>
-    /// Rebuilds both jump lists from what is remembered and what the endpoint list can offer, and puts the
-    /// favourite button in step with the directory on screen. Nothing here changes what is remembered: an endpoint
-    /// the search box has hidden takes its favourites out of sight and brings them back, because a place the user
-    /// chose is not lost because rclone.conf could not be read once.
+    /// Rebuilds the favourites list and the visits under the address bar from what is remembered and what the
+    /// endpoint list can offer, and puts the favourite button in step with the directory on screen. Nothing here
+    /// changes what is remembered: an endpoint the search box has hidden takes its places out of sight and brings
+    /// them back, because a place the user chose is not lost because rclone.conf could not be read once.
     /// </summary>
     private void RefreshBookmarkLists()
     {
@@ -1418,9 +1469,8 @@ public partial class RemoteEndpointManagerWindow : Window
         // list of rows that refuse to jump.
         var names = _accounts.Select(row => row.Account.Name).ToList();
         FavoriteJumpBox.ItemsSource = CloudBrowserBookmarks.JumpItems(_favorites, names);
-        RecentJumpBox.ItemsSource = CloudBrowserBookmarks.JumpItems(_recent, names);
         DescribeHidden(FavoriteJumpBox, _favorites, names, Tr.F("Mgr.Favorite"));
-        DescribeHidden(RecentJumpBox, _recent, names, Tr.F("Mgr.Recent"));
+        RefreshAddressHistory();
         UpdateFavoriteToggle();
     }
 
@@ -1428,7 +1478,7 @@ public partial class RemoteEndpointManagerWindow : Window
     /// Says how many remembered places the list had to leave out. A row count that fell from six to two is
     /// otherwise indistinguishable from a list that lost four of them for good.
     /// </summary>
-    private static void DescribeHidden(ComboBox box, IReadOnlyList<CloudBookmark> places, IReadOnlyCollection<string> names, string what)
+    private static void DescribeHidden(Control box, IReadOnlyList<CloudBookmark> places, IReadOnlyCollection<string> names, string what)
     {
         var hidden = CloudBrowserBookmarks.HiddenCount(places, names);
         box.ToolTip = hidden == 0 ? null : Tr.Format("Mgr.HiddenEntries", hidden, what);
@@ -1522,6 +1572,9 @@ public partial class RemoteEndpointManagerWindow : Window
         _applyingJump = true;
         try { EndpointList.SelectedItem = row; }
         finally { _applyingJump = false; }
+        // The selection event above is deliberately swallowed, so the pick is remembered here: a remembered
+        // place is a choice the user made, and it has to survive a filter hiding its endpoint just as a click does.
+        _preferredEndpoint = row.Account.Name;
         SwitchEndpoint(row.Account);
         await NavigateToAsync(item.Bookmark.Path);
         return true;
@@ -1769,13 +1822,111 @@ public partial class RemoteEndpointManagerWindow : Window
         await NavigateToAsync(path);
     }
 
-    private async void Go_Click(object sender, RoutedEventArgs e) => await NavigateToAsync(AddressBox.Text);
+    /// <summary>
+    /// The address bar's blank area was activated — a click on it, or Space/Enter while it has focus. The bar is
+    /// two controls in one cell, so this is the gesture that swaps them: the trail is replaced by a box holding the
+    /// current path, and the places the browser remembers drop underneath it, which is how Explorer's address bar
+    /// answers a click. Activating a segment never arrives here — that segment's own Button consumes the gesture.
+    /// </summary>
+    private void AddressBarButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Reachable twice while the box is open — UI Automation can invoke a control the trail now covers — and
+        // re-opening would throw away whatever the user had started typing.
+        if (_addressEditing) return;
+        BeginAddressEdit(openHistory: true);
+    }
+
+    /// <summary>Shows the editable box in place of the trail, and optionally the remembered visits below it.</summary>
+    private void BeginAddressEdit(bool openHistory)
+    {
+        if (!_addressEditing)
+        {
+            _addressEditing = true;
+            AddressBox.Text = _currentPath;
+            Breadcrumbs.Visibility = Visibility.Collapsed;
+            AddressBox.Visibility = Visibility.Visible;
+        }
+        AddressBox.SelectAll();
+        AddressBox.Focus();
+        if (!openHistory) return;
+        RefreshAddressHistory();
+        // A Popup opened inside the very MouseUp that asked for it is closed again by that same click, so it is
+        // deferred by one frame — and only while the box is still open, because that click may have moved on.
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_addressEditing) AddressHistoryPopup.IsOpen = true;
+        }), DispatcherPriority.Input);
+    }
+
+    /// <summary>
+    /// Puts the trail back. The flag is cleared first: hiding the box raises its LostFocus, and that handler has to
+    /// read the flag as already false or it would navigate to the path the window is in the middle of leaving.
+    /// </summary>
+    private void CloseAddressEditor()
+    {
+        if (!_addressEditing) return;
+        _addressEditing = false;
+        AddressHistoryPopup.IsOpen = false;
+        AddressBox.Visibility = Visibility.Collapsed;
+        Breadcrumbs.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Leaves the box and goes to what it says. Nothing is fetched when the normalised path is the one already on
+    /// screen, which is what keeps a click that only opened and closed the box from costing a round trip.
+    /// </summary>
+    private async Task CommitAddressAsync()
+    {
+        var typed = AddressBox.Text;
+        CloseAddressEditor();
+        if (Selected is not CloudEndpointAccount account) return;
+        var target = CloudBrowse.Normalize(typed, account.RootPath);
+        if (string.Equals(target, _currentPath, StringComparison.Ordinal)) return;
+        await NavigateToAsync(target);
+    }
 
     private async void AddressBox_KeyDown(object sender, KeyEventArgs e)
     {
+        // Escape abandons the edit rather than going somewhere: the box was opened by a click, so a keystroke that
+        // says "never mind" has to be able to put the trail back without listing anything.
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            CloseAddressEditor();
+            return;
+        }
         if (e.Key != Key.Enter) return;
         e.Handled = true;
-        await NavigateToAsync(AddressBox.Text);
+        await CommitAddressAsync();
+    }
+
+    private async void AddressBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!_addressEditing) return;
+        // Focus moving into the visits list is not the user leaving the bar — picking a row is what answers that,
+        // and committing here would close the popup before the row could be picked at all.
+        if (AddressHistoryPopup.IsOpen) return;
+        await CommitAddressAsync();
+    }
+
+    /// <summary>Fills the visits under the address bar from what the browser remembers.</summary>
+    private void RefreshAddressHistory()
+    {
+        var names = _accounts.Select(row => row.Account.Name).ToList();
+        AddressHistoryList.ItemsSource = CloudBrowserBookmarks.JumpItems(_recent, names);
+        DescribeHidden(AddressHistoryList, _recent, names, Tr.F("Mgr.Recent"));
+    }
+
+    private async void AddressHistory_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_applyingJump || sender is not ListBox { SelectedItem: CloudJumpItem item } list) return;
+        await JumpToAsync(item);
+        // The pick named a destination, not a filter, so it is put back — the same consumption the favourites list
+        // does, and for the same reason: a row left selected would read as a filter and offer nothing to pick twice.
+        _applyingJump = true;
+        try { list.SelectedItem = null; }
+        finally { _applyingJump = false; }
+        CloseAddressEditor();
     }
 
     private async void BrowseRefresh_Click(object sender, RoutedEventArgs e) => await BrowseAsync();
@@ -1883,8 +2034,6 @@ public partial class RemoteEndpointManagerWindow : Window
 
     // ---- File operations ----
 
-    private async void NewFolder_Click(object sender, RoutedEventArgs e) => await PromptNewFolderAsync();
-
     private async Task PromptNewFolderAsync()
     {
         if (Selected is null) { StatusText.Text = Tr.F("Mgr.PickCloudFirst"); return; }
@@ -1910,8 +2059,6 @@ public partial class RemoteEndpointManagerWindow : Window
         }
         catch (Exception ex) { ReportFailure(Tr.F("Mgr.NewFolderFailedTitle"), ex, "cloud-mkdir"); return false; }
     }
-
-    private async void Rename_Click(object sender, RoutedEventArgs e) => await RenameSelectedAsync();
 
     /// <summary>
     /// 重命名 for whatever is selected, which is one row or none: a rename has exactly one new name, so a multi-
@@ -1949,8 +2096,6 @@ public partial class RemoteEndpointManagerWindow : Window
         }
         catch (Exception ex) { ReportFailure(Tr.F("Mgr.RenameFailedTitle"), ex, "cloud-rename"); return false; }
     }
-
-    private async void DeleteEntries_Click(object sender, RoutedEventArgs e) => await DeleteSelectedAsync();
 
     /// <summary>
     /// 删除 for whatever is selected — the same question, the same bulk threshold and the same second
@@ -2025,10 +2170,8 @@ public partial class RemoteEndpointManagerWindow : Window
     /// </summary>
     internal Func<IReadOnlyList<CloudFileEntry>, bool>? ConfirmRecycle { get; set; }
 
-    private async void Recycle_Click(object sender, RoutedEventArgs e) => await RecycleSelectedAsync();
-
     /// <summary>
-    /// 移到回收站 for whatever is selected. Del and the button land here, so the empty-selection sentence is
+    /// 移到回收站 for whatever is selected. Del and the shortcut land here, so the empty-selection sentence is
     /// written once — and it is a different sentence from 删除's, because the two commands undo each other and a
     /// user must be able to tell which one the keystroke asked for.
     /// </summary>
@@ -2038,17 +2181,6 @@ public partial class RemoteEndpointManagerWindow : Window
         if (selected.Count == 0) { StatusText.Text = Tr.F("Mgr.SelectItemsToRecycle"); return; }
         await RecycleAsync(selected);
     }
-
-    private async void Restore_Click(object sender, RoutedEventArgs e)
-    {
-        var selected = SelectedEntries();
-        if (selected.Count == 0) { StatusText.Text = Tr.F("Mgr.SelectItemsToRestore"); return; }
-        await RestoreAsync(selected);
-    }
-
-    private async void EmptyTrash_Click(object sender, RoutedEventArgs e) => await EmptyTrashAsync();
-
-    private async void OpenTrash_Click(object sender, RoutedEventArgs e) => await OpenTrashAsync();
 
     /// <summary>
     /// 移到回收站 for the given rows: refuse what cannot be recycled, ask once, then move. A row that is already
@@ -2182,7 +2314,7 @@ public partial class RemoteEndpointManagerWindow : Window
         _clipboard.Clear();
         _clipboard.AddRange(entries.Select(entry => new CloudClipboardItem(account, entry)));
         _clipboardMode = mode;
-        UpdateFileButtons();
+        UpdateTransferButtons();
         var folders = entries.Count(entry => entry.IsDirectory);
         StatusText.Text = Tr.Format("Mgr.PasteDone", (mode == CloudClipboardMode.Cut ? Tr.F("Mgr.Cut") : Tr.F("Mgr.Copy")), entries.Count)
             + (folders > 0 ? Tr.Format("Mgr.PasteFoldersNotPasted", folders) : "")
@@ -2762,6 +2894,10 @@ public partial class RemoteEndpointManagerWindow : Window
         if (CloudRecycleBin.IsTrashView(root, _currentPath))
             Add(menu, Tr.F("Mgr.EmptyTrashEllipsis"), EmptyTrashAsync);
         Add(menu, Tr.F("Mgr.NewFolderEllipsis"), PromptNewFolderAsync);
+        // 回收站 came here with the rest of the 文件 row. It is the one command that row held which does not act on
+        // the selection at all — it walks to the trash folder — and that is exactly why it belongs with the
+        // commands rather than on a permanent strip of its own.
+        Add(menu, Tr.F("Mgr.OpenTrash"), OpenTrashAsync);
         // 属性 is last and after a separator, like Explorer's: it is the read-only answer, and the one that
         // must never be mistaken for an action that changes the cloud.
         menu.Items.Add(new Separator());

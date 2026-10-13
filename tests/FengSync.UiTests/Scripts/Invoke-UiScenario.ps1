@@ -353,6 +353,26 @@ function Wait-Until([scriptblock]$Condition, [string]$Message, [int]$Seconds = 3
 function Find-Id($root, [string]$id, [int]$seconds = 20) { Wait-Until { try { $root.FindFirst([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)) } catch { $null } } "Missing UI element: $id" $seconds }
 function Find-Name($root, [string]$name, [int]$seconds = 20) { Wait-Until { try { $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $name)) } catch { $null } } "Missing UI element: $name" $seconds }
 function Find-NameContaining($root, [string]$fragment, [int]$seconds = 20) { Wait-Until { try { $items = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition); foreach ($item in $items) { if ($item.Current.Name -like "*$fragment*") { return $item } }; $null } catch { $null } } "Missing UI element containing: $fragment" $seconds }
+# WPF hosts a Popup in a window of its own, so a dropdown belonging to a control inside the application is not a
+# descendant of that control's window — the address bar's 最近访问 list is reached from the desktop, not from the
+# manager. Look in the owning window first, then sweep the desktop top-down the way Find-ContextMenuInApp does.
+# Returns $null instead of throwing so a caller can wrap it in Wait-Until with wording about the feature it waits for.
+function Find-IdAnywhere($root, [string]$id) {
+  try {
+    $local = $root.FindFirst([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id))
+    if ($local) { return $local }
+  } catch { }
+  $queue = [System.Collections.Generic.Queue[System.Windows.Automation.AutomationElement]]::new()
+  $queue.Enqueue([System.Windows.Automation.AutomationElement]::RootElement)
+  while ($queue.Count -gt 0) {
+    $node = $queue.Dequeue()
+    try {
+      if ($node.Current.AutomationId -eq $id) { return $node }
+      foreach ($child in $node.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) { $queue.Enqueue($child) }
+    } catch { }
+  }
+  return $null
+}
 function Click($element) {
   # A disabled element cannot be invoked through UIA — UIA throws the
   # generic "Could not open the process token" / "Unrecognized error"
@@ -1474,22 +1494,23 @@ try {
       Click (Find-Id $manager 'CloudViewToggle')
       Wait-Until { try { $row = Find-Name $manager 'remote-proof.txt' 2; $rect = $row.Current.BoundingRectangle
         ($row.Current.Name -eq 'remote-proof.txt') -and ($rect.Width -gt 0) -and ($rect.Height -gt 0) } catch { $false } } '列表视图没有把这一行重新画出来。' 30 | Out-Null
-      # 收藏 / 最近访问 是浏览器写进应用数据的一份名单，而工具行是 WrapPanel：三个新控件里只要有一个在换行后
-      # 被裁掉，用户就永远看不到它，这在进程内测试里看不出来。按钮在 XAML 里刻意没有静态无障碍名，所以 UIA 读到
-      # 的「收藏此目录」就是它此刻的状态——点一下之后必须是「取消收藏」，屏幕阅读器拿到的是同一句话。
+      # 收藏 现在和搜索同排，地址栏那一行是 Grid（不是 WrapPanel），所以这一排控件不会被折行裁掉——这在进程内测试里
+      # 看不出来。按钮在 XAML 里刻意没有静态无障碍名，所以 UIA 读到的「收藏此目录」就是它此刻的状态——点一下之后
+      # 必须是「取消收藏」，屏幕阅读器拿到的是同一句话。
       $favoriteBox = Find-Id $manager 'CloudFavoriteJumps'
-      $recentBox = Find-Id $manager 'CloudRecentJumps'
-      foreach ($id in @('CloudFavoriteJumps', 'CloudRecentJumps', 'CloudFavoriteToggle')) { Assert-RectangleInside (Find-Id $manager $id) $manager "browser toolbar/$id" }
+      foreach ($id in @('CloudFavoriteJumps', 'CloudFavoriteToggle', 'CloudAddressBarChrome')) { Assert-RectangleInside (Find-Id $manager $id) $manager "browser toolbar/$id" }
       Find-Name $manager '收藏此目录' 10 | Out-Null
       Click (Find-Id $manager 'CloudFavoriteToggle')
       Wait-Until { try { $null -ne (Find-Name $manager '取消收藏' 2) } catch { $false } } '点下「收藏此目录」之后按钮没有改口说「取消收藏」。' 15 | Out-Null
-      # 最近访问里那一行是真实外壳列目录时记下来的：只有跑起来的外壳能证明记这次访问确实接在读目录之后，
-      # 而不是只有单测里那条规则。选它=让浏览器跟着端点列表的选中项走一遍，所以文件面板必须还是这个端点。
-      $recentExpand = $null
-      if (-not $recentBox.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$recentExpand)) { throw 'The recent-places picker has no expand pattern.' }
-      $recentExpand.Expand(); Start-Sleep -Milliseconds 200
-      Select-Ui (Find-NameContaining $recentBox $remoteName 5); Start-Sleep -Milliseconds 300
-      Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } '从最近访问里选了一项之后，文件面板没有回到这个端点的内容。' 30 | Out-Null
+      # 最近访问 从「跳转」行搬到了地址栏的下拉里：点地址栏空白处，面包屑换成可编辑的文本框，同时把这份名单铺在下面。
+      # 名单里那一行是真实外壳列目录时记下来的——只有跑起来的外壳能证明记这次访问确实接在读目录之后，而不是只有单测
+      # 里那条规则。选它=让浏览器跟着端点列表的选中项走一遍，所以文件面板必须还是这个端点。下拉是 WPF 的 Popup，
+      # 住在自己的窗口里，所以它按 Find-IdAnywhere 找：先在这个窗口的树里找，找不到再从上往下扫桌面。
+      Invoke-LeftClickGesture (Find-Id $manager 'CloudAddressBarChrome')
+      $history = Wait-Until { Find-IdAnywhere $manager 'CloudAddressHistory' } '点地址栏空白处之后没有出现最近访问下拉。' 15
+      Capture-Element $manager 'remote-file-manager-address-history.png' 'remote-file-manager' 'the address bar opened for editing with the remembered visits below it'
+      Select-Ui (Find-NameContaining $history $remoteName 5); Start-Sleep -Milliseconds 300
+      Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } '从地址栏下拉里选了一项之后，文件面板没有回到这个端点的内容。' 30 | Out-Null
       # 属性 面板里的 统计大小 是这一整套里只有真实外壳才能证明的一环，原因有两层：行的右键菜单在 XAML 里根本
       # 不存在（它是 BuildRowMenu 每次打开时用代码搭起来的），面板自己又是模态对话框，进程内测试只能验到
       # DetailsAsync 这个接缝。于是这里把整条路走一遍——右键、属性、点按钮、内置 rclone 真的经 SFTP 走完子树——
