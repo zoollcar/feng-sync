@@ -2,6 +2,10 @@
 .claude
 .workbuddy-ai/
 
+# Scratch space the assistant writes working files into: probes, intermediate tables, captured
+# output. Regenerated on demand and meaningless to anyone else, so it never reaches a commit.
+.arts/
+
 # Build output and local IDE state
 [Bb]in/
 [Oo]bj/
