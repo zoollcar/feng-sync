@@ -102,10 +102,6 @@ public sealed class UiAcceptanceTests
 
     [Fact]
     [Trait("Category", "UI")]
-    public Task Schedule_ui_creates_tests_and_deletes_a_unique_windows_task() => RunAsync("schedule");
-
-    [Fact]
-    [Trait("Category", "UI")]
     [Trait("Category", "External")]
     public Task Google_drive_test_directory_syncs_to_a_local_folder() => OnlineServicesEnabled ? RunAsync("gdrive") : Task.CompletedTask;
 
@@ -155,7 +151,7 @@ public sealed class UiAcceptanceTests
         // One switch decides where the scenario runs, and nothing else does. The default is a private
         // desktop, where the scenario is free to raise windows, move the pointer and take the foreground —
         // all of it lands on a desktop the user is not looking at. Children inherit that desktop, so the
-        // application, rclone, schtasks and the CLI stay there too.
+        // application, rclone and the CLI stay there too.
         using var desktop = ShowOnScreen ? null : PrivateDesktop.Create();
         var outputPath = desktop is null ? null : Path.Combine(Path.GetTempPath(), $"fengsync-ui-{scenario}-{Guid.NewGuid():N}.log");
         using var process = desktop is null

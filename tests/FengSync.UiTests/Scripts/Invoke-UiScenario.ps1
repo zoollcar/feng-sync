@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'sftp-service', 'cloud-transfers', 'batch-run', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'schedule', 'gdrive', 'gdrive-volume', 'r2', 'r2-volume')][string]$Scenario,
+    [Parameter(Mandatory)][ValidateSet('ui-shell', 'ui-shell-native', 'ui-shell-software', 'ui-visual-matrix', 'update-settings', 'about', 'local', 'local-move', 'modes', 'selection', 'sftp-to-local', 'sftp-ui', 'sftp-service', 'cloud-transfers', 'batch-run', 'profile', 'profile-filter', 'delete-threshold', 'settings', 'history', 'gdrive', 'gdrive-volume', 'r2', 'r2-volume')][string]$Scenario,
     [Parameter(Mandatory)][string]$AppPath,
     [Parameter(Mandatory)][string]$Workspace,
     # Off by default. See the "Where a scenario runs" section below: the test host normally starts this
@@ -1102,7 +1102,7 @@ function New-R2EndpointThroughUi { param($main, [string]$remoteName, [string]$bu
   return "s3://$remoteName/$bucketPath"
 }
 
-$process = $null; $server = $null; $remoteCleanup = $null; $sftpUri = $null; $driveUri = $null; $driveChild = $null; $r2Uri = $null; $r2Child = $null; $scheduledTask = $null; $passed = $false
+$process = $null; $server = $null; $remoteCleanup = $null; $sftpUri = $null; $driveUri = $null; $driveChild = $null; $r2Uri = $null; $r2Child = $null; $passed = $false
 try {
   if ($Scenario -in @('sftp-to-local', 'sftp-ui')) {
     $fixture = Join-Path $root 'sftp'; $share = Join-Path $fixture 'share'
@@ -1815,23 +1815,6 @@ try {
       Close-Window $history
       Close-Window $settings
     }
-    'schedule' {
-      $scheduledTask = 'FengSync-Test-' + [Guid]::NewGuid().ToString('N')
-      # Schedule UI is launched from the SchedulesButton in the main sidebar.
-      Click (Find-Id $main 'SchedulesButton')
-      $schedule = Find-WindowById 'ScheduleWizard'
-      Set-Text (Find-Id $schedule 'ScheduleTaskName') $scheduledTask
-      Capture-Element $schedule 'schedule-configured.png' 'schedule' 'schedule wizard before creation'
-      Click (Find-Id $schedule 'CreateScheduleButton')
-      Wait-Until { & schtasks.exe /Query /TN $scheduledTask *> $null; $LASTEXITCODE -eq 0 } 'Schedule UI did not create the unique Windows task.' 30
-      Click (Find-Id $schedule 'TestScheduleButton')
-      Wait-Until { try { (Find-Id $schedule 'ResultText').Current.Name -match '测试运行|请求' } catch { $true } } 'Schedule UI did not request a test run.' 30
-      Capture-Element $schedule 'schedule-test-running.png' 'schedule' 'scheduled test requested'
-      Wait-Until { $state = & schtasks.exe /Query /TN $scheduledTask /FO LIST 2>$null; $LASTEXITCODE -eq 0 -and ($state -notmatch 'Running|正在运行') } 'Scheduled test run did not leave the running state.' 60
-      Click (Find-Id $schedule 'DeleteScheduleButton')
-      Wait-Until { & schtasks.exe /Query /TN $scheduledTask *> $null; $LASTEXITCODE -ne 0 } 'Schedule UI did not delete the unique Windows task.' 30
-      $scheduledTask = $null
-    }
     'gdrive' {
       $upload = Join-Path $root 'drive-upload'; $download = Join-Path $root 'drive-download'; New-Item -ItemType Directory -Force -Path @($upload, $download) | Out-Null
       [IO.File]::WriteAllText((Join-Path $upload 'drive-proof.txt'), 'drive-roundtrip')
@@ -1994,6 +1977,5 @@ finally {
     }
     finally { $server.Dispose() }
   }
-  if ($scheduledTask) { & schtasks.exe /Delete /F /TN $scheduledTask *> $null }
   if (Test-Path -LiteralPath $root) { Write-Output "Artifacts retained: $root" }
 }

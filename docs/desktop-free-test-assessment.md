@@ -131,6 +131,9 @@ implicit Window style installed into Application.Resources
   2. 任务命令行外面套一层隐藏窗口的宿主（`pwsh -WindowStyle Hidden ...`）——产品行为变更；
   3. 测试侧接受这 1~2 秒的闪窗并写成已知例外（`<Hidden>true</Hidden>` 只隐藏任务本身，**不隐藏控制台窗口**，这条路走不通）。
 - 我的建议：先按 3 记录，等 P0/P1 落地后再评估 2。
+- **已处置（见 §9.5）**：私有桌面方案落地后，这条顾虑只剩「任务本身真的跑起来时闪窗」；而该场景的最后一层验证依赖
+  外部程序 `schtasks.exe`，在本机被程序黑名单拦截，因此整条场景已删除，这条风险随之消失。
+
 ### 4.6 截图的覆盖度损失（P1，技术风险最高的一条）
 
 - 现象：无桌面模式下 `Capture-Element` 直接记录「skipped」（`:1007-1016`），于是 `ui-shell-native` / `ui-shell-software` / `ui-visual-matrix` 以及所有场景的截图证据全部为空；`ui-shell` 里对 `02-shell.png` 的存在性断言也被 `if ($script:showOnScreen ...)` 短路（`:1246`）。剩下的只是 `BoundingRectangle` 几何断言。
@@ -199,7 +202,8 @@ implicit Window style installed into Application.Resources
 
 7. `ui-visual-matrix` 改用 `Resize` 代替 `Maximized`（§4.7）。
 8. `Focus-OffScreenWindow` 降为最后回退，并实测 `SetFocus()` 的抢焦点行为（§4.8）。
-9. `schedule` 场景的控制台窗口：记录为已知例外，或评估 CLI 改 `WinExe` 的代价（§4.5）。
+9. ~~`schedule` 场景的控制台窗口：记录为已知例外，或评估 CLI 改 `WinExe` 的代价（§4.5）。~~
+   **已随该场景整体删除而消解**（§9.5）。
 10. 更新 `README.md` / `tests/README.md` / `AGENTS.md` 里的措辞，并**在文档里写清判据是探测器而不是门禁绿**。
 
 ---
@@ -393,3 +397,36 @@ pwsh -File .\scripts\Test-All.ps1 -Level UiOffline
   场景上工作正常，只是最后一步要调用的外部程序被环境禁止。
 
 把 `schtasks.exe` 从黑名单移除后重跑该场景即可确认；其余 668 条（含全部 20 个非 `schedule` 场景）已全绿。
+
+### 9.6 删除 `schedule` 场景（用户决定）
+
+上面那条路走不通，因为黑名单**无法从命令行绕过**——拦截提示自己就写明了这一点，只能由用户在安全中心里手工改。
+一条在本机永远不可能变绿的场景留在门禁里，价值是负的：它把「环境禁止」长期伪装成「测试失败」。因此整条场景删除。
+
+删除范围（`git` 里可查）：
+
+| 位置 | 删除内容 |
+| --- | --- |
+| `tests/FengSync.UiTests/UiAcceptanceTests.cs` | `Schedule_ui_creates_tests_and_deletes_a_unique_windows_task` 用例 |
+| `Invoke-UiScenario.ps1` | `'schedule'` 分支（17 行）、`-Scenario` 的 `ValidateSet` 条目 |
+| `Invoke-UiScenario.ps1` | `$scheduledTask` 状态变量与其 `schtasks /Delete` 清理行 |
+
+删除后 harness 里不再出现 `schtasks` / `ScheduleWizard` / `SchedulesButton` 任何字样（`grep` 为 0），
+`-Scenario` 的合法值从 25 个变为 24 个。**`UiAcceptanceTests.cs` 里那句「子进程继承私有桌面，所以应用、rclone、
+schtasks 和 CLI 都留在那个桌面上」的注释也一并去掉了 `schtasks`**——它已不是这个套件会拉起的东西。
+
+重跑门禁（同一命令、同一台机器）：
+
+| 阶段 | 结果 |
+| --- | --- |
+| Build | **Passed**（0 warning / 0 error） |
+| Core, CLI, real SFTP and available WinFsp | **Passed 576 / 576**（6m27s） |
+| WPF UI acceptance tests（online services excluded） | **Passed 668 / 668**（15m19s） |
+
+`GATE_EXIT=0`，三个阶段全绿，`schedule` 那条假失败随场景一起消失。
+
+**代价（必须记住）**：这是唯一一条覆盖 `ScheduleWizard` UI 的场景。删除后计划任务向导只剩 Core 层单测
+（`AutomationAndSftpTests.Task_scheduler_never_puts_secrets_in_command`），它断言的是「命令行里不出现凭据」，
+不是「向导能创建/测试/删除任务」。如果以后要把这层覆盖找回来，正解是**只断言向导自己的 `ResultText`**
+（创建/测试/删除的结果文案），而不是用外部 `schtasks.exe` 回读真实任务——代价是它证明的是「向导报告成功」，
+而不是「Windows 真的接受了这个任务」。
