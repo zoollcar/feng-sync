@@ -4175,6 +4175,9 @@ Started: {1}
   <data name="Settings.VersioningNone" xml:space="preserve">
     <value>Delete permanently</value>
   </data>
+  <data name="Settings.VersioningRecycle" xml:space="preserve">
+    <value>Recycle bin (Windows local endpoints only)</value>
+  </data>
   <data name="Settings.WindowEnd" xml:space="preserve">
     <value>Transfer only in this window (end)</value>
   </data>

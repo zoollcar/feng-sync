@@ -4175,6 +4175,9 @@ Rclone：MIT License</value>
   <data name="Settings.VersioningNone" xml:space="preserve">
     <value>永久删除</value>
   </data>
+  <data name="Settings.VersioningRecycle" xml:space="preserve">
+    <value>回收站（仅 Windows 本地端点）</value>
+  </data>
   <data name="Settings.WindowEnd" xml:space="preserve">
     <value>仅在此时间段传输（结束）</value>
   </data>

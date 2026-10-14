@@ -12,7 +12,11 @@ public sealed class ProfileEditorViewModel : INotifyPropertyChanged
 {
     private SyncProfile _profile;
     private readonly SyncProfile _original;
-    public ProfileEditorViewModel(SyncProfile profile) { _original = profile; _profile = profile with { Settings = profile.Settings }; RefreshCompatibility(); }
+    // The global settings a profile with no versioning of its own inherits. Without it the compatibility banner
+    // would call a profile compatible that the runner is about to refuse, because the recycle bin is a
+    // Windows-local-only strategy and the profile itself carries no mode to check.
+    private readonly ApplicationSettings? _application;
+    public ProfileEditorViewModel(SyncProfile profile, ApplicationSettings? application = null) { _original = profile; _application = application; _profile = profile with { Settings = profile.Settings }; RefreshCompatibility(); }
     public SyncProfile Profile { get => _profile; private set { _profile = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsDirty)); RefreshCompatibility(); } }
     public bool IsDirty => !Equals(Profile, _original);
     public ProfileCompatibilityResult Compatibility { get; private set; } = new([], []);
@@ -28,7 +32,7 @@ public sealed class ProfileEditorViewModel : INotifyPropertyChanged
     ];
     public void Update(Func<SyncProfile, SyncProfile> update) => Profile = update(Profile);
     public SyncProfile SaveAsNew() => Profile with { Id = Guid.NewGuid().ToString("N") };
-    private void RefreshCompatibility() { Compatibility = new FeatureCapabilityService().Evaluate(Profile); OnPropertyChanged(nameof(Compatibility)); }
+    private void RefreshCompatibility() { Compatibility = new FeatureCapabilityService().Evaluate(Profile, _application); OnPropertyChanged(nameof(Compatibility)); }
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new(name));
 }

@@ -20,8 +20,7 @@ public partial class ProfileEditorWindow : Window
     public SyncProfile? SavedProfile { get; private set; }
     public ProfileEditorWindow(SyncProfile profile, ApplicationSettings? application = null)
     {
-        InitializeComponent(); _viewModel = new(profile); DataContext = _viewModel;
-        _application = application ?? new();
+        InitializeComponent(); _application = application ?? new(); _viewModel = new(profile, _application); DataContext = _viewModel;
         NameBox.Text = profile.Name; DescriptionBox.Text = profile.Description; LeftPathBox.Text = profile.LeftPath; RightPathBox.Text = profile.RightPath; ModeBox.SelectedIndex = (int)profile.Mode; Enabled.IsChecked = profile.Enabled;
         var setting = profile.Settings;
         foreach (var rule in (setting?.Filter ?? profile.Filter ?? SyncFilter.Empty).ToRules()) _rules.Add(new(rule));
@@ -30,7 +29,10 @@ public partial class ProfileEditorWindow : Window
         UseDefaultConcurrency.IsChecked = setting?.MaxConcurrentCopies is null; ConcurrencyBox.Text = (setting?.MaxConcurrentCopies ?? profile.MaxConcurrentCopies).ToString();
         UseDefaultResume.IsChecked = setting?.ResumeMinimumBytes is null; ResumeMinimumBox.Text = ByteSize.Format(setting?.ResumeMinimumBytes ?? _application.DefaultResumeMinimumBytes);
         TimeToleranceBox.Text = (setting?.TimeToleranceSeconds ?? 2).ToString();
-        var versioning = setting?.Versioning ?? profile.Versioning ?? new(); VersioningBox.SelectedIndex = versioning.Mode == VersioningMode.TimestampedArchive ? 1 : versioning.Mode == VersioningMode.RecycleBin ? 2 : 0; ArchiveBox.Text = versioning.ArchiveDirectory; KeepDaysBox.Text = versioning.KeepDays?.ToString() ?? ""; MaxVersionsBox.Text = versioning.MaxVersionsPerFile?.ToString() ?? ""; MaxTotalMbBox.Text = versioning.MaxTotalBytes is long bytes ? (bytes / 1024d / 1024d).ToString("0.##") : "";
+        // Resolved the same way the runner resolves it, global default included: showing "delete permanently"
+        // for a profile that actually inherits the recycle bin would both contradict the compatibility banner
+        // above and, on save, silently turn the inherited policy into an explicit permanent delete.
+        var versioning = setting?.Versioning ?? profile.Versioning ?? _application.DefaultVersioning; VersioningBox.SelectedIndex = versioning.Mode == VersioningMode.TimestampedArchive ? 1 : versioning.Mode == VersioningMode.RecycleBin ? 2 : 0; ArchiveBox.Text = versioning.ArchiveDirectory; KeepDaysBox.Text = versioning.KeepDays?.ToString() ?? ""; MaxVersionsBox.Text = versioning.MaxVersionsPerFile?.ToString() ?? ""; MaxTotalMbBox.Text = versioning.MaxTotalBytes is long bytes ? (bytes / 1024d / 1024d).ToString("0.##") : "";
         RefreshState();
     }
     private void Section_Changed(object sender, SelectionChangedEventArgs e)

@@ -129,7 +129,7 @@ public sealed class ProfileRunner
         if (!profile.Enabled) throw new InvalidOperationException("配置档案已禁用。");
         var profileValidation = ProfileValidator.Validate(profile);
         if (!profileValidation.IsValid) throw new InvalidOperationException(string.Join(" ", profileValidation.Messages));
-        var compatibility = new FeatureCapabilityService().Evaluate(profile);
+        var compatibility = new FeatureCapabilityService().Evaluate(profile, _applicationSettings);
         if (!compatibility.CanRun) throw new InvalidOperationException("该 Profile 需要修复：" + compatibility.Summary);
         var effective = EffectiveProfileSettings.Resolve(profile, _applicationSettings);
         var endpoints = _sharedRcloneClient is null

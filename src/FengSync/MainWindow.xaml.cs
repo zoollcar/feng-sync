@@ -404,7 +404,7 @@ public partial class MainWindow : Window
     {
         if (CompareButton is null || SyncButton is null) return;
         var profile = ProfileList?.SelectedItem as SyncProfile ?? SyncProfile.Create(Tr.F("Main.TemporaryProfile"), LeftPath?.Text ?? "", RightPath?.Text ?? "");
-        var canRun = new FeatureCapabilityService().Evaluate(profile with { LeftPath = LeftPath?.Text ?? "", RightPath = RightPath?.Text ?? "", Mode = SelectedMode }).CanRun;
+        var canRun = new FeatureCapabilityService().Evaluate(profile with { LeftPath = LeftPath?.Text ?? "", RightPath = RightPath?.Text ?? "", Mode = SelectedMode }, _settings).CanRun;
         var hasProfile = ProfileList?.SelectedItem is SyncProfile selectedProfile && !string.IsNullOrWhiteSpace(selectedProfile.Name);
         CompareButton.IsEnabled = canRun && !_closing && !_compareInProgress && !_syncInProgress && hasProfile;
         var planUsable = _plan is not null && new SyncPlan(_rows.Select(x => x.Operation).ToList()).CanExecute && !_safetySummary.Headline.Contains(Tr.F("Main.KindBlocked"));
@@ -627,7 +627,7 @@ public partial class MainWindow : Window
         UpdateSettingsText();
         UpdateEndpointHeaders();
         UpdateHeaderForCurrentProfile();
-        var compatibility = new FeatureCapabilityService().Evaluate(profile);
+        var compatibility = new FeatureCapabilityService().Evaluate(profile, _settings);
         UpdateActionButtons();
         Status.Text = compatibility.CanRun ? Tr.F("Main.Ready") : Tr.Format("Main.ProfileNeedsRepair", compatibility.Summary);
     }
@@ -654,7 +654,7 @@ public partial class MainWindow : Window
     }
     private async Task BuildPlanAsync(CancellationToken cancellationToken)
     {
-        var profile = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create(Tr.F("Main.TemporaryProfile"), LeftPath.Text, RightPath.Text) with { Mode = SelectedMode }; var compatibility = new FeatureCapabilityService().Evaluate(profile with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode }); if (!compatibility.CanRun) throw new InvalidOperationException(Tr.F("Main.ProfileNeedsRepairPrefix") + compatibility.Summary); var effective = CurrentSettings; (_left, _right) = await CreateEndpointsAsync(LeftPath.Text, RightPath.Text);
+        var profile = ProfileList.SelectedItem as SyncProfile ?? SyncProfile.Create(Tr.F("Main.TemporaryProfile"), LeftPath.Text, RightPath.Text) with { Mode = SelectedMode }; var compatibility = new FeatureCapabilityService().Evaluate(profile with { LeftPath = LeftPath.Text, RightPath = RightPath.Text, Mode = SelectedMode }, _settings); if (!compatibility.CanRun) throw new InvalidOperationException(Tr.F("Main.ProfileNeedsRepairPrefix") + compatibility.Summary); var effective = CurrentSettings; (_left, _right) = await CreateEndpointsAsync(LeftPath.Text, RightPath.Text);
         var configurationSafety = _left is LocalEndpoint configLeft && _right is LocalEndpoint configRight ? new SafetyValidator().ValidateConfiguration(configLeft.Root, configRight.Root, effective.Versioning?.ArchiveDirectory) : SafetyValidationResult.Pass;
         if (configurationSafety.HasBlockingIssues) throw new InvalidOperationException(string.Join(" ", configurationSafety.Issues.Select(x => x.Message)));
         Status.Text = Tr.Format("Main.ScanningEndpoints", LeftPath.Text, RightPath.Text);

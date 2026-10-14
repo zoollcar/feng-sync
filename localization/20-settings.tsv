@@ -24,6 +24,7 @@ Settings.IncludeRules	默认包含规则（每行一条）	Default include rules
 Settings.ExcludeRules	默认排除规则（每行一条）	Default exclude rules (one per line)
 Settings.VersioningNone	永久删除	Delete permanently
 Settings.VersioningArchive	版本目录	Version directory
+Settings.VersioningRecycle	回收站（仅 Windows 本地端点）	Recycle bin (Windows local endpoints only)
 Settings.DefaultVersioning	默认版本策略	Default versioning strategy
 Settings.ArchiveDirectory	版本目录	Version directory
 Settings.KeepDays	保留天数	Days to keep

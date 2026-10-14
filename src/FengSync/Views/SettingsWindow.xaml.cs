@@ -158,8 +158,15 @@ public partial class SettingsWindow : Window
         sp.Children.Add(NewLabeledRow(Tr.F("Settings.ExcludeRules"), NewTextBox("SettingsExcludeRules",
             string.Join(Environment.NewLine, _initial.DefaultFilter.Exclude ?? []), height: 60, multiline: true), caption));
 
-        var versioningCb = NewComboBox("SettingsVersioningMode", 220, _initial.DefaultVersioning.Mode == FengSync.Core.VersioningMode.TimestampedArchive ? 1 : 0,
-            [Tr.F("Settings.VersioningNone"), Tr.F("Settings.VersioningArchive")]);
+        // 0 = permanent delete, 1 = version directory, 2 = recycle bin. The order is shared by the item list here
+        // and the save mapping below, so a mode added to one has to be added to the other.
+        var versioningCb = NewComboBox("SettingsVersioningMode", 220, _initial.DefaultVersioning.Mode switch
+        {
+            FengSync.Core.VersioningMode.TimestampedArchive => 1,
+            FengSync.Core.VersioningMode.RecycleBin => 2,
+            _ => 0
+        },
+            [Tr.F("Settings.VersioningNone"), Tr.F("Settings.VersioningArchive"), Tr.F("Settings.VersioningRecycle")]);
         sp.Children.Add(NewLabeledRow(Tr.F("Settings.DefaultVersioning"), versioningCb, caption));
         sp.Children.Add(NewLabeledRow(Tr.F("Settings.ArchiveDirectory"), NewTextBox("SettingsArchiveDirectory", _initial.DefaultVersioning.ArchiveDirectory ?? ""), caption));
         sp.Children.Add(NewLabeledRow(Tr.F("Settings.KeepDays"), NewTextBox("SettingsKeepDays", (_initial.DefaultVersioning.KeepDays ?? 30).ToString()), caption));
@@ -472,9 +479,14 @@ public partial class SettingsWindow : Window
                 {
                     "SettingsVersioningMode" => value with
                     {
-                        DefaultVersioning = co.SelectedIndex == 1
-                            ? new VersioningPolicy(FengSync.Core.VersioningMode.TimestampedArchive, value.DefaultVersioning.ArchiveDirectory, value.DefaultVersioning.KeepDays)
-                            : new VersioningPolicy(FengSync.Core.VersioningMode.None, value.DefaultVersioning.ArchiveDirectory, value.DefaultVersioning.KeepDays)
+                        // The archive directory and keep-days survive a switch to another mode, so toggling to the
+                        // recycle bin and back does not quietly discard the folder the user configured.
+                        DefaultVersioning = new VersioningPolicy(co.SelectedIndex switch
+                        {
+                            1 => FengSync.Core.VersioningMode.TimestampedArchive,
+                            2 => FengSync.Core.VersioningMode.RecycleBin,
+                            _ => FengSync.Core.VersioningMode.None
+                        }, value.DefaultVersioning.ArchiveDirectory, value.DefaultVersioning.KeepDays)
                     },
                     "SettingsCloudConflict" => value with { CloudUploadConflict = ConflictPolicy(co.SelectedIndex) },
                     "SettingsCloudAfterTransfer" => value with { CloudAfterTransfer = AfterTransferPolicy(co.SelectedIndex) },

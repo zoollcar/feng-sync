@@ -1,4 +1,5 @@
 using FengSync.Core;
+using FengSync.Core.Configuration;
 
 namespace FengSync.Tests;
 
@@ -209,6 +210,23 @@ public sealed class SafetyAndExecutionTests : IAsyncLifetime
         var service = new FengSync.Core.Capabilities.FeatureCapabilityService();
         Assert.False(service.Evaluate(remote).CanRun);
         Assert.Equal(OperatingSystem.IsWindows(), service.Evaluate(local).CanRun);
+    }
+
+    /// <summary>
+    /// The recycle bin can be chosen as the global default versioning policy, and a profile that sets no
+    /// versioning of its own inherits it. The gate therefore has to resolve the same fallback the executor does,
+    /// or a remote profile would clear this check and only fail once the delete loop reaches a remote path.
+    /// </summary>
+    [Fact] public void Recycle_bin_inherited_from_the_global_default_is_gated_the_same_way()
+    {
+        var inheriting = SyncProfile.Create("inherits", Left, Right);
+        var application = new ApplicationSettings { DefaultVersioning = new(VersioningMode.RecycleBin) };
+        var service = new FengSync.Core.Capabilities.FeatureCapabilityService();
+        Assert.False(service.Evaluate(inheriting with { LeftPath = "sftp://server/data" }, application).CanRun);
+        Assert.Equal(OperatingSystem.IsWindows(), service.Evaluate(inheriting, application).CanRun);
+        // With no settings to read the inherited policy from, the gate can only see what the profile carries —
+        // which is nothing, and is precisely the behaviour this overload exists to close.
+        Assert.True(service.Evaluate(inheriting with { LeftPath = "sftp://server/data" }).CanRun);
     }
 
     [Fact] public void Invalid_profile_deletion_limits_are_blocked_before_planning()
