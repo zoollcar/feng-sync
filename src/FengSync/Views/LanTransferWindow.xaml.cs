@@ -58,8 +58,8 @@ public partial class LanTransferWindow : Window
     private readonly LanGroupLog _group = new();
 
     /// <summary>
-    /// The rows a paired phone may still list and read. The room's own entries are served by id through
-    /// <c>/attachments</c>; this list is what the shipped phone page reads until it is redrawn to read the room.
+    /// The rows a paired device may list through <c>/api/v1/basket</c>. The room's own entries are what the phone
+    /// page reads and what a member pulls, by id; this list is the older answer the listener still gives.
     /// </summary>
     private readonly LanSendBasket _basket = new();
 
@@ -262,13 +262,17 @@ public partial class LanTransferWindow : Window
             _session = new LanSession(new LanOptions(port, _receiveDirectory, _settings.LanAutoAcceptFromTrusted),
                 _peers, _secrets, _pairing, _basket, AskInboundAsync, _group);
             _client ??= new LanPeerClient(_identity, _peers);
-            _host = await LanServerHost.StartAsync(new LanServerOptions(_session, _identity, _pairing, sink), _lifetime.Token);
-            // The room's reader is built beside the listener because it is the same pair of promises: this
-            // machine answers its own <c>/log</c> here and reads everybody else's from here.
+            // The room's reader is built beside the listener because it is the same pair of promises: this machine
+            // answers its own <c>/log</c> here and reads everybody else's from here. It is built *before* the
+            // listener because the listener answers on its behalf — a phone cannot dial anybody, so its 接收 is
+            // this machine's own receive, and a route that reached back into the window for the room would be a
+            // second, later copy of a promise the window already made.
             _room = new LanGroupRoom(_identity, _client, _peers, _group, sink)
             {
                 AutoReceive = _settings.LanAutoAcceptFromTrusted,
             };
+            _host = await LanServerHost.StartAsync(
+                new LanServerOptions(_session, _identity, _pairing, sink) { Room = _room }, _lifetime.Token);
             AttachRoomEvents(_room);
         }
         catch (LanTransferException ex) when (ex.Refusal == LanRefusal.PortUnavailable)
@@ -688,8 +692,9 @@ public partial class LanTransferWindow : Window
     /// tomorrow.
     /// </para>
     /// <para>
-    /// The basket gets the same path because the shipped phone page lists that, not the room: one promise about
-    /// what may be read, drawn by two clients until the page is redrawn to read the room.
+    /// The basket gets the same path because the listener still answers <c>/api/v1/basket</c> from it: a device
+    /// that asks that route is offered what the user put on the screen, rather than an empty list beside a full
+    /// room. The page reads the room, by the id its author minted.
     /// </para>
     /// </remarks>
     internal int Announce(IEnumerable<string?> paths)

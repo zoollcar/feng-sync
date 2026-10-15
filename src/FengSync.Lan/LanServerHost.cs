@@ -26,6 +26,15 @@ public sealed record LanServerOptions(
     LanReceiveSink Sink,
     long DefaultBodyLimitBytes = 30L * 1024 * 1024)
 {
+    /// <summary>The reader this machine keeps its copy of the room with, when this listener has one.</summary>
+    /// <remarks>
+    /// A browser cannot be dialled, so a member that is one can only ask the computer it paired with to receive an
+    /// entry and hand it over. Deciding whom to ask is the room's job and no route may grow a second copy of it, so
+    /// the listener is handed the very <see cref="LanGroupRoom"/> the window polls with. Absent is a listener with
+    /// no reader — a harness that mapped the routes and nothing else — and an entry then stays where it is.
+    /// </remarks>
+    public LanGroupRoom? Room { get; init; }
+
     public LanOptions Validate()
     {
         Session.Options.Validate();
@@ -206,6 +215,9 @@ public sealed class LanServerHost : IAsyncDisposable
         // and holds it by id rather than by a row of somebody's send basket.
         endpoints.MapGet("/api/v1/attachments/{id}", (Func<string, HttpContext, Task<IResult>>)HandleAttachmentAsync);
         endpoints.MapGet("/api/v1/attachments/{id}/zip", (Func<string, HttpContext, Task<IResult>>)HandleAttachmentArchiveAsync);
+        // A member that cannot be dialed cannot dial out either, so a browser asks this machine to become the holder
+        // first. The asking, the choosing of whom to ask, and the landing are all the room's; this route only answers.
+        endpoints.MapPost("/api/v1/attachments/{id}/receive", (Func<string, HttpContext, Task<IResult>>)HandleAttachmentReceiveAsync);
 
         // Anything else answers in this protocol's shape. A bare 404 HTML page would leave a peer guessing
         // whether it had found a Feng Sync at all, which is the question /hello exists to answer.
@@ -563,6 +575,44 @@ public sealed class LanServerHost : IAsyncDisposable
         var (item, error) = Held(id, wantsArchive: true);
         if (error is not null) return error;
         return await ServeArchiveAsync(http, auth.Contact!, item!).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Receives one room entry into this machine's receive directory, so that the one member of the room which
+    /// cannot dial anybody can take it from here.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A browser has no listener, so a phone can only ever reach the computer it paired with. When that computer
+    /// does not hold the bytes an entry names, the phone's one honest move is to ask it to become a holder — which
+    /// is exactly what the room's own receive does for a member that can be dialed. This route therefore adds no
+    /// rule of its own: whom to ask, in what order, and where the bytes land all live in
+    /// <see cref="LanGroupRoom.ReceiveAsync"/>, and a second answer to those questions written here is how a phone
+    /// and a computer end up disagreeing about the same 接收.
+    /// </para>
+    /// <para>
+    /// The answer is the entry as this machine now holds it, not a path. A phone has no use for a Windows directory,
+    /// and <c>LocalPath</c> has never crossed the wire — it is a statement about this machine, which is why the row
+    /// the page gets back says 本机有了 and nothing about where.
+    /// </para>
+    /// </remarks>
+    private async Task<IResult> HandleAttachmentReceiveAsync(string id, HttpContext http)
+    {
+        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
+        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
+
+        // A listener with no reader has nothing to ask with, so the entry stays where it is. This is a state a
+        // harness reaches and a user does not: the window builds the reader beside the listener and takes it down
+        // before the port closes.
+        if (_options.Room is not { } room) return Answer(LanRefusal.NotFound);
+
+        // There is no form gate here, and that is the read route's own stance rather than an oversight: an id that
+        // is not an id, one this copy has never heard of, and one it holds no path for all answer 这里没有, because a
+        // member keeping its own copy of the room cannot tell a caller which of the three it met. The id is only
+        // ever a key in this machine's own log — never a path, and nothing on this route composes one from it.
+        var result = await room.ReceiveAsync(id, http.RequestAborted).ConfigureAwait(false);
+        if (result.Refusal != LanRefusal.None) return Answer(result.Refusal);
+        return result.Entry is null ? Answer(LanRefusal.NotFound) : Json(result.Entry.ToWire());
     }
 
     /// <summary>

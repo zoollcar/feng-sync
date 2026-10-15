@@ -1,8 +1,12 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Runtime.ExceptionServices;
+using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -419,7 +423,7 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
     }
 
     [Fact]
-    public Task A_file_the_user_puts_in_the_room_is_held_here_and_a_paired_phone_still_lists_it()
+    public Task A_file_the_user_puts_in_the_room_is_held_here_and_offered_in_both_shapes()
     {
         return RunSta(async () =>
         {
@@ -452,8 +456,8 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
                 Assert.Equal(Visibility.Collapsed, row.ActionVisibility);
                 Assert.Equal(Tr.Format("Lan.ChatHeld", Path.GetFileName(file)), row.Detail);
 
-                // The basket is the second drawing of the same promise, for the one client that still reads it:
-                // the shipped phone page lists these rows rather than the room.
+                // The basket is the older drawing of the same promise: the listener still lists these rows for a
+                // device that asks /api/v1/basket, while the page on screen reads the room above them.
                 var snapshot = window.Session!.Basket.Snapshot();
                 Assert.Equal(2, snapshot.Count);
                 Assert.All(snapshot, item => Assert.True(item.AbsolutePath.StartsWith(_root, StringComparison.Ordinal),
@@ -650,6 +654,60 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
         });
     }
 
+    [Fact]
+    public Task A_phone_that_cannot_be_dialled_is_received_for_by_the_window_s_own_listener()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var file = Path.Combine(_root, "quarter-report.txt");
+            File.WriteAllText(file, "第一季度的数字");
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                Assert.Equal(1, window.Announce([file]));
+                var messageId = Assert.Single(window.Group.Entries,
+                    entry => entry.Kind == LanGroupKind.File).MessageId;
+
+                using var phone = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+                var paired = await phone.PostAsync("/api/v1/pair", Body(new LanPairRequest(
+                    window.PairCodeText.Text!, StrangerId, "小明的手机", LanProtocol.KindPhone)));
+                paired.EnsureSuccessStatusCode();
+                var token = JsonSerializer.Deserialize<LanPairReply>(
+                    await paired.Content.ReadAsStringAsync(), LanApi.Json)!.Token;
+
+                // The 接收 a phone presses is a POST to this machine's own listener, because a browser holds no
+                // port nobody can dial. Only the window can make that call answer: it builds the room's reader
+                // before the listener and hands it over, so a listener started without one replies 这里没有 here.
+                // Nothing in FengSync.Tests can see that composition — it is the window's, not the server's.
+                var taken = await phone.SendAsync(
+                    Authenticated(HttpMethod.Post, $"/api/v1/attachments/{messageId}/receive", token));
+                Assert.Equal(HttpStatusCode.OK, taken.StatusCode);
+                var body = await taken.Content.ReadAsStringAsync();
+                var row = JsonSerializer.Deserialize<LanMessageWire>(body, LanApi.Json)!;
+                Assert.Equal(messageId, row.MessageId);
+                Assert.True(row.HeldHere, row.MessageId);
+
+                // No bytes moved, because the file was already here: this is the window's own announcement, so the
+                // room answers without asking anybody and the receive directory stays untouched.
+                Assert.DoesNotContain("localPath", body, StringComparison.OrdinalIgnoreCase);
+                Assert.Empty(Directory.EnumerateFileSystemEntries(_receive));
+
+                // And the row it was given is the one it can then download, by the id its author minted rather than
+                // by a row of this session's send basket.
+                var bytes = await phone.SendAsync(
+                    Authenticated(HttpMethod.Get, $"/api/v1/attachments/{messageId}", token));
+                bytes.EnsureSuccessStatusCode();
+                Assert.Equal("第一季度的数字", await bytes.Content.ReadAsStringAsync());
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
     // ------------------------------------------------------------------ harness
 
     /// <summary>
@@ -670,6 +728,21 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
 
     /// <summary>The list a probing caller keeps, so pairing it records an address without touching the window's own trust file.</summary>
     private LanPeerStore Members() => new(Path.Combine(_root, "probe-peers.json"));
+
+    /// <summary>A request body in the shape this protocol reads, so a case sends what the shipped page sends.</summary>
+    private static StringContent Body<T>(T payload) =>
+        new(JsonSerializer.Serialize(payload, LanApi.Json), Encoding.UTF8, "application/json");
+
+    /// <summary>
+    /// One call carrying the credential a pairing just handed out, in the header form rather than the cookie form —
+    /// which is the form a test can name a device id in, and the one a phone's own <c>fetch</c> uses.
+    /// </summary>
+    private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token)
+    {
+        var request = new HttpRequestMessage(method, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue(LanProtocol.AuthScheme, $"{StrangerId}:{token}");
+        return request;
+    }
 
     /// <summary>A port nobody is holding, so two tests on one machine never bind the same number.</summary>
     private static int FreePort()

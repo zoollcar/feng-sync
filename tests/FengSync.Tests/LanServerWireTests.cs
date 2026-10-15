@@ -533,12 +533,19 @@ public sealed class LanServerWireTests
         // got — crypto.subtle is undefined here, and a page that assumes it would break at the first upload.
         Assert.DoesNotContain("crypto.subtle", html, StringComparison.Ordinal);
         Assert.Contains("crypto.getRandomValues", html, StringComparison.Ordinal);
-        // Every route it names is one this listener maps, in the shape the mapping answers in.
-        foreach (var route in new[] { "/api/v1", "/pair", "/hello", "/inbox", "/basket/" })
+        // Every route it names is one this listener maps, in the shape the mapping answers in. The send basket is
+        // not among them any more: a phone now takes a file by the id its author minted, which is the same address
+        // a computer's own 接收 uses, so the page has no second way to point at a byte.
+        foreach (var route in new[]
+                 {
+                     "/api/v1", "/pair", "/hello", "/peers", "/name", "/messages", "/inbox", "/log?since=",
+                     "/attachments/", "/receive",
+                 })
             Assert.Contains(route, html, StringComparison.Ordinal);
         foreach (var header in new[]
                  {
                      LanProtocol.HeaderRel, LanProtocol.HeaderTotal, LanProtocol.HeaderMtime, LanProtocol.HeaderSession,
+                     LanProtocol.HeaderMessage, LanProtocol.HeaderKind,
                  })
             Assert.Contains(header, html, StringComparison.Ordinal);
     }
@@ -906,6 +913,96 @@ public sealed class LanServerWireTests
     }
 
     [Fact]
+    public async Task A_member_that_cannot_be_dialled_asks_its_relay_and_the_answer_names_no_path()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        await server.PairAsync(server.Pairing.Code);
+        var id = "5e4d3c2b1a09876f5e4d3c2b1a098765";
+        await server.InboxRawAsync("quarter-report.txt", "内容", messageId: id);
+
+        var response = await server.TakeAsync(id);
+
+        // A browser cannot dial anybody, so this route is the only way it can want a file. When the bytes are
+        // already here the answer is the row and nothing else: no second pull, and no duplicate landed under a
+        // renamed name, because already-here is a success rather than a retry.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        var row = JsonSerializer.Deserialize<LanMessageWire>(body, LanApi.Json)!;
+        Assert.Equal(id, row.MessageId);
+        Assert.True(row.HeldHere);
+        // And the answer names no path. LocalPath is a statement about this machine's disk, and a phone that read
+        // it would learn where the user keeps their files while gaining nothing it could press.
+        Assert.DoesNotContain("localPath", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_file_the_relay_holds_is_downloadable_by_a_link_that_carries_nothing_but_the_cookie()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        await server.PairAsync(server.Pairing.Code);
+        var id = "7a6b5c4d3e2f10987a6b5c4d3e2f1098";
+        await server.InboxRawAsync("tail.txt", "0123456789", messageId: id);
+
+        // The page's 接收 button answers with a row, and the row is then handed to the browser as a plain link —
+        // so the read route has to accept the same headerless shape the basket download did, or a tap on it would
+        // come back as a pairing refusal for a device that paired two requests ago.
+        var link = $"/api/v1/attachments/{id}";
+        var whole = await server.LinkAsync(link);
+        var tail = await server.LinkAsync(link, new RangeHeaderValue(5, null));
+
+        Assert.Equal(HttpStatusCode.OK, whole.StatusCode);
+        Assert.Equal("0123456789", await whole.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.PartialContent, tail.StatusCode);
+        Assert.Equal("bytes 5-9/10", Header(tail, "Content-Range"));
+        Assert.Equal("56789", await tail.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Asking_a_relay_for_a_file_it_does_not_hold_refuses_rather_than_answering_empty()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+        server.ServerOptions.Session.Group.TryMerge(new LanMessageWire("heard-from-a-peer", OtherPeerId,
+            "另一台电脑", 4, LanGroupKind.File, null, "合同.pdf", null, 4096, false, OldStamp, true));
+
+        var response = await server.TakeAsync("heard-from-a-peer");
+
+        // The peer's copy claimed the bytes and this copy has none, and there is nobody here to ask: the room
+        // answers the same sentence a computer's own 接收 would have got, rather than publishing an empty file to
+        // the receive directory because some device once said it had something.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(LanReason.NotFound, await ReasonAsync(response));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(server.Receive));
+    }
+
+    [Fact]
+    public async Task A_relay_request_is_refused_before_the_room_is_asked_by_anybody_without_a_credential()
+    {
+        await using var server = await Harness.StartAsync();
+
+        var response = await server.TakeAsync("5e4d3c2b1a09876f5e4d3c2b1a098765");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(LanReason.PairRequired, await ReasonAsync(response));
+    }
+
+    [Fact]
+    public async Task An_id_this_copy_has_never_heard_of_is_refused_at_the_relay_without_anybody_being_asked()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+
+        var response = await server.TakeAsync("not-an-id");
+
+        // Not a bad request: a member keeping its own copy of the room cannot tell a caller whether the id was
+        // never an id, never heard, or heard and not held, and the read route already answers all three as 这里没有.
+        // What matters is that nothing was dialed for it — an id is a key in this machine's own log and never a
+        // path, so a caller that invents keys spends a refusal rather than a round trip per member.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(LanReason.NotFound, await ReasonAsync(response));
+    }
+
+    [Fact]
     public async Task A_held_entry_whose_file_went_away_stops_being_offered_and_keeps_what_the_room_said()
     {
         await using var server = await Harness.StartAsync(confirm: Accepted);
@@ -1094,7 +1191,8 @@ public sealed class LanServerWireTests
         private string? _token;
 
         private Harness(string root, LanPairingState pairing, LanPeerStore peers, LanPeerSecretStore secrets,
-            LanReceiveSink sink, TestClock clock, LanServerOptions serverOptions, List<LanSendItem> basket)
+            LanReceiveSink sink, TestClock clock, LanGroupRoom reader, LanPeerClient dialer,
+            LanServerOptions serverOptions, List<LanSendItem> basket)
         {
             Root = root;
             Receive = Path.Combine(root, "in");
@@ -1103,6 +1201,8 @@ public sealed class LanServerWireTests
             Secrets = secrets;
             Sink = sink;
             Clock = clock;
+            Reader = reader;
+            Dialer = dialer;
             ServerOptions = serverOptions;
             Basket = basket;
             Http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{serverOptions.Session.Options.Port}") };
@@ -1116,6 +1216,15 @@ public sealed class LanServerWireTests
         public LanReceiveSink Sink { get; }
         public TestClock Clock { get; }
         public HttpClient Http { get; }
+
+        /// <summary>
+        /// This machine's room reader, never started. The listener answers on its behalf for a member that cannot
+        /// be dialled, so a case that asks for a file has to be asking a listener that has one.
+        /// </summary>
+        public LanGroupRoom Reader { get; }
+
+        /// <summary>The reader's own dialer, which the room deliberately does not own and this harness therefore does.</summary>
+        public LanPeerClient Dialer { get; }
 
         /// <summary>What was handed to <see cref="LanServerHost.StartAsync"/>, so a case can point a second listener at the same port.</summary>
         public LanServerOptions ServerOptions { get; }
@@ -1172,9 +1281,13 @@ public sealed class LanServerWireTests
             var options = new LanOptions(port ?? FreePort(), receive, autoAccept);
             var identity = await LanDeviceIdentity.LoadOrCreateAsync(Path.Combine(root, "device.json"));
             var basket = new List<LanSendItem>();
-            var harness = new Harness(root, pairing, peers, secrets, sink, clock,
-                new LanServerOptions(new LanSession(options, peers, secrets, pairing, new BasketSource(basket), confirm),
-                    identity, pairing, sink),
+            var session = new LanSession(options, peers, secrets, pairing, new BasketSource(basket), confirm);
+            // A reader that is never started holds no beat: a case that presses 接收 wants one pull, decided now,
+            // with nothing else in the room dialing behind it.
+            var dialer = new LanPeerClient(identity, peers, secrets);
+            var reader = new LanGroupRoom(identity, dialer, peers, session.Group, sink);
+            var harness = new Harness(root, pairing, peers, secrets, sink, clock, reader, dialer,
+                new LanServerOptions(session, identity, pairing, sink) { Room = reader },
                 basket);
             harness.Host = await LanServerHost.StartAsync(harness.ServerOptions, CancellationToken.None);
             return harness;
@@ -1352,6 +1465,14 @@ public sealed class LanServerWireTests
         public Task<HttpResponseMessage> ForgetSelfAsync(string token) =>
             SendAsync(Request(HttpMethod.Delete, "/api/v1/peers/mine", PeerId, token));
 
+        /// <summary>
+        /// Asks this machine to become the holder of one room entry: the move a member makes when it cannot dial
+        /// anybody and the browser's only reachable machine is the one it paired with.
+        /// </summary>
+        public Task<HttpResponseMessage> TakeAsync(string id, string? token = null, string? deviceId = null) =>
+            SendAsync(Request(HttpMethod.Post,
+                $"/api/v1/attachments/{Uri.EscapeDataString(id)}/receive", deviceId ?? PeerId, token));
+
         /// <summary>Says what this device wants to be called, and reads back the name that was kept.</summary>
         public async Task<string> NameAsync(string deviceName, string? token = null, string? deviceId = null)
         {
@@ -1436,6 +1557,8 @@ public sealed class LanServerWireTests
         public async ValueTask DisposeAsync()
         {
             await Host.DisposeAsync();
+            await Reader.DisposeAsync();
+            Dialer.Dispose();
             Http.Dispose();
             // A case that hands its stores to a second window keeps the directory and deletes it itself.
             if (!KeepRoot) Delete(Root);
