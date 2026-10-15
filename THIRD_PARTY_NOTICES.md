@@ -43,3 +43,10 @@ package, including transitive dependencies, when changing package versions.
 | SQLitePCLRaw.lib.e_sqlite3 | 2.1.12 | [NuGet package metadata](https://www.nuget.org/packages/SQLitePCLRaw.lib.e_sqlite3/2.1.12) |
 | System.Management | 9.0.0 | [NuGet package metadata](https://www.nuget.org/packages/System.Management/9.0.0) |
 | FluentIcons.Wpf | 2.1.333 | [NuGet package metadata](https://www.nuget.org/packages/FluentIcons.Wpf/2.1.333) |
+| QRCoder | 1.8.1 | [MIT](https://licenses.nuget.org/MIT) |
+| System.Drawing.Common | 6.0.0 | [MIT](https://licenses.nuget.org/MIT) — transitive dependency of QRCoder; it is resolved but never called, because the pairing picture comes from `PngByteQRCode`. |
+
+The LAN quick-transfer listener is hosted by `Microsoft.AspNetCore.App` (Kestrel). A
+self-contained release package therefore also carries that shared framework's
+assemblies; they are part of .NET and licensed under MIT — see
+<https://github.com/dotnet/aspnet.core>.
