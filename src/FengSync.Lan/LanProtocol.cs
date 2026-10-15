@@ -65,6 +65,27 @@ public static class LanProtocol
     /// by anything known here, which is why <see cref="LanReceiveSink"/> measures the real destination.
     /// </summary>
     public const int MaximumSegmentLength = 255;
+
+    /// <summary>The longest peer name a list will show. Long enough for any real machine name, short enough to fit a row.</summary>
+    public const int MaximumNameLength = 48;
+
+    /// <summary>
+    /// A name a peer chose for itself, made safe to render in a list.
+    /// </summary>
+    /// <remarks>
+    /// It is not a filesystem name, so it is trimmed and shortened rather than refused: a phone that sends 300
+    /// characters of name still has to be recognisable to the person deciding whether to accept its files. A
+    /// blank claim answers blank rather than a sentence, because which sentence it becomes is the window's and
+    /// this library holds no table of those strings. One owner for this rule, because a discovery row and a
+    /// paired row describe the same machine and must not disagree about what it is called.
+    /// </remarks>
+    public static string SanitizePeerName(string? claimed)
+    {
+        if (string.IsNullOrWhiteSpace(claimed)) return "";
+        var trimmed = claimed.Trim();
+        var printable = new string([.. trimmed.Where(character => !char.IsControl(character))]);
+        return printable.Length <= MaximumNameLength ? printable : printable[..MaximumNameLength];
+    }
 }
 
 /// <summary>

@@ -129,7 +129,7 @@ public sealed class LanSession(
         // agreed to. A credential with no record behind it falls back to what the peer claims about itself,
         // which it can only ever do for itself.
         var contact = new LanContact(deviceId,
-            string.IsNullOrWhiteSpace(record?.DeviceName) ? NameOf(claimedName) : record!.DeviceName,
+            string.IsNullOrWhiteSpace(record?.DeviceName) ? LanProtocol.SanitizePeerName(claimedName) : record!.DeviceName,
             record?.Kind ?? KindOf(claimedKind),
             address, port);
 
@@ -152,7 +152,7 @@ public sealed class LanSession(
         if (!LanProtocol.IsPeerDeviceId(deviceId))
             return new LanPairResult(LanRefusal.BadRequest, new LanContact(deviceId, "", "unknown", address, port), null, null);
 
-        var contact = new LanContact(deviceId, NameOf(request!.DeviceName), KindOf(request.Kind), address, port);
+        var contact = new LanContact(deviceId, LanProtocol.SanitizePeerName(request!.DeviceName), KindOf(request.Kind), address, port);
         var verdict = pairing.TryConsume(request.Code, address);
         if (verdict != LanPairVerdict.Accepted)
             return new LanPairResult(verdict switch
@@ -264,21 +264,6 @@ public sealed class LanSession(
         deviceId = value[..split];
         token = value[(split + 1)..];
         return LanProtocol.IsPeerDeviceId(deviceId) && token.Length >= LanPeerSecretStore.TokenBytes;
-    }
-
-    /// <summary>
-    /// A name a peer chose for itself, made safe to render in a list. It is not a filesystem name, so it is
-    /// trimmed and shortened rather than refused: a phone that sends 300 characters of name still has to be
-    /// recognisable to the person deciding whether to accept its files.
-    /// </summary>
-    private static string NameOf(string? claimed)
-    {
-        // A blank claim answers blank rather than a sentence: which sentence it becomes is the window's, in
-        // whichever language the user is reading, and this library has no table of those strings.
-        if (string.IsNullOrWhiteSpace(claimed)) return "";
-        var trimmed = claimed.Trim();
-        var printable = new string([.. trimmed.Where(character => !char.IsControl(character))]);
-        return printable.Length <= 48 ? printable : printable[..48];
     }
 
     /// <summary>An unrecognised kind is kept as "unknown" rather than believed, so a row cannot describe itself as anything.</summary>
