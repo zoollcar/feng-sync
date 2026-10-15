@@ -21,11 +21,26 @@ namespace FengSync.Lan;
 /// </remarks>
 public static class LanKnownFolders
 {
-    /// <summary>The known-folder id for Downloads, including its braces, as <c>SHGetKnownFolderPath</c> takes it.</summary>
-    public const string DownloadsFolderId = "{F38BF404-1D43-42F2-9305-67DE0B28FC23}";
+    /// <summary>
+    /// The known-folder id for Downloads, including its braces, as <c>SHGetKnownFolderPath</c> takes it.
+    /// </summary>
+    /// <remarks>
+    /// This string is the whole feature, and it is not checkable by reading: the id one character away resolves
+    /// to a machine folder rather than to the user's, and it resolves *successfully*, so nothing downstream
+    /// complains. <see cref="FengSync.Tests.LanKnownFoldersTests"/> therefore asks the shell itself which id
+    /// this machine names Downloads and compares, instead of trusting the literal.
+    /// </remarks>
+    public const string DownloadsFolderId = "{374DE290-123F-4565-9164-39C4925E467B}";
 
-    /// <summary>The known-folder id for the user's profile directory, which is where Downloads lives when it has never been redirected.</summary>
-    public const string UserProfileFolderId = "{DE62D742-17EE-4E54-A3F7-9A36A48B0BFC}";
+    /// <summary>
+    /// The known-folder id for the user's profile directory, which is where Downloads lives when it has never
+    /// been redirected.
+    /// </summary>
+    /// <remarks>
+    /// An id that is not in the shell's table is not a failed lookup but a silent one: it answers nothing, so the
+    /// fallback below would give up even on a machine with a perfectly good profile.
+    /// </remarks>
+    public const string UserProfileFolderId = "{5E6C858F-0E22-4760-9AFE-EA3317B67173}";
 
     /// <summary>
     /// The directory to receive into, or <see langword="null"/> when this machine cannot name one.
