@@ -83,7 +83,7 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
                 Assert.Equal(port.ToString(), window.PortBox.Text);
                 Assert.Equal(Tr.Format("Lan.Listening", port), window.StatusText.Text);
 
-                using var probe = new LanPeerClient(await IdentityAsync());
+                using var probe = new LanPeerClient(await IdentityAsync(), Members());
                 var hello = await probe.HelloAsync("127.0.0.1", port);
                 Assert.NotNull(hello);
                 Assert.True(hello!.PairingArmed);
@@ -377,7 +377,7 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
             await window.OpenAsync();
             try
             {
-                using var probe = new LanPeerClient(await IdentityAsync());
+                using var probe = new LanPeerClient(await IdentityAsync(), Members());
                 var hello = await probe.HelloAsync("127.0.0.1", port);
                 Assert.NotNull(hello);
                 var peer = new LanPeerEndpoint(hello!.DeviceId, "127.0.0.1", port);
@@ -511,6 +511,9 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
     private string IdentityPath() => Path.Combine(_root, "probe-device.json");
 
     private Task<LanDeviceIdentity> IdentityAsync() => LanDeviceIdentity.LoadOrCreateAsync(IdentityPath());
+
+    /// <summary>The list a probing caller keeps, so pairing it records an address without touching the window's own trust file.</summary>
+    private LanPeerStore Members() => new(Path.Combine(_root, "probe-peers.json"));
 
     /// <summary>A port nobody is holding, so two tests on one machine never bind the same number.</summary>
     private static int FreePort()

@@ -14,7 +14,12 @@ namespace FengSync.Lan;
 /// machine files that peer's issued token under — not our own id, which is the same value for every peer and
 /// would collapse two credentials into one slot.
 /// </param>
-public sealed record LanPeerEndpoint(string DeviceId, string Address, int Port);
+/// <param name="DeviceName">
+/// What that machine said it was called, from its own <c>/hello</c> or its announcement. It travels here because
+/// pairing is the moment this machine decides it will call that peer again, and the row that decision writes is
+/// the one place a later member list reads a name from.
+/// </param>
+public sealed record LanPeerEndpoint(string DeviceId, string Address, int Port, string? DeviceName = null);
 
 /// <summary>What one basket row cost to hand over.</summary>
 public sealed record LanSendOutcome(int Files, int Directories, long Bytes);
@@ -50,18 +55,25 @@ public sealed class LanPeerClient : IDisposable
     public static readonly TimeSpan QuestionTimeout = TimeSpan.FromSeconds(10);
 
     private readonly LanDeviceIdentity _self;
+    private readonly LanPeerStore _members;
     private readonly LanPeerSecretStore _received;
     private readonly HttpClient _http;
     private readonly bool _ownsHttpClient;
 
+    /// <param name="members">
+    /// The device list this machine keeps, which is also the list the room dials. Pairing writes into it: a
+    /// machine this one holds a credential for is a member it can read, and a caller that never recorded the
+    /// address it paired at would have a token with nothing to spend it on.
+    /// </param>
     /// <param name="received">
     /// Where the tokens other machines issued to this one are kept. Defaults to its own file rather than
     /// <c>lan-peer-secrets.dat</c>, because that one holds what this machine handed out and a reader of either
     /// file has to be able to tell which direction the credential points.
     /// </param>
-    public LanPeerClient(LanDeviceIdentity self, LanPeerSecretStore? received = null, HttpClient? http = null)
+    public LanPeerClient(LanDeviceIdentity self, LanPeerStore members, LanPeerSecretStore? received = null, HttpClient? http = null)
     {
         _self = self;
+        _members = members;
         _received = received ?? new LanPeerSecretStore(DefaultReceivedPath());
         _ownsHttpClient = http is null;
         _http = http ?? new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(10) })
@@ -119,6 +131,12 @@ public sealed class LanPeerClient : IDisposable
         using var response = await SendAsync(request, timeout.Token).ConfigureAwait(false);
         var reply = await ReadAsync<LanPairReply>(response, ct).ConfigureAwait(false);
         await _received.StoreAsync(peer.DeviceId, reply.Token, ct).ConfigureAwait(false);
+        // A machine that answers /pair is a computer — no phone listens — so the kind is settled by the call
+        // succeeding rather than by anything it claimed. The name is its own claim, sanitized the way every
+        // name this application stores is, and a later 改名 or /hello is what corrects it.
+        await _members.RememberAsync(new LanPeerRecord(peer.DeviceId, LanProtocol.SanitizePeerName(peer.DeviceName),
+            LanProtocol.KindWindows, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, peer.Port, [peer.Address]), ct)
+            .ConfigureAwait(false);
         return reply;
     }
 
@@ -314,34 +332,40 @@ public sealed class LanPeerClient : IDisposable
     }
 
     /// <summary>
-    /// Asks for the bytes behind one room entry, from a member that says it holds them.
+    /// Reads the bytes behind one room entry from a member that says it holds them, while the answer is still open.
     /// </summary>
     /// <remarks>
-    /// One id, one file, and no path anywhere in the call: a member that announced a folder is asked for the
-    /// archive through <see cref="AttachmentArchiveAsync"/>, and a peer that does not hold the entry answers
+    /// <para>
+    /// One id, one entry, and no path anywhere in the call: a member that announced a folder is asked for the
+    /// archive with <paramref name="archive"/> set, and a peer that does not hold the entry answers
     /// <see cref="LanRefusal.NotFound"/>, which is what lets a caller move on to the next holder rather than
     /// treating the refusal as damage.
+    /// </para>
+    /// <para>
+    /// The bytes are handed over as a stream the caller never has to close, rather than returned as one. A response
+    /// a caller must remember to dispose leaks a connection on every refusal path a room poller catches — and it
+    /// catches most of them — while nothing here buffers, which is the other half of the point: a pulled gigabyte
+    /// lands in the receive directory through the same staging path a pushed one does, and must not have to fit in
+    /// memory on the way.
+    /// </para>
     /// </remarks>
-    public Task<byte[]> AttachmentAsync(LanPeerEndpoint peer, string messageId, CancellationToken ct = default) =>
-        FetchAsync(peer, messageId, archive: false, ct);
-
-    /// <summary>Asks for a held folder as one archive.</summary>
-    public Task<byte[]> AttachmentArchiveAsync(LanPeerEndpoint peer, string messageId, CancellationToken ct = default) =>
-        FetchAsync(peer, messageId, archive: true, ct);
-
-    private async Task<byte[]> FetchAsync(LanPeerEndpoint peer, string messageId, bool archive, CancellationToken ct)
+    public async Task<T> ReadAttachmentAsync<T>(LanPeerEndpoint peer, string messageId, bool archive,
+        Func<Stream, Task<T>> consume, CancellationToken ct = default)
     {
         var token = await TokenForAsync(peer, ct).ConfigureAwait(false) ?? throw LanTransferException.For(LanRefusal.Unpaired);
-        using var response = await _http.SendAsync(
-            AttachmentRequest(peer, token, messageId, archive), HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        using var response = await _http.SendAsync(AttachmentRequest(peer, token, messageId, archive),
+            HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         // ReadAsync would translate the peer's own body here, and for this call the body is the file.
-        if (!response.IsSuccessStatusCode) throw LanTransferException.For(LanApi.RefusalFor(await ReadReasonAsync(response, ct).ConfigureAwait(false))
-            ?? LanApi.FromStatusCode((int)response.StatusCode));
+        if (!response.IsSuccessStatusCode)
+        {
+            var reason = await ReadReasonAsync(response, ct).ConfigureAwait(false);
+            throw LanTransferException.For(LanApi.RefusalFor(reason) ?? LanApi.FromStatusCode((int)response.StatusCode));
+        }
 
         await using var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        using var buffer = new MemoryStream();
-        await body.CopyToAsync(buffer, ct).ConfigureAwait(false);
-        return buffer.ToArray();
+        // The callback's own failure is the caller's business, not a refusal to translate: a sink that ran out of
+        // room to publish into has nothing to do with what the peer answered.
+        return await consume(body).ConfigureAwait(false);
     }
 
     private HttpRequestMessage AttachmentRequest(LanPeerEndpoint peer, string token, string messageId, bool archive)

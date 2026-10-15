@@ -230,7 +230,7 @@ public partial class LanTransferWindow : Window
 
             _session = new LanSession(new LanOptions(port, _receiveDirectory, _settings.LanAutoAcceptFromTrusted),
                 _peers, _secrets, _pairing, _basket, AskInboundAsync);
-            _client ??= new LanPeerClient(_identity);
+            _client ??= new LanPeerClient(_identity, _peers);
             _host = await LanServerHost.StartAsync(new LanServerOptions(_session, _identity, _pairing, sink), _lifetime.Token);
         }
         catch (LanTransferException ex) when (ex.Refusal == LanRefusal.PortUnavailable)

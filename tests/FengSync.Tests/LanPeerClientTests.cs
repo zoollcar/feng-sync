@@ -29,7 +29,7 @@ public sealed class LanPeerClientTests
     public async Task Hello_answers_null_for_a_port_where_nothing_is_listening()
     {
         var closed = FreePort();
-        using var client = new LanPeerClient(await Identity(closed));
+        using var client = new LanPeerClient(await Identity(closed), Members(closed));
 
         Assert.Null(await client.HelloAsync("127.0.0.1", closed));
     }
@@ -38,7 +38,7 @@ public sealed class LanPeerClientTests
     public async Task A_code_that_is_not_a_code_is_refused_before_the_socket_is_opened()
     {
         var closed = FreePort();
-        using var client = new LanPeerClient(await Identity(closed));
+        using var client = new LanPeerClient(await Identity(closed), Members(closed));
         var peer = new LanPeerEndpoint("a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6", "127.0.0.1", closed);
 
         // Nobody is listening, and the answer must still be about the code rather than about the network: a
@@ -53,7 +53,7 @@ public sealed class LanPeerClientTests
     {
         await using var server = await Server.StartAsync();
         var self = await Identity(server.Port);
-        using var client = new LanPeerClient(self, server.ClientTokens());
+        using var client = new LanPeerClient(self, server.Members(), server.ClientTokens());
         var peer = PeerOf(server);
 
         Assert.False(await client.IsPairedAsync(peer));
@@ -78,12 +78,31 @@ public sealed class LanPeerClientTests
         await using var server = await Server.StartAsync();
         var self = await Identity(server.Port);
         var received = server.ClientTokens();
-        using var client = new LanPeerClient(self, received);
+        using var client = new LanPeerClient(self, server.Members(), received);
         await client.PairAsync(PeerOf(server), server.Pairing.Code);
 
         // The window closes and another opens; the file is what makes the returning device not a stranger.
-        using var reopened = new LanPeerClient(self, server.ClientTokens());
+        using var reopened = new LanPeerClient(self, server.Members(), server.ClientTokens());
         Assert.True(await reopened.IsPairedAsync(PeerOf(server)));
+    }
+
+    [Fact]
+    public async Task Pairing_records_where_that_machine_answers_so_a_later_beat_can_dial_it()
+    {
+        await using var server = await Server.StartAsync();
+        var self = await Identity(server.Port);
+        using var client = new LanPeerClient(self, server.Members(), server.ClientTokens());
+
+        await client.PairAsync(PeerOf(server), server.Pairing.Code);
+
+        // A token with no address is a credential nobody can spend. The room reads its members out of this list,
+        // so a caller that did not write down where it paired would hold a pairing it could never use again.
+        var row = Assert.Single(await server.Members().LoadAsync());
+        Assert.Equal(server.Identity.DeviceId, row.DeviceId);
+        Assert.Equal(server.Identity.DeviceName, row.DeviceName);
+        Assert.Equal(LanProtocol.KindWindows, row.Kind);
+        Assert.Equal(server.Port, row.Port);
+        Assert.Equal(new[] { "127.0.0.1" }, row.SeenAddresses);
     }
 
     [Fact]
@@ -91,7 +110,7 @@ public sealed class LanPeerClientTests
     {
         await using var server = await Server.StartAsync();
         var self = await Identity(server.Port);
-        using var client = new LanPeerClient(self, server.ClientTokens());
+        using var client = new LanPeerClient(self, server.Members(), server.ClientTokens());
         await client.PairAsync(PeerOf(server), server.Pairing.Code);
         var peer = PeerOf(server);
 
@@ -106,7 +125,7 @@ public sealed class LanPeerClientTests
     public async Task Sending_without_a_credential_refuses_locally_and_writes_nothing_on_the_far_side()
     {
         await using var server = await Server.StartAsync();
-        using var client = new LanPeerClient(await Identity(server.Port), server.ClientTokens());
+        using var client = new LanPeerClient(await Identity(server.Port), server.Members(), server.ClientTokens());
         var source = Path.Combine(server.Root, "out.txt");
         File.WriteAllText(source, "bytes");
 
@@ -266,7 +285,7 @@ public sealed class LanPeerClientTests
     public async Task Reading_the_room_without_a_credential_refuses_locally_and_sends_nothing()
     {
         await using var server = await Server.StartAsync();
-        using var client = new LanPeerClient(await Identity(server.Port), server.ClientTokens());
+        using var client = new LanPeerClient(await Identity(server.Port), server.Members(), server.ClientTokens());
 
         var failure = await Assert.ThrowsAsync<LanTransferException>(() =>
             client.LogAsync(PeerOf(server), since: 0));
@@ -336,7 +355,7 @@ public sealed class LanPeerClientTests
         Assert.True(entry.HeldHere);
         Assert.Equal(Path.Combine(server.Receive, "报告 v2.txt"), entry.LocalPath);
 
-        Assert.Equal(File.ReadAllBytes(source), await client.AttachmentAsync(peer, id));
+        Assert.Equal(File.ReadAllBytes(source), await ReadAllAsync(client, peer, id));
     }
 
     [Fact]
@@ -361,13 +380,9 @@ public sealed class LanPeerClientTests
         Assert.Equal(0, entry.Bytes);
         Assert.Equal("bundle", entry.RelativePath);
 
-        using var archive = new ZipArchive(new MemoryStream(
-            await client.AttachmentArchiveAsync(PeerOf(server), id)));
-        Assert.Equal(["bundle/", "bundle/deep/in.txt", "bundle/empty/", "bundle/top.txt"],
-            archive.Entries.Select(item => item.FullName).OrderBy(item => item, StringComparer.Ordinal));
-        await using var body = archive.GetEntry("bundle/deep/in.txt")!.Open();
-        using var reader = new StreamReader(body);
-        Assert.Equal("nested bytes", await reader.ReadToEndAsync());
+        var archive = await ReadZipAsync(client, PeerOf(server), id);
+        Assert.Equal(["bundle/", "bundle/deep/in.txt", "bundle/empty/", "bundle/top.txt"], archive.Names);
+        Assert.Equal("nested bytes", archive.Content);
     }
 
     [Fact]
@@ -382,11 +397,11 @@ public sealed class LanPeerClientTests
         await client.SendAsync(PeerOf(server), LanSendItem.Of(source), "sess");
 
         var missing = await Assert.ThrowsAsync<LanTransferException>(() =>
-            client.AttachmentAsync(PeerOf(server), Guid.NewGuid().ToString("N")));
+            ReadAllAsync(client, PeerOf(server), Guid.NewGuid().ToString("N")));
         // An id that could not have been minted anywhere earns the same answer rather than a crash or a 500: a
         // caller cannot be told which of the two it hit in a room where every member keeps its own copy.
         var malformed = await Assert.ThrowsAsync<LanTransferException>(() =>
-            client.AttachmentAsync(PeerOf(server), "not a message id"));
+            ReadAllAsync(client, PeerOf(server), "not a message id"));
 
         Assert.Equal(LanRefusal.NotFound, missing.Refusal);
         Assert.Equal(LanRefusal.NotFound, malformed.Refusal);
@@ -406,24 +421,55 @@ public sealed class LanPeerClientTests
 
         // The one refusal a caller can act on: a row announced as a file has no zip behind it, and a peer that
         // unzipped whatever came back would report damage rather than admit it asked the wrong question.
-        var failure = await Assert.ThrowsAsync<LanTransferException>(() => client.AttachmentArchiveAsync(peer, id));
+        var failure = await Assert.ThrowsAsync<LanTransferException>(() =>
+            client.ReadAttachmentAsync(peer, id, archive: true, static _ => Task.FromResult(0)));
 
         Assert.Equal(LanRefusal.BadRequest, failure.Refusal);
         // The refusal costs the room nothing — the row stays held and askable the right way.
-        Assert.Equal(File.ReadAllBytes(source), await client.AttachmentAsync(peer, id));
+        Assert.Equal(File.ReadAllBytes(source), await ReadAllAsync(client, peer, id));
     }
+
+    /// <summary>Take a row's bytes the way a caller that means to look at them all would.</summary>
+    private static Task<byte[]> ReadAllAsync(LanPeerClient client, LanPeerEndpoint peer, string messageId) =>
+        client.ReadAttachmentAsync(peer, messageId, archive: false, async stream =>
+        {
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            return buffer.ToArray();
+        });
+
+    /// <summary>Open a folder row's archive while its body is still on the wire, and report what was inside.</summary>
+    private static Task<(string[] Names, string Content)> ReadZipAsync(LanPeerClient client, LanPeerEndpoint peer, string messageId) =>
+        client.ReadAttachmentAsync(peer, messageId, archive: true, async stream =>
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            var wanted = archive.GetEntry("bundle/deep/in.txt")!;
+            await using (var body = wanted.Open())
+            using (var reader = new StreamReader(body))
+            {
+                var content = await reader.ReadToEndAsync();
+                var names = archive.Entries.Select(item => item.FullName)
+                    .OrderBy(name => name, StringComparer.Ordinal)
+                    .ToArray();
+                return (names, content);
+            }
+        });
 
     private static async Task<LanPeerClient> PairedAsync(Server server)
     {
-        var client = new LanPeerClient(await Identity(server.Port), server.ClientTokens());
+        var client = new LanPeerClient(await Identity(server.Port), server.Members(), server.ClientTokens());
         await client.PairAsync(PeerOf(server), server.Pairing.Code);
         return client;
     }
 
-    private static LanPeerEndpoint PeerOf(Server server) => new(server.Identity.DeviceId, "127.0.0.1", server.Port);
+    private static LanPeerEndpoint PeerOf(Server server) =>
+        new(server.Identity.DeviceId, "127.0.0.1", server.Port, server.Identity.DeviceName);
 
     private static Task<LanDeviceIdentity> Identity(int port) =>
         LanDeviceIdentity.LoadOrCreateAsync(Path.Combine(Path.GetTempPath(), $"fengsync-lan-client-{port}-device.json"));
+
+    private static LanPeerStore Members(int port) =>
+        new(Path.Combine(Path.GetTempPath(), $"fengsync-lan-client-{port}-members.json"));
 
     private static int FreePort()
     {
@@ -479,6 +525,9 @@ public sealed class LanPeerClientTests
         public LanGroupLog Group => _session.Group;
 
         public LanPeerSecretStore ClientTokens() => new(Path.Combine(_root, "client-tokens.dat"));
+
+        /// <summary>The list a caller of this machine would keep, held apart from the listener's own trust file.</summary>
+        public LanPeerStore Members() => new(Path.Combine(_root, "caller-peers.json"));
 
         public static async Task<Server> StartAsync()
         {
