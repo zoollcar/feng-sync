@@ -28,4 +28,12 @@ public static class AppDataPaths
     /// deletable at any moment without touching anything the user asked to keep.
     /// </summary>
     public static string CloudThumbnails => Path.Combine(Root, "cloud-thumbnails");
+
+    /// <summary>
+    /// What the LAN transfer service keeps for itself: this device's identity, the trusted peer list, the
+    /// transfer history, and the one file holding pairing tokens. Its own directory because all of it
+    /// describes a listener rather than a sync profile, and because the token file has to be findable — and
+    /// deletable, which is what un-trusting every device means — without going through anything else.
+    /// </summary>
+    public static string LanTransfer => Path.Combine(Root, "lan-transfer");
 }

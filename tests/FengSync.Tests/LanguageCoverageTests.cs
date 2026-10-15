@@ -93,7 +93,11 @@ public sealed class LanguageCoverageTests
             var text = File.ReadAllText(table);
             foreach (var line in text.Split('\n'))
             {
-                if (line.Length == 0 || line.TrimStart().StartsWith('#')) continue;
+                // A blank line is blank whether the checkout kept the table as LF or turned it into CRLF:
+                // with core.autocrlf the separator's companion arrives here as a lone carriage return, and a
+                // test that only recognises the zero-length form fails on a normal Windows checkout while the
+                // tables themselves are intact.
+                if (line.Trim().Length == 0 || line.TrimStart().StartsWith('#')) continue;
                 var columns = line.TrimEnd('\r').Split('\t');
                 Assert.True(columns.Length == 3, $"{table}: a row must have three tab separated columns, found {columns.Length}.");
                 Assert.True(keys.Add(columns[0]), $"{table}: the key {columns[0]} is defined twice.");
