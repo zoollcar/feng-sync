@@ -83,6 +83,13 @@ public enum LanRefusal
     /// <summary>The body was cut short, so nothing was published.</summary>
     IncompleteBody,
 
+    /// <summary>
+    /// The published file is not what the sender described. It is its own state rather than another name for
+    /// a short body, because the honest advice differs: a short body means "send it again", a failed check
+    /// after the move means something else in the directory is competing with this file.
+    /// </summary>
+    VerificationFailed,
+
     /// <summary>The listen port is taken by something else.</summary>
     PortUnavailable,
 }
@@ -101,6 +108,7 @@ public static class LanReason
     public const string Conflict = "name_conflict";
     public const string NotFound = "not_found";
     public const string IncompleteBody = "incomplete_body";
+    public const string VerificationFailed = "verification_failed";
 
     /// <summary>The only mapping between a refusal and its wire token, so a body cannot drift from a code.</summary>
     public static string For(LanRefusal refusal) => refusal switch
@@ -116,6 +124,9 @@ public static class LanReason
         LanRefusal.Conflict => Conflict,
         LanRefusal.NotFound => NotFound,
         LanRefusal.IncompleteBody => IncompleteBody,
-        _ => "unpaired",
+        LanRefusal.VerificationFailed => VerificationFailed,
+        // A refusal with no token would answer an empty reason, which is the kind of silent default this
+        // protocol keeps being bitten by; unpaired is the closest truthful one and it is never selected here.
+        _ => PairRequired,
     };
 }
