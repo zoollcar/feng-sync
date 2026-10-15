@@ -1,0 +1,44 @@
+namespace FengSync.Lan;
+
+/// <summary>
+/// What the listener saw happen, in the form a window can put on screen.
+/// </summary>
+/// <remarks>
+/// These are separate records rather than one event with a kind field because each one answers a different
+/// question in the UI — who paired, what landed, what a person refused, how far a transfer has got — and a
+/// reader of the server code should be able to see which of them a route raises. They are plain records, not
+/// <see cref="EventArgs"/> subclasses, because a record cannot derive from anything and the payload already
+/// names the peer that acted; there is no <c>sender</c> left to carry.
+/// </remarks>
+public sealed record LanPairAttemptEventArgs(LanContact Contact, LanRefusal Refusal)
+{
+    public bool Accepted => Refusal == LanRefusal.None;
+}
+
+/// <summary>A file the sink published.</summary>
+public sealed record LanInboxEventArgs(LanContact Contact, LanReceived Received, string? Session);
+
+/// <summary>A directory a peer asked for, which is how an empty folder arrives at all.</summary>
+public sealed record LanDirectoryEventArgs(LanContact Contact, string RelativePath, string? Session);
+
+/// <summary>
+/// A write this side decided about before any byte moved. Raised for both answers, so the window can show that
+/// a device it never agreed to is still trying.
+/// </summary>
+public sealed record LanAdmissionEventArgs(LanInboundOffer Offer, LanRefusal Decision)
+{
+    public bool Accepted => Decision == LanRefusal.None;
+}
+
+/// <summary>
+/// One progress tick. <paramref name="TotalBytes"/> is 0 when the sender declined to declare a length, so a
+/// window cannot draw a fraction out of a number it was never given.
+/// </summary>
+public sealed record LanProgressEventArgs(LanContact Contact, string Path, long Bytes, long TotalBytes, bool IsInbound);
+
+/// <summary>
+/// Bytes this machine handed to a peer. It is the item's own length rather than the range the peer took,
+/// because a resumed download is one delivery of one file and a history row that counted the restart would
+/// say the file went twice.
+/// </summary>
+public sealed record LanOutboundEventArgs(LanContact Contact, LanSendItem Item, bool IsArchive);

@@ -24,6 +24,12 @@ public static class LanProtocol
     public const string HeaderDeviceKind = "X-FS-Device-Kind";
     public const string HeaderPairCode = "X-FS-Pair-Code";
 
+    /// <summary>
+    /// The port a peer is itself listening on, so a computer can dial back. A phone reports nothing, and that
+    /// absence is the answer rather than a made-up number.
+    /// </summary>
+    public const string HeaderPeerPort = "X-FS-Port";
+
     /// <summary>The kind a peer declares for itself. Only these two are recognised; anything else is treated as unknown.</summary>
     public const string KindWindows = "windows";
     public const string KindPhone = "phone";
@@ -34,6 +40,15 @@ public static class LanProtocol
     /// <summary>Wrong codes from one source that buy it a refusal, within <see cref="AttemptWindowSeconds"/>.</summary>
     public const int MaximumFailedAttempts = 5;
     public const int AttemptWindowSeconds = 60;
+
+    /// <summary>
+    /// Whether a peer's self-reported identifier is in a form this side will key trust on. Identifiers are
+    /// generated hex — a GUID for a computer, 32 random bytes for a phone — so anything else is either a
+    /// different application or somebody typing into a request body.
+    /// </summary>
+    public static bool IsPeerDeviceId(string? value) =>
+        value is { Length: >= 8 and <= 64 }
+        && value.All(character => Uri.IsHexDigit(character) || character == '-');
 
     /// <summary>
     /// The limit a single name can carry. The composed path is bounded by the receive directory rather than
@@ -80,6 +95,13 @@ public enum LanRefusal
     /// <summary>The named basket item is not in this session's basket.</summary>
     NotFound,
 
+    /// <summary>
+    /// A person looked at this transfer and said no. It is its own state rather than a flavour of
+    /// <see cref="Conflict"/>, because "rename it and send again" and "the user does not want this device's
+    /// files" are different advice, and 403 is the only code that means "understood and refused".
+    /// </summary>
+    Declined,
+
     /// <summary>The body was cut short, so nothing was published.</summary>
     IncompleteBody,
 
@@ -92,6 +114,13 @@ public enum LanRefusal
 
     /// <summary>The listen port is taken by something else.</summary>
     PortUnavailable,
+
+    /// <summary>
+    /// A request body this side cannot use: no device id, no path, an id in a form no peer of ours would
+    /// produce. Named rather than folded into <see cref="PathUnsafe"/> because the sender's fix is different —
+    /// it sent a request, not a name.
+    /// </summary>
+    BadRequest,
 }
 
 /// <summary>The stable, machine-readable reason strings that go in a refusal body.</summary>
@@ -107,8 +136,10 @@ public static class LanReason
     public const string PathTooLong = "path_too_long";
     public const string Conflict = "name_conflict";
     public const string NotFound = "not_found";
+    public const string Declined = "declined";
     public const string IncompleteBody = "incomplete_body";
     public const string VerificationFailed = "verification_failed";
+    public const string BadRequest = "bad_request";
 
     /// <summary>The only mapping between a refusal and its wire token, so a body cannot drift from a code.</summary>
     public static string For(LanRefusal refusal) => refusal switch
@@ -123,8 +154,10 @@ public static class LanReason
         LanRefusal.PathTooLong => PathTooLong,
         LanRefusal.Conflict => Conflict,
         LanRefusal.NotFound => NotFound,
+        LanRefusal.Declined => Declined,
         LanRefusal.IncompleteBody => IncompleteBody,
         LanRefusal.VerificationFailed => VerificationFailed,
+        LanRefusal.BadRequest => BadRequest,
         // A refusal with no token would answer an empty reason, which is the kind of silent default this
         // protocol keeps being bitten by; unpaired is the closest truthful one and it is never selected here.
         _ => PairRequired,
