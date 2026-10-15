@@ -808,6 +808,166 @@ public sealed class LanServerWireTests
         Assert.Equal(2, log.Head);
     }
 
+    [Fact]
+    public async Task A_push_that_names_the_entry_it_belongs_to_lands_and_becomes_askable_by_that_id()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        await server.PairAsync(server.Pairing.Code);
+
+        await server.InboxRawAsync("report.txt", "合同 1+1", messageId: "9a8b7c6d5e4f1a0b3c2d1e0f9a8b7c6d");
+
+        var response = await server.AttachmentAsync("9a8b7c6d5e4f1a0b3c2d1e0f9a8b7c6d");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        // The bytes come back as the file itself, not as a JSON description of it, and under the name the sink
+        // really stored rather than the one the sender hoped for.
+        Assert.Equal("合同 1+1", await response.Content.ReadAsStringAsync());
+        Assert.Contains("attachment", Header(response, "Content-Disposition"), StringComparison.Ordinal);
+
+        var entry = Assert.Single((await server.LogAsync()).Entries);
+        Assert.Equal("9a8b7c6d5e4f1a0b3c2d1e0f9a8b7c6d", entry.MessageId);
+        Assert.Equal(PeerId, entry.AuthorDeviceId);
+        Assert.Equal(LanGroupKind.File, entry.Kind);
+        Assert.Equal("report.txt", entry.FileName);
+        Assert.Equal(Encoding.UTF8.GetByteCount("合同 1+1"), entry.Bytes);
+        Assert.True(entry.HeldHere);
+    }
+
+    [Fact]
+    public async Task A_tree_that_arrives_file_by_file_under_one_id_is_announced_as_one_folder_and_not_as_many_files()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        await server.PairAsync(server.Pairing.Code);
+        var folder = "7d6c5b4a39281706f5e4d3c2b1a09876";
+
+        // The order a sender really sends in: the folder's own path first, then every file under it.
+        await server.MkdirAsync("tree", messageId: folder);
+        await server.InboxRawAsync("tree/a.txt", "A", messageId: folder, announcedDirectory: true);
+        await server.InboxRawAsync("tree/deep/b.txt", "B", messageId: folder, announcedDirectory: true);
+
+        var entry = Assert.Single((await server.LogAsync()).Entries);
+        Assert.Equal(LanGroupKind.Directory, entry.Kind);
+        Assert.True(entry.IsDirectory);
+        // The entry names the tree's root rather than whichever file landed beside it, because that is the thing a
+        // member fetching it later can ask for as one archive.
+        Assert.Equal("tree", entry.FileName);
+        Assert.Equal("tree", entry.RelativePath);
+        // A folder reports no size, which is the same choice a basket row makes: totalling a subtree is a walk
+        // nobody asked for at the moment the entry is made.
+        Assert.Equal(0, entry.Bytes);
+
+        var archive = await server.AttachmentAsync(folder, archive: true);
+        Assert.Equal(HttpStatusCode.OK, archive.StatusCode);
+        Assert.Equal("application/zip", archive.Content.Headers.ContentType?.MediaType);
+        using var zip = new System.IO.Compression.ZipArchive(await archive.Content.ReadAsStreamAsync(), System.IO.Compression.ZipArchiveMode.Read);
+        Assert.Equal(["tree/", "tree/a.txt", "tree/deep/b.txt"], zip.Entries.Select(each => each.FullName).Order(StringComparer.Ordinal));
+
+        // A folder has no single-length answer, so the bare route refuses it rather than handing out a zip under a
+        // name that would read as one file.
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.AttachmentAsync(folder)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_push_that_names_another_member_s_announcement_lands_as_a_file_and_moves_nobody_s_entry()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        await server.PairAsync(server.Pairing.Code);
+        var theirs = "1234567890abcdef1234567890abcdef";
+        server.ServerOptions.Session.Group.TryMerge(new LanMessageWire(theirs, OtherPeerId, "另一台电脑", 1,
+            LanGroupKind.File, null, "contract.pdf", null, 4096, false, OldStamp, false));
+
+        var push = await server.InboxRawAsync("other.txt", "不是那份", messageId: theirs);
+
+        // The bytes are what the user agreed to receive, so a tag that cannot be honoured is no reason to refuse them.
+        Assert.Equal(HttpStatusCode.Created, push.StatusCode);
+        var entry = Assert.Single((await server.LogAsync()).Entries);
+        Assert.Equal(OtherPeerId, entry.AuthorDeviceId);
+        Assert.False(entry.HeldHere);
+        // And the read still refuses: an entry this copy does not hold is not made servable by a stranger's push,
+        // which is the difference between a room and a place where any device can put any file's bytes behind any
+        // other device's name.
+        Assert.Equal(HttpStatusCode.NotFound, (await server.AttachmentAsync(theirs)).StatusCode);
+    }
+
+    [Fact]
+    public async Task An_entry_adopted_from_elsewhere_is_refused_here_rather_than_served_on_the_announcer_s_word()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+        server.ServerOptions.Session.Group.TryMerge(new LanMessageWire("heard-from-a-peer", OtherPeerId,
+            "另一台电脑", 4, LanGroupKind.File, null, "合同.pdf", null, 4096, false, OldStamp, true));
+
+        var response = await server.AttachmentAsync("heard-from-a-peer");
+
+        // The peer's copy said it held the file; this copy never saw a byte of it, so the honest answer to a poller
+        // choosing where to fetch is 这里没有 rather than the empty 200 a trusting implementation would hand back.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(LanReason.NotFound, await ReasonAsync(response));
+    }
+
+    [Fact]
+    public async Task A_held_entry_whose_file_went_away_stops_being_offered_and_keeps_what_the_room_said()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        await server.PairAsync(server.Pairing.Code);
+        var id = "5e4d3c2b1a09876f5e4d3c2b1a098765";
+        await server.InboxRawAsync("gone.txt", "内容", messageId: id);
+        File.Delete(Path.Combine(server.Receive, "gone.txt"));
+
+        Assert.Equal(HttpStatusCode.NotFound, (await server.AttachmentAsync(id)).StatusCode);
+
+        var entry = Assert.Single((await server.LogAsync()).Entries);
+        // The sentence stays — what a member said is not this machine's to erase — while the promise goes with it,
+        // so no later poller is invited to ask a member that can only refuse.
+        Assert.False(entry.HeldHere);
+        Assert.Equal("gone.txt", entry.FileName);
+    }
+
+    [Fact]
+    public async Task An_id_that_could_not_be_a_message_is_answered_as_absent_without_reaching_the_room()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        await server.PairAsync(server.Pairing.Code);
+        var id = "3c2b1a09f8e7d6c5b4a39281706f5e4d";
+        await server.InboxRawAsync("one.txt", "1", messageId: id);
+
+        // A value of the wrong shape is the same answer as a well-formed id nobody holds: a caller learns that this
+        // machine cannot serve it and nothing about which of the two it typed.
+        Assert.Equal(HttpStatusCode.NotFound, (await server.AttachmentAsync("not a message id!")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await server.AttachmentAsync("3c2b")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await server.AttachmentAsync(id)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_stranger_cannot_read_an_attachment_because_the_room_is_not_a_public_board()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        var paired = await server.PairAsync(server.Pairing.Code);
+        var id = "0123456789abcdef0123456789abcdef";
+        await server.InboxRawAsync("one.txt", "1", messageId: id);
+
+        // A device this listener has never issued to, holding a token that belongs to somebody else: the file is in
+        // the room, and that room is not a public board.
+        var response = await server.AttachmentAsync(id, token: paired.Token, deviceId: OtherPeerId);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(LanReason.PairRequired, await ReasonAsync(response));
+    }
+
+    [Fact]
+    public async Task A_write_that_named_no_entry_stays_a_file_and_says_nothing_to_the_room()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        await server.PairAsync(server.Pairing.Code);
+
+        await server.SendInboxAsync("plain.txt", "内容", 6, OldStamp);
+
+        // A peer that knows nothing of the room — or is sending to a window that has no room in it — gets the same
+        // landing as always, and no entry appears that nobody announced.
+        Assert.Empty((await server.LogAsync()).Entries);
+        Assert.True(File.Exists(Path.Combine(server.Receive, "plain.txt")));
+    }
+
     private static Task<bool> Accepted(LanInboundOffer offer, CancellationToken ct) => Task.FromResult(true);
 
     private static string ReadEntry(System.IO.Compression.ZipArchive archive, string name)
@@ -998,27 +1158,43 @@ public sealed class LanServerWireTests
             return Deserialize<LanInboxReply>(await response.Content.ReadAsStringAsync());
         }
 
-        public Task<HttpResponseMessage> InboxRawAsync(string wire, string content, long? declaredBytes = null, DateTimeOffset? mtime = null, string? token = null) =>
-            InboxRawAsync(wire, Encoding.UTF8.GetBytes(content), declaredBytes, mtime, token);
+        public Task<HttpResponseMessage> InboxRawAsync(string wire, string content, long? declaredBytes = null, DateTimeOffset? mtime = null, string? token = null,
+            string? messageId = null, bool announcedDirectory = false) =>
+            InboxRawAsync(wire, Encoding.UTF8.GetBytes(content), declaredBytes, mtime, token, messageId, announcedDirectory);
 
-        public Task<HttpResponseMessage> InboxRawAsync(string wire, byte[] content, long? declaredBytes = null, DateTimeOffset? mtime = null, string? token = null)
+        public Task<HttpResponseMessage> InboxRawAsync(string wire, byte[] content, long? declaredBytes = null, DateTimeOffset? mtime = null, string? token = null,
+            string? messageId = null, bool announcedDirectory = false)
         {
             var request = Request(HttpMethod.Post, "/api/v1/inbox", PeerId, token);
             request.Content = new ByteArrayContent(content);
             if (declaredBytes is { } bytes) request.Headers.Add(LanProtocol.HeaderTotal, bytes.ToString());
             if (mtime is { } stamp) request.Headers.Add(LanProtocol.HeaderMtime, stamp.ToUnixTimeMilliseconds().ToString());
             request.Headers.Add(LanProtocol.HeaderRel, wire);
+            AddAnnouncement(request, messageId, announcedDirectory);
             return SendAsync(request);
         }
 
-        public async Task<LanMkdirReply> MkdirAsync(string wire, string? token = null)
+        public async Task<LanMkdirReply> MkdirAsync(string wire, string? token = null, string? messageId = null)
         {
             var request = Request(HttpMethod.Post, "/api/v1/mkdir", PeerId, token);
             request.Content = new StringContent("");
             request.Headers.Add(LanProtocol.HeaderRel, wire);
+            AddAnnouncement(request, messageId, isDirectory: true);
             var response = await SendAsync(request);
             response.EnsureSuccessStatusCode();
             return Deserialize<LanMkdirReply>(await response.Content.ReadAsStringAsync());
+        }
+
+        /// <summary>
+        /// Tags a write with the room entry it belongs to, which is the whole of what a sender may say about a file
+        /// it is pushing. The kind is a separate header because a folder arrives as many writes and the entry that
+        /// stands for them has to be a folder whichever write happened to land first.
+        /// </summary>
+        private static void AddAnnouncement(HttpRequestMessage request, string? messageId, bool isDirectory)
+        {
+            if (messageId is null) return;
+            request.Headers.Add(LanProtocol.HeaderMessage, messageId);
+            if (isDirectory) request.Headers.Add(LanProtocol.HeaderKind, LanGroupKind.Directory);
         }
 
         /// <summary>
@@ -1081,6 +1257,18 @@ public sealed class LanServerWireTests
         public Task<HttpResponseMessage> DownloadAsync(string id, string token, bool archive = false, RangeHeaderValue? range = null) =>
             SendAsync(Request(HttpMethod.Get,
                 $"/api/v1/basket/{Uri.EscapeDataString(id)}{(archive ? "/zip" : "")}", PeerId, token, range));
+
+        /// <summary>
+        /// Asks for the bytes behind one room entry, the way a member that wants a file it was only told about does.
+        /// </summary>
+        /// <remarks>
+        /// The id is escaped because a case that names a value this protocol would never mint has to reach the route
+        /// to be refused by it, rather than mangled into some other address by the client.
+        /// </remarks>
+        public Task<HttpResponseMessage> AttachmentAsync(string id, bool archive = false, string? token = null,
+            string? deviceId = null, RangeHeaderValue? range = null) =>
+            SendAsync(Request(HttpMethod.Get,
+                $"/api/v1/attachments/{Uri.EscapeDataString(id)}{(archive ? "/zip" : "")}", deviceId ?? PeerId, token, range));
 
         /// <summary>A device removing its own credential, which is the one thing a peer may do to the trust list.</summary>
         public Task<HttpResponseMessage> ForgetSelfAsync(string token) =>

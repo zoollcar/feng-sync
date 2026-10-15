@@ -106,6 +106,20 @@ public static class LanRelativePath
         return index < 0 ? "" : safeRelative[..index];
     }
 
+    /// <summary>
+    /// The first segment, which is the name of the whole tree when a peer sent a folder rather than one file.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart of <see cref="NameOf"/> at the other end of the path, and the reason it is a rule here
+    /// rather than a <c>Split</c> at a call site: a folder announcement is one entry for a tree that arrives file
+    /// by file, so the name of that entry has to be taken from the same end every time.
+    /// </remarks>
+    public static string RootOf(string safeRelative)
+    {
+        var index = safeRelative.IndexOf('/');
+        return index < 0 ? safeRelative : safeRelative[..index];
+    }
+
     private static bool IsNumberedReserved(string stem)
     {
         if (stem.Length is not (4 or 5)) return false;

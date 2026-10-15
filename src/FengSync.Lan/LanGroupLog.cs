@@ -186,6 +186,98 @@ public sealed class LanGroupLog(int maximumEntries = LanGroupLog.MaximumEntries)
         }
     }
 
+    /// <summary>
+    /// Says this machine can no longer hand over the bytes behind an entry, leaving what the room said intact.
+    /// </summary>
+    /// <remarks>
+    /// The entry is not removed: a replicated copy has no authority to un-say another member's sentence, and a
+    /// member that cannot serve is a normal state of this log rather than a fault — most entries in it were never
+    /// this machine's to hold. Only the promise goes, because a path named once and now gone would otherwise keep
+    /// offering a 接收 this copy cannot honour.
+    /// </remarks>
+    public void DropHeld(string messageId)
+    {
+        lock (_gate)
+        {
+            if (!_byId.TryGetValue(messageId ?? "", out var message)) return;
+            message.HeldHere = false;
+            message.LocalPath = null;
+        }
+    }
+
+    /// <summary>
+    /// Files the bytes a peer just pushed under the entry it named — or announces that entry here, when this copy
+    /// has never heard of it.
+    /// </summary>
+    /// <returns>
+    /// The entry the arrival became or updated, and <see langword="null"/> when the id belongs to another member.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// A push is the only way a device nobody can dial gets a file into the room, so an arrival has to be able to
+    /// speak for itself. <paramref name="relativePath"/> and <paramref name="localPath"/> are both things this
+    /// machine observed rather than believed: the path the sink was handed, and the path it published. The time
+    /// is this machine's too, because a write carries no clock the room could key a display order on.
+    /// </para>
+    /// <para>
+    /// The id arrives in a header while the author arrives in a credential, so the two are compared rather than
+    /// merged. An id this copy already knows under <b>another</b> member's authorship is left exactly as it was and
+    /// nothing is returned: a device cannot retarget somebody else's announcement by tagging its own bytes with
+    /// that id, because every later 接收 would then read this machine's copy as pointing at a path the pusher
+    /// chose while still naming the other member's file. The write itself is not refused for that reason — the
+    /// bytes are already on disk by the time a tag is read, and a file in the receive directory is the thing the
+    /// user agreed to.
+    /// </para>
+    /// <para>
+    /// A same-author arrival that is already known only moves the path, which is what a retried or renamed send
+    /// needs: the newest copy this machine holds is the one it can hand over. Neither marking case raises
+    /// <see cref="Appended"/>, because nothing new entered the room; the shell learns of the arrival from the
+    /// receive event, which is the one that carries the peer.
+    /// </para>
+    /// </remarks>
+    public LanGroupMessage? Hold(LanContact author, string messageId, string relativePath, long bytes,
+        bool isDirectory, string localPath, DateTimeOffset createdUtc)
+    {
+        if (!LanProtocol.IsMessageId(messageId)) return null;
+
+        LanGroupMessage? message = null;
+        List<LanGroupMessage> dropped = [];
+        var announced = false;
+        lock (_gate)
+        {
+            if (_byId.TryGetValue(messageId, out var known))
+            {
+                if (!string.Equals(known.AuthorDeviceId, author.DeviceId, StringComparison.OrdinalIgnoreCase)) return null;
+                known.HeldHere = true;
+                known.LocalPath = localPath;
+                message = known;
+            }
+            else
+            {
+                message = new LanGroupMessage
+                {
+                    MessageId = messageId,
+                    AuthorDeviceId = author.DeviceId,
+                    AuthorName = author.DeviceName,
+                    Kind = isDirectory ? LanGroupKind.Directory : LanGroupKind.File,
+                    FileName = LanRelativePath.NameOf(relativePath),
+                    RelativePath = relativePath.Length == 0 ? null : relativePath,
+                    Bytes = bytes < 0 ? 0 : bytes,
+                    IsDirectory = isDirectory,
+                    CreatedUtc = createdUtc,
+                    HeldHere = true,
+                    LocalPath = localPath,
+                };
+                dropped = Index(message);
+                announced = true;
+            }
+        }
+
+        if (announced) Appended?.Invoke(message!);
+        foreach (var gone in dropped) Trimmed?.Invoke(gone);
+        return message;
+    }
+
     private LanGroupMessage Append(LanGroupMessage message)
     {
         List<LanGroupMessage> dropped;

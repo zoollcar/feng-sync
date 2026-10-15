@@ -40,6 +40,18 @@ public static class LanProtocol
     /// </summary>
     public const string HeaderPeerPort = "X-FS-Port";
 
+    /// <summary>
+    /// The room entry these bytes belong to. A write that carries it is a member delivering what it announced,
+    /// so the arriving file becomes — or already is — something the other members can ask for.
+    /// </summary>
+    public const string HeaderMessage = "X-FS-Msg";
+
+    /// <summary>
+    /// Whether the bytes named by <see cref="HeaderMessage"/> are a folder rather than one file, which is the one
+    /// thing a receiver cannot read off a single write of a tree that arrives file by file.
+    /// </summary>
+    public const string HeaderKind = "X-FS-Kind";
+
     /// <summary>The kind a peer declares for itself. Only these two are recognised; anything else is treated as unknown.</summary>
     public const string KindWindows = "windows";
     public const string KindPhone = "phone";
@@ -57,6 +69,21 @@ public static class LanProtocol
     /// different application or somebody typing into a request body.
     /// </summary>
     public static bool IsPeerDeviceId(string? value) =>
+        value is { Length: >= 8 and <= 64 }
+        && value.All(character => Uri.IsHexDigit(character) || character == '-');
+
+    /// <summary>
+    /// Whether a header could be one of the room's message ids. The same shape as
+    /// <see cref="IsPeerDeviceId"/> for the same reason: ids are minted here as <c>Guid.ToString("N")</c>, so a
+    /// value of any other length or alphabet is a peer inventing a key rather than referring to a real entry.
+    /// </summary>
+    /// <remarks>
+    /// This is a gate on <i>form</i> only, and it is the sink's tag and the read route's lookup that use it. What
+    /// it cannot decide is whether such an id exists in this copy of the room, which is why an arrival with a
+    /// well-formed but unknown id announces itself rather than being discarded, and a read for one this machine
+    /// does not hold answers 没有 this side cannot hand these bytes over.
+    /// </remarks>
+    public static bool IsMessageId(string? value) =>
         value is { Length: >= 8 and <= 64 }
         && value.All(character => Uri.IsHexDigit(character) || character == '-');
 

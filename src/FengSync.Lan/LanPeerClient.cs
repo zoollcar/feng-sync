@@ -183,14 +183,21 @@ public sealed class LanPeerClient : IDisposable
     /// eight, and the peer's own per-file staging means the ninth is a half-written
     /// <c>.fengsync.partial</c> rather than a truncated archive — the same contract a phone's upload gets.
     /// </remarks>
-    public async Task<LanSendOutcome> SendAsync(LanPeerEndpoint peer, LanSendItem item, string? session = null, IProgress<long>? progress = null, CancellationToken ct = default)
+    /// <param name="messageId">
+    /// The id of this machine's own announcement of the row, so the peer files what lands under it and every other
+    /// member can ask for it later. Absent means an ordinary send: the bytes still land, and nobody hears about
+    /// them except through the receive event on that peer's window.
+    /// </param>
+    public async Task<LanSendOutcome> SendAsync(LanPeerEndpoint peer, LanSendItem item, string? session = null,
+        string? messageId = null, IProgress<long>? progress = null, CancellationToken ct = default)
     {
         var token = await TokenForAsync(peer, ct).ConfigureAwait(false)
             ?? throw LanTransferException.For(LanRefusal.Unpaired);
-        if (item.IsDirectory) return await SendDirectoryAsync(peer, item, token, session, progress, ct).ConfigureAwait(false);
+        if (item.IsDirectory) return await SendDirectoryAsync(peer, item, token, session, messageId, progress, ct).ConfigureAwait(false);
 
         using var body = File.OpenRead(item.AbsolutePath);
-        var reply = await PushFileAsync(peer, token, item.Name, body, item.Bytes, item.ModifiedUtc, session, progress, ct).ConfigureAwait(false);
+        var reply = await PushFileAsync(peer, token, item.Name, body, item.Bytes, item.ModifiedUtc, session, messageId,
+            announcedAsDirectory: false, progress, ct).ConfigureAwait(false);
         return new LanSendOutcome(1, 0, reply.Bytes);
     }
 
@@ -199,18 +206,19 @@ public sealed class LanPeerClient : IDisposable
         DateTimeOffset? sourceWriteUtc, string? session = null, IProgress<long>? progress = null, CancellationToken ct = default)
     {
         var token = await TokenForAsync(peer, ct).ConfigureAwait(false) ?? throw LanTransferException.For(LanRefusal.Unpaired);
-        return await PushFileAsync(peer, token, relativePath, body, bytes, sourceWriteUtc, session, progress, ct).ConfigureAwait(false);
+        return await PushFileAsync(peer, token, relativePath, body, bytes, sourceWriteUtc, session,
+            messageId: null, announcedAsDirectory: false, progress, ct).ConfigureAwait(false);
     }
 
     /// <summary>Asks the peer to hold a directory open, which is the only way an empty one arrives at all.</summary>
     public async Task PushDirectoryAsync(LanPeerEndpoint peer, string relativePath, string? session = null, CancellationToken ct = default)
     {
         var token = await TokenForAsync(peer, ct).ConfigureAwait(false) ?? throw LanTransferException.For(LanRefusal.Unpaired);
-        await PushDirectoryAsync(peer, token, relativePath, session, ct).ConfigureAwait(false);
+        await PushDirectoryAsync(peer, token, relativePath, session, messageId: null, ct).ConfigureAwait(false);
     }
 
     private async Task<LanSendOutcome> SendDirectoryAsync(LanPeerEndpoint peer, LanSendItem folder, string token,
-        string? session, IProgress<long>? progress, CancellationToken ct)
+        string? session, string? messageId, IProgress<long>? progress, CancellationToken ct)
     {
         var files = 0;
         var directories = 0;
@@ -218,7 +226,7 @@ public sealed class LanPeerClient : IDisposable
         // The folder's own name first, so an empty row still becomes an empty directory on the far side rather
         // than nothing at all. After that the walk's own order already puts every directory before its contents,
         // which is the only order a receiver can use: a file's parent has to exist before its write is admitted.
-        await PushDirectoryAsync(peer, token, folder.Name, session, ct).ConfigureAwait(false);
+        await PushDirectoryAsync(peer, token, folder.Name, session, messageId, ct).ConfigureAwait(false);
         directories++;
 
         foreach (var entry in LanFolderTree.Entries(folder.AbsolutePath))
@@ -226,14 +234,15 @@ public sealed class LanPeerClient : IDisposable
             var relative = $"{folder.Name}/{entry.RelativePath}";
             if (entry.IsDirectory)
             {
-                await PushDirectoryAsync(peer, token, relative, session, ct).ConfigureAwait(false);
+                await PushDirectoryAsync(peer, token, relative, session, messageId, ct).ConfigureAwait(false);
                 directories++;
                 continue;
             }
 
             var info = new FileInfo(Path.Combine(folder.AbsolutePath, entry.RelativePath.Replace('/', Path.DirectorySeparatorChar)));
             await using var body = File.OpenRead(info.FullName);
-            var reply = await PushFileAsync(peer, token, relative, body, info.Length, info.LastWriteTimeUtc, session, progress, ct).ConfigureAwait(false);
+            var reply = await PushFileAsync(peer, token, relative, body, info.Length, info.LastWriteTimeUtc, session,
+                messageId, announcedAsDirectory: true, progress, ct).ConfigureAwait(false);
             files++;
             bytes += reply.Bytes;
         }
@@ -241,27 +250,85 @@ public sealed class LanPeerClient : IDisposable
         return new LanSendOutcome(files, directories, bytes);
     }
 
-    private async Task PushDirectoryAsync(LanPeerEndpoint peer, string token, string relativePath, string? session, CancellationToken ct)
+    private async Task PushDirectoryAsync(LanPeerEndpoint peer, string token, string relativePath, string? session, string? messageId, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, Build("/api/v1/mkdir", peer.Address, peer.Port));
         AddCredential(request, token);
         AddWireHeaders(request, relativePath, session, declaredBytes: null, sourceWriteUtc: null);
+        AddAnnouncement(request, messageId, isDirectory: true);
         using var response = await SendAsync(request, ct).ConfigureAwait(false);
         await ReadAsync<LanMkdirReply>(response, ct).ConfigureAwait(false);
     }
 
     private async Task<LanInboxReply> PushFileAsync(LanPeerEndpoint peer, string token, string relativePath, Stream body,
-        long bytes, DateTimeOffset? sourceWriteUtc, string? session, IProgress<long>? progress, CancellationToken ct)
+        long bytes, DateTimeOffset? sourceWriteUtc, string? session, string? messageId, bool announcedAsDirectory,
+        IProgress<long>? progress, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, Build("/api/v1/inbox", peer.Address, peer.Port));
         AddCredential(request, token);
         AddWireHeaders(request, relativePath, session, bytes, sourceWriteUtc);
+        AddAnnouncement(request, messageId, announcedAsDirectory);
         var content = new StreamContent(progress is null ? body : new ProgressStream(body, progress));
         if (bytes > 0) content.Headers.ContentLength = bytes;
         request.Content = content;
 
         using var response = await SendAsync(request, ct).ConfigureAwait(false);
         return await ReadAsync<LanInboxReply>(response, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Names the room entry these bytes belong to, and says whether that entry is a folder.
+    /// </summary>
+    /// <remarks>
+    /// The kind travels with every file of a tree rather than with the announcement alone, because a folder arrives
+    /// as separate writes and whichever one lands first is the one that has to create the entry with the right kind
+    /// — a peer that filed a tree's first file as a plain file would announce a whole folder as one text document,
+    /// and a later 接收 would ask for one file and be handed a zip it was never promised.
+    /// </remarks>
+    private static void AddAnnouncement(HttpRequestMessage request, string? messageId, bool isDirectory)
+    {
+        if (string.IsNullOrEmpty(messageId)) return;
+        request.Headers.TryAddWithoutValidation(LanProtocol.HeaderMessage, messageId);
+        if (isDirectory) request.Headers.TryAddWithoutValidation(LanProtocol.HeaderKind, LanGroupKind.Directory);
+    }
+
+    /// <summary>
+    /// Asks for the bytes behind one room entry, from a member that says it holds them.
+    /// </summary>
+    /// <remarks>
+    /// One id, one file, and no path anywhere in the call: a member that announced a folder is asked for the
+    /// archive through <see cref="AttachmentArchiveAsync"/>, and a peer that does not hold the entry answers
+    /// <see cref="LanRefusal.NotFound"/>, which is what lets a caller move on to the next holder rather than
+    /// treating the refusal as damage.
+    /// </remarks>
+    public Task<byte[]> AttachmentAsync(LanPeerEndpoint peer, string messageId, CancellationToken ct = default) =>
+        FetchAsync(peer, messageId, archive: false, ct);
+
+    /// <summary>Asks for a held folder as one archive.</summary>
+    public Task<byte[]> AttachmentArchiveAsync(LanPeerEndpoint peer, string messageId, CancellationToken ct = default) =>
+        FetchAsync(peer, messageId, archive: true, ct);
+
+    private async Task<byte[]> FetchAsync(LanPeerEndpoint peer, string messageId, bool archive, CancellationToken ct)
+    {
+        var token = await TokenForAsync(peer, ct).ConfigureAwait(false) ?? throw LanTransferException.For(LanRefusal.Unpaired);
+        using var response = await _http.SendAsync(
+            AttachmentRequest(peer, token, messageId, archive), HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        // ReadAsync would translate the peer's own body here, and for this call the body is the file.
+        if (!response.IsSuccessStatusCode) throw LanTransferException.For(LanApi.RefusalFor(await ReadReasonAsync(response, ct).ConfigureAwait(false))
+            ?? LanApi.FromStatusCode((int)response.StatusCode));
+
+        await using var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        await body.CopyToAsync(buffer, ct).ConfigureAwait(false);
+        return buffer.ToArray();
+    }
+
+    private HttpRequestMessage AttachmentRequest(LanPeerEndpoint peer, string token, string messageId, bool archive)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get,
+            Build($"/api/v1/attachments/{messageId}{(archive ? "/zip" : "")}", peer.Address, peer.Port));
+        AddCredential(request, token);
+        return request;
     }
 
     /// <summary>

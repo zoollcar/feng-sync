@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 using FengSync.Lan;
@@ -292,6 +293,104 @@ public sealed class LanPeerClientTests
         Assert.Empty(server.Group.Entries);
         Assert.Equal(0, server.Group.Head);
         Assert.Contains(self.DeviceId, (await server.Peers.LoadAsync()).Select(record => record.DeviceId));
+    }
+
+    [Fact]
+    public async Task A_file_sent_with_an_id_can_be_asked_back_from_the_peer_that_took_it()
+    {
+        await using var server = await Server.StartAsync();
+        using var client = await PairedAsync(server);
+        var peer = PeerOf(server);
+        var source = Path.Combine(server.Root, "报告 v2.txt");
+        File.WriteAllText(source, "quarterly");
+        var id = Guid.NewGuid().ToString("N");
+
+        await client.SendAsync(peer, LanSendItem.Of(source), "sess", messageId: id);
+
+        // The row the peer now lists is an announcement with bytes behind it: authored by this machine, held here,
+        // and pointed at the path the sink actually wrote rather than at the name this side sent.
+        var entry = Assert.Single(server.Group.Entries);
+        Assert.Equal(id, entry.MessageId);
+        Assert.Equal(LanGroupKind.File, entry.Kind);
+        Assert.Equal((await Identity(server.Port)).DeviceId, entry.AuthorDeviceId);
+        Assert.True(entry.HeldHere);
+        Assert.Equal(Path.Combine(server.Receive, "报告 v2.txt"), entry.LocalPath);
+
+        Assert.Equal(File.ReadAllBytes(source), await client.AttachmentAsync(peer, id));
+    }
+
+    [Fact]
+    public async Task A_tree_sent_under_one_id_lands_as_one_row_and_unpacks_whole()
+    {
+        await using var server = await Server.StartAsync();
+        using var client = await PairedAsync(server);
+        var root = Path.Combine(server.Root, "bundle");
+        Directory.CreateDirectory(Path.Combine(root, "deep"));
+        Directory.CreateDirectory(Path.Combine(root, "empty"));
+        File.WriteAllText(Path.Combine(root, "top.txt"), "a");
+        File.WriteAllText(Path.Combine(root, "deep", "in.txt"), "nested bytes");
+        var id = Guid.NewGuid().ToString("N");
+
+        await client.SendAsync(PeerOf(server), LanSendItem.Of(root), "sess", messageId: id);
+
+        // One folder means one sentence: every write of the tree carries the same id, and the peer files them all
+        // under the tree's root instead of announcing a row per file.
+        var entry = Assert.Single(server.Group.Entries);
+        Assert.Equal(LanGroupKind.Directory, entry.Kind);
+        Assert.True(entry.IsDirectory);
+        Assert.Equal(0, entry.Bytes);
+        Assert.Equal("bundle", entry.RelativePath);
+
+        using var archive = new ZipArchive(new MemoryStream(
+            await client.AttachmentArchiveAsync(PeerOf(server), id)));
+        Assert.Equal(["bundle/", "bundle/deep/in.txt", "bundle/empty/", "bundle/top.txt"],
+            archive.Entries.Select(item => item.FullName).OrderBy(item => item, StringComparer.Ordinal));
+        await using var body = archive.GetEntry("bundle/deep/in.txt")!.Open();
+        using var reader = new StreamReader(body);
+        Assert.Equal("nested bytes", await reader.ReadToEndAsync());
+    }
+
+    [Fact]
+    public async Task An_entry_nobody_here_holds_answers_not_found_whether_it_is_unknown_or_unusable()
+    {
+        await using var server = await Server.StartAsync();
+        using var client = await PairedAsync(server);
+        var source = Path.Combine(server.Root, "single.txt");
+        File.WriteAllText(source, "x");
+        // A send that named no entry: the bytes landed, and the room was told nothing, so there is no row to ask
+        // for and no path this machine would serve from.
+        await client.SendAsync(PeerOf(server), LanSendItem.Of(source), "sess");
+
+        var missing = await Assert.ThrowsAsync<LanTransferException>(() =>
+            client.AttachmentAsync(PeerOf(server), Guid.NewGuid().ToString("N")));
+        // An id that could not have been minted anywhere earns the same answer rather than a crash or a 500: a
+        // caller cannot be told which of the two it hit in a room where every member keeps its own copy.
+        var malformed = await Assert.ThrowsAsync<LanTransferException>(() =>
+            client.AttachmentAsync(PeerOf(server), "not a message id"));
+
+        Assert.Equal(LanRefusal.NotFound, missing.Refusal);
+        Assert.Equal(LanRefusal.NotFound, malformed.Refusal);
+        Assert.Equal(0, server.Group.Count);
+    }
+
+    [Fact]
+    public async Task A_held_file_asked_for_as_an_archive_is_refused_before_any_bytes_move()
+    {
+        await using var server = await Server.StartAsync();
+        using var client = await PairedAsync(server);
+        var peer = PeerOf(server);
+        var source = Path.Combine(server.Root, "one.txt");
+        File.WriteAllText(source, "plain");
+        var id = Guid.NewGuid().ToString("N");
+        await client.SendAsync(peer, LanSendItem.Of(source), "sess", messageId: id);
+
+        // The one refusal a caller can act on: a row announced as a file has no zip behind it, and a peer that
+        // unzipped whatever came back would report damage rather than admit it asked the wrong question.
+        var failure = await Assert.ThrowsAsync<LanTransferException>(() => client.AttachmentArchiveAsync(peer, id));
+
+        Assert.Equal(LanRefusal.BadRequest, failure.Refusal);
+        // The refusal costs the room nothing — the row stays held and askable the right way.
+        Assert.Equal(File.ReadAllBytes(source), await client.AttachmentAsync(peer, id));
     }
 
     private static async Task<LanPeerClient> PairedAsync(Server server)

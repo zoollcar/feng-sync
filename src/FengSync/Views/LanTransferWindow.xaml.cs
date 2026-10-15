@@ -761,7 +761,7 @@ public partial class LanTransferWindow : Window
             foreach (var item in rows)
             {
                 current = item;
-                var outcome = await _client.SendAsync(peer, item, session, new ProgressRowReporter(this, item), _lifetime?.Token ?? CancellationToken.None);
+                var outcome = await _client.SendAsync(peer, item, session, messageId: null, new ProgressRowReporter(this, item), _lifetime?.Token ?? CancellationToken.None);
                 CloseOutbound(item, LanTransferState.Completed, "");
                 sent++;
                 bytes += outcome.Bytes;

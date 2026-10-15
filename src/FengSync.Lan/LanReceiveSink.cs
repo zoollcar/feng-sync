@@ -189,6 +189,18 @@ public sealed class LanReceiveSink
     }
 
     /// <summary>
+    /// The absolute path a stored relative path names inside the receive directory, through the same composition
+    /// and containment check every path here goes through.
+    /// </summary>
+    /// <remarks>
+    /// Exists for the room, which has to be able to point one entry at the <b>folder</b> a tree landed in: a
+    /// per-file receive only ever names its own file, while a folder is announced once and arrives many times.
+    /// This application has no caller-built read path, and a public method that turns a name into a path is where
+    /// one could begin, so the only thing it accepts is a path the caller has just watched this class accept.
+    /// </remarks>
+    public string AbsolutePathOf(string storedRelative) => Compose(storedRelative);
+
+    /// <summary>
     /// Whether the receive directory can be written into at all. Asked before the window says it is
     /// listening: a directory deleted since it was chosen is a different situation from one never chosen, and
     /// only the window knows which sentence each deserves.

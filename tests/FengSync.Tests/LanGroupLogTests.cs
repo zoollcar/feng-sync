@@ -282,6 +282,117 @@ public sealed class LanGroupLogTests
     }
 
     [Fact]
+    public void A_push_that_names_an_entry_nobody_here_has_heard_of_announces_it_with_the_bytes_that_arrived()
+    {
+        var log = new LanGroupLog();
+        var path = Path.Combine(Path.GetTempPath(), "fengsync-group-push", "report.txt");
+
+        var entry = log.Hold(Peer(), "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d", "report.txt", 12, isDirectory: false, path, Stamp);
+
+        // The peer minted the id, so this copy files the entry under that id rather than minting its own: the
+        // announcer and the announcer's host must converge on one message, not two.
+        Assert.Equal("1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d", entry!.MessageId);
+        Assert.Equal(PeerId, entry.AuthorDeviceId);
+        Assert.Equal("小明的手机", entry.AuthorName);
+        Assert.Equal("report.txt", entry.FileName);
+        Assert.Equal(LanGroupKind.File, entry.Kind);
+        Assert.True(entry.HeldHere);
+        Assert.Equal(path, entry.LocalPath);
+        Assert.Equal(1, log.Head);
+    }
+
+    [Fact]
+    public void A_push_under_an_id_another_member_spoke_is_left_alone_because_bytes_cannot_retarget_a_sentence()
+    {
+        var log = new LanGroupLog();
+        var theirs = "abcdef0123456789abcdef0123456789";
+        log.TryMerge(new LanMessageWire(theirs, PeerId, "小明的手机", 2, LanGroupKind.File,
+            null, "报告.pdf", null, 1024, false, Stamp, false));
+
+        var entry = log.Hold(Self(), theirs, "冒名.txt", 8, isDirectory: false,
+            Path.Combine(Path.GetTempPath(), "冒名.txt"), Stamp);
+
+        // Nothing is returned, nothing is added, and the entry keeps the author and the absence it was heard with:
+        // a device that tags its own bytes with somebody else's announcement must not be able to make this copy
+        // offer those bytes under that name.
+        Assert.Null(entry);
+        Assert.Single(log.Entries);
+        var kept = log.Entries[0];
+        Assert.Equal(PeerId, kept.AuthorDeviceId);
+        Assert.False(kept.HeldHere);
+        Assert.Null(kept.LocalPath);
+    }
+
+    [Fact]
+    public void A_retried_push_from_the_same_member_moves_the_held_path_and_adds_no_second_row()
+    {
+        var log = new LanGroupLog();
+        var id = "00112233445566778899aabbccddeeff";
+        var first = log.Hold(Peer(), id, "report.txt", 12, false, @"C:\in\report.txt", Stamp);
+        // The name the sink settled on can differ from the one that was sent, and the newest copy is the one this
+        // machine can hand over.
+        var again = log.Hold(Peer(), id, "report (1).txt", 12, false, @"C:\in\report (1).txt", Stamp);
+
+        Assert.NotNull(first);
+        Assert.Same(first, again);
+        Assert.Single(log.Entries);
+        Assert.Equal(@"C:\in\report (1).txt", again!.LocalPath);
+        // The watermark does not move either: no new line entered the room, so a poller that had read the first has
+        // read everything there is.
+        Assert.Equal(1, log.Head);
+    }
+
+    [Fact]
+    public void A_push_of_a_tree_is_one_folder_entry_at_its_root_and_not_one_per_file()
+    {
+        var log = new LanGroupLog();
+        var id = "ffeedccbbaa99887766554433221100";
+        var root = Path.Combine(Path.GetTempPath(), "fengsync-group-tree");
+
+        // The arrival order a sender really produces: the folder, then a nested file, each naming one id.
+        log.Hold(Peer(), id, "照片", 0, isDirectory: true, root, Stamp);
+        var entry = log.Hold(Peer(), id, "照片/假期的 IMG.jpg", 0, isDirectory: true, root, Stamp);
+
+        Assert.Single(log.Entries);
+        Assert.True(entry!.IsDirectory);
+        // The entry names the root of what was sent rather than whichever file landed, because that is the thing a
+        // member can ask for as one archive.
+        Assert.Equal("照片", entry.FileName);
+        Assert.Equal("照片", entry.RelativePath);
+    }
+
+    [Fact]
+    public void An_id_that_could_not_have_been_minted_here_is_not_announced_by_a_push()
+    {
+        var log = new LanGroupLog();
+
+        Assert.Null(log.Hold(Peer(), "一", "note.txt", 4, false, @"C:\in\note.txt", Stamp));
+        Assert.Null(log.Hold(Peer(), "", "note.txt", 4, false, @"C:\in\note.txt", Stamp));
+        Assert.Null(log.Hold(Peer(), "not a message id!", "note.txt", 4, false, @"C:\in\note.txt", Stamp));
+
+        Assert.Empty(log.Entries);
+    }
+
+    [Fact]
+    public void Losing_the_bytes_takes_the_promise_and_leaves_the_sentence()
+    {
+        var log = new LanGroupLog();
+        var entry = log.Hold(Peer(), "5566778899aabbccddeeff001122334455", "report.txt", 12, false,
+            @"C:\in\report.txt", Stamp);
+
+        log.DropHeld("5566778899aabbccddeeff001122334455");
+
+        Assert.False(entry!.HeldHere);
+        Assert.Null(entry.LocalPath);
+        // What a member said is not this machine's to erase, so the room still shows the file — it just cannot be
+        // served from here any more.
+        Assert.Single(log.Entries);
+        // An id this copy never heard of costs nothing, exactly as with the mark.
+        log.DropHeld("ffffffff");
+        Assert.Single(log.Entries);
+    }
+
+    [Fact]
     public void A_new_entry_is_announced_once_and_on_the_caller_that_spoke_it()
     {
         var log = new LanGroupLog();

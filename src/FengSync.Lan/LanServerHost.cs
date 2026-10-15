@@ -196,6 +196,11 @@ public sealed class LanServerHost : IAsyncDisposable
         endpoints.MapGet("/api/v1/basket/{id}", (Func<string, HttpContext, Task<IResult>>)HandleDownloadAsync);
         endpoints.MapGet("/api/v1/basket/{id}/zip", (Func<string, HttpContext, Task<IResult>>)HandleArchiveAsync);
 
+        // The same two answers for the room's own entries: a peer that was told about a file asks whoever holds it,
+        // and holds it by id rather than by a row of somebody's send basket.
+        endpoints.MapGet("/api/v1/attachments/{id}", (Func<string, HttpContext, Task<IResult>>)HandleAttachmentAsync);
+        endpoints.MapGet("/api/v1/attachments/{id}/zip", (Func<string, HttpContext, Task<IResult>>)HandleAttachmentArchiveAsync);
+
         // Anything else answers in this protocol's shape. A bare 404 HTML page would leave a peer guessing
         // whether it had found a Feng Sync at all, which is the question /hello exists to answer.
         endpoints.MapFallback((Func<HttpContext, Task<IResult>>)HandleNotFoundAsync);
@@ -325,6 +330,7 @@ public sealed class LanServerHost : IAsyncDisposable
         }
 
         InboxReceived?.Invoke(new LanInboxEventArgs(contact, received, offer.Session));
+        TagArrival(http, contact, received.RelativePath, received.Bytes, storedIsDirectory: false);
         return Json(new LanInboxReply(received.Name, received.Bytes, received.Renamed, received.RelativePath),
             StatusCodes.Status201Created);
     }
@@ -348,7 +354,42 @@ public sealed class LanServerHost : IAsyncDisposable
         catch (Exception ex) when (ex is OperationCanceledException or IOException or UnauthorizedAccessException) { return Results.Empty; }
 
         DirectoryReceived?.Invoke(new LanDirectoryEventArgs(auth.Contact!, relative, offer.Session));
+        TagArrival(http, auth.Contact!, relative, 0, storedIsDirectory: true);
         return Json(new LanMkdirReply(relative), StatusCodes.Status201Created);
+    }
+
+    /// <summary>
+    /// Gives a push its entry in the room, when the push named one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A write with no <c>X-FS-Msg</c> stays what it always was — a file in the receive directory — which is what
+    /// a peer that knows nothing of the room gets. Nothing about the write changes on the strength of the tag, so a
+    /// peer that names an id gains the right to be asked for those bytes later, and nothing else.
+    /// </para>
+    /// <para>
+    /// The folder question comes from the header rather than from the arrival, because a tree lands as many file
+    /// writes and the one entry that announces it has to be a folder whichever file happened to arrive first. That
+    /// entry names the tree's own root (<see cref="LanRelativePath.RootOf"/>) and reports no size, the same two
+    /// choices <see cref="LanSendItem.Of"/> makes for a folder row: totalling a subtree is a walk nobody asked for.
+    /// </para>
+    /// <para>
+    /// Both paths handed to the log are this class's own answers, not the peer's: the stored relative path is what
+    /// the sink settled on after its collision rules, and the absolute path is that same name composed by the sink.
+    /// A peer that sent <c>x.txt</c> and got stored as <c>x (1).txt</c> is announced under the name that is really
+    /// there, which is the only name a later 接收 can open.
+    /// </para>
+    /// </remarks>
+    private void TagArrival(HttpContext http, LanContact contact, string storedRelative, long storedBytes, bool storedIsDirectory)
+    {
+        var messageId = Header(http, LanProtocol.HeaderMessage);
+        if (messageId.Length == 0) return;
+
+        var isFolder = storedIsDirectory
+            || string.Equals(Header(http, LanProtocol.HeaderKind), LanGroupKind.Directory, StringComparison.OrdinalIgnoreCase);
+        var relative = isFolder ? LanRelativePath.RootOf(storedRelative) : storedRelative;
+        _options.Session.Group.Hold(contact, messageId, relative, isFolder ? 0 : storedBytes, isFolder,
+            _options.Sink.AbsolutePathOf(relative), DateTimeOffset.UtcNow);
     }
 
     /// <summary>
@@ -427,21 +468,9 @@ public sealed class LanServerHost : IAsyncDisposable
         var auth = await AuthorizeAsync(http).ConfigureAwait(false);
         if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
 
-        var (item, error) = Find(id);
+        var (item, error) = Find(id, wantsArchive: false);
         if (error is not null) return error;
-        if (item!.IsDirectory)
-            // A folder has no single-length answer: it is served as an archive, and a client that asked for the
-            // bare item would otherwise receive a file that is not the folder it named.
-            return Answer(LanRefusal.BadRequest);
-        if (!File.Exists(item.AbsolutePath)) return Answer(LanRefusal.NotFound);
-
-        OutboundDelivered?.Invoke(new LanOutboundEventArgs(auth.Contact!, item, IsArchive: false));
-        // Range support is the whole point of this route: a phone that drops a large download can come back for
-        // the tail instead of starting over, which is the property a zip cannot offer.
-        // The name is written here rather than handed to Results.File, because that call would answer a single
-        // ASCII filename and a Chinese download name is exactly what the peer needs intact.
-        http.Response.Headers.ContentDisposition = Attachment(item.Name);
-        return Results.File(item.AbsolutePath, "application/octet-stream", fileDownloadName: null, enableRangeProcessing: true);
+        return ServeFile(http, auth.Contact!, item!);
     }
 
     private async Task<IResult> HandleArchiveAsync(string id, HttpContext http)
@@ -449,12 +478,67 @@ public sealed class LanServerHost : IAsyncDisposable
         var auth = await AuthorizeAsync(http).ConfigureAwait(false);
         if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
 
-        var (item, error) = Find(id);
+        var (item, error) = Find(id, wantsArchive: true);
         if (error is not null) return error;
-        if (!item!.IsDirectory) return Answer(LanRefusal.BadRequest);
-        if (!Directory.Exists(item.AbsolutePath)) return Answer(LanRefusal.NotFound);
+        return await ServeArchiveAsync(http, auth.Contact!, item!).ConfigureAwait(false);
+    }
 
-        OutboundDelivered?.Invoke(new LanOutboundEventArgs(auth.Contact!, item, IsArchive: true));
+    /// <summary>
+    /// The bytes behind one room entry, addressed by the id its author minted.
+    /// </summary>
+    /// <remarks>
+    /// A peer asks whoever holds an entry rather than the machine that announced it, because the room has no
+    /// hierarchy: every member that holds the file may serve it, and one that does not answers 这里没有 for that
+    /// id. Nothing on this path is a caller-built read — the id selects an entry, and only an entry whose path
+    /// <i>this</i> machine wrote (from a push it published, or from its own composer) carries one at all.
+    /// </remarks>
+    private async Task<IResult> HandleAttachmentAsync(string id, HttpContext http)
+    {
+        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
+        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
+
+        var (item, error) = Held(id, wantsArchive: false);
+        if (error is not null) return error;
+        return ServeFile(http, auth.Contact!, item!);
+    }
+
+    /// <summary>A held folder, as one archive, for the member that wants the whole tree rather than file by file.</summary>
+    private async Task<IResult> HandleAttachmentArchiveAsync(string id, HttpContext http)
+    {
+        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
+        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
+
+        var (item, error) = Held(id, wantsArchive: true);
+        if (error is not null) return error;
+        return await ServeArchiveAsync(http, auth.Contact!, item!).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Puts one local file on the response, with range support and the name the peer needs back.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both read routes come through here, because a basket row and a room entry differ only in where their path
+    /// came from — and two downloads that behave differently is exactly the drift nobody notices until a phone can
+    /// resume one of them and not the other.
+    /// </para>
+    /// <para>
+    /// Range support is the whole point of this shape: a phone that drops a large download can come back for the
+    /// tail instead of starting over, which is the property an archive cannot offer. The name is written here rather
+    /// than handed to <c>Results.File</c>, because that call would answer a single ASCII filename and a Chinese
+    /// download name is precisely what the peer needs intact.
+    /// </para>
+    /// </remarks>
+    private IResult ServeFile(HttpContext http, LanContact peer, LanSendItem item)
+    {
+        OutboundDelivered?.Invoke(new LanOutboundEventArgs(peer, item, IsArchive: false));
+        http.Response.Headers.ContentDisposition = Attachment(item.Name);
+        return Results.File(item.AbsolutePath, "application/octet-stream", fileDownloadName: null, enableRangeProcessing: true);
+    }
+
+    private async Task<IResult> ServeArchiveAsync(HttpContext http, LanContact peer, LanSendItem item)
+    {
+        OutboundDelivered?.Invoke(new LanOutboundEventArgs(peer, item, IsArchive: true));
         // The archive is written onto the response, so its length is unknown and the transfer is chunked; a
         // peer cannot ask for a range of something still being compressed.
         http.Response.ContentType = "application/zip";
@@ -475,12 +559,68 @@ public sealed class LanServerHost : IAsyncDisposable
         return Written.Instance;
     }
 
-    private (LanSendItem? Item, IResult? Error) Find(string id)
+    private (LanSendItem? Item, IResult? Error) Find(string id, bool wantsArchive)
     {
         if (!Guid.TryParse(id, out var guid)) return (null, Answer(LanRefusal.NotFound));
         var item = _options.Session.Basket.Snapshot().FirstOrDefault(candidate => candidate.Id == guid);
-        return item is null ? (null, Answer(LanRefusal.NotFound)) : (item, null);
+        if (item is null) return (null, Answer(LanRefusal.NotFound));
+        if (item.IsDirectory != wantsArchive)
+            // A folder has no single-length answer: it is served as an archive, and a client that asked for the
+            // bare item would otherwise receive a file that is not the folder it named.
+            return (null, Answer(LanRefusal.BadRequest));
+        return Exists(wantsArchive, item.AbsolutePath) ? (item, null) : (null, Answer(LanRefusal.NotFound));
     }
+
+    /// <summary>
+    /// The entry a caller named, when this machine can actually hand its bytes over.
+    /// </summary>
+    /// <remarks>
+    /// Three refusals and one side effect. An id that is not a message id, one this copy has never heard of, and
+    /// one it holds no path for all read the same way to a peer — 这里没有 — which is the honest form of a room where
+    /// every member keeps its own copy: a caller cannot be told which of the three it hit, and an answer naming
+    /// "the announcement exists somewhere" would offer bytes nobody promised. The kind question is the one answer
+    /// the caller can act on, so a file asked for as an archive is a bad request rather than a not found.
+    /// <para>
+    /// The side effect is the vanished file: a held entry whose path stopped existing is un-marked here, so this
+    /// copy stops claiming it can serve what it no longer has, and the next 接收 goes to whoever does. The entry
+    /// itself stays — what the room said is not this machine's to erase.
+    /// </para>
+    /// </remarks>
+    private (LanSendItem? Item, IResult? Error) Held(string id, bool wantsArchive)
+    {
+        if (!LanProtocol.IsMessageId(id) || !_options.Session.Group.TryFind(id, out var entry) || !entry.HeldHere)
+            return (null, Answer(LanRefusal.NotFound));
+        if (entry.IsDirectory != wantsArchive) return (null, Answer(LanRefusal.BadRequest));
+
+        var path = entry.LocalPath;
+        if (string.IsNullOrEmpty(path) || !Exists(entry.IsDirectory, path))
+        {
+            // The claim was made when the bytes landed, and this is the moment the room learns they are gone: the
+            // entry keeps its sentence and loses 接收, so a poller is not invited to ask here again every round.
+            _options.Session.Group.DropHeld(id);
+            return (null, Answer(LanRefusal.NotFound));
+        }
+
+        LanSendItem item;
+        try
+        {
+            // The row the window records for a delivery is the same description it would show for a basket row, so
+            // the rule that reads a path is reused rather than re-derived from the entry's own claimed size.
+            item = LanSendItem.Of(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The check above and this read are not one atomic act, and a member that deleted the received file in
+            // between is the same vanished case a moment late — so it earns the same answer, and the same un-mark.
+            _options.Session.Group.DropHeld(id);
+            return (null, Answer(LanRefusal.NotFound));
+        }
+
+        return (item, null);
+    }
+
+    private static bool Exists(bool directory, string path) =>
+        directory ? Directory.Exists(path) : File.Exists(path);
 
     private async Task<LanAuthResult> AuthorizeAsync(HttpContext http) =>
         await _options.Session.AuthenticateAsync(CredentialOf(http.Request),
