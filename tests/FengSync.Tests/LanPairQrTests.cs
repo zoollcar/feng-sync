@@ -158,5 +158,7 @@ public sealed class LanPairQrTests
         return pair is null ? null : Uri.UnescapeDataString(pair[(name.Length + 1)..]);
     }
 
-    private static LanDeviceIdentity Identity() => new(SelfId, "本机", LanProtocol.KindWindows);
+    /// <summary>An identity that is never renamed, so the file it would write to is only a name here.</summary>
+    private static LanDeviceIdentity Identity() =>
+        new(SelfId, "本机", LanProtocol.KindWindows, Path.Combine(Path.GetTempPath(), "fengsync-lan-qr-device.json"));
 }

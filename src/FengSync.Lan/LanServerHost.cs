@@ -64,6 +64,9 @@ public sealed class LanServerHost : IAsyncDisposable
     /// <summary>A pairing request was judged, either way, and this is who made it.</summary>
     public event Action<LanPairAttemptEventArgs>? PairAttempted;
 
+    /// <summary>A device already on the list corrected the name this machine calls it by.</summary>
+    public event Action<LanPeerRenamedEventArgs>? PeerRenamed;
+
     /// <summary>Bytes landed in the receive directory.</summary>
     public event Action<LanInboxEventArgs>? InboxReceived;
 
@@ -185,6 +188,9 @@ public sealed class LanServerHost : IAsyncDisposable
         endpoints.MapPost("/api/v1/pair", (Func<HttpContext, Task<IResult>>)HandlePairAsync);
         endpoints.MapGet("/api/v1/peers", (Func<HttpContext, Task<IResult>>)HandlePeersAsync);
         endpoints.MapDelete("/api/v1/peers/mine", (Func<HttpContext, Task<IResult>>)HandleForgetSelfAsync);
+        // Two verbs about the same row seen from the other side: a device correcting what it is called, and a
+        // device taking itself off the list.
+        endpoints.MapPost("/api/v1/name", (Func<HttpContext, Task<IResult>>)HandleNameAsync);
         endpoints.MapPost("/api/v1/inbox", (Func<HttpContext, Task<IResult>>)HandleInboxAsync);
         endpoints.MapPost("/api/v1/mkdir", (Func<HttpContext, Task<IResult>>)HandleMkdirAsync);
 
@@ -293,6 +299,51 @@ public sealed class LanServerHost : IAsyncDisposable
         // still opens a door — so the answer that removes the device removes the browser's copy as well.
         http.Response.Cookies.Delete(LanProtocol.CookieName, new CookieOptions { Path = "/", HttpOnly = true, SameSite = SameSiteMode.Lax });
         return Results.NoContent();
+    }
+
+    /// <summary>
+    /// Lets a peer correct the name this machine lists it under, which is the only way a 改名 reaches here.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The device id is the one the credential proved, so a caller relabels its own row and cannot point at
+    /// another member's — which is why the body carries no id, and why the write takes
+    /// <see cref="LanAuthResult.Contact"/> rather than anything read off the request. A name is the one claim about
+    /// itself this library has always accepted, because it can only ever be a claim about the machine making it.
+    /// </para>
+    /// <para>
+    /// What gets stored is <see cref="LanProtocol.SanitizePeerName"/>'s answer, and that answer is sent back for
+    /// the same reason a received file's stored name is: a device that asked for sixty characters is listed under
+    /// the characters it actually got, and must not keep showing a name nobody on the room can read. The room's
+    /// own rows are not rewritten — what was said under an old name stays as it was said — and the event is what
+    /// lets the window narrate the change in its own words, since this library holds no table of those.
+    /// </para>
+    /// </remarks>
+    private async Task<IResult> HandleNameAsync(HttpContext http)
+    {
+        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
+        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
+
+        LanNameRequest? request;
+        try
+        {
+            request = await JsonSerializer.DeserializeAsync<LanNameRequest>(http.Request.Body, LanApi.Json, http.RequestAborted)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            return Answer(LanRefusal.BadRequest);
+        }
+
+        var name = LanProtocol.SanitizePeerName(request?.DeviceName);
+        // A blank is not a rename in either direction: an empty row is the failure the fallback exists to avoid,
+        // and which name to use instead is the person's decision rather than this route's.
+        if (name.Length == 0) return Answer(LanRefusal.BadRequest);
+
+        var contact = auth.Contact!;
+        await _options.Session.Peers.RenameAsync(contact.DeviceId, name, http.RequestAborted).ConfigureAwait(false);
+        PeerRenamed?.Invoke(new LanPeerRenamedEventArgs(contact with { DeviceName = name }, contact.DeviceName));
+        return Json(new LanNameReply(name));
     }
 
     private async Task<IResult> HandleInboxAsync(HttpContext http)

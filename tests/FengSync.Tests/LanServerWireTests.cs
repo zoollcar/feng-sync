@@ -968,6 +968,84 @@ public sealed class LanServerWireTests
         Assert.True(File.Exists(Path.Combine(server.Receive, "plain.txt")));
     }
 
+    [Fact]
+    public async Task A_device_that_renames_itself_is_listed_under_the_new_name_from_then_on()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+
+        var kept = await server.NameAsync("小红的平板");
+
+        Assert.Equal("小红的平板", kept);
+        Assert.Equal("小红的平板", (await server.ServerOptions.Session.Peers.LoadAsync())
+            .Single(record => record.DeviceId == PeerId).DeviceName);
+        // The record is what a person read and agreed to, so a later sentence is authored under the new name even
+        // though the write carries no name header at all — which is the whole reason a rename has to reach the row
+        // rather than be a claim re-read on every request.
+        Assert.Equal("小红的平板", (await server.SayAsync("二")).AuthorName);
+    }
+
+    [Fact]
+    public async Task A_name_too_long_for_a_row_comes_back_as_the_name_that_was_actually_stored()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+
+        var kept = await server.NameAsync(new string('板', LanProtocol.MaximumNameLength + 12));
+
+        // The caller is told what it got, because a device that kept showing its own sixty characters would be
+        // listing a name no member of the room can read.
+        Assert.Equal(new string('板', LanProtocol.MaximumNameLength), kept);
+        Assert.Equal(kept, (await server.ServerOptions.Session.Peers.LoadAsync())
+            .Single(record => record.DeviceId == PeerId).DeviceName);
+    }
+
+    [Fact]
+    public async Task An_empty_name_is_refused_and_leaves_the_row_the_person_already_agreed_to()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+
+        var response = await server.NameRawAsync("   ");
+
+        // Which name to fall back to is the user's decision, so this route guesses nothing and writes nothing: an
+        // empty row is the failure the fallback exists to avoid.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("小明的手机", (await server.ServerOptions.Session.Peers.LoadAsync())
+            .Single(record => record.DeviceId == PeerId).DeviceName);
+        // And a device this listener has never issued a token to cannot rename anybody at all, which is the same
+        // answer every other verb gives: the room is not a public board.
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await server.NameRawAsync("路人", token: "never-issued", deviceId: OtherPeerId)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_rename_reaches_the_row_the_credential_proves_and_no_other_member_s()
+    {
+        await using var server = await Harness.StartAsync();
+        var mine = await server.PairAsync(server.Pairing.Code);
+        var theirs = await server.PairAsync(server.Pairing.Arm(), OtherPeerId);
+        var seen = new List<LanPeerRenamedEventArgs>();
+        server.Host.PeerRenamed += seen.Add;
+
+        // A body that invents a deviceId field is inert: LanNameRequest has no such property, and the row written
+        // is the one the credential names — so no device can relabel another member.
+        var response = await server.NameRawBodyAsync(
+            $"{{\"deviceId\":\"{PeerId}\",\"deviceName\":\"改过的名字\"}}", token: theirs.Token, deviceId: OtherPeerId);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var records = await server.ServerOptions.Session.Peers.LoadAsync();
+        Assert.Equal("改过的名字", records.Single(record => record.DeviceId == OtherPeerId).DeviceName);
+        Assert.Equal("小明的手机", records.Single(record => record.DeviceId == PeerId).DeviceName);
+        // The window needs the old name to say 改名 at all, and the room's earlier rows keep the name they were
+        // said under, so the event is the only place the two meet.
+        var notice = Assert.Single(seen);
+        Assert.Equal("小明的手机", notice.PreviousName);
+        Assert.Equal(OtherPeerId, notice.Contact.DeviceId);
+        Assert.Equal("改过的名字", notice.Contact.DeviceName);
+        Assert.NotEqual(mine.Token, theirs.Token);
+    }
+
     private static Task<bool> Accepted(LanInboundOffer offer, CancellationToken ct) => Task.FromResult(true);
 
     private static string ReadEntry(System.IO.Compression.ZipArchive archive, string name)
@@ -1273,6 +1351,32 @@ public sealed class LanServerWireTests
         /// <summary>A device removing its own credential, which is the one thing a peer may do to the trust list.</summary>
         public Task<HttpResponseMessage> ForgetSelfAsync(string token) =>
             SendAsync(Request(HttpMethod.Delete, "/api/v1/peers/mine", PeerId, token));
+
+        /// <summary>Says what this device wants to be called, and reads back the name that was kept.</summary>
+        public async Task<string> NameAsync(string deviceName, string? token = null, string? deviceId = null)
+        {
+            var response = await NameRawAsync(deviceName, token, deviceId);
+            response.EnsureSuccessStatusCode();
+            return Deserialize<LanNameReply>(await response.Content.ReadAsStringAsync()).DeviceName;
+        }
+
+        public Task<HttpResponseMessage> NameRawAsync(string? deviceName, string? token = null, string? deviceId = null)
+        {
+            var request = Request(HttpMethod.Post, "/api/v1/name", deviceId ?? PeerId, token);
+            request.Content = Json(new LanNameRequest(deviceName));
+            return SendAsync(request);
+        }
+
+        /// <summary>
+        /// A rename claim as raw JSON, because the shape worth pinning is a body that invents a field: a peer
+        /// naming somebody else's device id must be answered with its own row moving and nobody else's.
+        /// </summary>
+        public Task<HttpResponseMessage> NameRawBodyAsync(string json, string? token = null, string? deviceId = null)
+        {
+            var request = Request(HttpMethod.Post, "/api/v1/name", deviceId ?? PeerId, token);
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            return SendAsync(request);
+        }
 
         /// <summary>
         /// A request as a browser makes it when a person taps a link: no header of ours, only what the browser

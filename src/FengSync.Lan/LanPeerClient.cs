@@ -174,6 +174,27 @@ public sealed class LanPeerClient : IDisposable
     }
 
     /// <summary>
+    /// Tells a peer the name this machine now wants to be listed under.
+    /// </summary>
+    /// <remarks>
+    /// One call per peer, and the answer is the name that peer really stored, because a device that chose more
+    /// characters than a row can hold is listed under the ones it got — and a window that showed a name nobody
+    /// else in the room can read would be a lie with a tick next to it. Nobody on the far side is asked anything,
+    /// since a name is a claim about the machine making it and pairing already settled that it owns that claim.
+    /// </remarks>
+    public async Task<string> TellNameAsync(LanPeerEndpoint peer, string name, CancellationToken ct = default)
+    {
+        var token = await TokenForAsync(peer, ct).ConfigureAwait(false) ?? throw LanTransferException.For(LanRefusal.Unpaired);
+        using var request = new HttpRequestMessage(HttpMethod.Post, Build("/api/v1/name", peer.Address, peer.Port))
+        {
+            Content = JsonContent(new LanNameRequest(name)),
+        };
+        AddCredential(request, token);
+        using var response = await SendAsync(request, ct).ConfigureAwait(false);
+        return (await ReadAsync<LanNameReply>(response, ct).ConfigureAwait(false)).DeviceName;
+    }
+
+    /// <summary>
     /// Sends one basket row. A file is one <c>/inbox</c> write; a folder is a walk — one <c>/mkdir</c> per
     /// directory it holds, including the empty ones, then one write per file — so the tree the peer receives
     /// has the shape it was given rather than a pile of names.

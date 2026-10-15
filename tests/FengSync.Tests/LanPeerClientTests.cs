@@ -296,6 +296,26 @@ public sealed class LanPeerClientTests
     }
 
     [Fact]
+    public async Task Telling_a_peer_the_new_name_moves_this_machine_s_own_row_there()
+    {
+        await using var server = await Server.StartAsync();
+        using var client = await PairedAsync(server);
+        var self = await Identity(server.Port);
+
+        var kept = await client.TellNameAsync(PeerOf(server), "客厅的小电脑");
+
+        Assert.Equal("客厅的小电脑", kept);
+        // The row that moves is this machine's own, seen from the far side: the device id being renamed is the one
+        // the credential proves, so a client has no way to relabel another member.
+        Assert.Equal("客厅的小电脑", (await server.Peers.LoadAsync())
+            .Single(record => record.DeviceId == self.DeviceId).DeviceName);
+        // A name too long for a row answers with what the peer kept, which is the only version any member of the
+        // room will ever read — and the previous name is the one this client is left holding, not a truncated lie.
+        Assert.Equal(new string('名', LanProtocol.MaximumNameLength),
+            await client.TellNameAsync(PeerOf(server), new string('名', LanProtocol.MaximumNameLength + 9)));
+    }
+
+    [Fact]
     public async Task A_file_sent_with_an_id_can_be_asked_back_from_the_peer_that_took_it()
     {
         await using var server = await Server.StartAsync();

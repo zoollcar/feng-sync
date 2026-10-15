@@ -15,6 +15,13 @@ public sealed record LanPairAttemptEventArgs(LanContact Contact, LanRefusal Refu
     public bool Accepted => Refusal == LanRefusal.None;
 }
 
+/// <summary>
+/// A device that already had a row corrected its own name. The name it was listed under before travels with it,
+/// because the thing worth showing is 改名 — and the room's older rows keep the name they were said under, so a
+/// window holding only the new one could not say what changed.
+/// </summary>
+public sealed record LanPeerRenamedEventArgs(LanContact Contact, string PreviousName);
+
 /// <summary>A file the sink published.</summary>
 public sealed record LanInboxEventArgs(LanContact Contact, LanReceived Received, string? Session);
 

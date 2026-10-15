@@ -184,5 +184,14 @@ public sealed record LanLogReply(int V, long Head, IReadOnlyList<LanMessageWire>
 /// <summary>A sentence a peer is asking this machine to remember and repeat.</summary>
 public sealed record LanSayRequest(string? Text);
 
+/// <summary>
+/// The name a peer now wants to be listed under. It carries no device id, because the id it renames is the one
+/// its credential already proves and nothing a body claims may point at another member's row.
+/// </summary>
+public sealed record LanNameRequest(string? DeviceName);
+
+/// <summary>The name this machine kept, which is the peer's answer when the claimed one was too long to store.</summary>
+public sealed record LanNameReply(string DeviceName);
+
 /// <summary>The only body shape a refusal ever takes.</summary>
 public sealed record LanErrorReply(string Error, string Reason);

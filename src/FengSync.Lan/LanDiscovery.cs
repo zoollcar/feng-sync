@@ -126,7 +126,7 @@ public static class LanDiscovery
 public sealed class LanDiscoveryService : IAsyncDisposable
 {
     private readonly string _deviceId;
-    private readonly string _payload;
+    private string _payload;
     private readonly int _port;
     private readonly Socket _socket;
     private readonly IReadOnlyList<string> _broadcasts;
@@ -191,6 +191,17 @@ public sealed class LanDiscoveryService : IAsyncDisposable
     /// <summary>The networks this socket will announce on. Empty means this machine has no LAN to describe.</summary>
     public IReadOnlyList<string> BroadcastTargets => _broadcasts;
 
+    /// <summary>
+    /// Changes what this socket says about itself, on the same port and the same socket.
+    /// </summary>
+    /// <remarks>
+    /// A separate verb from <see cref="Start"/> because rebinding is the expensive, user-visible part: a window
+    /// that restarted discovery to rename itself would drop every computer it had already heard from and make the
+    /// other side's list blink empty for the length of a beat. The payload travels whole, so a peer reads either
+    /// the old name or the new one and never a mixture of the two.
+    /// </remarks>
+    public void AnnounceAs(string? deviceName) => _payload = LanDiscovery.BuildAnnouncement(_deviceId, deviceName, _port);
+
     private void Begin()
     {
         _loops.Add(Task.Run(() => ReceiveAsync(_stop.Token)));
@@ -208,10 +219,11 @@ public sealed class LanDiscoveryService : IAsyncDisposable
 
     private async Task AnnounceAsync(CancellationToken ct)
     {
-        var bytes = Encoding.ASCII.GetBytes(_payload);
         while (!ct.IsCancellationRequested)
         {
-            await AnnounceOnceAsync(bytes, ct).ConfigureAwait(false);
+            // Read per beat rather than once for the loop, so a rename that lands mid-session reaches the next
+            // announcement instead of waiting for the window to be closed and opened again.
+            await AnnounceOnceAsync(Encoding.ASCII.GetBytes(_payload), ct).ConfigureAwait(false);
             try { await Task.Delay(LanDiscovery.AnnounceInterval, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
         }
