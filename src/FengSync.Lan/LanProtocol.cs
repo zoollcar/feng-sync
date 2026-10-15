@@ -14,6 +14,16 @@ public static class LanProtocol
 
     public const string AuthScheme = "FS-LAN";
 
+    /// <summary>
+    /// The cookie a pairing reply leaves, holding the same <c>deviceId:token</c> the header carries.
+    /// </summary>
+    /// <remarks>
+    /// A browser cannot put a header on a download link, and the phone's one job with a link is to stream a file
+    /// it may have to resume. The alternative — the token in a query string — would put a long-lived credential
+    /// in an address a person can copy, share, or leave in a history, so this protocol does not do that.
+    /// </remarks>
+    public const string CookieName = "fs_lan";
+
     // Header values must be ASCII, so the paths that can hold a Chinese name travel percent-encoded.
     public const string HeaderRel = "X-FS-Rel";
     public const string HeaderSession = "X-FS-Session";

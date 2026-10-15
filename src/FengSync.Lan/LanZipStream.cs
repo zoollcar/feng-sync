@@ -35,8 +35,11 @@ public static class LanZipStream
         // user's whole volume into wherever the phone happened to put it.
         if (folder.Length == 0) throw new ArgumentException("没有名字可打包的目录。", nameof(directory));
 
-        // Create mode writes the central directory when the archive is disposed, so the archive must be
-        // disposed before the response ends — and it must not close the response stream on the way out.
+        // Create mode writes the central directory when the archive is disposed, so the archive must be disposed
+        // before the response ends — and it must not close the response stream on the way out. There is no
+        // asynchronous way to be rid of it: <c>ZipArchive</c> has no <c>IAsyncDisposable</c>, and measured here,
+        // disposing it synchronously is what wrote through Kestrel's response body and got refused. The route
+        // that calls this therefore lifts that gate for its own response, and nothing else does.
         using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
         // An entry that is never opened lands as a zero-length name, which is exactly what a directory is.
         archive.CreateEntry($"{folder}/", CompressionLevel.NoCompression);

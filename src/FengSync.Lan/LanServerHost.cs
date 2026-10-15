@@ -350,10 +350,10 @@ public sealed class LanServerHost : IAsyncDisposable
         // peer cannot ask for a range of something still being compressed.
         http.Response.ContentType = "application/zip";
         http.Response.Headers.ContentDisposition = Attachment($"{item.Name}.zip");
-        // Kestrel refuses a synchronous write on the response body and <c>ZipArchive</c> makes several: an entry
-        // header lands on <c>CreateEntry</c> and the central directory on dispose, neither of which is an await.
-        // Lifting the gate for this one response is what lets the archive stream at all, and it is scoped here
-        // rather than set on the listener so every other route keeps Kestrel's own protection.
+        // Kestrel refuses a synchronous write on a response body, and <c>ZipArchive</c> cannot be disposed
+        // otherwise — it has no asynchronous dispose, measured here by trying one and being told the archive
+        // never closed. So this one response lifts that gate, which is what lets the central directory land;
+        // every other route keeps Kestrel's protection untouched.
         if (http.Features.Get<IHttpBodyControlFeature>() is { } body) body.AllowSynchronousIO = true;
         try
         {
