@@ -173,18 +173,23 @@ public sealed class LanPeerClient : IDisposable
     /// This is how a machine that nobody can dial still gets said into the history: the peer it paired with is the
     /// one member it can reach, and what lands there spreads the way everything else does — by being pulled.
     /// </remarks>
+    /// <param name="messageId">
+    /// The id this machine minted for the sentence, which every peer is asked to keep as its own copy's identity.
+    /// A window fanning one sentence out to several members names it here, because otherwise each of them numbers
+    /// a different arrival and the room the others converge on holds the sentence once per member it reached.
+    /// </param>
     /// <exception cref="LanTransferException">
     /// <see cref="LanRefusal.MessageTooLong"/> when the sentence is longer than a peer will hold, and
     /// <see cref="LanRefusal.BadRequest"/> when it says nothing at all — both named by the peer, not guessed here.
     /// </exception>
-    public async Task<LanMessageWire> SayAsync(LanPeerEndpoint peer, string text, CancellationToken ct = default)
+    public async Task<LanMessageWire> SayAsync(LanPeerEndpoint peer, string text, string? messageId = null, CancellationToken ct = default)
     {
         var token = await TokenForAsync(peer, ct).ConfigureAwait(false) ?? throw LanTransferException.For(LanRefusal.Unpaired);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(QuestionTimeout);
         using var request = new HttpRequestMessage(HttpMethod.Post, Build("/api/v1/messages", peer.Address, peer.Port))
         {
-            Content = JsonContent(new LanSayRequest(text)),
+            Content = JsonContent(new LanSayRequest(text, messageId)),
         };
         AddCredential(request, token);
         using var response = await SendAsync(request, timeout.Token).ConfigureAwait(false);

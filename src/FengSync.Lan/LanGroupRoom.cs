@@ -16,6 +16,13 @@ namespace FengSync.Lan;
 /// </param>
 public sealed record LanRoomFetchEventArgs(LanGroupMessage? Entry, string? LandedPath, LanRefusal Refusal);
 
+/// <summary>How far one pull has got, for a window that must show it rather than leave a button pressed into a silence.</summary>
+/// <param name="TotalBytes">
+/// The length the entry announced, or 0 when nothing measured it — a folder arrives as one archive whose size the
+/// room never agreed on, and a window that was handed 0 has no percentage to draw.
+/// </param>
+public sealed record LanRoomProgressEventArgs(LanGroupMessage Entry, long Bytes, long TotalBytes);
+
 /// <summary>
 /// The reading half of the room: what this machine does on its own to keep up with what the other members said,
 /// and to get the bytes behind what they offered.
@@ -80,6 +87,13 @@ public sealed class LanGroupRoom(
 
     /// <summary>One pull settled, with the path it landed at or the reason it did not.</summary>
     public event Action<LanRoomFetchEventArgs>? Fetched;
+
+    /// <summary>
+    /// How far a pull has got. Raised from the thread that is reading the peer's bytes, so a window that shows it
+    /// must cross onto its own; a folder reports its bytes without a total, because a tree announces no size and
+    /// the archive that carries it is not the thing the room named.
+    /// </summary>
+    public event Action<LanRoomProgressEventArgs>? Progress;
 
     /// <summary>Starts reading the room. Returns immediately; a window that wants its past before the first beat awaits <see cref="PollOnceAsync"/> itself.</summary>
     public void Start() => _loop ??= Task.Run(() => RunAsync(_stop.Token));
@@ -157,6 +171,20 @@ public sealed class LanGroupRoom(
         finally { _pullGate.Release(); }
     }
 
+    /// <summary>
+    /// Every member this machine can reach, as endpoints rather than as records: the same list the poll reads, for
+    /// a caller that wants to say something to the room instead of hearing from it.
+    /// </summary>
+    /// <remarks>
+    /// One rule for who is dialable, because a fan-out that reached a member the poll could not read would leave
+    /// that member's copy of the room behind, and the two lists would then disagree about what the room is.
+    /// </remarks>
+    public async Task<IReadOnlyList<LanPeerEndpoint>> ReachableMembersAsync(CancellationToken ct = default)
+    {
+        var rows = await MembersAsync(ct).ConfigureAwait(false);
+        return [.. rows.Select(Dial).Where(member => member is not null).Cast<LanPeerEndpoint>()];
+    }
+
     /// <summary>The members this machine can reach: paired, Windows, and remembered at some address.</summary>
     private async Task<IReadOnlyList<LanPeerRecord>> MembersAsync(CancellationToken ct)
     {
@@ -222,7 +250,7 @@ public sealed class LanGroupRoom(
             // The announced length is the sender's own claim, and the sink treats 0 as "not stated" — the two
             // checks it can make without a claim are the publish and the post-publish size.
             var landed = await sink.ReceiveAsync(stream, entry.RelativePath ?? entry.FileName,
-                entry.Bytes, sourceWriteUtc: null, progress: null, ct).ConfigureAwait(false);
+                entry.Bytes, sourceWriteUtc: null, ReportFor(entry, entry.Bytes), ct).ConfigureAwait(false);
             return landed.RelativePath;
         }, ct);
 
@@ -249,7 +277,7 @@ public sealed class LanGroupRoom(
         client.ReadAttachmentAsync(member, entry.MessageId, archive: true, async stream =>
         {
             var root = LanRelativePath.RootOf(entry.RelativePath ?? entry.FileName ?? "");
-            var staged = await StageArchiveAsync(stream, root, ct).ConfigureAwait(false);
+            var staged = await StageArchiveAsync(stream, entry, root, ct).ConfigureAwait(false);
             try
             {
                 using var file = File.OpenRead(staged);
@@ -277,14 +305,26 @@ public sealed class LanGroupRoom(
         }, ct);
 
     /// <summary>Writes the archive a member is handing over into the receive directory, under a hidden name.</summary>
-    private async Task<string> StageArchiveAsync(Stream body, string root, CancellationToken ct)
+    private async Task<string> StageArchiveAsync(Stream body, LanGroupMessage entry, string root, CancellationToken ct)
     {
         var full = sink.AbsolutePathOf(SyncInternalPaths.TransferTemporary($"{root}.zip"));
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             await using var file = File.Create(full);
-            await body.CopyToAsync(file, ct).ConfigureAwait(false);
+            // The tree's own announced size is 0, so this reports what has been read against nothing: a window
+            // draws it as a pull in flight rather than as a bar stuck at a percentage nobody measured.
+            var reported = ReportFor(entry, totalBytes: 0);
+            var buffer = new byte[81920];
+            long read = 0;
+            int got;
+            while ((got = await body.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+            {
+                await file.WriteAsync(buffer.AsMemory(0, got), ct).ConfigureAwait(false);
+                read += got;
+                reported?.Report(read);
+            }
+
             return full;
         }
         catch
@@ -292,6 +332,20 @@ public sealed class LanGroupRoom(
             TryDeleteArchive(full);
             throw;
         }
+    }
+
+    /// <summary>
+    /// The callback one pull reports into, or <see langword="null"/> when nobody is watching. Raised inline on the
+    /// thread reading the peer's socket, because a <see cref="Progress{T}"/> captured under a dispatcher would post
+    /// every buffer's worth of bytes onto it and the window would spend the transfer laying out instead of
+    /// receiving.
+    /// </summary>
+    private IProgress<long>? ReportFor(LanGroupMessage entry, long totalBytes) =>
+        Progress is null ? null : new RoomProgress(this, entry, totalBytes);
+
+    private sealed class RoomProgress(LanGroupRoom room, LanGroupMessage entry, long totalBytes) : IProgress<long>
+    {
+        public void Report(long value) => room.Progress?.Invoke(new LanRoomProgressEventArgs(entry, value, totalBytes));
     }
 
     private static void TryDeleteArchive(string path)

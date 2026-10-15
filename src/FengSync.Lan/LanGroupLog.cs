@@ -60,16 +60,32 @@ public sealed class LanGroupLog(int maximumEntries = LanGroupLog.MaximumEntries)
     }
 
     /// <summary>A sentence from a member. Empty after trimming is a request that said nothing, and a too-long one is refused before it lands.</summary>
-    public LanRefusal TryAppendText(LanContact author, string? text, DateTimeOffset createdUtc, out LanGroupMessage? entry)
+    /// <param name="mintedMessageId">
+    /// The id the speaker gave its own sentence, so the same words arriving from two paths — a fan-out that raced a
+    /// poll — become one row rather than two. An id that is not a message id is ignored rather than trusted: a
+    /// peer naming an id this copy already holds under another author would otherwise be able to make a sentence
+    /// vanish by re-delivering it.
+    /// </param>
+    public LanRefusal TryAppendText(LanContact author, string? text, DateTimeOffset createdUtc, out LanGroupMessage? entry,
+        string? mintedMessageId = null)
     {
         entry = null;
         var said = (text ?? "").Trim();
         if (said.Length == 0) return LanRefusal.BadRequest;
         if (said.Length > MaximumTextLength) return LanRefusal.MessageTooLong;
 
+        var id = LanProtocol.IsMessageId(mintedMessageId) ? mintedMessageId! : Guid.NewGuid().ToString("N");
+        // The duplicate is the normal answer to being told the same thing twice, and the entry that is already
+        // here is the one to hand back, so a relaying caller can report the id it just repeated.
+        if (TryFind(id, out var known))
+        {
+            entry = known;
+            return LanRefusal.None;
+        }
+
         entry = Append(new LanGroupMessage
         {
-            MessageId = Guid.NewGuid().ToString("N"),
+            MessageId = id,
             AuthorDeviceId = author.DeviceId,
             AuthorName = author.DeviceName,
             Kind = LanGroupKind.Text,

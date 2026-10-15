@@ -499,7 +499,8 @@ public sealed class LanServerHost : IAsyncDisposable
             return Answer(LanRefusal.BadRequest);
         }
 
-        var refusal = _options.Session.Group.TryAppendText(auth.Contact!, request?.Text, DateTimeOffset.UtcNow, out var entry);
+        var refusal = _options.Session.Group.TryAppendText(auth.Contact!, request?.Text, DateTimeOffset.UtcNow, out var entry,
+            request?.MessageId);
         if (refusal != LanRefusal.None || entry is null) return Answer(refusal);
         return Json(entry.ToWire(), StatusCodes.Status201Created);
     }

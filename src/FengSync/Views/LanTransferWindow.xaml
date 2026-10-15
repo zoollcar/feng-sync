@@ -14,6 +14,21 @@
         DragOver="Window_DragOver"
         AutomationProperties.AutomationId="LanTransferWindow"
         AutomationProperties.Name="{Binding [Lan.WindowName], Source={l:Lang}}">
+    <Window.Resources>
+        <!-- One bubble shape for both sides of the room; which side a row sits on is the row's own answer, and
+             the fill is the only thing that differs, so the two cannot drift into different paddings. -->
+        <Style x:Key="ChatBubbleBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource NeutralSubtleBackgroundBrush}"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="MaxWidth" Value="560"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMine}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource AccentSubtleBackgroundBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
     <DockPanel>
         <!-- 底部状态行：整个窗口只有一句话的空间来报告启动失败、端口被占、防火墙被取消这类事实。 -->
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource SurfaceBrush}"
@@ -29,17 +44,216 @@
             </DockPanel>
         </Border>
 
-        <Grid Margin="14">
+        <!-- ================= 顶部：这台电脑叫什么，以及收到东西时怎么办 =================
+             改名、自动接收、接收目录、端口和防火墙都放在这一条里：它们都是关于这台机器现在的做法，
+             而不是关于房间里某一句话。房间里的内容往下走。 -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="14,10">
+            <WrapPanel>
+                <TextBlock Text="{Binding [Lan.MyDevice], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"
+                           VerticalAlignment="Center"/>
+                <TextBox x:Name="DeviceNameBox" AutomationProperties.AutomationId="LanDeviceNameBox"
+                         Width="168" Margin="6,0,0,0" VerticalContentAlignment="Center"
+                         MaxLength="32"/>
+                <Button x:Name="SaveDeviceNameButton" AutomationProperties.AutomationId="LanSaveDeviceNameButton"
+                        Content="{Binding [Lan.SaveName], Source={l:Lang}}" Click="SaveDeviceName_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" Margin="6,0,0,0"/>
+
+                <CheckBox x:Name="AutoReceiveBox" AutomationProperties.AutomationId="LanAutoReceiveBox"
+                          Content="{Binding [Lan.AutoReceive], Source={l:Lang}}" Margin="18,0,0,0"
+                          VerticalAlignment="Center" Checked="AutoReceive_Changed" Unchecked="AutoReceive_Changed"/>
+
+                <TextBlock Text="{Binding [Lan.ReceiveDirectory], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"
+                           Margin="18,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="ReceiveDirectoryText" AutomationProperties.AutomationId="LanReceiveDirectory"
+                           Style="{StaticResource CaptionTextStyle}" Margin="6,0,0,0" VerticalAlignment="Center"
+                           MaxWidth="260" TextTrimming="CharacterEllipsis"/>
+                <Button x:Name="PickDirectoryButton" AutomationProperties.AutomationId="LanPickDirectoryButton"
+                        Content="{Binding [Lan.ChooseDirectory], Source={l:Lang}}" Click="PickDirectory_Click"
+                        Style="{StaticResource TertiaryButtonStyle}" Margin="6,0,0,0"/>
+
+                <TextBlock Text="{Binding [Lan.Port], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"
+                           Margin="18,0,0,0" VerticalAlignment="Center"/>
+                <TextBox x:Name="PortBox" AutomationProperties.AutomationId="LanPortBox" Width="64"
+                         Margin="6,0,0,0" VerticalContentAlignment="Center"/>
+                <Button x:Name="ApplyPortButton" AutomationProperties.AutomationId="LanApplyPortButton"
+                        Content="{Binding [Lan.ApplyPort], Source={l:Lang}}" Click="ApplyPort_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" Margin="6,0,0,0"/>
+
+                <Button x:Name="FirewallButton" AutomationProperties.AutomationId="LanFirewallButton"
+                        Content="{Binding [Lan.FirewallAdd], Source={l:Lang}}" Click="Firewall_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" Margin="18,0,0,0"/>
+                <TextBlock x:Name="FirewallStatusText" AutomationProperties.AutomationId="LanFirewallStatus"
+                           Style="{StaticResource CaptionTextStyle}" Margin="6,0,0,0" VerticalAlignment="Center"
+                           MaxWidth="220" TextTrimming="CharacterEllipsis"/>
+            </WrapPanel>
+        </Border>
+
+        <Grid Margin="14,12">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="400"/>
-                <ColumnDefinition Width="12"/>
-                <ColumnDefinition Width="340"/>
-                <ColumnDefinition Width="12"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="392"/>
             </Grid.ColumnDefinitions>
 
-            <!-- ================= 1 · 配对 ================= -->
-            <Border Grid.Column="0" Background="{DynamicResource SurfaceBrush}"
+            <!-- ================= 房间 ================= -->
+            <Border Grid.Column="0" Background="{DynamicResource AppCanvasBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
+                    CornerRadius="{StaticResource RadiusMedium}">
+                <DockPanel LastChildFill="True">
+
+                    <!-- 陌生设备的第一笔要在这里点「同意」，所以这一栏在没有待确认项时整块收起：
+                         一个没人能按的按钮组比空白更让人怀疑是不是坏了。 -->
+                    <Border DockPanel.Dock="Top" x:Name="PendingBorder"
+                            Background="{DynamicResource WarningSubtleBackgroundBrush}"
+                            CornerRadius="{StaticResource RadiusMedium}" Padding="10" Margin="12,12,12,0">
+                        <StackPanel>
+                            <TextBlock Text="{Binding [Lan.Pending], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"/>
+                            <TextBlock Text="{Binding [Lan.PendingHint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}"
+                                       TextWrapping="Wrap" Margin="0,2,0,6"/>
+                            <DockPanel LastChildFill="True">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button x:Name="AcceptPendingButton" AutomationProperties.AutomationId="LanAcceptPendingButton"
+                                            Content="{Binding [Lan.Accept], Source={l:Lang}}" Click="AcceptPending_Click"
+                                            Style="{StaticResource PrimaryButtonStyle}"/>
+                                    <Button x:Name="DeclinePendingButton" AutomationProperties.AutomationId="LanDeclinePendingButton"
+                                            Content="{Binding [Lan.Decline], Source={l:Lang}}" Click="DeclinePending_Click"
+                                            Style="{StaticResource TertiaryButtonStyle}" Margin="6,0,0,0"/>
+                                </StackPanel>
+                                <ListView x:Name="PendingList" AutomationProperties.AutomationId="LanPendingList"
+                                          BorderThickness="0" Background="Transparent" MaxHeight="120"
+                                          SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,1">
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource BodyStrongTextStyle}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionTextStyle}"
+                                                           TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </DockPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 正在进出的字节。对方推过来的文件在落地之前没有气泡可挂，所以这一条是它唯一的可见性；
+                         自己在拉的则在房间的气泡里画进度。没有在跑的传输时整条收起。 -->
+                    <Border DockPanel.Dock="Top" x:Name="TransferBorder"
+                            Background="{DynamicResource SurfaceSubtleBrush}"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                            Padding="10,8" Margin="12,10,12,0" CornerRadius="{StaticResource RadiusMedium}">
+                        <ListView x:Name="TransferList" AutomationProperties.AutomationId="LanTransferList"
+                                  BorderThickness="0" Background="Transparent" MaxHeight="120"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,3">
+                                        <TextBlock Text="{Binding Line}" Style="{StaticResource BodyTextStyle}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <!-- Mode=OneWay is load-bearing here for the same reason it is in the
+                                             bubble template: LanProgressRow.Percentage is read-only. -->
+                                        <ProgressBar Height="4" Minimum="0" Maximum="100"
+                                                     Value="{Binding Percentage, Mode=OneWay}"
+                                                     IsIndeterminate="{Binding IsUnknown}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Border>
+
+                    <!-- 输入区。回车发送、Shift+回车换行：聊天框里的人默认按回车。 -->
+                    <Border DockPanel.Dock="Bottom" Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0"
+                            Padding="12,10">
+                        <DockPanel LastChildFill="True">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
+                                <Button x:Name="AddFilesButton" AutomationProperties.AutomationId="LanAddFilesButton"
+                                        Content="{Binding [Lan.SendFiles], Source={l:Lang}}" Click="AddFiles_Click"
+                                        Style="{StaticResource SecondaryButtonStyle}"/>
+                                <Button x:Name="AddFolderButton" AutomationProperties.AutomationId="LanAddFolderButton"
+                                        Content="{Binding [Lan.SendFolder], Source={l:Lang}}" Click="AddFolder_Click"
+                                        Style="{StaticResource SecondaryButtonStyle}" Margin="6,0,0,0"/>
+                                <Button x:Name="SendButton" AutomationProperties.AutomationId="LanSendButton"
+                                        Content="{Binding [Lan.Send], Source={l:Lang}}" Click="Send_Click"
+                                        Style="{StaticResource PrimaryButtonStyle}" Margin="6,0,0,0"/>
+                            </StackPanel>
+                            <TextBox x:Name="ChatInputBox" AutomationProperties.AutomationId="LanChatInput"
+                                     AcceptsReturn="True" MaxLines="4" TextWrapping="Wrap"
+                                     MinHeight="30" MaxHeight="88" VerticalScrollBarVisibility="Auto"
+                                     VerticalContentAlignment="Center" KeyDown="Message_KeyDown"/>
+                        </DockPanel>
+                    </Border>
+
+                    <Grid Margin="12,0">
+                        <ListView x:Name="ChatList" AutomationProperties.AutomationId="LanChatList"
+                                  BorderThickness="0" Background="Transparent"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListView.ItemContainerStyle>
+                                <!-- A chat row is not selectable: the only thing on it anybody clicks is 接收. -->
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="Focusable" Value="False"/>
+                                    <Setter Property="IsTabStop" Value="False"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0,3"/>
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding AutomationLine}"/>
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <!-- 房间里的旁白（谁进来了、谁改名了）不属于任何一边，所以居中且不进气泡。 -->
+                                        <TextBlock Text="{Binding SystemText}" Visibility="{Binding SystemVisibility}"
+                                                   Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap"
+                                                   HorizontalAlignment="Center" TextAlignment="Center" Margin="8,2"/>
+                                        <Border Style="{StaticResource ChatBubbleBorderStyle}"
+                                                Visibility="{Binding BubbleVisibility}"
+                                                HorizontalAlignment="{Binding Side}">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding AuthorLine}" Visibility="{Binding AuthorVisibility}"
+                                                           Style="{StaticResource CaptionTextStyle}"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                <TextBlock Text="{Binding Body}" Style="{StaticResource BodyTextStyle}"
+                                                           TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding Detail}" Visibility="{Binding DetailVisibility}"
+                                                           Style="{StaticResource CaptionTextStyle}"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                                           TextWrapping="Wrap"/>
+                                                <!-- Mode=OneWay is load-bearing: RangeBase.Value binds TwoWay by
+                                                     default and LanChatRow.Percentage is read-only, so the default
+                                                     mode throws a XamlParseException the first time a pulling row is
+                                                     realised — in a window the user is already looking at. -->
+                                                <ProgressBar Height="4" Minimum="0" Maximum="100" Margin="0,4,0,0"
+                                                             Visibility="{Binding ProgressVisibility}"
+                                                             Value="{Binding Percentage, Mode=OneWay}"
+                                                             IsIndeterminate="{Binding IsUnknown}"/>
+                                                <Button Content="{Binding [Lan.Receive], Source={l:Lang}}" Click="Receive_Click" Tag="{Binding}"
+                                                        Visibility="{Binding ActionVisibility}" Margin="0,6,0,0"
+                                                        HorizontalAlignment="Left" Style="{StaticResource SecondaryButtonStyle}"
+                                                        AutomationProperties.AutomationId="LanReceiveButton"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock x:Name="ChatEmptyText" AutomationProperties.AutomationId="LanChatEmpty"
+                                   Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center"
+                                   HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+                                   Text="{Binding [Lan.RoomEmpty], Source={l:Lang}}"/>
+                    </Grid>
+                </DockPanel>
+            </Border>
+
+            <Rectangle Grid.Column="1" Fill="{DynamicResource BorderSubtleBrush}"/>
+
+            <!-- ================= 这个群里的设备 ================= -->
+            <Border Grid.Column="2" Background="{DynamicResource SurfaceBrush}"
                     BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
                     CornerRadius="{StaticResource RadiusMedium}" Padding="14">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -52,7 +266,7 @@
                                 BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" Padding="6"
                                 HorizontalAlignment="Center">
                             <Image x:Name="QrImage" AutomationProperties.AutomationId="LanQrImage"
-                                   Width="188" Height="188" Stretch="Uniform"/>
+                                   Width="164" Height="164" Stretch="Uniform"/>
                         </Border>
 
                         <TextBlock x:Name="PairCodeText" AutomationProperties.AutomationId="LanPairCode"
@@ -71,43 +285,11 @@
                         <ListBox x:Name="AddressList" AutomationProperties.AutomationId="LanAddressList"
                                  SelectionChanged="AddressList_SelectionChanged" MaxHeight="88"/>
 
-                        <!-- 端口是固定的，所以撞了只能让人换：界面上的数字和防火墙规则里的数字必须是同一对，
-                             悄悄改绑另一个端口会让那条规则保护着一个没人监听的号码。 -->
-                        <TextBlock Text="{Binding [Lan.Port], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"
-                                   Margin="0,16,0,0"/>
-                        <DockPanel Margin="0,4,0,0" LastChildFill="True">
-                            <Button x:Name="ApplyPortButton" DockPanel.Dock="Right"
-                                    AutomationProperties.AutomationId="LanApplyPortButton"
-                                    Content="{Binding [Lan.ApplyPort], Source={l:Lang}}" Click="ApplyPort_Click"
-                                    Style="{StaticResource SecondaryButtonStyle}" Margin="6,0,0,0"/>
-                            <TextBox x:Name="PortBox" AutomationProperties.AutomationId="LanPortBox"
-                                     VerticalContentAlignment="Center"/>
-                        </DockPanel>
                         <TextBlock Text="{Binding [Lan.PortHint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}"
-                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                   TextWrapping="Wrap" Margin="0,8,0,0"/>
 
-                        <Button x:Name="FirewallButton" AutomationProperties.AutomationId="LanFirewallButton"
-                                Content="{Binding [Lan.FirewallAdd], Source={l:Lang}}" Click="Firewall_Click"
-                                Style="{StaticResource SecondaryButtonStyle}" Margin="0,10,0,0"
-                                HorizontalAlignment="Left"/>
-                        <TextBlock x:Name="FirewallStatusText" AutomationProperties.AutomationId="LanFirewallStatus"
-                                   Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-
-                        <TextBlock Text="{Binding [Lan.ReceiveDirectory], Source={l:Lang}}"
-                                   Style="{StaticResource BodyStrongTextStyle}" Margin="0,16,0,0"/>
-                        <TextBlock x:Name="ReceiveDirectoryText" AutomationProperties.AutomationId="LanReceiveDirectory"
-                                   Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        <Button x:Name="PickDirectoryButton" AutomationProperties.AutomationId="LanPickDirectoryButton"
-                                Content="{Binding [Lan.ChooseDirectory], Source={l:Lang}}" Click="PickDirectory_Click"
-                                Style="{StaticResource SecondaryButtonStyle}" Margin="0,6,0,0" HorizontalAlignment="Left"/>
-                        <CheckBox x:Name="AutoAcceptBox" AutomationProperties.AutomationId="LanAutoAcceptBox"
-                                  Content="{Binding [Lan.AutoAcceptTrusted], Source={l:Lang}}" Margin="0,10,0,0"
-                                  Checked="AutoAccept_Changed" Unchecked="AutoAccept_Changed"/>
-                        <TextBlock Text="{Binding [Lan.AutoAcceptHint], Source={l:Lang}}"
-                                   Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-
-                        <TextBlock Text="{Binding [Lan.TrustedDevices], Source={l:Lang}}"
-                                   Style="{StaticResource BodyStrongTextStyle}" Margin="0,16,0,0"/>
+                        <TextBlock Text="{Binding [Lan.Members], Source={l:Lang}}" Style="{StaticResource SectionTitleTextStyle}"
+                                   Margin="0,16,0,0"/>
                         <ListView x:Name="TrustedList" AutomationProperties.AutomationId="LanTrustedList"
                                   BorderThickness="0" Background="Transparent" MaxHeight="176"
                                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -129,40 +311,6 @@
                         <TextBlock x:Name="TrustedEmptyText" AutomationProperties.AutomationId="LanTrustedEmpty"
                                    Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap"
                                    Text="{Binding [Lan.NoTrustedDevices], Source={l:Lang}}"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </Border>
-
-            <Rectangle Grid.Column="1" Fill="{DynamicResource BorderSubtleBrush}"/>
-
-            <!-- ================= 2 · 发送篮与对端电脑 ================= -->
-            <Border Grid.Column="2" Background="{DynamicResource SurfaceBrush}"
-                    BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
-                    CornerRadius="{StaticResource RadiusMedium}" Padding="14">
-                <DockPanel LastChildFill="True">
-                    <StackPanel DockPanel.Dock="Top">
-                        <TextBlock Text="{Binding [Lan.Basket], Source={l:Lang}}" Style="{StaticResource SectionTitleTextStyle}"/>
-                        <TextBlock Text="{Binding [Lan.BasketScope], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}"
-                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <Button x:Name="AddFilesButton" AutomationProperties.AutomationId="LanAddFilesButton"
-                                    Content="{Binding [Lan.AddFiles], Source={l:Lang}}" Click="AddFiles_Click"
-                                    Style="{StaticResource SecondaryButtonStyle}"/>
-                            <Button x:Name="AddFolderButton" AutomationProperties.AutomationId="LanAddFolderButton"
-                                    Content="{Binding [Lan.AddFolder], Source={l:Lang}}" Click="AddFolder_Click"
-                                    Style="{StaticResource SecondaryButtonStyle}" Margin="6,0,0,0"/>
-                        </StackPanel>
-                    </StackPanel>
-
-                    <StackPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <Button x:Name="RemoveFromBasketButton" AutomationProperties.AutomationId="LanRemoveFromBasketButton"
-                                    Content="{Binding [Lan.Remove], Source={l:Lang}}" Click="RemoveFromBasket_Click"
-                                    Style="{StaticResource TertiaryButtonStyle}"/>
-                            <Button x:Name="ClearBasketButton" AutomationProperties.AutomationId="LanClearBasketButton"
-                                    Content="{Binding [Lan.ClearBasket], Source={l:Lang}}" Click="ClearBasket_Click"
-                                    Style="{StaticResource TertiaryButtonStyle}" Margin="6,0,0,0"/>
-                        </StackPanel>
 
                         <TextBlock Text="{Binding [Lan.Computers], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"
                                    Margin="0,16,0,0"/>
@@ -199,54 +347,20 @@
                                     Content="{Binding [Lan.PairPeer], Source={l:Lang}}" Click="PairPeer_Click"
                                     Style="{StaticResource SecondaryButtonStyle}" Margin="6,0,0,0"/>
                         </StackPanel>
-                        <Button x:Name="SendToPeerButton" AutomationProperties.AutomationId="LanSendToPeerButton"
-                                Content="{Binding [Lan.SendToPeer], Source={l:Lang}}" Click="SendToPeer_Click"
-                                Style="{StaticResource PrimaryButtonStyle}" Margin="0,8,0,0" HorizontalAlignment="Left"/>
                         <TextBlock x:Name="PeerStatusText" AutomationProperties.AutomationId="LanPeerStatus"
                                    Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,6,0,0"/>
-                    </StackPanel>
 
-                    <ListView x:Name="BasketList" AutomationProperties.AutomationId="LanBasketList"
-                              Margin="0,8,0,0" BorderThickness="0" Background="Transparent"
-                              SelectionMode="Extended" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Margin="0,2">
-                                    <TextBlock Text="{Binding Name}" Style="{StaticResource BodyStrongTextStyle}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionTextStyle}"/>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                </DockPanel>
-            </Border>
-
-            <Rectangle Grid.Column="3" Fill="{DynamicResource BorderSubtleBrush}"/>
-
-            <!-- ================= 3 · 传输 ================= -->
-            <Border Grid.Column="4" Background="{DynamicResource SurfaceBrush}"
-                    BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
-                    CornerRadius="{StaticResource RadiusMedium}" Padding="14">
-                <DockPanel LastChildFill="True">
-                    <StackPanel DockPanel.Dock="Top">
-                        <TextBlock Text="{Binding [Lan.Pending], Source={l:Lang}}" Style="{StaticResource SectionTitleTextStyle}"/>
-                        <TextBlock Text="{Binding [Lan.PendingHint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}"
-                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
-                    </StackPanel>
-
-                    <StackPanel DockPanel.Dock="Bottom">
                         <TextBlock Text="{Binding [Lan.History], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"
-                                   Margin="0,12,0,0"/>
+                                   Margin="0,16,0,0"/>
                         <ListView x:Name="HistoryList" AutomationProperties.AutomationId="LanHistoryList"
-                                  BorderThickness="0" Background="Transparent" MaxHeight="196"
+                                  BorderThickness="0" Background="Transparent" MaxHeight="150"
                                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListView.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Margin="0,2">
-                                        <TextBlock Text="{Binding Line}" Style="{StaticResource BodyTextStyle}"
+                                        <TextBlock Text="{Binding Name}" Style="{StaticResource BodyTextStyle}"
                                                    TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding When}" Style="{StaticResource CaptionTextStyle}"/>
+                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionTextStyle}"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
@@ -255,71 +369,7 @@
                                    Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap"
                                    Text="{Binding [Lan.NoHistory], Source={l:Lang}}"/>
                     </StackPanel>
-
-                    <Grid Margin="0,8,0,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="8"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <!-- 陌生设备的第一笔要在这里点「同意」，所以这一栏在没有待确认项时整块收起：
-                             一个没人能按的按钮组比空白更让人怀疑是不是坏了。 -->
-                        <Border Grid.Row="0" x:Name="PendingBorder"
-                                Background="{DynamicResource WarningSubtleBackgroundBrush}"
-                                CornerRadius="{StaticResource RadiusMedium}" Padding="10">
-                            <DockPanel LastChildFill="True">
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                                    <Button x:Name="AcceptPendingButton" AutomationProperties.AutomationId="LanAcceptPendingButton"
-                                            Content="{Binding [Lan.Accept], Source={l:Lang}}" Click="AcceptPending_Click"
-                                            Style="{StaticResource PrimaryButtonStyle}"/>
-                                    <Button x:Name="DeclinePendingButton" AutomationProperties.AutomationId="LanDeclinePendingButton"
-                                            Content="{Binding [Lan.Decline], Source={l:Lang}}" Click="DeclinePending_Click"
-                                            Style="{StaticResource TertiaryButtonStyle}" Margin="6,0,0,0"/>
-                                </StackPanel>
-                                <ListView x:Name="PendingList" AutomationProperties.AutomationId="LanPendingList"
-                                          BorderThickness="0" Background="Transparent" MaxHeight="150"
-                                          SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                                    <ListView.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Margin="0,1">
-                                                <TextBlock Text="{Binding Name}" Style="{StaticResource BodyStrongTextStyle}"
-                                                           TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionTextStyle}"
-                                                           TextWrapping="Wrap"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ListView.ItemTemplate>
-                                </ListView>
-                            </DockPanel>
-                        </Border>
-
-                        <TextBlock Grid.Row="2" x:Name="TransfersEmptyText"
-                                   AutomationProperties.AutomationId="LanTransfersEmpty"
-                                   Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Top"
-                                   Text="{Binding [Lan.WaitingForFiles], Source={l:Lang}}"/>
-                        <ListView Grid.Row="2" x:Name="TransferList" AutomationProperties.AutomationId="LanTransferList"
-                                  BorderThickness="0" Background="Transparent"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Margin="0,3">
-                                        <TextBlock Text="{Binding Line}" Style="{StaticResource BodyTextStyle}"
-                                                   TextTrimming="CharacterEllipsis"/>
-                                        <!-- Mode=OneWay is load-bearing: RangeBase.Value binds TwoWay by default and
-                                             LanProgressRow.Percentage is read-only, so the default mode makes WPF
-                                             throw a XamlParseException the moment a transfer row is realised — and
-                                             the row is realised by the layout pass a shown window does without
-                                             asking, so the first file a phone sends kills the process. CloudTransfer-
-                                             Window.xaml died the same way for the same reason. -->
-                                        <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding Percentage, Mode=OneWay}"
-                                                   IsIndeterminate="{Binding IsUnknown}"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                    </Grid>
-                </DockPanel>
+                </ScrollViewer>
             </Border>
         </Grid>
     </DockPanel>

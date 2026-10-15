@@ -341,13 +341,19 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
                 Assert.Single(window.TrustedList.Items);
                 Assert.Equal(Visibility.Collapsed, window.TrustedEmptyText.Visibility);
                 Assert.True(window.Session!.AutoAcceptFromTrusted);
+                Assert.True(window.Room!.AutoReceive);
 
                 // The row was in the list before this window opened, so its bytes are its own business.
                 Assert.Equal(LanRefusal.None, await Task.Run(() => window.Session!.AdmitWriteAsync(Offer("第一个.txt", ReturningId, port))));
                 Assert.Empty(window.PendingList.Items);
 
-                window.AutoAcceptBox.IsChecked = false;
-                await WaitUntil(() => !window.Session!.AutoAcceptFromTrusted, "关掉的开关没有落到正在跑的监听器上");
+                window.AutoReceiveBox.IsChecked = false;
+                // One switch, two directions: the session reads it per write and the room reads it per offer, so
+                // a running listener and a running poll both take the change without a restart. The status line is
+                // the last thing the handler writes, so waiting for it waits for both.
+                await WaitUntil(() => window.StatusText.Text == Tr.F("Lan.AutoReceiveOff"), "开关没有落到状态行");
+                Assert.False(window.Session!.AutoAcceptFromTrusted);
+                Assert.False(window.Room!.AutoReceive);
 
                 var saved = await new SettingsStore().LoadAsync();
                 Assert.False(saved.Settings.LanAutoAcceptFromTrusted);
@@ -399,7 +405,7 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
                 // process mid-transfer. A window this suite never shows never lays anything out, so building it
                 // and reading its collections could stay green over a row that cannot be drawn at all — which is
                 // exactly how the cloud transfer window died before, for the same binding.
-                Realise(window);
+                Realise(window.TransferList);
 
                 var bar = Descendants<ProgressBar>(window.TransferList).Single();
                 Assert.Equal(100d, bar.Maximum);
@@ -413,7 +419,7 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
     }
 
     [Fact]
-    public Task The_basket_holds_only_what_was_dropped_and_nothing_at_all_after_the_window_closes()
+    public Task A_file_the_user_puts_in_the_room_is_held_here_and_a_paired_phone_still_lists_it()
     {
         return RunSta(async () =>
         {
@@ -426,24 +432,32 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
             await window.OpenAsync();
             try
             {
-                // A path that is gone and a path already on the list are both skipped, so four drops make two
-                // rows rather than two rows and a lie about what is shareable.
-                var added = window.Basket.Add([file, folder, Path.Combine(_root, "不存在的.txt"), file]);
-                Assert.Equal(2, added);
-                Assert.Equal(2, window.Basket.Rows.Count);
+                // A path that is gone is skipped rather than announced: an entry whose bytes nobody holds is a
+                // 接收 button that can only ever fail, and a room full of those reads as damage.
+                Assert.Equal(Visibility.Visible, window.ChatEmptyText.Visibility);
+                var announced = window.Announce([file, folder, Path.Combine(_root, "不存在的.txt")]);
+                Assert.Equal(2, announced);
 
-                // One collection, drawn twice: the rows on screen are exactly what a peer may list, in the same
-                // order, because a second list would let 清空 and the peer's answer disagree.
+                var entries = window.Group.Entries;
+                Assert.Equal(2, entries.Count);
+                Assert.All(entries, entry => Assert.True(entry.HeldHere, entry.MessageId));
+                Assert.All(entries, entry => Assert.True(entry.LocalPath!.StartsWith(_root, StringComparison.Ordinal),
+                    entry.LocalPath));
+                Assert.Single(entries, entry => entry.IsDirectory);
+
+                // No 接收 on a file this copy can hand over, and the line under it says where it is.
+                Assert.Equal(2, window.ChatList.Items.Count);
+                Assert.Equal(Visibility.Collapsed, window.ChatEmptyText.Visibility);
+                var row = (LanChatRow)window.ChatList.Items[0];
+                Assert.Equal(Visibility.Collapsed, row.ActionVisibility);
+                Assert.Equal(Tr.Format("Lan.ChatHeld", Path.GetFileName(file)), row.Detail);
+
+                // The basket is the second drawing of the same promise, for the one client that still reads it:
+                // the shipped phone page lists these rows rather than the room.
                 var snapshot = window.Session!.Basket.Snapshot();
-                Assert.Equal(window.Basket.Rows.Select(row => row.Item.Id), snapshot.Select(item => item.Id));
-                Assert.All(snapshot, item => Assert.True(item.AbsolutePath.StartsWith(_root, StringComparison.Ordinal), item.AbsolutePath));
-
-                window.ClearBasketButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.True(window.Basket.IsEmpty);
-                Assert.Empty(window.Session!.Basket.Snapshot());
-
-                window.Basket.Add([file]);
-                Assert.False(window.Basket.IsEmpty);
+                Assert.Equal(2, snapshot.Count);
+                Assert.All(snapshot, item => Assert.True(item.AbsolutePath.StartsWith(_root, StringComparison.Ordinal),
+                    item.AbsolutePath));
             }
             finally
             {
@@ -454,6 +468,148 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
             // peer keeps, and closing the window is supposed to close that door.
             Assert.True(window.Basket.IsEmpty);
             Assert.Empty(window.Session!.Basket.Snapshot());
+        });
+    }
+
+    [Fact]
+    public Task 一句打出来的话在房间里只出现一次_and_a_refused_one_stays_in_the_box()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                window.ChatInputBox.Text = "下午三点之前把报告发我";
+                window.SendButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await WaitUntil(() => window.ChatList.Items.Count == 1, "typed 的话没有出现");
+                Assert.Equal("", window.ChatInputBox.Text);
+
+                var row = (LanChatRow)window.ChatList.Items[0];
+                Assert.Equal("下午三点之前把报告发我", row.Body);
+                Assert.True(row.IsMine);
+                // One id for one sentence, minted before anything left this machine: the same words arriving later
+                // from a member's poll have to land on this row rather than open a second one.
+                var entry = Assert.Single(window.Group.Entries);
+                Assert.Equal(row.MessageId, entry.MessageId);
+                Assert.Equal(LanGroupKind.Text, entry.Kind);
+
+                // 空 is not a sentence, and a sentence longer than the room holds is refused before a request is
+                // spent on it.
+                Assert.Equal(LanRefusal.BadRequest, await window.SayAsync("   "));
+                var tooLong = new string('字', LanGroupLog.MaximumTextLength + 1);
+                Assert.Equal(LanRefusal.MessageTooLong, await window.SayAsync(tooLong));
+                Assert.Equal(1, window.Group.Count);
+
+                // The box keeps what it was refused: what a person typed must not be lost to their own typing limit.
+                window.ChatInputBox.Text = tooLong;
+                window.SendButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await WaitUntil(() => window.StatusText.Text == Tr.F("Lan.Refuse.MessageTooLong"), "长句没有被拒绝");
+                Assert.Equal(tooLong, window.ChatInputBox.Text);
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
+    [Fact]
+    public Task 房间里一个本机没有的文件给了一个接收按钮_and_the_answer_lands_on_that_same_row()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                // A member's announcement, in exactly the shape the poll merges it. The wire claims the bytes are
+                // held where it came from, and this copy must not inherit that claim.
+                var id = Guid.NewGuid().ToString("N");
+                Assert.True(window.Group.TryMerge(new LanMessageWire(id, StrangerId, "小明的手机", 7,
+                    LanGroupKind.File, null, "季度 报告.txt", "季度 报告.txt", 2048, false,
+                    DateTimeOffset.UtcNow, true)));
+                await WaitUntil(() => window.ChatList.Items.Count == 1, "别人报的文件没有画出气泡");
+
+                var row = (LanChatRow)window.ChatList.Items[0];
+                Assert.False(row.IsMine);
+                Assert.Contains("小明的手机", row.AuthorLine);
+                Assert.Equal("季度 报告.txt", row.Body);
+                Assert.Contains(ByteSize.Format(2048), row.Detail);
+                Assert.Equal(Visibility.Visible, row.ActionVisibility);
+
+                // A pull in flight draws its bar on the bubble, and laying the row out is the only way to attach
+                // that binding at all — see the note on the transfer list's own case above.
+                row.SetProgress(1024, 2048);
+                Realise(window.ChatList, 900, 900);
+                var bar = Descendants<ProgressBar>(window.ChatList).Single();
+                Assert.Equal(100d, bar.Maximum);
+                Assert.Equal(50d, bar.Value, 3);
+                var button = Descendants<Button>(window.ChatList).Single();
+                Assert.Equal(Tr.F("Lan.Receive"), button.Content);
+
+                // The click reaches the room, and the room's answer paints on the row it came from rather than
+                // opening a new one. Nobody here can be dialled, so the entry stays as the room's promise: a
+                // machine that is switched off tonight may still answer it tomorrow.
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await WaitUntil(() => row.Detail.Contains(Tr.F("Lan.Refuse.NotFound")), "点了接收，房间的回答没有落回这一行");
+                Assert.Single(window.ChatList.Items);
+                Assert.Equal(Visibility.Visible, row.ActionVisibility);
+                Assert.Equal(Visibility.Collapsed, row.ProgressVisibility);
+                Assert.Equal(Tr.Format("Lan.RoomRefused", "季度 报告.txt", Tr.F("Lan.Refuse.NotFound")),
+                    window.StatusText.Text);
+                // And the room keeps what it was told: a refused pull does not un-say an announcement.
+                var entry = Assert.Single(window.Group.Entries);
+                Assert.False(entry.HeldHere);
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
+    [Fact]
+    public Task 改名之后屏幕上是名字表里存着的那个_and_房间里多说一句而不是两句()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                var before = (await LanDeviceIdentity.LoadOrCreateAsync()).DeviceName;
+                Assert.Equal(before, window.DeviceNameBox.Text);
+
+                const string chosen = "小风的笔记本";
+                Assert.Equal(chosen, await window.RenameSelfAsync(chosen));
+                Assert.Equal(chosen, window.DeviceNameBox.Text);
+                // The identity file is the only store a device name has, so this is what the next window reads.
+                Assert.Equal(chosen, (await LanDeviceIdentity.LoadOrCreateAsync()).DeviceName);
+
+                // Said once, as narration rather than as something this machine "said": no author line, and the
+                // status line is left free for the failures that need it.
+                var line = Assert.Single(window.Group.Entries);
+                Assert.Equal("", line.AuthorDeviceId);
+                Assert.Equal(Tr.Format("Lan.RenamedSelf", chosen), line.Text);
+                var row = (LanChatRow)window.ChatList.Items[0];
+                Assert.True(row.IsSystem);
+                Assert.Equal(Visibility.Visible, row.SystemVisibility);
+                Assert.Equal(Visibility.Collapsed, row.BubbleVisibility);
+
+                // A blank is not a rename. The box stops showing what was typed, and the room does not hear that
+                // the machine is still called the same thing.
+                Assert.Equal(chosen, await window.RenameSelfAsync("   "));
+                Assert.Equal(chosen, window.DeviceNameBox.Text);
+                Assert.Equal(1, window.Group.Count);
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
         });
     }
 
@@ -550,15 +706,15 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
     }
 
     /// <summary>
-    /// Gives the transfer list the size a shown window would give it. A window that is never displayed never
-    /// measures anything, and an ItemsControl that is never measured never generates a container — so without
-    /// this its row template, and every binding in it, is never attached and never runs.
+    /// Gives a list the size a shown window would give it. A window that is never displayed never measures
+    /// anything, and an ItemsControl that is never measured never generates a container — so without this its row
+    /// template, and every binding in it, is never attached and never runs.
     /// </summary>
-    private static void Realise(LanTransferWindow window)
+    private static void Realise(ItemsControl list, double width = 900, double height = 300)
     {
-        window.TransferList.Measure(new Size(900, 300));
-        window.TransferList.Arrange(new Rect(0, 0, 900, 300));
-        window.TransferList.UpdateLayout();
+        list.Measure(new Size(width, height));
+        list.Arrange(new Rect(0, 0, width, height));
+        list.UpdateLayout();
     }
 
     private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject

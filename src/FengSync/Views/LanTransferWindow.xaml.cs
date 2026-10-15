@@ -2,8 +2,11 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Net;
+using System.Net.Http;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using FengSync.Core.Configuration;
@@ -15,12 +18,13 @@ using Microsoft.Win32;
 namespace FengSync.Views;
 
 /// <summary>
-/// The window that owns a LAN listener: it pairs, it receives, and it hands out whatever the user put in the
-/// basket — for as long as this window is open, and not one second longer.
+/// The window that owns a LAN listener and draws what the room of paired machines said: it pairs, it receives,
+/// it speaks, and it hands out whatever it put in the room — for as long as this window is open, and not one
+/// second longer.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The service is a field of the window rather than of the shell on purpose. A listener that outlives its
+/// The service is a field of the window rather than of the shell on purpose. A listener that outlived its
 /// window would answer a pairing code nobody is watching, and the one promise this feature makes about its
 /// blast radius is that closing the window closes the door. The shell holds only a reference to the open
 /// window, so application shutdown can await the teardown; the reference arrives through
@@ -28,9 +32,16 @@ namespace FengSync.Views;
 /// how a shared window stays hostable by any shell.
 /// </para>
 /// <para>
-/// Everything with a decision in it lives in <see cref="LanSession"/> and <see cref="LanReceiveSink"/>, both
-/// of which are reachable without a socket. What is here is WPF state: rows on screen, a countdown, and the
-/// one place a person's 同意 or 拒绝 becomes an answer the listener can act on.
+/// Everything with a decision in it lives in <see cref="LanSession"/>, <see cref="LanGroupLog"/>,
+/// <see cref="LanGroupRoom"/> and <see cref="LanReceiveSink"/>, none of which needs a socket to be tested. What
+/// is here is WPF state: bubbles on screen, a countdown, and the one place a person's 同意 or 拒绝 becomes an
+/// answer the listener can act on.
+/// </para>
+/// <para>
+/// The window owns the room log because closing this window is the only thing that is supposed to end this
+/// machine's part in it. <see cref="LanSession"/> takes that same log on every listener restart, so changing
+/// the port or the receive directory moves the door and not the conversation — while a window that never
+/// reopened simply leaves, and its copy of the history goes with it.
 /// </para>
 /// </remarks>
 public partial class LanTransferWindow : Window
@@ -40,12 +51,25 @@ public partial class LanTransferWindow : Window
 
     private readonly LanTransferDependencies _deps;
     private readonly App? _shell;
+
+    /// <summary>
+    /// What this machine knows the room said — in memory, and gone when this window is.
+    /// </summary>
+    private readonly LanGroupLog _group = new();
+
+    /// <summary>
+    /// The rows a paired phone may still list and read. The room's own entries are served by id through
+    /// <c>/attachments</c>; this list is what the shipped phone page reads until it is redrawn to read the room.
+    /// </summary>
     private readonly LanSendBasket _basket = new();
+
+    private readonly ObservableCollection<LanChatRow> _chat = [];
     private readonly ObservableCollection<LanRow> _trusted = [];
     private readonly ObservableCollection<LanRow> _discovered = [];
     private readonly ObservableCollection<LanRow> _pending = [];
     private readonly ObservableCollection<LanProgressRow> _transfers = [];
     private readonly ObservableCollection<LanRow> _history = [];
+    private readonly Dictionary<string, LanChatRow> _rows = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<LanPendingOffer> _awaiting = [];
     private readonly Dictionary<string, LanProgressRow> _running = [];
     private readonly object _gate = new();
@@ -57,6 +81,7 @@ public partial class LanTransferWindow : Window
     private LanPairingState? _pairing;
     private LanSession? _session;
     private LanServerHost? _host;
+    private LanGroupRoom? _room;
     private LanDiscoveryService? _discovery;
     private LanPeerClient? _client;
     private LanTransferHistoryRepository? _archive;
@@ -68,9 +93,9 @@ public partial class LanTransferWindow : Window
     private string? _paintedCode;
     private string? _paintedAddress;
     private string _chosenAddress = "";
-    // Assigning 收到文件时自动同意 from the settings file raises the same Checked event a click does, and that
-    // handler saves settings and writes the status line. So the read is marked, or every listener restart would
-    // answer a choice nobody made and overwrite the sentence the user was reading.
+    // Assigning 自动接收 from the settings file raises the same Checked event a click does, and that handler
+    // saves settings and writes the status line. So the read is marked, or every listener restart would answer
+    // a choice nobody made and overwrite the sentence the user was reading.
     private bool _restoringToggle;
 
     /// <summary>Opens the one window this shell can have, or raises the one already open.</summary>
@@ -95,19 +120,20 @@ public partial class LanTransferWindow : Window
         _deps = dependencies ?? new LanTransferDependencies();
         _shell = shell;
         InitializeComponent();
-        BasketList.ItemsSource = _basket.Rows;
+        ChatList.ItemsSource = _chat;
         TrustedList.ItemsSource = _trusted;
         DiscoveredList.ItemsSource = _discovered;
         PendingList.ItemsSource = _pending;
         TransferList.ItemsSource = _transfers;
         HistoryList.ItemsSource = _history;
         AddressList.ItemsSource = Array.Empty<string>();
-        BasketList.AllowDrop = true;
-        BasketList.Drop += Basket_Drop;
+        // The log is written by a peer's poll, by a pushed arrival inside the listener, and by this window's own
+        // composer, so its events arrive on whichever thread spoke. Everything they touch is on the dispatcher.
+        _group.Appended += entry => OnUi(() => ShowEntry(entry));
+        _group.Trimmed += entry => OnUi(() => ForgetEntry(entry));
         // WPF has no Opened event on Window; ContentRendered is the one that means "the person can see it",
         // and it fires once rather than on every re-hive the way Loaded does.
         ContentRendered += async (_, _) => await OpenAsync();
-        _basket.PropertyChanged += (_, _) => UpdateEmptyHints();
         UpdateEmptyHints();
     }
 
@@ -116,6 +142,11 @@ public partial class LanTransferWindow : Window
 
     /// <summary>What the listener is receiving into right now, for a test that needs to read the screen and the state together.</summary>
     internal LanSession? Session => _session;
+
+    /// <summary>The reading half of the room, which is the half that pulls a file a member only announced.</summary>
+    internal LanGroupRoom? Room => _room;
+
+    internal LanGroupLog Group => _group;
 
     internal LanSendBasket Basket => _basket;
 
@@ -150,7 +181,7 @@ public partial class LanTransferWindow : Window
     }
 
     /// <summary>
-    /// Stops the discovery advertiser and the listener and empties the basket. Idempotent, because the window's
+    /// Stops the room, the advertiser and the listener, and empties the basket. Idempotent, because the window's
     /// own close and the application's shutdown both call it and neither may make the other throw.
     /// </summary>
     internal Task ShutdownAsync()
@@ -229,9 +260,16 @@ public partial class LanTransferWindow : Window
             }
 
             _session = new LanSession(new LanOptions(port, _receiveDirectory, _settings.LanAutoAcceptFromTrusted),
-                _peers, _secrets, _pairing, _basket, AskInboundAsync);
+                _peers, _secrets, _pairing, _basket, AskInboundAsync, _group);
             _client ??= new LanPeerClient(_identity, _peers);
             _host = await LanServerHost.StartAsync(new LanServerOptions(_session, _identity, _pairing, sink), _lifetime.Token);
+            // The room's reader is built beside the listener because it is the same pair of promises: this
+            // machine answers its own <c>/log</c> here and reads everybody else's from here.
+            _room = new LanGroupRoom(_identity, _client, _peers, _group, sink)
+            {
+                AutoReceive = _settings.LanAutoAcceptFromTrusted,
+            };
+            AttachRoomEvents(_room);
         }
         catch (LanTransferException ex) when (ex.Refusal == LanRefusal.PortUnavailable)
         {
@@ -253,24 +291,37 @@ public partial class LanTransferWindow : Window
 
         AttachHostEvents(_host);
         PortBox.Text = port.ToString();
+        DeviceNameBox.Text = _identity.DeviceName;
         _chosenAddress = _host.ListenAddresses.FirstOrDefault() ?? "";
         AddressList.ItemsSource = _host.ListenAddresses;
         AddressList.SelectedItem = _chosenAddress;
         _restoringToggle = true;
-        AutoAcceptBox.IsChecked = _settings.LanAutoAcceptFromTrusted;
+        AutoReceiveBox.IsChecked = _settings.LanAutoAcceptFromTrusted;
         _restoringToggle = false;
         ReceiveDirectoryText.Text = _receiveDirectory;
         await RefreshTrustedAsync();
         RefreshCode();
         StartDiscovery(port);
+        // Started after the screen has its rows, so the first beat's arrivals are painted onto a window that is
+        // already showing the room rather than onto one still reading its own settings file.
+        _room.Start();
         Say(Tr.Format("Lan.Listening", port));
         UpdateEmptyHints();
     }
 
-    /// <summary>Takes the listener and the advertiser down, leaving the window's own state intact.</summary>
+    /// <summary>Takes the room, the listener and the advertiser down, leaving the window's own state intact.</summary>
     private async Task StopListenerAsync()
     {
         _timer?.Stop();
+        if (_room is { } room)
+        {
+            _room = null;
+            // Before the host: a poll that is still reading a peer belongs to this window, and the peer it is
+            // waiting on has no business holding a listener that is already being torn down.
+            try { await room.DisposeAsync(); }
+            catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop the LAN room reader: " + ex); }
+        }
+
         if (_discovery is { } discovery)
         {
             _discovery = null;
@@ -315,11 +366,20 @@ public partial class LanTransferWindow : Window
     private void AttachHostEvents(LanServerHost host)
     {
         host.PairAttempted += args => Dispatcher.BeginInvoke(() => OnPairAttempted(args));
+        host.PeerRenamed += args => Dispatcher.BeginInvoke(() => OnPeerRenamed(args));
         host.AdmissionDecided += args => Dispatcher.BeginInvoke(() => OnAdmission(args));
         host.InboxReceived += args => Dispatcher.BeginInvoke(() => OnInbox(args));
         host.DirectoryReceived += args => Dispatcher.BeginInvoke(() => OnDirectory(args));
         host.OutboundDelivered += args => Dispatcher.BeginInvoke(() => OnOutbound(args));
         host.TransferProgress += args => Dispatcher.BeginInvoke(() => OnProgress(args));
+    }
+
+    private void AttachRoomEvents(LanGroupRoom room)
+    {
+        // Both of these are raised from whichever thread was reading the peer's bytes, and the rows they touch
+        // belong to the dispatcher.
+        room.Progress += args => OnUi(() => OnRoomProgress(args));
+        room.Fetched += args => OnUi(() => OnRoomFetched(args));
     }
 
     // ------------------------------------------------------------------ pairing
@@ -444,9 +504,255 @@ public partial class LanTransferWindow : Window
     private void OnPairAttempted(LanPairAttemptEventArgs args)
     {
         var who = Who(args.Contact);
-        Say(args.Accepted ? Tr.Format("Lan.Paired", who) : Tr.Format("Lan.PairRefused", who, LanPeerPresentation.Refusal(args.Refusal)));
+        // A device that just proved it could read the code is in the room from now on, and the room is where a
+        // person is already looking — so the joining is a line on the stream rather than a status sentence the
+        // next tick overwrites.
+        if (args.Accepted) _group.AppendSystem(Tr.Format("Lan.JoinedRoom", who), DateTimeOffset.UtcNow);
+        else Say(Tr.Format("Lan.PairRefused", who, LanPeerPresentation.Refusal(args.Refusal)));
         _ = RefreshTrustedAsync();
     }
+
+    private void OnPeerRenamed(LanPeerRenamedEventArgs args)
+    {
+        var was = string.IsNullOrWhiteSpace(args.PreviousName) ? Tr.F("Lan.KindUnknown") : args.PreviousName;
+        _group.AppendSystem(Tr.Format("Lan.RenamedPeer", was, args.Contact.DeviceName), DateTimeOffset.UtcNow);
+        _ = RefreshTrustedAsync();
+    }
+
+    // ------------------------------------------------------------------ the room on screen
+
+    /// <summary>
+    /// Paints one entry of this machine's copy of the room.
+    /// </summary>
+    /// <remarks>
+    /// Keyed on the message id rather than appended blindly, because one sentence can genuinely be heard twice
+    /// in one window — the composer wrote it into this copy and a member's poll then carried the same id back —
+    /// and a room that shows a person their own words twice reads as damage.
+    /// </remarks>
+    private void ShowEntry(LanGroupMessage entry)
+    {
+        if (_rows.ContainsKey(entry.MessageId)) return;
+        var row = new LanChatRow(entry, IsMine(entry));
+        if (entry.Kind != LanGroupKind.Text) row.SetDetail(OfferLine(entry));
+        _rows[entry.MessageId] = row;
+        _chat.Add(row);
+        FollowNewest();
+        UpdateEmptyHints();
+    }
+
+    /// <summary>
+    /// Drops the row of an entry that aged out of this copy. The file it pointed at is left exactly where it is:
+    /// a published copy belongs to the user, and this log never had a claim on it.
+    /// </summary>
+    private void ForgetEntry(LanGroupMessage entry)
+    {
+        if (!_rows.Remove(entry.MessageId, out var row)) return;
+        _chat.Remove(row);
+        UpdateEmptyHints();
+    }
+
+    private bool IsMine(LanGroupMessage entry) => _identity is { } self
+        && string.Equals(entry.AuthorDeviceId, self.DeviceId, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The line under a file's bubble: where its bytes are, or what the room promised about them.</summary>
+    private static string OfferLine(LanGroupMessage entry) => entry.HeldHere ? HeldLine(entry) : SizeLine(entry);
+
+    private static string HeldLine(LanGroupMessage entry) =>
+        Tr.Format("Lan.ChatHeld", Path.GetFileName(entry.LocalPath ?? entry.FileName ?? ""));
+
+    private static string SizeLine(LanGroupMessage entry) => entry.IsDirectory
+        ? Tr.F("Lan.ChatFolder")
+        : ByteSize.Format(entry.Bytes);
+
+    private void Receive_Click(object sender, RoutedEventArgs e)
+    {
+        if (_room is not { } room || sender is not Button { Tag: LanChatRow row }) return;
+        _ = PullAsync(row, room);
+    }
+
+    /// <summary>
+    /// Asks the room for one entry's bytes. Everything the answer decides is painted by the room's own
+    /// <c>Fetched</c> event, because an auto-received file goes through this same call from the poll thread and
+    /// the two must not grow two versions of the same sentence.
+    /// </summary>
+    private async Task PullAsync(LanChatRow row, LanGroupRoom room)
+    {
+        try { await room.ReceiveAsync(row.MessageId, _lifetime?.Token ?? CancellationToken.None); }
+        // A pull cut short by this window closing has nothing left to report to.
+        catch (Exception ex) when (ex is LanTransferException or HttpRequestException or JsonException
+                or IOException or OperationCanceledException)
+        {
+            row.SetDetail(Tr.F("Lan.Refuse.IncompleteBody"));
+        }
+    }
+
+    private void OnRoomProgress(LanRoomProgressEventArgs args)
+    {
+        // A pull reports against the length the entry announced; a folder's archive announces no length at all, so
+        // its row draws a bar in flight rather than a percentage nobody measured.
+        if (_rows.TryGetValue(args.Entry.MessageId, out var row)) row.SetProgress(args.Bytes, args.TotalBytes);
+    }
+
+    private void OnRoomFetched(LanRoomFetchEventArgs args)
+    {
+        if (args.Entry is not { } entry) return;
+        var row = _rows.TryGetValue(entry.MessageId, out var found) ? found : null;
+        if (args.Refusal == LanRefusal.None && args.LandedPath is { Length: > 0 } path)
+        {
+            row?.SetDetail(HeldLine(entry));
+            Say(Tr.Format("Lan.RoomReceived", Path.GetFileName(path),
+                entry.IsDirectory ? Tr.F("Lan.ChatFolder") : ByteSize.Format(entry.Bytes)));
+            _ = ArchiveAsync(new LanTransferHistoryEntry(Guid.NewGuid(), LanTransferDirection.Received,
+                entry.AuthorDeviceId, entry.AuthorName, path, entry.Bytes,
+                LanTransferState.Completed, DateTimeOffset.UtcNow));
+            return;
+        }
+
+        var reason = LanPeerPresentation.Refusal(args.Refusal);
+        // The 接收 button stays, because the entry is still the room's promise and a member that is asleep tonight
+        // may answer it tomorrow; only the reason goes under it.
+        row?.SetDetail(reason);
+        Say(Tr.Format("Lan.RoomRefused", entry.FileName ?? "", reason));
+    }
+
+    private void FollowNewest()
+    {
+        // A chat is read from the bottom, so the newest line is the one worth showing. Asked of a list that has
+        // never been laid out there is no scroll host to answer, which is why this waits for the window to be
+        // loaded rather than running on every entry a background test ever paints.
+        if (ChatList.IsLoaded && ChatList.Items.Count > 0) ChatList.ScrollIntoView(ChatList.Items[^1]);
+    }
+
+    // ------------------------------------------------------------------ speaking
+
+    private void Send_Click(object sender, RoutedEventArgs e) => _ = SendFromComposerAsync();
+
+    private void Message_KeyDown(object sender, KeyEventArgs e)
+    {
+        // 回车发送、Shift+回车换行. The box accepts both because a sentence with a line break in it is a normal
+        // thing to say, and which of the two a person means when they press Enter is not in doubt.
+        if (e.Key != Key.Enter || (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift) return;
+        e.Handled = true;
+        _ = SendFromComposerAsync();
+    }
+
+    private async Task SendFromComposerAsync()
+    {
+        var text = ChatInputBox.Text;
+        var refusal = await SayAsync(text);
+        if (refusal == LanRefusal.None) ChatInputBox.Clear();
+        else Say(LanPeerPresentation.Refusal(refusal));
+    }
+
+    /// <summary>
+    /// Says one sentence in the room: it goes into this machine's copy at once, and every member that can be
+    /// dialled is told about it.
+    /// </summary>
+    /// <returns>
+    /// What the local append decided, which is the only answer worth showing: <see cref="LanRefusal.BadRequest"/>
+    /// for an empty box and <see cref="LanRefusal.MessageTooLong"/> for a sentence longer than the room holds.
+    /// </returns>
+    /// <remarks>
+    /// The id is minted here, before anything is sent, because the same sentence reaches a member by two paths —
+    /// this push and that member's own poll of somebody else who heard it — and two ids for one sentence would
+    /// converge as two rows. The push is not the propagation mechanism: every member is polled every few
+    /// seconds anyway. It is there for the machine the firewall still has shut, which can dial out but cannot be
+    /// read, and would otherwise never get its own sentences any further than its own copy.
+    /// </remarks>
+    internal async Task<LanRefusal> SayAsync(string? text)
+    {
+        if (_identity is null) return LanRefusal.BadRequest;
+        var id = Guid.NewGuid().ToString("N");
+        var said = (text ?? "").Trim();
+        var refusal = _group.TryAppendText(SelfContact(), text, DateTimeOffset.UtcNow, out _, id);
+        if (refusal != LanRefusal.None) return refusal;
+
+        await FanOutAsync(async member =>
+        {
+            if (_client is null) return;
+            await _client.SayAsync(member, said, id, _lifetime?.Token ?? CancellationToken.None);
+        });
+        return LanRefusal.None;
+    }
+
+    /// <summary>
+    /// Puts a file or a folder the user chose into the room: this machine announces it and holds its bytes, and
+    /// every other member learns of it by reading this copy.
+    /// </summary>
+    /// <returns>How many rows the room gained, so a pick of five vanished files can be told apart from a pick of five.</returns>
+    /// <remarks>
+    /// <para>
+    /// No byte leaves here. The entry lands in this machine's log already marked as held, a member's poll carries
+    /// it outward, and whoever wants it asks — which is why sending into a room of five costs one row rather than
+    /// five uploads, and why a machine that was switched off when the file was announced can still take it
+    /// tomorrow.
+    /// </para>
+    /// <para>
+    /// The basket gets the same path because the shipped phone page lists that, not the room: one promise about
+    /// what may be read, drawn by two clients until the page is redrawn to read the room.
+    /// </para>
+    /// </remarks>
+    internal int Announce(IEnumerable<string?> paths)
+    {
+        if (_identity is null) return 0;
+        var self = SelfContact();
+        var now = DateTimeOffset.UtcNow;
+        var announced = 0;
+        foreach (var candidate in paths)
+        {
+            if (string.IsNullOrWhiteSpace(candidate)) continue;
+            LanSendItem item;
+            try { item = LanSendItem.Of(candidate); }
+            // A path that is gone, or that this machine may not read, is skipped rather than announced: an entry
+            // with nobody holding it is a 接收 button that can only ever fail.
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { continue; }
+
+            _basket.Add([item.AbsolutePath]);
+            _group.Hold(self, Guid.NewGuid().ToString("N"), item.Name, item.Bytes, item.IsDirectory,
+                item.AbsolutePath, now);
+            announced++;
+        }
+
+        Say(announced > 0 ? Tr.Format("Lan.Announced", announced) : Tr.F("Lan.AnnouncedNothing"));
+        return announced;
+    }
+
+    private LanContact SelfContact() => new(_identity!.DeviceId, _identity.DeviceName, _identity.Kind, "", CurrentPort());
+
+    /// <summary>
+    /// Hands one finished sentence to every member this machine can dial, at the same time.
+    /// </summary>
+    /// <remarks>
+    /// Concurrently because the wait is a dead member's own timeout, and a room of five must not pay it five
+    /// times before the composer's box clears.
+    /// </remarks>
+    private async Task FanOutAsync(Func<LanPeerEndpoint, Task> tell)
+    {
+        if (_client is null || _room is null) return;
+        IReadOnlyList<LanPeerEndpoint> members;
+        try { members = await _room.ReachableMembersAsync(_lifetime?.Token ?? CancellationToken.None); }
+        catch (Exception ex) when (ConvergesAnyway(ex)) { return; }
+        catch (Exception ex) { Say(Tr.F("Lan.PeerListFailed") + Describe(ex)); return; }
+
+        try
+        {
+            await Task.WhenAll([.. members.Select(async member =>
+            {
+                try { await tell(member); }
+                catch (Exception ex) when (ConvergesAnyway(ex)) { }
+            })]);
+        }
+        catch (Exception ex) when (ConvergesAnyway(ex)) { }
+    }
+
+    /// <summary>
+    /// Whether a member that did not answer is the room's problem rather than this window's. It is: the sentence
+    /// is already in this machine's copy of the log, and that member's own poll picks it up from whoever else in
+    /// the room heard it. A cancellation belongs in the same list, because a window that is closing has nobody
+    /// left to report to.
+    /// </summary>
+    private static bool ConvergesAnyway(Exception ex) =>
+        ex is LanTransferException or HttpRequestException or JsonException or OperationCanceledException;
 
     // ------------------------------------------------------------------ receiving
 
@@ -575,33 +881,6 @@ public partial class LanTransferWindow : Window
         row.Update(line, args.TotalBytes > 0 ? 100d * args.Bytes / args.TotalBytes : -1);
     }
 
-    /// <summary>
-    /// A row for the bytes this side is pushing to a peer. The host raises nothing for those — they leave
-    /// through <see cref="LanPeerClient"/>, which has no listener to report to — so the window draws its own
-    /// upload progress from the client's callback.
-    /// </summary>
-    internal void ReportOutboundProgress(LanSendItem item, long bytes)
-    {
-        // Report lands on whichever thread drained the request stream, and every collection here belongs to the
-        // dispatcher, so the crossing happens before the lookup rather than after it.
-        Dispatcher.BeginInvoke(() =>
-        {
-            var key = OutKey(item);
-            // Its own key rather than Lan.ProgressOut, because this line has no peer to name: the bytes leave
-            // through the client, which knows the address it dialed but reports progress without a contact.
-            var line = Tr.Format("Lan.ProgressUp", item.Name, ByteSize.Format(bytes),
-                item.IsDirectory ? Tr.F("Lan.SizeUnknown") : ByteSize.Format(item.Bytes));
-            if (!_running.TryGetValue(key, out var row))
-            {
-                row = new LanProgressRow(line, !item.IsDirectory && item.Bytes > 0);
-                _running[key] = row;
-                _transfers.Add(row);
-                UpdateEmptyHints();
-            }
-            row.Update(line, item.IsDirectory || item.Bytes <= 0 ? -1 : 100d * bytes / item.Bytes);
-        });
-    }
-
     private string ProgressLine(string path, LanContact contact, long bytes, long totalBytes, bool inbound) =>
         inbound
             ? Tr.Format("Lan.ProgressIn", Path.GetFileName(path), Who(contact), ByteSize.Format(bytes),
@@ -630,33 +909,17 @@ public partial class LanTransferWindow : Window
         oldest.Value.Finish(state, detail);
     }
 
-    /// <summary>Closes the row for a send that finished, was refused, or never got as far as a row.</summary>
-    private void CloseOutbound(LanSendItem? item, LanTransferState state, string detail)
-    {
-        if (item is not null && _running.Remove(OutKey(item), out var row)) row.Finish(state, detail);
-    }
-
     private static string InKey(string deviceId, string path) => $"{deviceId}|{path}";
 
-    /// <summary>
-    /// Outbound rows are keyed on the basket item rather than on a device, because this side names its own
-    /// uploads and a peer's identifier has nothing to do with which row is being read out of the basket.
-    /// </summary>
-    private static string OutKey(LanSendItem item) => $"out|{item.Id:N}";
-
-    // ------------------------------------------------------------------ sending
-
-    private void Basket_Drop(object sender, DragEventArgs e) => AcceptDrop(e);
+    // ------------------------------------------------------------------ this computer
 
     private void Window_Drop(object sender, DragEventArgs e) => AcceptDrop(e);
 
     private void AcceptDrop(DragEventArgs e)
     {
         e.Handled = true;
-        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
-        var added = _basket.Add(e.Data.GetData(DataFormats.FileDrop) as string[]);
-        Say(added > 0 ? Tr.Format("Lan.BasketAdded", added) : Tr.F("Lan.BasketNothingAdded"));
-        UpdateEmptyHints();
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] dropped) return;
+        Announce(dropped);
     }
 
     private void Window_DragOver(object sender, DragEventArgs e) =>
@@ -664,33 +927,59 @@ public partial class LanTransferWindow : Window
 
     private void AddFiles_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Multiselect = true, Title = Tr.F("Lan.AddFiles") };
-        if (dialog.ShowDialog(this) != true) return;
-        Say(Tr.Format("Lan.BasketAdded", _basket.Add(dialog.FileNames)));
-        UpdateEmptyHints();
+        var dialog = new OpenFileDialog { Multiselect = true, Title = Tr.F("Lan.SendFiles") };
+        if (dialog.ShowDialog(this) == true) Announce(dialog.FileNames);
     }
 
     private void AddFolder_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog { Title = Tr.F("Lan.AddFolder"), Multiselect = true };
-        if (dialog.ShowDialog(this) != true) return;
-        Say(Tr.Format("Lan.BasketAdded", _basket.Add(dialog.FolderNames)));
-        UpdateEmptyHints();
+        var dialog = new OpenFolderDialog { Title = Tr.F("Lan.SendFolder"), Multiselect = true };
+        if (dialog.ShowDialog(this) == true) Announce(dialog.FolderNames);
     }
 
-    private void RemoveFromBasket_Click(object sender, RoutedEventArgs e)
-    {
-        var picked = BasketList.SelectedItems.OfType<LanSendRow>().ToList();
-        foreach (var row in picked) _basket.Remove(row);
-        Say(Tr.Format("Lan.BasketRemoved", picked.Count));
-        UpdateEmptyHints();
-    }
+    private async void SaveDeviceName_Click(object sender, RoutedEventArgs e) => await RenameSelfAsync(DeviceNameBox.Text);
 
-    private void ClearBasket_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Renames this machine, then tells the room.
+    /// </summary>
+    /// <returns>The name the identity file really holds, which is what every other member now lists.</returns>
+    /// <remarks>
+    /// The order is the whole point of returning a name. A typed one can be longer than a row holds or blank, and
+    /// a window that kept showing what the person typed while the rest of the room listed what it stored would
+    /// be describing a rename nobody made. The room is told after the file is written for the same reason: a peer
+    /// that answers the new name must be able to find it on disk afterwards.
+    /// </remarks>
+    internal async Task<string> RenameSelfAsync(string? name)
     {
-        _basket.Clear();
-        Say(Tr.F("Lan.BasketCleared"));
-        UpdateEmptyHints();
+        if (_identity is null) return "";
+        var was = _identity.DeviceName;
+        string kept;
+        try { kept = await _identity.RenameAsync(name, _lifetime?.Token ?? CancellationToken.None); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Say(Tr.F("Lan.RenameFailed") + Describe(ex));
+            return "";
+        }
+        catch (OperationCanceledException) { return ""; }
+
+        DeviceNameBox.Text = kept;
+        // A name that did not move is not a rename, and the room must not be told it was. This is also what a
+        // blank box does: the identity answers with the name it already holds, and the person gets their name
+        // back on the screen without a second line saying so.
+        if (string.Equals(kept, was, StringComparison.Ordinal)) return kept;
+
+        await FanOutAsync(async member =>
+        {
+            if (_client is null) return;
+            await _client.TellNameAsync(member, kept, _lifetime?.Token ?? CancellationToken.None);
+        });
+        // The advertiser carries it too, so a computer that has not paired yet sees this one under the name it
+        // chose rather than the one Windows gave it.
+        _discovery?.AnnounceAs(kept);
+        // The room is the one place this is said. A status line would only repeat it, and the status line is the
+        // window's only space for reporting a failure.
+        _group.AppendSystem(Tr.Format("Lan.RenamedSelf", kept), DateTimeOffset.UtcNow);
+        return kept;
     }
 
     private async void CheckPeer_Click(object sender, RoutedEventArgs e)
@@ -722,70 +1011,6 @@ public partial class LanTransferWindow : Window
         }
         catch (LanTransferException ex) { PeerStatusText.Text = LanPeerPresentation.Refusal(ex.Refusal); }
         catch (Exception ex) { PeerStatusText.Text = Tr.F("Lan.PeerNoAnswer") + Describe(ex); }
-    }
-
-    private async void SendToPeer_Click(object sender, RoutedEventArgs e)
-    {
-        if (_client is null || !TryPeerTarget(out var address, out var port)) return;
-        var rows = _basket.Snapshot();
-        if (rows.Count == 0)
-        {
-            PeerStatusText.Text = Tr.F("Lan.BasketEmptySend");
-            return;
-        }
-
-        var hello = await HelloAsync(address, port);
-        if (hello is null)
-        {
-            PeerStatusText.Text = Tr.F("Lan.PeerNoAnswer");
-            return;
-        }
-
-        var peer = new LanPeerEndpoint(hello.DeviceId, address, port);
-        if (!await _client.IsPairedAsync(peer))
-        {
-            // A device that has to be told the code again is not a failure of the send; the pairing is a
-            // separate decision a person makes on the other screen.
-            PeerStatusText.Text = LanPeerPresentation.Refusal(LanRefusal.Unpaired);
-            return;
-        }
-
-        var session = Guid.NewGuid().ToString("N")[..8];
-        var button = (Button)sender;
-        button.IsEnabled = false;
-        var sent = 0;
-        long bytes = 0;
-        LanSendItem? current = null;
-        try
-        {
-            foreach (var item in rows)
-            {
-                current = item;
-                var outcome = await _client.SendAsync(peer, item, session, messageId: null, new ProgressRowReporter(this, item), _lifetime?.Token ?? CancellationToken.None);
-                CloseOutbound(item, LanTransferState.Completed, "");
-                sent++;
-                bytes += outcome.Bytes;
-                current = null;
-            }
-            PeerStatusText.Text = Tr.Format("Lan.SendDone", sent, ByteSize.Format(bytes), hello.DeviceName);
-        }
-        catch (LanTransferException ex)
-        {
-            var reason = LanPeerPresentation.Refusal(ex.Refusal);
-            PeerStatusText.Text = current is null ? reason : Tr.Format("Lan.SendFailed", current.Name, reason);
-            CloseOutbound(current, LanTransferState.Failed, reason);
-        }
-        catch (OperationCanceledException)
-        {
-            PeerStatusText.Text = Tr.F("Lan.SendCancelled");
-            CloseOutbound(current, LanTransferState.Cancelled, Tr.F("Lan.State.Cancelled"));
-        }
-        catch (Exception ex)
-        {
-            PeerStatusText.Text = current is null ? Describe(ex) : Tr.Format("Lan.SendFailed", current.Name, Describe(ex));
-            CloseOutbound(current, LanTransferState.Failed, Describe(ex));
-        }
-        finally { if (IsLoaded) button.IsEnabled = true; }
     }
 
     /// <summary>
@@ -880,7 +1105,8 @@ public partial class LanTransferWindow : Window
         if (dialog.ShowDialog(this) != true) return;
         await SaveSettingsAsync(settings => settings with { LanReceiveDirectory = dialog.FolderName });
         // The listener's whole write path is rooted at that directory, so changing it means starting a new
-        // listener rather than telling the running one to move.
+        // listener rather than telling the running one to move. The room's log is this window's, so the
+        // conversation is still here when it comes back.
         await RestartListenerAsync();
     }
 
@@ -896,15 +1122,17 @@ public partial class LanTransferWindow : Window
         await RestartListenerAsync(port);
     }
 
-    private async void AutoAccept_Changed(object sender, RoutedEventArgs e)
+    private async void AutoReceive_Changed(object sender, RoutedEventArgs e)
     {
         if (_restoringToggle) return;
-        var chosen = AutoAcceptBox.IsChecked == true;
+        var chosen = AutoReceiveBox.IsChecked == true;
         await SaveSettingsAsync(settings => settings with { LanAutoAcceptFromTrusted = chosen });
-        // The session reads the switch per write, so a running listener takes it without a restart and a
-        // transfer already in the air is not cancelled by a change of mind.
+        // One switch, two directions: the session reads it per write and the room reads it per offer, so a
+        // running listener and a running poll both take the change without a restart, and a transfer already in
+        // the air is not cancelled by a change of mind.
         if (_session is { } session) session.AutoAcceptFromTrusted = chosen;
-        Say(chosen ? Tr.F("Lan.AutoAcceptOn") : Tr.F("Lan.AutoAcceptOff"));
+        if (_room is { } room) room.AutoReceive = chosen;
+        Say(chosen ? Tr.F("Lan.AutoReceiveOn") : Tr.F("Lan.AutoReceiveOff"));
     }
 
     /// <summary>
@@ -953,8 +1181,30 @@ public partial class LanTransferWindow : Window
         TrustedEmptyText.Visibility = _trusted.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         DiscoveredEmptyText.Visibility = _discovered.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         HistoryEmptyText.Visibility = _history.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
-        TransfersEmptyText.Visibility = _transfers.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+        TransferBorder.Visibility = _transfers.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         PendingBorder.Visibility = _pending.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ChatEmptyText.Visibility = _chat.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Runs a paint on the dispatcher, or straight away when this thread already is it.
+    /// </summary>
+    /// <remarks>
+    /// The straight-away half matters: a sentence the user just typed would otherwise wait for the next beat to
+    /// appear in its own room, and a window that is closing has nobody left to paint for, which is why the
+    /// teardown is the first test rather than an exception to catch.
+    /// </remarks>
+    private void OnUi(Action paint)
+    {
+        if (_teardownStarted) return;
+        if (Dispatcher.CheckAccess())
+        {
+            paint();
+            return;
+        }
+
+        try { Dispatcher.BeginInvoke(paint); }
+        catch (Exception ex) when (ex is InvalidOperationException or TaskCanceledException) { }
     }
 
     private string Who(LanContact contact) => string.IsNullOrWhiteSpace(contact.DeviceName)
@@ -979,6 +1229,105 @@ public partial class LanTransferWindow : Window
 /// made the payload's type a compile-time accident rather than the thing the click handler checks.
 /// </remarks>
 public sealed record LanRow(string Name, string Detail, object? Tag);
+
+/// <summary>
+/// One line of the room as the screen draws it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The row holds the entry rather than a copy of what it says, because a room line changes under the person
+/// reading it: a file that was announced becomes a file that landed, and the bubble must move from 接收 to the
+/// name it was stored under instead of being replaced by a second row. Which side it sits on and whether it is
+/// narration are the entry's own answers, so nobody has to keep a flag in step with the log.
+/// </para>
+/// <para>
+/// <see cref="Percentage"/> is read-only on purpose and both progress bars bind it with
+/// <c>Mode=OneWay</c>: <c>RangeBase.Value</c> binds TwoWay by default, and a TwoWay read of a property with no
+/// setter throws out of the dispatcher on the first tick — in a window the user is already looking at.
+/// </para>
+/// </remarks>
+public sealed class LanChatRow(LanGroupMessage entry, bool isMine) : INotifyPropertyChanged
+{
+    private string _detail = "";
+    private bool _showsProgress;
+    private double _percentage;
+    private bool _isUnknown;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>The entry this row draws, live: <see cref="LanGroupMessage.HeldHere"/> is the room's own answer to 「接收」.</summary>
+    public LanGroupMessage Entry { get; } = entry;
+
+    public string MessageId => Entry.MessageId;
+
+    public bool IsMine { get; } = isMine;
+
+    public HorizontalAlignment Side => IsMine ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+
+    /// <summary>A line this machine wrote about the room, which belongs to neither side of it.</summary>
+    public bool IsSystem => Entry.AuthorDeviceId.Length == 0;
+
+    public Visibility SystemVisibility => IsSystem ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility BubbleVisibility => IsSystem ? Visibility.Collapsed : Visibility.Visible;
+
+    public string SystemText => Entry.Text ?? "";
+
+    /// <summary>What the bubble is about: the sentence, or the name the sender gave the bytes.</summary>
+    public string Body => Entry.Kind == LanGroupKind.Text ? Entry.Text ?? "" : Entry.FileName ?? "";
+
+    public string AuthorLine => $"{Author} · {Entry.CreatedUtc.ToLocalTime().ToString("g")}";
+
+    /// <summary>Whose name to read above a bubble — never on this machine's own, whose side already says it.</summary>
+    public Visibility AuthorVisibility => IsMine ? Visibility.Collapsed : Visibility.Visible;
+
+    public string Detail => _detail;
+
+    public Visibility DetailVisibility => _detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>
+    /// 接收 is offered on a file or folder this copy cannot hand over, and on nothing else: not on a sentence, not
+    /// on a line this machine wrote itself, and not on bytes that are already in the receive directory.
+    /// </summary>
+    public Visibility ActionVisibility =>
+        !IsSystem && Entry.Kind != LanGroupKind.Text && !Entry.HeldHere
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    public Visibility ProgressVisibility => _showsProgress ? Visibility.Visible : Visibility.Collapsed;
+
+    public double Percentage => _percentage;
+
+    public bool IsUnknown => _isUnknown;
+
+    /// <summary>What a screen reader says for the whole row, so a row is reachable by name without being selectable.</summary>
+    public string AutomationLine => string.Join(" · ", new[] { Body, _detail }.Where(part => part.Length > 0));
+
+    /// <summary>Says what this machine now knows about the bytes behind the entry, and takes the in-flight bar with it.</summary>
+    public void SetDetail(string detail)
+    {
+        _detail = detail;
+        _showsProgress = false;
+        Raise(nameof(Detail), nameof(DetailVisibility), nameof(ProgressVisibility), nameof(AutomationLine));
+    }
+
+    /// <summary>One tick of a pull this machine is doing right now.</summary>
+    /// <param name="totalBytes">The length the entry announced, or 0 when nothing measured it.</param>
+    public void SetProgress(long bytes, long totalBytes)
+    {
+        _showsProgress = true;
+        _isUnknown = totalBytes <= 0;
+        _percentage = totalBytes > 0 ? Math.Min(100d, 100d * bytes / totalBytes) : 0d;
+        Raise(nameof(ProgressVisibility), nameof(Percentage), nameof(IsUnknown));
+    }
+
+    private string Author => string.IsNullOrWhiteSpace(Entry.AuthorName) ? Tr.F("Lan.KindUnknown") : Entry.AuthorName;
+
+    private void Raise(params string[] names)
+    {
+        foreach (var name in names) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+}
 
 /// <summary>
 /// One transfer in flight, as the window shows it.
@@ -1067,9 +1416,3 @@ internal sealed record LanTransferDependencies(
     Func<LanInboundOffer, CancellationToken, Task<bool>>? ConfirmInbound = null,
     LanProcessRunner? Netsh = null,
     bool DiscoverPeers = true);
-
-/// <summary>Reports a peer's own upload progress into the window's list.</summary>
-internal sealed class ProgressRowReporter(LanTransferWindow window, LanSendItem item) : IProgress<long>
-{
-    public void Report(long value) => window.ReportOutboundProgress(item, value);
-}

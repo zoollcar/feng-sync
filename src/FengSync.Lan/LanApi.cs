@@ -181,8 +181,16 @@ public sealed record LanMessageWire(
 /// </summary>
 public sealed record LanLogReply(int V, long Head, IReadOnlyList<LanMessageWire> Entries);
 
-/// <summary>A sentence a peer is asking this machine to remember and repeat.</summary>
-public sealed record LanSayRequest(string? Text);
+/// <summary>
+/// A sentence a peer is asking this machine to remember and repeat.
+/// </summary>
+/// <param name="MessageId">
+/// The id the speaker minted, so one sentence carries one identity into every copy of the room. Absent means the
+/// caller has none, and this machine mints one for its own copy — which is why a fan-out is asked to name the id
+/// rather than let each peer invent its own: two members told the same sentence with two different ids would
+/// converge as two rows, and a room that shows a person their own sentence twice reads as damage.
+/// </param>
+public sealed record LanSayRequest(string? Text, string? MessageId = null);
 
 /// <summary>
 /// The name a peer now wants to be listed under. It carries no device id, because the id it renames is the one

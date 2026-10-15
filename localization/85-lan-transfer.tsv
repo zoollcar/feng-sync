@@ -32,30 +32,39 @@ Lan.ChooseDirectory	选择目录…	Choose a folder…
 Lan.PickReceiveDirectory	请先选择接收目录	Choose the receive folder first
 Lan.NoDirectory	接收目录不存在，监听没有启动	The receive folder does not exist, so nothing is listening
 Lan.DirectoryUnwritable	接收目录写不进去，监听没有启动	The receive folder cannot be written to, so nothing is listening
-Lan.AutoAcceptTrusted	受信设备发来的文件自动同意	Accept files from trusted devices automatically
-Lan.AutoAcceptHint	关掉后，受信设备也要一笔一笔点同意。陌生设备的第一笔始终要点。	With this off, even a trusted device is asked one file at a time. A stranger's first file always asks.
-Lan.AutoAcceptOn	已设为自动同意	Trusted devices are accepted automatically
-Lan.AutoAcceptOff	已设为逐笔确认	Every file from a trusted device will be asked
-Lan.TrustedDevices	受信设备	Trusted devices
+# ---- 顶部这条：这台电脑叫什么，以及房间里的东西进来时怎么办 ----
+Lan.MyDevice	这台电脑	This computer
+Lan.SaveName	保存名字	Save name
+Lan.RenameFailed	名字没能存下来：	The name could not be saved:
+Lan.RenamedSelf	这台电脑现在叫 {0}	This computer is now called {0}
+Lan.RenamedPeer	{0} 改名为 {1}	{0} renamed itself to {1}
+Lan.AutoReceive	自动接收	Auto-receive
+Lan.AutoReceiveOn	已设为自动接收，文件直接落到接收目录	Files now land in the receive folder on their own
+Lan.AutoReceiveOff	已设为每笔自己点接收	Every file in the room now waits for you to take it
 Lan.TrustedRow	{0} · {1} · 上次联系 {2}	{0} · {1} · last seen {2}
 Lan.Forget	取消信任	Forget
 Lan.Forgotten	已取消对 {0} 的信任	{0} is no longer trusted
 Lan.AlreadyGone	这台设备已经不在这份列表里了	That device is no longer on the list
 Lan.NoTrustedDevices	还没有配对过的设备	Nothing has been paired with yet
 Lan.PeerListFailed	受信设备列表没读到	The trusted device list could not be read
-Lan.Basket	发送篮	Send basket
-Lan.BasketScope	只有放进这里的内容能被对方读到。关窗即清空，不落盘。	Only what you put here can be read by the other side. The basket is emptied when the window closes and is never written to disk.
+# ---- 房间：一句话、一个文件、一个接收的动作 ----
+# Lan.BasketFile / Lan.BasketFolder still name what the send basket lists for the phone page, which reads that
+# list rather than the room until it is redrawn; the room's own bubbles carry the file's own name instead.
 Lan.BasketFile	文件 · {0}	File · {0}
 Lan.BasketFolder	文件夹（对方收到的是打包）	Folder (the other side receives a zip)
-Lan.AddFiles	添加文件…	Add files…
-Lan.AddFolder	添加文件夹…	Add a folder…
-Lan.Remove	移出篮子	Remove
-Lan.ClearBasket	清空	Empty
-Lan.BasketAdded	已加入 {0} 项	Added {0} item(s)
-Lan.BasketNothingAdded	没有新内容加入	Nothing new was added
-Lan.BasketRemoved	已移出 {0} 项	Removed {0} item(s)
-Lan.BasketCleared	发送篮已清空	The basket is empty
-Lan.BasketEmptySend	发送篮是空的，先拖进来	The send basket is empty
+Lan.Members	群里的设备	Devices in the room
+Lan.RoomEmpty	还没有人说话。让手机扫上面的码进来，或者用下面的按钮往房间里放一个文件。	Nothing has been said yet. Let a phone scan the code above, or use the buttons below to put a file in the room.
+Lan.SendFiles	发文件…	Send files…
+Lan.SendFolder	发文件夹…	Send a folder…
+Lan.Send	发送	Send
+Lan.Receive	接收	Receive
+Lan.JoinedRoom	{0} 加入了这个群	{0} joined this room
+Lan.Announced	已在房间里放出 {0} 项，谁要谁自己点接收	Put {0} item(s) in the room; whoever wants it takes it
+Lan.AnnouncedNothing	没有东西被放出，选中的路径可能已经不在了	Nothing was announced; the paths you picked may already be gone
+Lan.ChatFolder	文件夹	Folder
+Lan.ChatHeld	已在本机：{0}	Held here: {0}
+Lan.RoomReceived	已收到 {0}（{1}）	Received {0} ({1})
+Lan.RoomRefused	{0} 没能收到：{1}	{0} could not be fetched: {1}
 Lan.Computers	发现的电脑	Computers found
 Lan.NoComputersFound	没发现其他电脑，可直接填下面的地址	No other computer answered; type the address below instead
 Lan.PeerRow	{0}:{1} · {2}	{0}:{1} · {2}
@@ -63,14 +72,10 @@ Lan.ManualPeer	手动地址	Manual address
 Lan.ManualPeerHint	写成 ip:端口。有些网络（AP 隔离）拦得住发现也拦得住连接，这一栏是唯一的兜底。	Format: ip:port. Some networks (AP isolation) block both discovery and the connection, so this box is the only way through.
 Lan.CheckPeer	先看它在不在	Is it there?
 Lan.PairPeer	用对方的码配对	Pair with their code
-Lan.SendToPeer	把选中的发给它	Send the selection
 Lan.PeerNoAnswer	那个地址没有回答	That address did not answer
 Lan.PeerAnswers	{0} · {1} · {2}	{0} · {1} · {2}
 Lan.PeerPaired	已与 {0} 配对	Paired with {0}
 Lan.PeerAddressInvalid	地址要写成 ip:端口	Please write the address as ip:port
-Lan.SendDone	已发送 {0} 项 · {1} 给 {2}	Sent {0} item(s), {1}, to {2}
-Lan.SendFailed	{0} 发送失败：{1}	{0} failed to send: {1}
-Lan.SendCancelled	发送已取消	The send was cancelled
 Lan.Pending	等你确认	Waiting for you
 Lan.PendingHint	陌生设备的第一笔要在这里点同意，字节才会落盘。	A stranger's first file is only written after you accept it here.
 Lan.PendingRow	{0} 想写入	{0} wants to send
@@ -80,7 +85,6 @@ Lan.AskingFirstWrite	正在等你同意 {0} 的第一笔	Waiting for you to acce
 Lan.NothingToAnswer	没有待确认的传输	Nothing is waiting for an answer
 Lan.DeclinedThatFile	已拒绝这一笔	That transfer was declined
 Lan.RefusedWrite	已拒绝 {0} 的写入：{1}	Refused a write from {0}: {1}
-Lan.Paired	{0} 现在是受信设备	{0} is now a trusted device
 Lan.PairRefused	与 {0} 配对没通过：{1}	Pairing with {0} did not work: {1}
 Lan.Received	已收到 {0} · {1} · 来自 {2}	Received {0} · {1} · from {2}
 Lan.ReceivedRenamed	同名已占，存成了 {0} · {1} · 来自 {2}	That name was taken, so it landed as {0} · {1} · from {2}
@@ -89,11 +93,9 @@ Lan.Sent	已发出 {0} · {1} · 给 {2}	Sent {0} · {1} · to {2}
 Lan.SentArchive	已把 {0} 打包发给 {1}，压缩包不能续传	{0} was zipped and sent to {1}; an archive cannot be resumed
 Lan.ProgressIn	接收 {0} ← {1}（{2} / {3}）	Receiving {0} from {1} ({2} / {3})
 Lan.ProgressOut	发送 {0} → {1}（{2} / {3}）	Sending {0} to {1} ({2} / {3})
-Lan.ProgressUp	读出 {0}（{1} / {2}）	Reading {0} ({1} / {2})
 Lan.SizeUnknown	大小未知	size unknown
 Lan.History	历史	History
 Lan.NoHistory	还没有通过局域网收发的记录	Nothing has moved over the LAN yet
-Lan.WaitingForFiles	没有正在进行的传输	Nothing is transferring
 Lan.Row.Summary	{0} {1} · {2} · {3}	{0} {1} · {2} · {3}
 Lan.SettingsFailed	设置没读到，用了默认值：	The settings could not be read, so the defaults were used:
 Lan.SettingsSaveFailed	设置没写回：	The settings were not saved:
@@ -120,7 +122,7 @@ Lan.Refuse.PathUnsafe	路径不安全，整笔拒绝	The path is not safe, so th
 Lan.Refuse.NameReserved	名字是 Windows 的保留名	Windows reserves that name
 Lan.Refuse.PathTooLong	路径太长	The path is too long
 Lan.Refuse.Conflict	同名文件已存在，请改名后重发	A file of that name is already there; rename it and send again
-Lan.Refuse.NotFound	篮子里没有这一项	That item is not in the basket
+Lan.Refuse.NotFound	这一项已经不在了，或者谁都没有它的字节	That item is gone, or nobody here holds its bytes
 Lan.Refuse.Declined	人看了一眼，拒绝了	Somebody looked at it and said no
 Lan.Refuse.IncompleteBody	数据没传完	The body arrived short
 Lan.Refuse.VerificationFailed	落地的大小或修改时间与声明不符	The size or the date on disk is not what was declared

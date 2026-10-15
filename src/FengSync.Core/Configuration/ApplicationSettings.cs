@@ -144,10 +144,16 @@ public sealed record ApplicationSettings
     public string? LanReceiveDirectory { get; init; }
 
     /// <summary>
-    /// Whether a device that is already on the trust list may send without another click each time. On by
-    /// default because the first contact is already confirmed by a person; turning it off makes every transfer
-    /// ask, which is what a shared office machine wants.
+    /// Whether files other devices send to this computer land without another click — both the ones a peer pushes
+    /// at this listener and the ones a room member only announced. On by default because the first contact is
+    /// already confirmed by a person; turning it off makes every transfer ask, which is what a shared office
+    /// machine wants.
     /// </summary>
+    /// <remarks>
+    /// One switch for both directions on purpose: they are the same promise to the same user (bytes appear in
+    /// <see cref="LanReceiveDirectory"/> unasked), and two checkboxes whose wording differs by one verb is how a
+    /// person ends up turning off the wrong one and still getting files.
+    /// </remarks>
     public bool LanAutoAcceptFromTrusted { get; init; } = true;
 
     /// <summary>
