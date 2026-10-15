@@ -26,6 +26,10 @@ public static class ConfigurationValidator
             errors.Add("传输时段的开始与结束不能相同，否则将变成全天可传输。");
         if (!Enum.IsDefined(settings.CloudAfterTransfer)) errors.Add("传输完成后动作设置无效。");
         if (settings.MountCacheMaxSizeBytes is < 0 or > 1L << 50) errors.Add("挂载缓存上限必须介于 0 和 1 PB 之间（0 表示不限）。");
+        // The LAN transfer listener is fixed-port on purpose, because a firewall rule, a QR code and an address
+        // somebody types all name this number. The range is the one the listener itself would accept; it is
+        // checked against that listener's own bounds by a test in FengSync.Tests, since Core cannot see them.
+        if (settings.LanTransferPort is < 1024 or > 65535) errors.Add("局域网快传端口必须介于 1024 和 65535 之间。");
         if (!TryValidateProxy(settings.RcloneProxy, out var proxyError)) errors.Add(proxyError);
         if (double.IsNaN(settings.MainWindowSidebarWidth) || double.IsInfinity(settings.MainWindowSidebarWidth) || settings.MainWindowSidebarWidth is < 220 or > 320) errors.Add("主窗口侧栏宽度必须介于 220 和 320 之间。");
         if (!string.IsNullOrWhiteSpace(settings.SkippedUpdateVersion) && !Updates.ReleaseVersion.TryParse(settings.SkippedUpdateVersion, out _)) errors.Add("忽略的更新版本无效。");

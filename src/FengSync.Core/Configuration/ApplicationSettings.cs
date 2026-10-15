@@ -123,6 +123,34 @@ public sealed record ApplicationSettings
     public AppLanguage Language { get; init; } = AppLanguage.Chinese;
 
     /// <summary>
+    /// The port the LAN transfer window listens on — both the TCP transfer and the UDP discovery, which are
+    /// different protocols on one number so that one firewall rule each can name it.
+    /// </summary>
+    /// <remarks>
+    /// Fixed rather than chosen by the operating system, because a rule and a QR code both have to carry a
+    /// number a person can type. Kept in the settings file rather than beside the listener because a network
+    /// that already occupies 59871 is a thing the user changes once, on one machine, and remembers.
+    /// The value is the same number <c>FengSync.Lan.LanOptions.DefaultPort</c> starts from; Core cannot see
+    /// that library, and a settings default nobody validates against is how the two would drift.
+    /// </remarks>
+    public int LanTransferPort { get; init; } = 59871;
+
+    /// <summary>
+    /// Where files another device sends to this computer land. <see langword="null"/> means the system's own
+    /// Downloads folder, resolved when the window opens rather than stored here — the shape
+    /// <see cref="CloudDownloadDirectory"/> has, for the same reason: a path that no longer exists must read as
+    /// "fall back", not as "the user chose nothing".
+    /// </summary>
+    public string? LanReceiveDirectory { get; init; }
+
+    /// <summary>
+    /// Whether a device that is already on the trust list may send without another click each time. On by
+    /// default because the first contact is already confirmed by a person; turning it off makes every transfer
+    /// ask, which is what a shared office machine wants.
+    /// </summary>
+    public bool LanAutoAcceptFromTrusted { get; init; } = true;
+
+    /// <summary>
     /// Whether the cloud manager has already shown its first-run guide (E5). Off by default, and it is the
     /// only thing that makes the guide stop: <c>CloudFirstRunGuide.ShouldShow</c> also declines to show it to
     /// somebody who already has endpoints, so this flag is what silences it for a user who read it and said
