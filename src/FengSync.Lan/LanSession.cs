@@ -77,7 +77,7 @@ public interface ILanSendSource
 /// The confirmation rule is the one worth reading twice. A device that was already in
 /// <c>lan-peers.json</c> when this window opened is trusted and its bytes land unasked; a device that pairs
 /// while the window is open is a stranger until a person has agreed to its first write, and that agreement
-/// lasts for the rest of the session. With <see cref="LanOptions.AutoAcceptFromTrusted"/> off, even a
+/// lasts for the rest of the session. With <see cref="AutoAcceptFromTrusted"/> off, even a
 /// returning device is asked once per session — the switch means "ask me again", not "ask me per file".
 /// </para>
 /// </remarks>
@@ -101,6 +101,16 @@ public sealed class LanSession(
     public LanOptions Options { get; } = options;
     public LanPeerStore Peers { get; } = peers;
     public ILanSendSource Basket { get; } = basket;
+
+    /// <summary>
+    /// Whether a device that was already trusted before this window opened may write without being asked.
+    /// </summary>
+    /// <remarks>
+    /// Read per write rather than frozen into <see cref="Options"/>, because the window's 收到文件时自动同意
+    /// switch is a choice the user makes while a transfer may already be running, and a listener that only
+    /// takes it on restart would keep accepting after the person has turned it off.
+    /// </remarks>
+    public bool AutoAcceptFromTrusted { get; set; } = options.AutoAcceptFromTrusted;
 
     /// <summary>The answer to "is there a Feng Sync listening here", and the only body an unpaired stranger can read.</summary>
     public LanHelloReply Hello(LanDeviceIdentity self) =>
@@ -185,7 +195,7 @@ public sealed class LanSession(
             if (_agreedThisSession.Contains(offer.Contact.DeviceId)) return LanRefusal.None;
         }
 
-        if (Options.AutoAcceptFromTrusted && (await TrustedBeforeThisSessionAsync(ct).ConfigureAwait(false)).Contains(offer.Contact.DeviceId))
+        if (AutoAcceptFromTrusted && (await TrustedBeforeThisSessionAsync(ct).ConfigureAwait(false)).Contains(offer.Contact.DeviceId))
         {
             // No prompt and no permanent note: a returning device is accepted for this file, and the next
             // window opening will make the same decision from the same list.

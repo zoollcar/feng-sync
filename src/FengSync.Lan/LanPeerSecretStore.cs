@@ -43,6 +43,18 @@ public sealed class LanPeerSecretStore(string? path = null)
     public async Task<string> IssueAsync(string deviceId, CancellationToken ct = default)
     {
         var token = NewToken();
+        return await StoreAsync(deviceId, token, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Records a token under a device id. Separate from <see cref="IssueAsync"/> because the calling half of a
+    /// computer-to-computer pair holds a token that <b>the peer</b> made and handed back in a reply: this side
+    /// stores that value verbatim and has no authority to replace it.
+    /// </summary>
+    public async Task<string> StoreAsync(string deviceId, string token, CancellationToken ct = default)
+    {
+        if (deviceId.Length == 0) throw new ArgumentException("密钥必须属于一台设备。", nameof(deviceId));
+        if (token.Length == 0) throw new ArgumentException("空的凭据不能存。", nameof(token));
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {

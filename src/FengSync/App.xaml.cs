@@ -4,6 +4,7 @@ using FengSync.Core.Rclone.Lifecycle;
 using FengSync.Localization;
 using FengSync.Core.SftpServer;
 using FengSync.Services;
+using FengSync.Views;
 using System.IO;
 
 namespace FengSync;
@@ -13,6 +14,12 @@ public partial class App : System.Windows.Application, IAppServiceHost
     private readonly SftpServerHostedService _sftpService;
     private readonly RcloneMountService _mountService;
     private readonly CloudTransferQueue _cloudTransfers = new(history: new CloudTransferHistoryRepository());
+    /// <summary>
+    /// The LAN transfer window, while one is open. Held here rather than inside <see cref="IAppServiceHost"/>
+    /// for the same reason the SFTP server is: a fixed listen port is not something two shells can own, and
+    /// the DriveHub entry point shows no route to this window at all.
+    /// </summary>
+    private LanTransferWindow? _lanTransfer;
     private int _shutdownStarted;
 
     public App()
@@ -40,6 +47,17 @@ public partial class App : System.Windows.Application, IAppServiceHost
     /// in the standalone transfer window) after the cloud manager window is closed.
     /// </summary>
     public CloudTransferQueue CloudTransfers => _cloudTransfers;
+
+    /// <summary>
+    /// Remembers the LAN window that has just opened, so shutdown can await its teardown. One at a time:
+    /// <see cref="LanTransferWindow.ShowOrActivate"/> keeps the window a singleton and the listen port free.
+    /// </summary>
+    internal void LatchLanTransfer(LanTransferWindow window) => _lanTransfer = window;
+
+    internal void ReleaseLanTransfer(LanTransferWindow window)
+    {
+        if (ReferenceEquals(_lanTransfer, window)) _lanTransfer = null;
+    }
 
     protected override void OnStartup(System.Windows.StartupEventArgs e)
     {
@@ -72,6 +90,14 @@ public partial class App : System.Windows.Application, IAppServiceHost
     public async Task ShutdownAsync()
     {
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0) return;
+        // The LAN listener goes down first: it is the one thing here a machine on another desk can still be
+        // writing to, and a shutdown that leaves it bound answers requests with a half-stopped process behind them.
+        try
+        {
+            var lan = _lanTransfer;
+            if (lan is not null) await lan.ShutdownAsync();
+        }
+        catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop the LAN transfer listener during shutdown: " + ex); }
         // Mounts must come down BEFORE the SFTP service: SFTP may be backed by a remote
         // we just mounted, so leaving the SFTP child process alive while we tear down
         // the mount would orphan the underlying connection. Any failures here are
@@ -139,6 +165,8 @@ public partial class App : System.Windows.Application, IAppServiceHost
         {
             if (Volatile.Read(ref _shutdownStarted) == 0)
             {
+                try { _lanTransfer?.ShutdownAsync().GetAwaiter().GetResult(); }
+                catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop the LAN transfer listener during final exit: " + ex); }
                 try { _mountService.StopAllFengSyncMountsAsync().GetAwaiter().GetResult(); }
                 catch (Exception ex) { System.Diagnostics.Trace.TraceError("Unable to stop Feng Sync mounts during final exit: " + ex); }
                 try { _sftpService.StopAsync().GetAwaiter().GetResult(); }

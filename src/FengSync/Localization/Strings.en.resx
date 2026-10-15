@@ -779,6 +779,378 @@ Save anyway?</value>
   <data name="History.Upload" xml:space="preserve">
     <value>Upload</value>
   </data>
+  <data name="Lan.Accept" xml:space="preserve">
+    <value>Accept</value>
+  </data>
+  <data name="Lan.AddFiles" xml:space="preserve">
+    <value>Add files…</value>
+  </data>
+  <data name="Lan.AddFolder" xml:space="preserve">
+    <value>Add a folder…</value>
+  </data>
+  <data name="Lan.AddressPickHint" xml:space="preserve">
+    <value>The phone connects to whichever of these you pick, and the QR code follows. With a VPN or a virtual adapter, choose the LAN one.</value>
+  </data>
+  <data name="Lan.Addresses" xml:space="preserve">
+    <value>This computer's addresses</value>
+  </data>
+  <data name="Lan.AlreadyGone" xml:space="preserve">
+    <value>That device is no longer on the list</value>
+  </data>
+  <data name="Lan.ApplyPort" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="Lan.AskingFirstWrite" xml:space="preserve">
+    <value>Waiting for you to accept the first file from {0}</value>
+  </data>
+  <data name="Lan.AutoAcceptHint" xml:space="preserve">
+    <value>With this off, even a trusted device is asked one file at a time. A stranger's first file always asks.</value>
+  </data>
+  <data name="Lan.AutoAcceptOff" xml:space="preserve">
+    <value>Every file from a trusted device will be asked</value>
+  </data>
+  <data name="Lan.AutoAcceptOn" xml:space="preserve">
+    <value>Trusted devices are accepted automatically</value>
+  </data>
+  <data name="Lan.AutoAcceptTrusted" xml:space="preserve">
+    <value>Accept files from trusted devices automatically</value>
+  </data>
+  <data name="Lan.Basket" xml:space="preserve">
+    <value>Send basket</value>
+  </data>
+  <data name="Lan.BasketAdded" xml:space="preserve">
+    <value>Added {0} item(s)</value>
+  </data>
+  <data name="Lan.BasketCleared" xml:space="preserve">
+    <value>The basket is empty</value>
+  </data>
+  <data name="Lan.BasketEmptySend" xml:space="preserve">
+    <value>The send basket is empty</value>
+  </data>
+  <data name="Lan.BasketFile" xml:space="preserve">
+    <value>File · {0}</value>
+  </data>
+  <data name="Lan.BasketFolder" xml:space="preserve">
+    <value>Folder (the other side receives a zip)</value>
+  </data>
+  <data name="Lan.BasketNothingAdded" xml:space="preserve">
+    <value>Nothing new was added</value>
+  </data>
+  <data name="Lan.BasketRemoved" xml:space="preserve">
+    <value>Removed {0} item(s)</value>
+  </data>
+  <data name="Lan.BasketScope" xml:space="preserve">
+    <value>Only what you put here can be read by the other side. The basket is emptied when the window closes and is never written to disk.</value>
+  </data>
+  <data name="Lan.CheckPeer" xml:space="preserve">
+    <value>Is it there?</value>
+  </data>
+  <data name="Lan.ChooseDirectory" xml:space="preserve">
+    <value>Choose a folder…</value>
+  </data>
+  <data name="Lan.ClearBasket" xml:space="preserve">
+    <value>Empty</value>
+  </data>
+  <data name="Lan.CodeExpires" xml:space="preserve">
+    <value>{0} seconds left</value>
+  </data>
+  <data name="Lan.CodeRegenerated" xml:space="preserve">
+    <value>New pairing code: {0}</value>
+  </data>
+  <data name="Lan.CodeRenewing" xml:space="preserve">
+    <value>Replacing the code…</value>
+  </data>
+  <data name="Lan.Computers" xml:space="preserve">
+    <value>Computers found</value>
+  </data>
+  <data name="Lan.Decline" xml:space="preserve">
+    <value>Decline</value>
+  </data>
+  <data name="Lan.DeclinedThatFile" xml:space="preserve">
+    <value>That transfer was declined</value>
+  </data>
+  <data name="Lan.Direction.Received" xml:space="preserve">
+    <value>Received</value>
+  </data>
+  <data name="Lan.Direction.Sent" xml:space="preserve">
+    <value>Sent</value>
+  </data>
+  <data name="Lan.DirectoryUnwritable" xml:space="preserve">
+    <value>The receive folder cannot be written to, so nothing is listening</value>
+  </data>
+  <data name="Lan.DiscoveryUnavailable" xml:space="preserve">
+    <value>LAN discovery did not start; you can still type an address</value>
+  </data>
+  <data name="Lan.Firewall.Added" xml:space="preserve">
+    <value>The firewall rule was added</value>
+  </data>
+  <data name="Lan.Firewall.Allowed" xml:space="preserve">
+    <value>The firewall already allows it</value>
+  </data>
+  <data name="Lan.Firewall.Declined" xml:space="preserve">
+    <value>You cancelled, so a phone still cannot connect</value>
+  </data>
+  <data name="Lan.Firewall.FailedElevated" xml:space="preserve">
+    <value>Elevation was refused, so the rule was not added</value>
+  </data>
+  <data name="Lan.Firewall.FailedUnknown" xml:space="preserve">
+    <value>The firewall rule could not be checked</value>
+  </data>
+  <data name="Lan.Firewall.Missing" xml:space="preserve">
+    <value>No firewall rule yet; a phone may not be able to connect</value>
+  </data>
+  <data name="Lan.FirewallAdd" xml:space="preserve">
+    <value>Allow access from the LAN</value>
+  </data>
+  <data name="Lan.Forget" xml:space="preserve">
+    <value>Forget</value>
+  </data>
+  <data name="Lan.Forgotten" xml:space="preserve">
+    <value>{0} is no longer trusted</value>
+  </data>
+  <data name="Lan.History" xml:space="preserve">
+    <value>History</value>
+  </data>
+  <data name="Lan.KindComputer" xml:space="preserve">
+    <value>Computer</value>
+  </data>
+  <data name="Lan.KindPhone" xml:space="preserve">
+    <value>Phone</value>
+  </data>
+  <data name="Lan.KindUnknown" xml:space="preserve">
+    <value>Unknown device</value>
+  </data>
+  <data name="Lan.Listening" xml:space="preserve">
+    <value>Listening on port {0}</value>
+  </data>
+  <data name="Lan.ManualPeer" xml:space="preserve">
+    <value>Manual address</value>
+  </data>
+  <data name="Lan.ManualPeerHint" xml:space="preserve">
+    <value>Format: ip:port. Some networks (AP isolation) block both discovery and the connection, so this box is the only way through.</value>
+  </data>
+  <data name="Lan.NoComputersFound" xml:space="preserve">
+    <value>No other computer answered; type the address below instead</value>
+  </data>
+  <data name="Lan.NoDirectory" xml:space="preserve">
+    <value>The receive folder does not exist, so nothing is listening</value>
+  </data>
+  <data name="Lan.NoHistory" xml:space="preserve">
+    <value>Nothing has moved over the LAN yet</value>
+  </data>
+  <data name="Lan.NoTrustedDevices" xml:space="preserve">
+    <value>Nothing has been paired with yet</value>
+  </data>
+  <data name="Lan.NothingToAnswer" xml:space="preserve">
+    <value>Nothing is waiting for an answer</value>
+  </data>
+  <data name="Lan.OfferFile" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Lan.OfferFolder" xml:space="preserve">
+    <value>Folder {0}</value>
+  </data>
+  <data name="Lan.PairPeer" xml:space="preserve">
+    <value>Pair with their code</value>
+  </data>
+  <data name="Lan.PairRefused" xml:space="preserve">
+    <value>Pairing with {0} did not work: {1}</value>
+  </data>
+  <data name="Lan.Paired" xml:space="preserve">
+    <value>{0} is now a trusted device</value>
+  </data>
+  <data name="Lan.Pairing" xml:space="preserve">
+    <value>Pairing</value>
+  </data>
+  <data name="Lan.PairingHint" xml:space="preserve">
+    <value>Scan the code below with a phone, or type this code on the other computer. A code works once and goes stale after two minutes.</value>
+  </data>
+  <data name="Lan.PeerAddressInvalid" xml:space="preserve">
+    <value>Please write the address as ip:port</value>
+  </data>
+  <data name="Lan.PeerAnswers" xml:space="preserve">
+    <value>{0} · {1} · {2}</value>
+  </data>
+  <data name="Lan.PeerListFailed" xml:space="preserve">
+    <value>The trusted device list could not be read</value>
+  </data>
+  <data name="Lan.PeerNoAnswer" xml:space="preserve">
+    <value>That address did not answer</value>
+  </data>
+  <data name="Lan.PeerPaired" xml:space="preserve">
+    <value>Paired with {0}</value>
+  </data>
+  <data name="Lan.PeerRow" xml:space="preserve">
+    <value>{0}:{1} · {2}</value>
+  </data>
+  <data name="Lan.Pending" xml:space="preserve">
+    <value>Waiting for you</value>
+  </data>
+  <data name="Lan.PendingHint" xml:space="preserve">
+    <value>A stranger's first file is only written after you accept it here.</value>
+  </data>
+  <data name="Lan.PendingRow" xml:space="preserve">
+    <value>{0} wants to send</value>
+  </data>
+  <data name="Lan.PickReceiveDirectory" xml:space="preserve">
+    <value>Choose the receive folder first</value>
+  </data>
+  <data name="Lan.Port" xml:space="preserve">
+    <value>Port</value>
+  </data>
+  <data name="Lan.PortBusy" xml:space="preserve">
+    <value>The port is taken; choose another</value>
+  </data>
+  <data name="Lan.PortHint" xml:space="preserve">
+    <value>The firewall rule names this port. After a change the rule has to be added again and the phone has to pair again.</value>
+  </data>
+  <data name="Lan.PortRange" xml:space="preserve">
+    <value>The port must be between {0} and {1}</value>
+  </data>
+  <data name="Lan.ProgressIn" xml:space="preserve">
+    <value>Receiving {0} from {1} ({2} / {3})</value>
+  </data>
+  <data name="Lan.ProgressOut" xml:space="preserve">
+    <value>Sending {0} to {1} ({2} / {3})</value>
+  </data>
+  <data name="Lan.ProgressUp" xml:space="preserve">
+    <value>Reading {0} ({1} / {2})</value>
+  </data>
+  <data name="Lan.QrFailed" xml:space="preserve">
+    <value>The QR code could not be drawn; the pairing code still works</value>
+  </data>
+  <data name="Lan.ReceiveDirectory" xml:space="preserve">
+    <value>Receive folder</value>
+  </data>
+  <data name="Lan.Received" xml:space="preserve">
+    <value>Received {0} · {1} · from {2}</value>
+  </data>
+  <data name="Lan.ReceivedFolder" xml:space="preserve">
+    <value>Directory {0} is in place · from {1}</value>
+  </data>
+  <data name="Lan.ReceivedRenamed" xml:space="preserve">
+    <value>That name was taken, so it landed as {0} · {1} · from {2}</value>
+  </data>
+  <data name="Lan.Refuse.BadCode" xml:space="preserve">
+    <value>The pairing code is not the armed one</value>
+  </data>
+  <data name="Lan.Refuse.BadRequest" xml:space="preserve">
+    <value>The request itself was unusable</value>
+  </data>
+  <data name="Lan.Refuse.CodeExpired" xml:space="preserve">
+    <value>The pairing code had expired</value>
+  </data>
+  <data name="Lan.Refuse.Conflict" xml:space="preserve">
+    <value>A file of that name is already there; rename it and send again</value>
+  </data>
+  <data name="Lan.Refuse.Declined" xml:space="preserve">
+    <value>Somebody looked at it and said no</value>
+  </data>
+  <data name="Lan.Refuse.IdentityChanged" xml:space="preserve">
+    <value>This device's identity changed, so it has to pair again</value>
+  </data>
+  <data name="Lan.Refuse.IncompleteBody" xml:space="preserve">
+    <value>The body arrived short</value>
+  </data>
+  <data name="Lan.Refuse.NameReserved" xml:space="preserve">
+    <value>Windows reserves that name</value>
+  </data>
+  <data name="Lan.Refuse.None" xml:space="preserve">
+    <value>Nothing was refused</value>
+  </data>
+  <data name="Lan.Refuse.NotFound" xml:space="preserve">
+    <value>That item is not in the basket</value>
+  </data>
+  <data name="Lan.Refuse.PathTooLong" xml:space="preserve">
+    <value>The path is too long</value>
+  </data>
+  <data name="Lan.Refuse.PathUnsafe" xml:space="preserve">
+    <value>The path is not safe, so the whole request was refused</value>
+  </data>
+  <data name="Lan.Refuse.PortUnavailable" xml:space="preserve">
+    <value>Another program holds that port</value>
+  </data>
+  <data name="Lan.Refuse.RateLimited" xml:space="preserve">
+    <value>Too many wrong codes; it has to wait a minute</value>
+  </data>
+  <data name="Lan.Refuse.Unpaired" xml:space="preserve">
+    <value>This device is not paired yet</value>
+  </data>
+  <data name="Lan.Refuse.VerificationFailed" xml:space="preserve">
+    <value>The size or the date on disk is not what was declared</value>
+  </data>
+  <data name="Lan.RefusedWrite" xml:space="preserve">
+    <value>Refused a write from {0}: {1}</value>
+  </data>
+  <data name="Lan.Regenerate" xml:space="preserve">
+    <value>New code</value>
+  </data>
+  <data name="Lan.Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Lan.Row.Summary" xml:space="preserve">
+    <value>{0} {1} · {2} · {3}</value>
+  </data>
+  <data name="Lan.SendCancelled" xml:space="preserve">
+    <value>The send was cancelled</value>
+  </data>
+  <data name="Lan.SendDone" xml:space="preserve">
+    <value>Sent {0} item(s), {1}, to {2}</value>
+  </data>
+  <data name="Lan.SendFailed" xml:space="preserve">
+    <value>{0} failed to send: {1}</value>
+  </data>
+  <data name="Lan.SendToPeer" xml:space="preserve">
+    <value>Send the selection</value>
+  </data>
+  <data name="Lan.Sent" xml:space="preserve">
+    <value>Sent {0} · {1} · to {2}</value>
+  </data>
+  <data name="Lan.SentArchive" xml:space="preserve">
+    <value>{0} was zipped and sent to {1}; an archive cannot be resumed</value>
+  </data>
+  <data name="Lan.SettingsFailed" xml:space="preserve">
+    <value>The settings could not be read, so the defaults were used:</value>
+  </data>
+  <data name="Lan.SettingsSaveFailed" xml:space="preserve">
+    <value>The settings were not saved:</value>
+  </data>
+  <data name="Lan.SizeUnknown" xml:space="preserve">
+    <value>size unknown</value>
+  </data>
+  <data name="Lan.StartFailed" xml:space="preserve">
+    <value>The listener did not start:</value>
+  </data>
+  <data name="Lan.State.Cancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
+  <data name="Lan.State.Completed" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="Lan.State.Declined" xml:space="preserve">
+    <value>Declined</value>
+  </data>
+  <data name="Lan.State.Failed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Lan.Title" xml:space="preserve">
+    <value>LAN quick transfer</value>
+  </data>
+  <data name="Lan.TrustedDevices" xml:space="preserve">
+    <value>Trusted devices</value>
+  </data>
+  <data name="Lan.TrustedRow" xml:space="preserve">
+    <value>{0} · {1} · last seen {2}</value>
+  </data>
+  <data name="Lan.UnnamedDevice" xml:space="preserve">
+    <value>A device at {0}</value>
+  </data>
+  <data name="Lan.WaitingForFiles" xml:space="preserve">
+    <value>Nothing is transferring</value>
+  </data>
+  <data name="Lan.WindowName" xml:space="preserve">
+    <value>LAN quick transfer window</value>
+  </data>
   <data name="Main.About" xml:space="preserve">
     <value>About</value>
   </data>
@@ -1015,6 +1387,9 @@ Started: {1:yyyy-MM-dd HH:mm:ss}
   </data>
   <data name="Main.KindUpload" xml:space="preserve">
     <value>Upload</value>
+  </data>
+  <data name="Main.LanTransfer" xml:space="preserve">
+    <value>LAN quick transfer</value>
   </data>
   <data name="Main.LastRun" xml:space="preserve">
     <value>Last run · {0:yyyy-MM-dd HH:mm}</value>

@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using FengSync.Core;
 
 namespace FengSync.Lan;
 
@@ -44,12 +43,13 @@ public static class LanZipStream
         // An entry that is never opened lands as a zero-length name, which is exactly what a directory is.
         archive.CreateEntry($"{folder}/", CompressionLevel.NoCompression);
 
-        foreach (var (path, isDirectory) in Walk(root))
+        foreach (var entry in LanFolderTree.Entries(root))
         {
             ct.ThrowIfCancellationRequested();
-            var name = $"{folder}/{Path.GetRelativePath(root, path).Replace('\\', '/')}";
+            var path = Path.Combine(root, entry.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            var name = $"{folder}/{entry.RelativePath}";
 
-            if (isDirectory)
+            if (entry.IsDirectory)
             {
                 // Named only when it holds nothing: a directory with children arrives through them, and an
                 // empty one would otherwise vanish — the same reason the inbound path has its own mkdir.
@@ -60,39 +60,10 @@ public static class LanZipStream
 
             // Fastest rather than Optimal: this pass runs while a phone waits, and these bytes are already on
             // local disk, where deflating a photo or a video costs time and buys nothing.
-            var entry = archive.CreateEntry(name, CompressionLevel.Fastest);
+            var archiveEntry = archive.CreateEntry(name, CompressionLevel.Fastest);
             await using var source = File.OpenRead(path);
-            await using var target = entry.Open();
+            await using var target = archiveEntry.Open();
             await source.CopyToAsync(target, ct).ConfigureAwait(false);
-        }
-    }
-
-    /// <summary>
-    /// Every packable entry under a root, deepest last, in a stable order.
-    /// </summary>
-    /// <remarks>
-    /// The exclusions are the ones a local scan already applies, so a zip of a synced folder never hands a peer
-    /// this application's own partial files: a sorted order is what makes the entry list something a test can
-    /// pin, and skipping a reparse point is what stops a junction from packing somebody else's tree twice.
-    /// </remarks>
-    private static IEnumerable<(string Path, bool IsDirectory)> Walk(string root)
-    {
-        foreach (var path in Directory.EnumerateFileSystemEntries(root).OrderBy(entry => entry, StringComparer.Ordinal))
-        {
-            var name = Path.GetFileName(path);
-            if (name.Length == 0 || SyncInternalPaths.IsExcludedFromScan(name)) continue;
-
-            var attributes = File.GetAttributes(path);
-            if (attributes.HasFlag(FileAttributes.System) || attributes.HasFlag(FileAttributes.ReparsePoint)) continue;
-
-            if (!attributes.HasFlag(FileAttributes.Directory))
-            {
-                yield return (path, false);
-                continue;
-            }
-
-            yield return (path, true);
-            foreach (var child in Walk(path)) yield return child;
         }
     }
 }

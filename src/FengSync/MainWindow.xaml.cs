@@ -724,6 +724,9 @@ public partial class MainWindow : Window
         Status.Text = Tr.Format("Main.EndpointAddedToSide", resolvedSide, picker.ResultUri);
     }
     private void ManageRemoteEndpoints_Click(object sender, RoutedEventArgs e) => new RemoteEndpointManagerWindow { Owner = this }.ShowDialog();
+    // Non-modal on purpose: the listener lives only while this window is open, and a dialog would freeze the
+    // profiles page for as long as a phone is deciding what to send.
+    private void LanTransfer_Click(object sender, RoutedEventArgs e) => LanTransferWindow.ShowOrActivate(this, (App)Application.Current);
     private void OpenBatchRun_Click(object sender, RoutedEventArgs e)
     {
         if (_profiles.Count == 0) { Status.Text = Tr.F("Main.NoRunnableProfile"); return; }

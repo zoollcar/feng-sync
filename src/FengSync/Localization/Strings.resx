@@ -779,6 +779,378 @@ Rclone：MIT License</value>
   <data name="History.Upload" xml:space="preserve">
     <value>上传</value>
   </data>
+  <data name="Lan.Accept" xml:space="preserve">
+    <value>同意</value>
+  </data>
+  <data name="Lan.AddFiles" xml:space="preserve">
+    <value>添加文件…</value>
+  </data>
+  <data name="Lan.AddFolder" xml:space="preserve">
+    <value>添加文件夹…</value>
+  </data>
+  <data name="Lan.AddressPickHint" xml:space="preserve">
+    <value>手机连哪一个由这里选，二维码跟着它重画。装了 VPN 或虚拟网卡时，请挑局域网那一条。</value>
+  </data>
+  <data name="Lan.Addresses" xml:space="preserve">
+    <value>本机地址</value>
+  </data>
+  <data name="Lan.AlreadyGone" xml:space="preserve">
+    <value>这台设备已经不在这份列表里了</value>
+  </data>
+  <data name="Lan.ApplyPort" xml:space="preserve">
+    <value>应用</value>
+  </data>
+  <data name="Lan.AskingFirstWrite" xml:space="preserve">
+    <value>正在等你同意 {0} 的第一笔</value>
+  </data>
+  <data name="Lan.AutoAcceptHint" xml:space="preserve">
+    <value>关掉后，受信设备也要一笔一笔点同意。陌生设备的第一笔始终要点。</value>
+  </data>
+  <data name="Lan.AutoAcceptOff" xml:space="preserve">
+    <value>已设为逐笔确认</value>
+  </data>
+  <data name="Lan.AutoAcceptOn" xml:space="preserve">
+    <value>已设为自动同意</value>
+  </data>
+  <data name="Lan.AutoAcceptTrusted" xml:space="preserve">
+    <value>受信设备发来的文件自动同意</value>
+  </data>
+  <data name="Lan.Basket" xml:space="preserve">
+    <value>发送篮</value>
+  </data>
+  <data name="Lan.BasketAdded" xml:space="preserve">
+    <value>已加入 {0} 项</value>
+  </data>
+  <data name="Lan.BasketCleared" xml:space="preserve">
+    <value>发送篮已清空</value>
+  </data>
+  <data name="Lan.BasketEmptySend" xml:space="preserve">
+    <value>发送篮是空的，先拖进来</value>
+  </data>
+  <data name="Lan.BasketFile" xml:space="preserve">
+    <value>文件 · {0}</value>
+  </data>
+  <data name="Lan.BasketFolder" xml:space="preserve">
+    <value>文件夹（对方收到的是打包）</value>
+  </data>
+  <data name="Lan.BasketNothingAdded" xml:space="preserve">
+    <value>没有新内容加入</value>
+  </data>
+  <data name="Lan.BasketRemoved" xml:space="preserve">
+    <value>已移出 {0} 项</value>
+  </data>
+  <data name="Lan.BasketScope" xml:space="preserve">
+    <value>只有放进这里的内容能被对方读到。关窗即清空，不落盘。</value>
+  </data>
+  <data name="Lan.CheckPeer" xml:space="preserve">
+    <value>先看它在不在</value>
+  </data>
+  <data name="Lan.ChooseDirectory" xml:space="preserve">
+    <value>选择目录…</value>
+  </data>
+  <data name="Lan.ClearBasket" xml:space="preserve">
+    <value>清空</value>
+  </data>
+  <data name="Lan.CodeExpires" xml:space="preserve">
+    <value>剩余 {0} 秒</value>
+  </data>
+  <data name="Lan.CodeRegenerated" xml:space="preserve">
+    <value>新配对码：{0}</value>
+  </data>
+  <data name="Lan.CodeRenewing" xml:space="preserve">
+    <value>正在换新码…</value>
+  </data>
+  <data name="Lan.Computers" xml:space="preserve">
+    <value>发现的电脑</value>
+  </data>
+  <data name="Lan.Decline" xml:space="preserve">
+    <value>拒绝</value>
+  </data>
+  <data name="Lan.DeclinedThatFile" xml:space="preserve">
+    <value>已拒绝这一笔</value>
+  </data>
+  <data name="Lan.Direction.Received" xml:space="preserve">
+    <value>收到</value>
+  </data>
+  <data name="Lan.Direction.Sent" xml:space="preserve">
+    <value>发出</value>
+  </data>
+  <data name="Lan.DirectoryUnwritable" xml:space="preserve">
+    <value>接收目录写不进去，监听没有启动</value>
+  </data>
+  <data name="Lan.DiscoveryUnavailable" xml:space="preserve">
+    <value>局域网发现没能起来，仍可手动填地址</value>
+  </data>
+  <data name="Lan.Firewall.Added" xml:space="preserve">
+    <value>已添加防火墙规则</value>
+  </data>
+  <data name="Lan.Firewall.Allowed" xml:space="preserve">
+    <value>防火墙已放行</value>
+  </data>
+  <data name="Lan.Firewall.Declined" xml:space="preserve">
+    <value>你取消了，手机仍连不上</value>
+  </data>
+  <data name="Lan.Firewall.FailedElevated" xml:space="preserve">
+    <value>没有取得管理员权限，规则没加上</value>
+  </data>
+  <data name="Lan.Firewall.FailedUnknown" xml:space="preserve">
+    <value>防火墙规则检查失败</value>
+  </data>
+  <data name="Lan.Firewall.Missing" xml:space="preserve">
+    <value>还没有防火墙规则，手机可能连不上</value>
+  </data>
+  <data name="Lan.FirewallAdd" xml:space="preserve">
+    <value>允许局域网访问</value>
+  </data>
+  <data name="Lan.Forget" xml:space="preserve">
+    <value>取消信任</value>
+  </data>
+  <data name="Lan.Forgotten" xml:space="preserve">
+    <value>已取消对 {0} 的信任</value>
+  </data>
+  <data name="Lan.History" xml:space="preserve">
+    <value>历史</value>
+  </data>
+  <data name="Lan.KindComputer" xml:space="preserve">
+    <value>电脑</value>
+  </data>
+  <data name="Lan.KindPhone" xml:space="preserve">
+    <value>手机</value>
+  </data>
+  <data name="Lan.KindUnknown" xml:space="preserve">
+    <value>未知设备</value>
+  </data>
+  <data name="Lan.Listening" xml:space="preserve">
+    <value>正在监听端口 {0}</value>
+  </data>
+  <data name="Lan.ManualPeer" xml:space="preserve">
+    <value>手动地址</value>
+  </data>
+  <data name="Lan.ManualPeerHint" xml:space="preserve">
+    <value>写成 ip:端口。有些网络（AP 隔离）拦得住发现也拦得住连接，这一栏是唯一的兜底。</value>
+  </data>
+  <data name="Lan.NoComputersFound" xml:space="preserve">
+    <value>没发现其他电脑，可直接填下面的地址</value>
+  </data>
+  <data name="Lan.NoDirectory" xml:space="preserve">
+    <value>接收目录不存在，监听没有启动</value>
+  </data>
+  <data name="Lan.NoHistory" xml:space="preserve">
+    <value>还没有通过局域网收发的记录</value>
+  </data>
+  <data name="Lan.NoTrustedDevices" xml:space="preserve">
+    <value>还没有配对过的设备</value>
+  </data>
+  <data name="Lan.NothingToAnswer" xml:space="preserve">
+    <value>没有待确认的传输</value>
+  </data>
+  <data name="Lan.OfferFile" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Lan.OfferFolder" xml:space="preserve">
+    <value>文件夹 {0}</value>
+  </data>
+  <data name="Lan.PairPeer" xml:space="preserve">
+    <value>用对方的码配对</value>
+  </data>
+  <data name="Lan.PairRefused" xml:space="preserve">
+    <value>与 {0} 配对没通过：{1}</value>
+  </data>
+  <data name="Lan.Paired" xml:space="preserve">
+    <value>{0} 现在是受信设备</value>
+  </data>
+  <data name="Lan.Pairing" xml:space="preserve">
+    <value>配对</value>
+  </data>
+  <data name="Lan.PairingHint" xml:space="preserve">
+    <value>手机扫下面的二维码，或在另一台电脑上输入这个码。码只用一次，两分钟就作废。</value>
+  </data>
+  <data name="Lan.PeerAddressInvalid" xml:space="preserve">
+    <value>地址要写成 ip:端口</value>
+  </data>
+  <data name="Lan.PeerAnswers" xml:space="preserve">
+    <value>{0} · {1} · {2}</value>
+  </data>
+  <data name="Lan.PeerListFailed" xml:space="preserve">
+    <value>受信设备列表没读到</value>
+  </data>
+  <data name="Lan.PeerNoAnswer" xml:space="preserve">
+    <value>那个地址没有回答</value>
+  </data>
+  <data name="Lan.PeerPaired" xml:space="preserve">
+    <value>已与 {0} 配对</value>
+  </data>
+  <data name="Lan.PeerRow" xml:space="preserve">
+    <value>{0}:{1} · {2}</value>
+  </data>
+  <data name="Lan.Pending" xml:space="preserve">
+    <value>等你确认</value>
+  </data>
+  <data name="Lan.PendingHint" xml:space="preserve">
+    <value>陌生设备的第一笔要在这里点同意，字节才会落盘。</value>
+  </data>
+  <data name="Lan.PendingRow" xml:space="preserve">
+    <value>{0} 想写入</value>
+  </data>
+  <data name="Lan.PickReceiveDirectory" xml:space="preserve">
+    <value>请先选择接收目录</value>
+  </data>
+  <data name="Lan.Port" xml:space="preserve">
+    <value>端口</value>
+  </data>
+  <data name="Lan.PortBusy" xml:space="preserve">
+    <value>端口被占用，请换一个</value>
+  </data>
+  <data name="Lan.PortHint" xml:space="preserve">
+    <value>防火墙规则里写的是这个端口。换端口后规则要重新加，手机也得重新配对。</value>
+  </data>
+  <data name="Lan.PortRange" xml:space="preserve">
+    <value>端口要在 {0} 到 {1} 之间</value>
+  </data>
+  <data name="Lan.ProgressIn" xml:space="preserve">
+    <value>接收 {0} ← {1}（{2} / {3}）</value>
+  </data>
+  <data name="Lan.ProgressOut" xml:space="preserve">
+    <value>发送 {0} → {1}（{2} / {3}）</value>
+  </data>
+  <data name="Lan.ProgressUp" xml:space="preserve">
+    <value>读出 {0}（{1} / {2}）</value>
+  </data>
+  <data name="Lan.QrFailed" xml:space="preserve">
+    <value>二维码没能画出来，配对码仍可用</value>
+  </data>
+  <data name="Lan.ReceiveDirectory" xml:space="preserve">
+    <value>接收目录</value>
+  </data>
+  <data name="Lan.Received" xml:space="preserve">
+    <value>已收到 {0} · {1} · 来自 {2}</value>
+  </data>
+  <data name="Lan.ReceivedFolder" xml:space="preserve">
+    <value>已建好目录 {0} · 来自 {1}</value>
+  </data>
+  <data name="Lan.ReceivedRenamed" xml:space="preserve">
+    <value>同名已占，存成了 {0} · {1} · 来自 {2}</value>
+  </data>
+  <data name="Lan.Refuse.BadCode" xml:space="preserve">
+    <value>配对码不对</value>
+  </data>
+  <data name="Lan.Refuse.BadRequest" xml:space="preserve">
+    <value>请求本身不完整</value>
+  </data>
+  <data name="Lan.Refuse.CodeExpired" xml:space="preserve">
+    <value>配对码已过期</value>
+  </data>
+  <data name="Lan.Refuse.Conflict" xml:space="preserve">
+    <value>同名文件已存在，请改名后重发</value>
+  </data>
+  <data name="Lan.Refuse.Declined" xml:space="preserve">
+    <value>人看了一眼，拒绝了</value>
+  </data>
+  <data name="Lan.Refuse.IdentityChanged" xml:space="preserve">
+    <value>设备身份变了，要重新配对</value>
+  </data>
+  <data name="Lan.Refuse.IncompleteBody" xml:space="preserve">
+    <value>数据没传完</value>
+  </data>
+  <data name="Lan.Refuse.NameReserved" xml:space="preserve">
+    <value>名字是 Windows 的保留名</value>
+  </data>
+  <data name="Lan.Refuse.None" xml:space="preserve">
+    <value>没有被拒的事</value>
+  </data>
+  <data name="Lan.Refuse.NotFound" xml:space="preserve">
+    <value>篮子里没有这一项</value>
+  </data>
+  <data name="Lan.Refuse.PathTooLong" xml:space="preserve">
+    <value>路径太长</value>
+  </data>
+  <data name="Lan.Refuse.PathUnsafe" xml:space="preserve">
+    <value>路径不安全，整笔拒绝</value>
+  </data>
+  <data name="Lan.Refuse.PortUnavailable" xml:space="preserve">
+    <value>端口被别的程序占着</value>
+  </data>
+  <data name="Lan.Refuse.RateLimited" xml:space="preserve">
+    <value>错码次数太多，先停一会儿</value>
+  </data>
+  <data name="Lan.Refuse.Unpaired" xml:space="preserve">
+    <value>这台设备还没配对</value>
+  </data>
+  <data name="Lan.Refuse.VerificationFailed" xml:space="preserve">
+    <value>落地的大小或修改时间与声明不符</value>
+  </data>
+  <data name="Lan.RefusedWrite" xml:space="preserve">
+    <value>已拒绝 {0} 的写入：{1}</value>
+  </data>
+  <data name="Lan.Regenerate" xml:space="preserve">
+    <value>换一个新码</value>
+  </data>
+  <data name="Lan.Remove" xml:space="preserve">
+    <value>移出篮子</value>
+  </data>
+  <data name="Lan.Row.Summary" xml:space="preserve">
+    <value>{0} {1} · {2} · {3}</value>
+  </data>
+  <data name="Lan.SendCancelled" xml:space="preserve">
+    <value>发送已取消</value>
+  </data>
+  <data name="Lan.SendDone" xml:space="preserve">
+    <value>已发送 {0} 项 · {1} 给 {2}</value>
+  </data>
+  <data name="Lan.SendFailed" xml:space="preserve">
+    <value>{0} 发送失败：{1}</value>
+  </data>
+  <data name="Lan.SendToPeer" xml:space="preserve">
+    <value>把选中的发给它</value>
+  </data>
+  <data name="Lan.Sent" xml:space="preserve">
+    <value>已发出 {0} · {1} · 给 {2}</value>
+  </data>
+  <data name="Lan.SentArchive" xml:space="preserve">
+    <value>已把 {0} 打包发给 {1}，压缩包不能续传</value>
+  </data>
+  <data name="Lan.SettingsFailed" xml:space="preserve">
+    <value>设置没读到，用了默认值：</value>
+  </data>
+  <data name="Lan.SettingsSaveFailed" xml:space="preserve">
+    <value>设置没写回：</value>
+  </data>
+  <data name="Lan.SizeUnknown" xml:space="preserve">
+    <value>大小未知</value>
+  </data>
+  <data name="Lan.StartFailed" xml:space="preserve">
+    <value>监听没能起来：</value>
+  </data>
+  <data name="Lan.State.Cancelled" xml:space="preserve">
+    <value>已取消</value>
+  </data>
+  <data name="Lan.State.Completed" xml:space="preserve">
+    <value>已完成</value>
+  </data>
+  <data name="Lan.State.Declined" xml:space="preserve">
+    <value>已拒绝</value>
+  </data>
+  <data name="Lan.State.Failed" xml:space="preserve">
+    <value>失败</value>
+  </data>
+  <data name="Lan.Title" xml:space="preserve">
+    <value>局域网快传</value>
+  </data>
+  <data name="Lan.TrustedDevices" xml:space="preserve">
+    <value>受信设备</value>
+  </data>
+  <data name="Lan.TrustedRow" xml:space="preserve">
+    <value>{0} · {1} · 上次联系 {2}</value>
+  </data>
+  <data name="Lan.UnnamedDevice" xml:space="preserve">
+    <value>来自 {0} 的设备</value>
+  </data>
+  <data name="Lan.WaitingForFiles" xml:space="preserve">
+    <value>没有正在进行的传输</value>
+  </data>
+  <data name="Lan.WindowName" xml:space="preserve">
+    <value>局域网快传窗口</value>
+  </data>
   <data name="Main.About" xml:space="preserve">
     <value>关于</value>
   </data>
@@ -1015,6 +1387,9 @@ Rclone：MIT License</value>
   </data>
   <data name="Main.KindUpload" xml:space="preserve">
     <value>上传</value>
+  </data>
+  <data name="Main.LanTransfer" xml:space="preserve">
+    <value>局域网快传</value>
   </data>
   <data name="Main.LastRun" xml:space="preserve">
     <value>上次运行 · {0:yyyy-MM-dd HH:mm}</value>

@@ -98,9 +98,17 @@
 
     <!-- 底部：工具与设置入口 -->
     <StackPanel Grid.Row="4" Margin="20,12,20,16">
+     <Button x:Name="LanTransferButton" AutomationProperties.AutomationId="LanTransferButton"
+             Click="LanTransfer_Click" Style="{StaticResource TertiaryButtonStyle}"
+             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+      <DockPanel>
+        <fluent:FluentIcon DockPanel.Dock="Left" Icon="NetworkCheck" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Style="{StaticResource LibraryIconStyle}"/>
+       <TextBlock Text="{Binding [Main.LanTransfer], Source={l:Lang}}" VerticalAlignment="Center"/>
+      </DockPanel>
+     </Button>
      <Button x:Name="RemoteEndpointsButton" AutomationProperties.AutomationId="RemoteEndpointsButton"
              Click="ManageRemoteEndpoints_Click" Style="{StaticResource TertiaryButtonStyle}"
-             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,4,0,0">
       <DockPanel>
         <fluent:FluentIcon DockPanel.Dock="Left" Icon="Cloud" Width="20" Height="20" FontSize="20" Margin="0,0,10,0" Style="{StaticResource LibraryIconStyle}"/>
        <TextBlock Text="{Binding [Main.CloudManagement], Source={l:Lang}}" VerticalAlignment="Center"/>

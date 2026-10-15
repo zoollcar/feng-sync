@@ -1,0 +1,128 @@
+# ---- 局域网快传 (LanTransferWindow) ----
+# The window's own sentences. Nothing here is a warning about cleartext HTTP: the protocol is plain HTTP
+# because the token is the only credential and signing a request over a sniffable link protects nothing, and
+# that trade-off is documented in AGENTS.md rather than shown to the user on every open.
+Lan.Title	局域网快传	LAN quick transfer
+Lan.WindowName	局域网快传窗口	LAN quick transfer window
+Lan.Pairing	配对	Pairing
+Lan.PairingHint	手机扫下面的二维码，或在另一台电脑上输入这个码。码只用一次，两分钟就作废。	Scan the code below with a phone, or type this code on the other computer. A code works once and goes stale after two minutes.
+Lan.Regenerate	换一个新码	New code
+Lan.CodeExpires	剩余 {0} 秒	{0} seconds left
+Lan.CodeRenewing	正在换新码…	Replacing the code…
+Lan.CodeRegenerated	新配对码：{0}	New pairing code: {0}
+Lan.QrFailed	二维码没能画出来，配对码仍可用	The QR code could not be drawn; the pairing code still works
+Lan.Addresses	本机地址	This computer's addresses
+Lan.AddressPickHint	手机连哪一个由这里选，二维码跟着它重画。装了 VPN 或虚拟网卡时，请挑局域网那一条。	The phone connects to whichever of these you pick, and the QR code follows. With a VPN or a virtual adapter, choose the LAN one.
+Lan.Listening	正在监听端口 {0}	Listening on port {0}
+Lan.Port	端口	Port
+Lan.ApplyPort	应用	Apply
+Lan.PortHint	防火墙规则里写的是这个端口。换端口后规则要重新加，手机也得重新配对。	The firewall rule names this port. After a change the rule has to be added again and the phone has to pair again.
+Lan.PortRange	端口要在 {0} 到 {1} 之间	The port must be between {0} and {1}
+Lan.PortBusy	端口被占用，请换一个	The port is taken; choose another
+Lan.DiscoveryUnavailable	局域网发现没能起来，仍可手动填地址	LAN discovery did not start; you can still type an address
+Lan.FirewallAdd	允许局域网访问	Allow access from the LAN
+Lan.Firewall.Allowed	防火墙已放行	The firewall already allows it
+Lan.Firewall.Missing	还没有防火墙规则，手机可能连不上	No firewall rule yet; a phone may not be able to connect
+Lan.Firewall.Added	已添加防火墙规则	The firewall rule was added
+Lan.Firewall.Declined	你取消了，手机仍连不上	You cancelled, so a phone still cannot connect
+Lan.Firewall.FailedElevated	没有取得管理员权限，规则没加上	Elevation was refused, so the rule was not added
+Lan.Firewall.FailedUnknown	防火墙规则检查失败	The firewall rule could not be checked
+Lan.ReceiveDirectory	接收目录	Receive folder
+Lan.ChooseDirectory	选择目录…	Choose a folder…
+Lan.PickReceiveDirectory	请先选择接收目录	Choose the receive folder first
+Lan.NoDirectory	接收目录不存在，监听没有启动	The receive folder does not exist, so nothing is listening
+Lan.DirectoryUnwritable	接收目录写不进去，监听没有启动	The receive folder cannot be written to, so nothing is listening
+Lan.AutoAcceptTrusted	受信设备发来的文件自动同意	Accept files from trusted devices automatically
+Lan.AutoAcceptHint	关掉后，受信设备也要一笔一笔点同意。陌生设备的第一笔始终要点。	With this off, even a trusted device is asked one file at a time. A stranger's first file always asks.
+Lan.AutoAcceptOn	已设为自动同意	Trusted devices are accepted automatically
+Lan.AutoAcceptOff	已设为逐笔确认	Every file from a trusted device will be asked
+Lan.TrustedDevices	受信设备	Trusted devices
+Lan.TrustedRow	{0} · {1} · 上次联系 {2}	{0} · {1} · last seen {2}
+Lan.Forget	取消信任	Forget
+Lan.Forgotten	已取消对 {0} 的信任	{0} is no longer trusted
+Lan.AlreadyGone	这台设备已经不在这份列表里了	That device is no longer on the list
+Lan.NoTrustedDevices	还没有配对过的设备	Nothing has been paired with yet
+Lan.PeerListFailed	受信设备列表没读到	The trusted device list could not be read
+Lan.Basket	发送篮	Send basket
+Lan.BasketScope	只有放进这里的内容能被对方读到。关窗即清空，不落盘。	Only what you put here can be read by the other side. The basket is emptied when the window closes and is never written to disk.
+Lan.BasketFile	文件 · {0}	File · {0}
+Lan.BasketFolder	文件夹（对方收到的是打包）	Folder (the other side receives a zip)
+Lan.AddFiles	添加文件…	Add files…
+Lan.AddFolder	添加文件夹…	Add a folder…
+Lan.Remove	移出篮子	Remove
+Lan.ClearBasket	清空	Empty
+Lan.BasketAdded	已加入 {0} 项	Added {0} item(s)
+Lan.BasketNothingAdded	没有新内容加入	Nothing new was added
+Lan.BasketRemoved	已移出 {0} 项	Removed {0} item(s)
+Lan.BasketCleared	发送篮已清空	The basket is empty
+Lan.BasketEmptySend	发送篮是空的，先拖进来	The send basket is empty
+Lan.Computers	发现的电脑	Computers found
+Lan.NoComputersFound	没发现其他电脑，可直接填下面的地址	No other computer answered; type the address below instead
+Lan.PeerRow	{0}:{1} · {2}	{0}:{1} · {2}
+Lan.ManualPeer	手动地址	Manual address
+Lan.ManualPeerHint	写成 ip:端口。有些网络（AP 隔离）拦得住发现也拦得住连接，这一栏是唯一的兜底。	Format: ip:port. Some networks (AP isolation) block both discovery and the connection, so this box is the only way through.
+Lan.CheckPeer	先看它在不在	Is it there?
+Lan.PairPeer	用对方的码配对	Pair with their code
+Lan.SendToPeer	把选中的发给它	Send the selection
+Lan.PeerNoAnswer	那个地址没有回答	That address did not answer
+Lan.PeerAnswers	{0} · {1} · {2}	{0} · {1} · {2}
+Lan.PeerPaired	已与 {0} 配对	Paired with {0}
+Lan.PeerAddressInvalid	地址要写成 ip:端口	Please write the address as ip:port
+Lan.SendDone	已发送 {0} 项 · {1} 给 {2}	Sent {0} item(s), {1}, to {2}
+Lan.SendFailed	{0} 发送失败：{1}	{0} failed to send: {1}
+Lan.SendCancelled	发送已取消	The send was cancelled
+Lan.Pending	等你确认	Waiting for you
+Lan.PendingHint	陌生设备的第一笔要在这里点同意，字节才会落盘。	A stranger's first file is only written after you accept it here.
+Lan.PendingRow	{0} 想写入	{0} wants to send
+Lan.Accept	同意	Accept
+Lan.Decline	拒绝	Decline
+Lan.AskingFirstWrite	正在等你同意 {0} 的第一笔	Waiting for you to accept the first file from {0}
+Lan.NothingToAnswer	没有待确认的传输	Nothing is waiting for an answer
+Lan.DeclinedThatFile	已拒绝这一笔	That transfer was declined
+Lan.RefusedWrite	已拒绝 {0} 的写入：{1}	Refused a write from {0}: {1}
+Lan.Paired	{0} 现在是受信设备	{0} is now a trusted device
+Lan.PairRefused	与 {0} 配对没通过：{1}	Pairing with {0} did not work: {1}
+Lan.Received	已收到 {0} · {1} · 来自 {2}	Received {0} · {1} · from {2}
+Lan.ReceivedRenamed	同名已占，存成了 {0} · {1} · 来自 {2}	That name was taken, so it landed as {0} · {1} · from {2}
+Lan.ReceivedFolder	已建好目录 {0} · 来自 {1}	Directory {0} is in place · from {1}
+Lan.Sent	已发出 {0} · {1} · 给 {2}	Sent {0} · {1} · to {2}
+Lan.SentArchive	已把 {0} 打包发给 {1}，压缩包不能续传	{0} was zipped and sent to {1}; an archive cannot be resumed
+Lan.ProgressIn	接收 {0} ← {1}（{2} / {3}）	Receiving {0} from {1} ({2} / {3})
+Lan.ProgressOut	发送 {0} → {1}（{2} / {3}）	Sending {0} to {1} ({2} / {3})
+Lan.ProgressUp	读出 {0}（{1} / {2}）	Reading {0} ({1} / {2})
+Lan.SizeUnknown	大小未知	size unknown
+Lan.History	历史	History
+Lan.NoHistory	还没有通过局域网收发的记录	Nothing has moved over the LAN yet
+Lan.WaitingForFiles	没有正在进行的传输	Nothing is transferring
+Lan.Row.Summary	{0} {1} · {2} · {3}	{0} {1} · {2} · {3}
+Lan.SettingsFailed	设置没读到，用了默认值：	The settings could not be read, so the defaults were used:
+Lan.SettingsSaveFailed	设置没写回：	The settings were not saved:
+Lan.StartFailed	监听没能起来：	The listener did not start:
+Lan.UnnamedDevice	来自 {0} 的设备	A device at {0}
+Lan.OfferFile	{0} · {1}	{0} · {1}
+Lan.OfferFolder	文件夹 {0}	Folder {0}
+Lan.KindComputer	电脑	Computer
+Lan.KindPhone	手机	Phone
+Lan.KindUnknown	未知设备	Unknown device
+Lan.State.Completed	已完成	Done
+Lan.State.Failed	失败	Failed
+Lan.State.Cancelled	已取消	Cancelled
+Lan.State.Declined	已拒绝	Declined
+Lan.Direction.Received	收到	Received
+Lan.Direction.Sent	发出	Sent
+Lan.Refuse.None	没有被拒的事	Nothing was refused
+Lan.Refuse.Unpaired	这台设备还没配对	This device is not paired yet
+Lan.Refuse.BadCode	配对码不对	The pairing code is not the armed one
+Lan.Refuse.CodeExpired	配对码已过期	The pairing code had expired
+Lan.Refuse.RateLimited	错码次数太多，先停一会儿	Too many wrong codes; it has to wait a minute
+Lan.Refuse.IdentityChanged	设备身份变了，要重新配对	This device's identity changed, so it has to pair again
+Lan.Refuse.PathUnsafe	路径不安全，整笔拒绝	The path is not safe, so the whole request was refused
+Lan.Refuse.NameReserved	名字是 Windows 的保留名	Windows reserves that name
+Lan.Refuse.PathTooLong	路径太长	The path is too long
+Lan.Refuse.Conflict	同名文件已存在，请改名后重发	A file of that name is already there; rename it and send again
+Lan.Refuse.NotFound	篮子里没有这一项	That item is not in the basket
+Lan.Refuse.Declined	人看了一眼，拒绝了	Somebody looked at it and said no
+Lan.Refuse.IncompleteBody	数据没传完	The body arrived short
+Lan.Refuse.VerificationFailed	落地的大小或修改时间与声明不符	The size or the date on disk is not what was declared
+Lan.Refuse.PortUnavailable	端口被别的程序占着	Another program holds that port
+Lan.Refuse.BadRequest	请求本身不完整	The request itself was unusable

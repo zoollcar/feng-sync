@@ -66,6 +66,50 @@ public static class LanApi
     public static bool IsPairingFailure(LanRefusal refusal) => refusal
         is LanRefusal.Unpaired or LanRefusal.BadCode or LanRefusal.CodeExpired
         or LanRefusal.RateLimited or LanRefusal.DeviceIdentityChanged;
+
+    /// <summary>
+    /// Reads a refusal out of a reason token, for the calling half of a transfer. The token is the answer a
+    /// peer gives; the status code alone cannot tell 配对码过期 from 配对码不对, and those are different things
+    /// for a person to read on screen.
+    /// </summary>
+    /// <returns><see langword="null"/> for a token this protocol never wrote, which the caller then judges
+    /// from the status code rather than inventing a named state for.</returns>
+    public static LanRefusal? RefusalFor(string? reason) => reason switch
+    {
+        LanReason.PairRequired => LanRefusal.Unpaired,
+        LanReason.BadCode => LanRefusal.BadCode,
+        LanReason.CodeExpired => LanRefusal.CodeExpired,
+        LanReason.RateLimited => LanRefusal.RateLimited,
+        LanReason.IdentityChanged => LanRefusal.DeviceIdentityChanged,
+        LanReason.PathUnsafe => LanRefusal.PathUnsafe,
+        LanReason.NameReserved => LanRefusal.NameReserved,
+        LanReason.PathTooLong => LanRefusal.PathTooLong,
+        LanReason.Conflict => LanRefusal.Conflict,
+        LanReason.NotFound => LanRefusal.NotFound,
+        LanReason.Declined => LanRefusal.Declined,
+        LanReason.IncompleteBody => LanRefusal.IncompleteBody,
+        LanReason.VerificationFailed => LanRefusal.VerificationFailed,
+        LanReason.BadRequest => LanRefusal.BadRequest,
+        _ => null,
+    };
+
+    /// <summary>
+    /// The fallback when a refusal carries no token this side recognises — a proxy answering instead of a Feng
+    /// Sync, or a build that renamed a reason. It keys on the number rather than guessing a reason a peer
+    /// never sent, and a server-side failure with no token is filed under 对端没有接受这次请求 rather than under
+    /// a named cause we did not observe: "not accepted" is true of every one of those answers, while inventing
+    /// a specific one would let the window give advice nobody has evidence for.
+    /// </summary>
+    public static LanRefusal FromStatusCode(int statusCode) => statusCode switch
+    {
+        401 => LanRefusal.Unpaired,
+        403 => LanRefusal.Declined,
+        404 => LanRefusal.NotFound,
+        409 => LanRefusal.Conflict,
+        414 => LanRefusal.PathTooLong,
+        429 => LanRefusal.RateLimited,
+        _ => LanRefusal.BadRequest,
+    };
 }
 
 /// <summary>The answer to "is there a Feng Sync listening here?" — the only body a stranger can read.</summary>
