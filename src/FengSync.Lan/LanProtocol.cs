@@ -152,6 +152,13 @@ public enum LanRefusal
     /// it sent a request, not a name.
     /// </summary>
     BadRequest,
+
+    /// <summary>
+    /// A sentence longer than <see cref="LanGroupLog.MaximumTextLength"/>. Its own state rather than another name
+    /// for <see cref="BadRequest"/>, because the sender can act on this one — shorten it and say it again — while
+    /// every other bad request means the message was built wrong.
+    /// </summary>
+    MessageTooLong,
 }
 
 /// <summary>The stable, machine-readable reason strings that go in a refusal body.</summary>
@@ -171,6 +178,7 @@ public static class LanReason
     public const string IncompleteBody = "incomplete_body";
     public const string VerificationFailed = "verification_failed";
     public const string BadRequest = "bad_request";
+    public const string MessageTooLong = "message_too_long";
 
     /// <summary>The only mapping between a refusal and its wire token, so a body cannot drift from a code.</summary>
     public static string For(LanRefusal refusal) => refusal switch
@@ -189,6 +197,7 @@ public static class LanReason
         LanRefusal.IncompleteBody => IncompleteBody,
         LanRefusal.VerificationFailed => VerificationFailed,
         LanRefusal.BadRequest => BadRequest,
+        LanRefusal.MessageTooLong => MessageTooLong,
         // A refusal with no token would answer an empty reason, which is the kind of silent default this
         // protocol keeps being bitten by; unpaired is the closest truthful one and it is never selected here.
         _ => PairRequired,

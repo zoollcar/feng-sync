@@ -87,7 +87,8 @@ public sealed class LanSession(
     LanPeerSecretStore secrets,
     LanPairingState pairing,
     ILanSendSource basket,
-    Func<LanInboundOffer, CancellationToken, Task<bool>>? confirmInbound = null)
+    Func<LanInboundOffer, CancellationToken, Task<bool>>? confirmInbound = null,
+    LanGroupLog? group = null)
 {
     private readonly object _gate = new();
     private readonly HashSet<string> _agreedThisSession = new(StringComparer.OrdinalIgnoreCase);
@@ -101,6 +102,13 @@ public sealed class LanSession(
     public LanOptions Options { get; } = options;
     public LanPeerStore Peers { get; } = peers;
     public ILanSendSource Basket { get; } = basket;
+
+    /// <summary>
+    /// What this machine knows the room said. On the session rather than on the window or the listener because
+    /// both of them write it and neither may own it: a peer's poll merges into it, the user's own sentence lands
+    /// in it, and the window draws whatever is in it. It is memory, so closing the window is leaving the room.
+    /// </summary>
+    public LanGroupLog Group { get; } = group ?? new LanGroupLog();
 
     /// <summary>
     /// Whether a device that was already trusted before this window opened may write without being asked.

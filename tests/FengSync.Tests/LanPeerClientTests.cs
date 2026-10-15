@@ -210,6 +210,90 @@ public sealed class LanPeerClientTests
         Assert.DoesNotContain(LanPeerClient.DefaultReceivedPath(), new LanPeerSecretStore().Path, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task A_sentence_this_machine_says_lands_in_the_peers_copy_of_the_room_and_reads_back()
+    {
+        await using var server = await Server.StartAsync();
+        using var client = await PairedAsync(server);
+        var peer = PeerOf(server);
+
+        var said = await client.SayAsync(peer, "先看报告");
+        var log = await client.LogAsync(peer, since: 0);
+
+        // The peer authors the entry on this machine's behalf, from the credential rather than from anything the
+        // body claimed, so the room can show who spoke without trusting a name a stranger typed.
+        Assert.Equal((await Identity(server.Port)).DeviceId, said.AuthorDeviceId);
+        Assert.Equal(said.MessageId, Assert.Single(log.Entries).MessageId);
+        Assert.Equal(log.Head, said.LocalSeq);
+        Assert.Equal(LanApi.WireVersion, log.V);
+    }
+
+    [Fact]
+    public async Task The_next_pull_of_the_room_asks_past_the_number_this_machine_remembered_for_that_peer()
+    {
+        await using var server = await Server.StartAsync();
+        using var client = await PairedAsync(server);
+        var peer = PeerOf(server);
+        await client.SayAsync(peer, "一");
+        await client.SayAsync(peer, "二");
+
+        var first = await client.LogAsync(peer, since: 0);
+        var second = await client.LogAsync(peer, since: first.Head);
+
+        Assert.Equal(2, first.Entries.Count);
+        // Nothing new is an ordinary answer, and the watermark still travels: a poller that read it off the
+        // entries would re-ask for a gap it had already crossed.
+        Assert.Empty(second.Entries);
+        Assert.Equal(2, second.Head);
+    }
+
+    [Fact]
+    public async Task A_sentence_the_peer_would_not_hold_comes_back_named_rather_than_as_a_number()
+    {
+        await using var server = await Server.StartAsync();
+        using var client = await PairedAsync(server);
+
+        var failure = await Assert.ThrowsAsync<LanTransferException>(() =>
+            client.SayAsync(PeerOf(server), new string('字', LanGroupLog.MaximumTextLength + 1)));
+
+        // 413 alone would tell the window "the request failed"; the reason token is what lets it say 发短一点.
+        Assert.Equal(LanRefusal.MessageTooLong, failure.Refusal);
+        Assert.Empty((await client.LogAsync(PeerOf(server), since: 0)).Entries);
+    }
+
+    [Fact]
+    public async Task Reading_the_room_without_a_credential_refuses_locally_and_sends_nothing()
+    {
+        await using var server = await Server.StartAsync();
+        using var client = new LanPeerClient(await Identity(server.Port), server.ClientTokens());
+
+        var failure = await Assert.ThrowsAsync<LanTransferException>(() =>
+            client.LogAsync(PeerOf(server), since: 0));
+
+        Assert.Equal(LanRefusal.Unpaired, failure.Refusal);
+        Assert.Equal(0, server.Group.Count);
+    }
+
+    [Fact]
+    public async Task A_room_re_opened_starts_empty_while_the_devices_a_person_trusted_survive_in_their_file()
+    {
+        await using var server = await Server.StartAsync();
+        // Read before the restart: this helper names its identity file after the port, and a new window binds a
+        // new number, so asking afterwards would read a different device rather than the one that just spoke.
+        var self = await Identity(server.Port);
+        using var client = await PairedAsync(server);
+        await client.SayAsync(PeerOf(server), "上一扇窗里说的话");
+        Assert.NotEmpty(server.Group.Entries);
+
+        await server.RestartAsync();
+
+        // The history is memory and dies with the window, while the trust list is a file and does not: what a
+        // person agreed to is a different promise from what the room said, and only one of them is kept.
+        Assert.Empty(server.Group.Entries);
+        Assert.Equal(0, server.Group.Head);
+        Assert.Contains(self.DeviceId, (await server.Peers.LoadAsync()).Select(record => record.DeviceId));
+    }
+
     private static async Task<LanPeerClient> PairedAsync(Server server)
     {
         var client = new LanPeerClient(await Identity(server.Port), server.ClientTokens());
@@ -247,6 +331,7 @@ public sealed class LanPeerClientTests
         private readonly LanPeerSecretStore _secrets;
         private readonly LanPairingState _pairing;
         private readonly LanDeviceIdentity _identity;
+        private LanSession _session = null!;
         private LanServerHost _host = null!;
 
         private Server(string root, LanReceiveSink sink, LanPeerStore peers, LanPeerSecretStore secrets,
@@ -270,6 +355,9 @@ public sealed class LanPeerClientTests
         public LanDeviceIdentity Identity => _identity;
         public Signal<LanInboundOffer> Asked { get; }
         public int Port { get; private set; }
+
+        /// <summary>The listener's copy of the room, which a new window replaces with an empty one.</summary>
+        public LanGroupLog Group => _session.Group;
 
         public LanPeerSecretStore ClientTokens() => new(Path.Combine(_root, "client-tokens.dat"));
 
@@ -295,9 +383,11 @@ public sealed class LanPeerClientTests
             // when the user restarts the service after changing the number.
             if (_host is not null) await _host.DisposeAsync();
             Port = FreePort();
-            var session = new LanSession(new LanOptions(Port, Receive, true), _peers, _secrets, _pairing,
+            // A new window means a new room: the listener's copy of the history is memory, so it is rebuilt here
+            // rather than read back from the stores that survive on disk.
+            _session = new LanSession(new LanOptions(Port, Receive, true), _peers, _secrets, _pairing,
                 new EmptyBasket(), (offer, _) => Asked.PublishAsync(offer, accept: true));
-            _host = await LanServerHost.StartAsync(new LanServerOptions(session, _identity, _pairing, _sink), CancellationToken.None);
+            _host = await LanServerHost.StartAsync(new LanServerOptions(_session, _identity, _pairing, _sink), CancellationToken.None);
         }
 
         public async ValueTask DisposeAsync()

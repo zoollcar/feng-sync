@@ -187,6 +187,11 @@ public sealed class LanServerHost : IAsyncDisposable
         endpoints.MapDelete("/api/v1/peers/mine", (Func<HttpContext, Task<IResult>>)HandleForgetSelfAsync);
         endpoints.MapPost("/api/v1/inbox", (Func<HttpContext, Task<IResult>>)HandleInboxAsync);
         endpoints.MapPost("/api/v1/mkdir", (Func<HttpContext, Task<IResult>>)HandleMkdirAsync);
+
+        // The room, in both directions: what this copy has heard past a number the caller named, and a sentence
+        // somebody is adding to it.
+        endpoints.MapGet("/api/v1/log", (Func<HttpContext, Task<IResult>>)HandleLogAsync);
+        endpoints.MapPost("/api/v1/messages", (Func<HttpContext, Task<IResult>>)HandleSayAsync);
         endpoints.MapGet("/api/v1/basket", (Func<HttpContext, Task<IResult>>)HandleBasketAsync);
         endpoints.MapGet("/api/v1/basket/{id}", (Func<string, HttpContext, Task<IResult>>)HandleDownloadAsync);
         endpoints.MapGet("/api/v1/basket/{id}/zip", (Func<string, HttpContext, Task<IResult>>)HandleArchiveAsync);
@@ -344,6 +349,67 @@ public sealed class LanServerHost : IAsyncDisposable
 
         DirectoryReceived?.Invoke(new LanDirectoryEventArgs(auth.Contact!, relative, offer.Session));
         return Json(new LanMkdirReply(relative), StatusCodes.Status201Created);
+    }
+
+    /// <summary>
+    /// This machine's copy of what the room said, past the number the caller named.
+    /// </summary>
+    /// <remarks>
+    /// The number is the caller's watermark on <i>this</i> copy: every host numbers its own arrival order, so a
+    /// poller keeps one per peer and never one for the room — there is no member that could hand out a shared
+    /// number. A <c>since</c> that is not a number is refused rather than read as zero, because answering a
+    /// malformed watermark with the whole history would turn a caller's bug into a large response, and a
+    /// poller that did that every few seconds would look only a little different from one copying the room out.
+    /// </remarks>
+    private async Task<IResult> HandleLogAsync(HttpContext http)
+    {
+        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
+        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
+
+        var raw = http.Request.Query["since"].ToString();
+        long since = 0;
+        if (raw.Length > 0 && (!long.TryParse(raw, out since) || since < 0)) return Answer(LanRefusal.BadRequest);
+
+        var group = _options.Session.Group;
+        // A line about this window — a firewall question answered, a code regenerated — is narration, not
+        // something a peer said, so it stays here. Every host can see its own room change; none of them needs to
+        // hear about another's.
+        var entries = group.Since(since)
+            .Where(entry => entry.AuthorDeviceId.Length > 0)
+            .Select(entry => entry.ToWire())
+            .ToList();
+        return Json(new LanLogReply(LanApi.WireVersion, group.Head, entries));
+    }
+
+    /// <summary>
+    /// Adds one sentence to the room, from a peer that can only ever reach this machine.
+    /// </summary>
+    /// <remarks>
+    /// A browser cannot be dialed, so a phone's text has exactly one way into the history and this is it; the
+    /// entry then travels to everybody else the way every other entry does — by being pulled. A sentence is not
+    /// gated by <see cref="LanSession.AdmitWriteAsync"/>, because that gate exists for bytes landing on the
+    /// user's disk, and nothing here touches disk. What it does cost is a slot in a capped in-memory copy, which
+    /// pairing alone already buys.
+    /// </remarks>
+    private async Task<IResult> HandleSayAsync(HttpContext http)
+    {
+        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
+        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
+
+        LanSayRequest? request;
+        try
+        {
+            request = await JsonSerializer.DeserializeAsync<LanSayRequest>(http.Request.Body, LanApi.Json, http.RequestAborted)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            return Answer(LanRefusal.BadRequest);
+        }
+
+        var refusal = _options.Session.Group.TryAppendText(auth.Contact!, request?.Text, DateTimeOffset.UtcNow, out var entry);
+        if (refusal != LanRefusal.None || entry is null) return Answer(refusal);
+        return Json(entry.ToWire(), StatusCodes.Status201Created);
     }
 
     private async Task<IResult> HandleBasketAsync(HttpContext http)

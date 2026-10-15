@@ -1052,6 +1052,9 @@ Save anyway?</value>
   <data name="Lan.Refuse.IncompleteBody" xml:space="preserve">
     <value>The body arrived short</value>
   </data>
+  <data name="Lan.Refuse.MessageTooLong" xml:space="preserve">
+    <value>This sentence is too long; say it in fewer characters</value>
+  </data>
   <data name="Lan.Refuse.NameReserved" xml:space="preserve">
     <value>Windows reserves that name</value>
   </data>

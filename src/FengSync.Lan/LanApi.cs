@@ -47,6 +47,10 @@ public static class LanApi
         LanRefusal.NameReserved => (400, LanReason.NameReserved),
         LanRefusal.IncompleteBody => (400, LanReason.IncompleteBody),
 
+        // Its own code because a page that got this answer has something to do about it — shorten the sentence —
+        // while every other 400 here means the request was built wrong. 413 is what the number actually means.
+        LanRefusal.MessageTooLong => (413, LanReason.MessageTooLong),
+
         LanRefusal.PathTooLong => (414, LanReason.PathTooLong),
         LanRefusal.Conflict => (409, LanReason.Conflict),
         LanRefusal.NotFound => (404, LanReason.NotFound),
@@ -90,6 +94,7 @@ public static class LanApi
         LanReason.IncompleteBody => LanRefusal.IncompleteBody,
         LanReason.VerificationFailed => LanRefusal.VerificationFailed,
         LanReason.BadRequest => LanRefusal.BadRequest,
+        LanReason.MessageTooLong => LanRefusal.MessageTooLong,
         _ => null,
     };
 
@@ -106,6 +111,7 @@ public static class LanApi
         403 => LanRefusal.Declined,
         404 => LanRefusal.NotFound,
         409 => LanRefusal.Conflict,
+        413 => LanRefusal.MessageTooLong,
         414 => LanRefusal.PathTooLong,
         429 => LanRefusal.RateLimited,
         _ => LanRefusal.BadRequest,
@@ -149,6 +155,34 @@ public sealed record LanMkdirReply(string RelativePath);
 
 /// <summary>One row of the send basket, as a phone lists it.</summary>
 public sealed record LanBasketReply(string Id, string Name, long Bytes, bool IsDirectory, DateTimeOffset? ModifiedUtc);
+
+/// <summary>
+/// One thing said in the room. <see cref="LocalSeq"/> is the answering machine's own arrival number and
+/// <see cref="HeldHere"/> is a statement about that machine, so a reader keys its watermark on the pair
+/// <c>(peer, LocalSeq)</c> and never on this field alone — there is no member that numbers the room.
+/// </summary>
+public sealed record LanMessageWire(
+    string MessageId,
+    string AuthorDeviceId,
+    string AuthorName,
+    long LocalSeq,
+    string Kind,
+    string? Text,
+    string? FileName,
+    string? RelativePath,
+    long Bytes,
+    bool IsDirectory,
+    DateTimeOffset CreatedUtc,
+    bool HeldHere);
+
+/// <summary>
+/// What one machine's copy of the room holds past a number its caller named. <see cref="Head"/> is where this
+/// copy is now, which is what lets a poller record its watermark even when nothing new came across.
+/// </summary>
+public sealed record LanLogReply(int V, long Head, IReadOnlyList<LanMessageWire> Entries);
+
+/// <summary>A sentence a peer is asking this machine to remember and repeat.</summary>
+public sealed record LanSayRequest(string? Text);
 
 /// <summary>The only body shape a refusal ever takes.</summary>
 public sealed record LanErrorReply(string Error, string Reason);

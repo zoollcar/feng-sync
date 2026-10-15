@@ -26,9 +26,9 @@ public sealed record LanSendOutcome(int Files, int Directories, long Bytes);
 /// <remarks>
 /// <para>
 /// A second computer needs nothing the phone page does not already do — <c>/hello</c>, <c>/pair</c>,
-/// <c>/inbox</c>, <c>/mkdir</c> — so this class is those four calls with typed bodies, and nothing else. It
-/// deliberately grows no new protocol: a pull/ack handshake for computers would have made the receiving side
-/// two code paths instead of one, and a folder is the same sequence of per-file writes either way.
+/// <c>/inbox</c>, <c>/mkdir</c>, and the room's two calls — so this class is those with typed bodies, and nothing
+/// else. It deliberately grows no new protocol: a pull/ack handshake for computers would have made the receiving
+/// side two code paths instead of one, and a folder is the same sequence of per-file writes either way.
 /// </para>
 /// <para>
 /// Credentials it receives live in their own DPAPI file, keyed by the <b>peer's</b> id, because a token issued
@@ -41,6 +41,13 @@ public sealed class LanPeerClient : IDisposable
 {
     /// <summary>How long a stranger is allowed to take answering 这里是 Feng Sync 吗 before the window says 无应答.</summary>
     public static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// How long one of the small calls around a transfer may take. It is a timeout rather than an open end because
+    /// a poll for the room's history runs on a timer: a peer that stops answering must make that poll give up and
+    /// the next one happen, not leave a task waiting forever on a machine whose window has closed.
+    /// </summary>
+    public static readonly TimeSpan QuestionTimeout = TimeSpan.FromSeconds(10);
 
     private readonly LanDeviceIdentity _self;
     private readonly LanPeerSecretStore _received;
@@ -117,6 +124,54 @@ public sealed class LanPeerClient : IDisposable
 
     /// <summary>Drops the credential this machine holds for a peer. The peer's own row is unaffected — that is what 取消信任 on the other side is for.</summary>
     public Task<bool> ForgetAsync(LanPeerEndpoint peer, CancellationToken ct = default) => _received.ForgetAsync(peer.DeviceId, ct);
+
+    /// <summary>
+    /// Reads a peer's copy of the room past the number this machine remembers for that peer.
+    /// </summary>
+    /// <remarks>
+    /// The watermark is per peer on purpose: each machine numbers the arrival order of its own copy, so one number
+    /// for the room would need a member that owns it, and this design has none. A caller that reads two peers with
+    /// one shared watermark re-asks for what it already has from one and misses what the other said.
+    /// </remarks>
+    public async Task<LanLogReply> LogAsync(LanPeerEndpoint peer, long since, CancellationToken ct = default)
+    {
+        var token = await TokenForAsync(peer, ct).ConfigureAwait(false) ?? throw LanTransferException.For(LanRefusal.Unpaired);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(QuestionTimeout);
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            // The query goes on after the address rather than inside the path: UriBuilder writes its path with the
+            // question mark escaped, and a route that arrives as <c>/api/v1/log%3Fsince=0</c> is not the route
+            // this listener mapped.
+            Build("/api/v1/log", peer.Address, peer.Port) + $"?since={since}");
+        AddCredential(request, token);
+        using var response = await SendAsync(request, timeout.Token).ConfigureAwait(false);
+        return await ReadAsync<LanLogReply>(response, timeout.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Adds a sentence to the room through a peer that holds this machine's credential.
+    /// </summary>
+    /// <remarks>
+    /// This is how a machine that nobody can dial still gets said into the history: the peer it paired with is the
+    /// one member it can reach, and what lands there spreads the way everything else does — by being pulled.
+    /// </remarks>
+    /// <exception cref="LanTransferException">
+    /// <see cref="LanRefusal.MessageTooLong"/> when the sentence is longer than a peer will hold, and
+    /// <see cref="LanRefusal.BadRequest"/> when it says nothing at all — both named by the peer, not guessed here.
+    /// </exception>
+    public async Task<LanMessageWire> SayAsync(LanPeerEndpoint peer, string text, CancellationToken ct = default)
+    {
+        var token = await TokenForAsync(peer, ct).ConfigureAwait(false) ?? throw LanTransferException.For(LanRefusal.Unpaired);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(QuestionTimeout);
+        using var request = new HttpRequestMessage(HttpMethod.Post, Build("/api/v1/messages", peer.Address, peer.Port))
+        {
+            Content = JsonContent(new LanSayRequest(text)),
+        };
+        AddCredential(request, token);
+        using var response = await SendAsync(request, timeout.Token).ConfigureAwait(false);
+        return await ReadAsync<LanMessageWire>(response, timeout.Token).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Sends one basket row. A file is one <c>/inbox</c> write; a folder is a walk — one <c>/mkdir</c> per

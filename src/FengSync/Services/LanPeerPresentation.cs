@@ -35,6 +35,7 @@ internal static class LanPeerPresentation
         LanRefusal.VerificationFailed => Tr.F("Lan.Refuse.VerificationFailed"),
         LanRefusal.PortUnavailable => Tr.F("Lan.Refuse.PortUnavailable"),
         LanRefusal.BadRequest => Tr.F("Lan.Refuse.BadRequest"),
+        LanRefusal.MessageTooLong => Tr.F("Lan.Refuse.MessageTooLong"),
         _ => Tr.F("Lan.Refuse.BadRequest"),
     };
 

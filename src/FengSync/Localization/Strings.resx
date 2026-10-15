@@ -1052,6 +1052,9 @@ Rclone：MIT License</value>
   <data name="Lan.Refuse.IncompleteBody" xml:space="preserve">
     <value>数据没传完</value>
   </data>
+  <data name="Lan.Refuse.MessageTooLong" xml:space="preserve">
+    <value>这句话太长了，发短一点</value>
+  </data>
   <data name="Lan.Refuse.NameReserved" xml:space="preserve">
     <value>名字是 Windows 的保留名</value>
   </data>

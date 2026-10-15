@@ -126,3 +126,4 @@ Lan.Refuse.IncompleteBody	数据没传完	The body arrived short
 Lan.Refuse.VerificationFailed	落地的大小或修改时间与声明不符	The size or the date on disk is not what was declared
 Lan.Refuse.PortUnavailable	端口被别的程序占着	Another program holds that port
 Lan.Refuse.BadRequest	请求本身不完整	The request itself was unusable
+Lan.Refuse.MessageTooLong	这句话太长了，发短一点	This sentence is too long; say it in fewer characters

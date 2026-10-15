@@ -642,6 +642,172 @@ public sealed class LanServerWireTests
         }
     }
 
+    [Fact]
+    public async Task The_room_reads_back_only_for_a_device_that_has_traded_a_code_for_a_credential()
+    {
+        await using var server = await Harness.StartAsync();
+
+        // Nobody has paired in this case, so the request carries no credential at all — the same shape a stranger
+        // gets from every other route, and the reason a page can show 请先配对 instead of a blank list.
+        var response = await server.LogRawAsync();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(LanReason.PairRequired, await ReasonAsync(response));
+    }
+
+    [Fact]
+    public async Task A_watermark_that_is_not_a_number_is_refused_instead_of_bringing_the_whole_history()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+        await server.SayAsync("先看报告");
+
+        // A poller that mistyped its watermark would otherwise ask for everything, every few seconds, and look
+        // only a little different from one copying the room out.
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.LogRawQueryAsync("abc")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.LogRawQueryAsync("-1")).StatusCode);
+
+        Assert.Single((await server.LogAsync()).Entries);
+    }
+
+    [Fact]
+    public async Task A_sentence_a_peer_says_lands_in_the_room_with_the_author_the_credential_names()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+
+        var said = await server.SayAsync("  先看报告  ");
+        var log = await server.LogAsync();
+
+        // The body carried no author, so the only name the entry can wear is the one this machine verified.
+        Assert.Equal(PeerId, said.AuthorDeviceId);
+        Assert.Equal(LanGroupKind.Text, said.Kind);
+        Assert.False(said.HeldHere);
+        Assert.Equal(1, said.LocalSeq);
+        Assert.Equal(1, log.Head);
+        // What the sender got back is what a reader gets, because a page that redraws from its own reply must
+        // not show a row the room would describe differently.
+        Assert.Equal(said.MessageId, Assert.Single(log.Entries).MessageId);
+        Assert.Equal("先看报告", Assert.Single(log.Entries).Text);
+    }
+
+    [Fact]
+    public async Task An_incremental_read_carries_what_is_past_the_watermark_and_still_names_where_the_room_ends()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+        await server.SayAsync("一");
+        await server.SayAsync("二");
+        await server.SayAsync("三");
+
+        var first = await server.LogAsync();
+        var rest = await server.LogAsync(2);
+
+        Assert.Equal(3, first.Entries.Count);
+        Assert.Equal(["三"], rest.Entries.Select(entry => entry.Text));
+        // The head is the room's, not the page's: a caller that was told nothing new still learns where the end
+        // is, which is what lets it stop asking for a gap it already crossed.
+        Assert.Equal(3, rest.Head);
+    }
+
+    [Fact]
+    public async Task A_device_that_was_refused_its_bytes_is_still_allowed_to_speak()
+    {
+        await using var server = await Harness.StartAsync(
+            confirm: (offer, _) => Task.FromResult(false));
+        await server.PairAsync(server.Pairing.Code);
+
+        var declined = await server.InboxRawAsync("report.txt", "内容");
+        var said = await server.SayRawAsync("文件你拒绝了，我先说一句");
+
+        Assert.Equal(HttpStatusCode.Forbidden, declined.StatusCode);
+        Assert.Equal(LanReason.Declined, await ReasonAsync(declined));
+        Assert.Equal(HttpStatusCode.Created, said.StatusCode);
+        // The gate exists for bytes landing on the user's disk. A sentence costs a slot in a capped in-memory
+        // copy, which pairing alone already bought, and folding the two into one refusal would tell the phone
+        // that its whole window is closed.
+        Assert.Equal("文件你拒绝了，我先说一句", Assert.Single((await server.LogAsync()).Entries).Text);
+    }
+
+    [Fact]
+    public async Task A_sentence_too_long_for_the_history_answers_with_the_one_thing_the_sender_can_do_about_it()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+
+        var response = await server.SayRawAsync(new string('字', LanGroupLog.MaximumTextLength + 1));
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.Equal(LanReason.MessageTooLong, await ReasonAsync(response));
+        // The refusal costs no slot: a sentence too long to keep has not taken a row from the newest one.
+        Assert.Empty((await server.LogAsync()).Entries);
+
+        Assert.Equal(HttpStatusCode.Created, (await server.SayRawAsync(new string('字', LanGroupLog.MaximumTextLength))).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_sentence_that_says_nothing_is_refused_as_a_request_rather_than_stored_as_blank()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.SayRawAsync("   ")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.SayRawAsync(null)).StatusCode);
+        Assert.Empty((await server.LogAsync()).Entries);
+    }
+
+    [Fact]
+    public async Task An_unparsable_message_body_answers_bad_request_instead_of_failing_the_route()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+
+        var response = await server.SayRawBodyAsync("{ this is not json");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(LanReason.BadRequest, await ReasonAsync(response));
+    }
+
+    [Fact]
+    public async Task An_entry_adopted_from_elsewhere_is_served_to_a_poller_as_this_machines_copy_of_it()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+        // What a relay does: an entry pulled from a peer lands in this copy, and the next page asking this
+        // machine for the room must see it — that is how a phone reaches a sentence another computer spoke.
+        server.ServerOptions.Session.Group.TryMerge(new LanMessageWire("heard-from-a-peer", OtherPeerId,
+            "另一台电脑", 4, LanGroupKind.File, null, "合同.pdf", null, 4096, false, OldStamp, true));
+
+        var entry = Assert.Single((await server.LogAsync()).Entries);
+
+        Assert.Equal("heard-from-a-peer", entry.MessageId);
+        Assert.Equal(OtherPeerId, entry.AuthorDeviceId);
+        Assert.Equal(4096, entry.Bytes);
+        // HeldHere comes back false because this machine does not hold the bytes, whatever the machine it heard
+        // the entry from claimed about itself.
+        Assert.False(entry.HeldHere);
+        // A peer's arrival number is not adopted, so the watermark this page tracks stays one this machine owns.
+        Assert.Equal(1, entry.LocalSeq);
+    }
+
+    [Fact]
+    public async Task A_line_about_this_window_is_shown_to_its_own_machine_and_to_nobody_else()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+        await server.SayAsync("先看报告");
+        server.ServerOptions.Session.Group.AppendSystem("防火墙规则已加上", OldStamp);
+
+        var log = await server.LogAsync();
+
+        // Narration belongs to the window that wrote it: a peer told about another machine's firewall question
+        // would show a sentence nobody there agreed to.
+        Assert.Equal(["先看报告"], log.Entries.Select(entry => entry.Text));
+        Assert.Equal(2, server.ServerOptions.Session.Group.Count);
+        // The watermark still counts the line it hid, or a poller would be asked to re-read past it.
+        Assert.Equal(2, log.Head);
+    }
+
     private static Task<bool> Accepted(LanInboundOffer offer, CancellationToken ct) => Task.FromResult(true);
 
     private static string ReadEntry(System.IO.Compression.ZipArchive archive, string name)
@@ -853,6 +1019,46 @@ public sealed class LanServerWireTests
             var response = await SendAsync(request);
             response.EnsureSuccessStatusCode();
             return Deserialize<LanMkdirReply>(await response.Content.ReadAsStringAsync());
+        }
+
+        /// <summary>
+        /// This copy of the room, past a watermark. A peer reads it on a timer and merges whatever is new, so the
+        /// reply's shape is the whole of what a second machine can learn from this one.
+        /// </summary>
+        public async Task<LanLogReply> LogAsync(long? since = null, string? token = null)
+        {
+            var response = await LogRawAsync(since, token);
+            response.EnsureSuccessStatusCode();
+            return Deserialize<LanLogReply>(await response.Content.ReadAsStringAsync());
+        }
+
+        public Task<HttpResponseMessage> LogRawAsync(long? since = null, string? token = null) =>
+            GetAsync(since is { } watermark ? $"/api/v1/log?since={watermark}" : "/api/v1/log", token: token);
+
+        /// <summary>A <c>since</c> as a mistyped query would carry it, because the route reads a number and not a word.</summary>
+        public Task<HttpResponseMessage> LogRawQueryAsync(string since, string? token = null) =>
+            GetAsync($"/api/v1/log?since={Uri.EscapeDataString(since)}", token: token);
+
+        /// <summary>Says something in the room, from the device its credential names.</summary>
+        public async Task<LanMessageWire> SayAsync(string text, string? token = null)
+        {
+            var response = await SayRawAsync(text, token);
+            response.EnsureSuccessStatusCode();
+            return Deserialize<LanMessageWire>(await response.Content.ReadAsStringAsync());
+        }
+
+        public Task<HttpResponseMessage> SayRawAsync(string? text, string? token = null)
+        {
+            var request = Request(HttpMethod.Post, "/api/v1/messages", PeerId, token);
+            request.Content = Json(new LanSayRequest(text));
+            return SendAsync(request);
+        }
+
+        public Task<HttpResponseMessage> SayRawBodyAsync(string json, string? token = null)
+        {
+            var request = Request(HttpMethod.Post, "/api/v1/messages", PeerId, token);
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            return SendAsync(request);
         }
 
         public async Task<IReadOnlyList<LanBasketReply>> BasketAsync(string? token = null)
