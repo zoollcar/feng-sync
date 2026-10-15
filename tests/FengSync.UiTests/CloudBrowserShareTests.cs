@@ -54,6 +54,11 @@ public sealed class CloudBrowserShareTests
         await WithWindow(async (window, standIn) =>
         {
             window.ConfirmShare = _ => true;
+            // The clipboard stays behind the seam here too, as this class says it must: without it the case
+            // passes only on a machine whose copy buffer happens to be free, and what it claims — which object
+            // the cloud was asked about — has nothing to do with that.
+            window.CopyLink = _ => { };
+
             var result = await window.ShareLinkAsync(Entry(window, $"{Root}/a.txt"));
 
             var call = Assert.Single(standIn.Shares);
