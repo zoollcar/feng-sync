@@ -177,6 +177,10 @@ public sealed class LanServerHost : IAsyncDisposable
     /// </remarks>
     private void MapRoutes(IEndpointRouteBuilder endpoints)
     {
+        // The page a scanned code opens, and the one route a stranger reaches with no credential at all:
+        // pairing is something a person does, so it has to have somewhere to be done from.
+        endpoints.MapGet("/p", (Func<HttpContext, Task<IResult>>)HandlePageAsync);
+
         endpoints.MapGet("/api/v1/hello", (Func<HttpContext, Task<IResult>>)HandleHelloAsync);
         endpoints.MapPost("/api/v1/pair", (Func<HttpContext, Task<IResult>>)HandlePairAsync);
         endpoints.MapGet("/api/v1/peers", (Func<HttpContext, Task<IResult>>)HandlePeersAsync);
@@ -193,6 +197,21 @@ public sealed class LanServerHost : IAsyncDisposable
     }
 
     private Task<IResult> HandleNotFoundAsync(HttpContext http) => Task.FromResult(Answer(LanRefusal.NotFound));
+
+    /// <summary>
+    /// The page a phone opens, sent so that a reload always asks this process again.
+    /// </summary>
+    /// <remarks>
+    /// No caching, because a page a phone keeps would show a pairing code that has already been spent — the code
+    /// is good for exactly one try, and the only honest answer to the second is a refusal. No sniffing, because
+    /// the bytes are this process's own and there is nothing for a browser to second-guess about them.
+    /// </remarks>
+    private Task<IResult> HandlePageAsync(HttpContext http)
+    {
+        http.Response.Headers["Cache-Control"] = "no-store";
+        http.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return Task.FromResult<IResult>(Results.Text(LanPhonePage.Html, LanPhonePage.ContentType, LanPhonePage.Body));
+    }
 
     private Task<IResult> HandleHelloAsync(HttpContext http) =>
         Task.FromResult(Json(_options.Session.Hello(_options.Self)));
@@ -217,8 +236,29 @@ public sealed class LanServerHost : IAsyncDisposable
         RaisePairAttempted(result.Contact, result.Refusal);
         if (!result.Accepted) return Answer(result.Refusal);
 
-        return Json(new LanPairReply(result.Token!, LanApi.WireVersion, PeerOf(result.Peer!)), StatusCodes.Status201Created);
+        // The device id comes back in the reply's own row, so the phone does not have to remember what it made up.
+        OfferCredential(http, result.Peer!.DeviceId, result.Token!);
+        return Json(new LanPairReply(result.Token!, LanApi.WireVersion, PeerOf(result.Peer)), StatusCodes.Status201Created);
     }
+
+    /// <summary>
+    /// The cookie that carries a fresh credential to a browser that cannot write a header.
+    /// </summary>
+    /// <remarks>
+    /// A phone takes a file off this machine through an ordinary link, and a link can carry nothing but what the
+    /// browser stores for this origin. So the credential leaves here as an HttpOnly cookie and never as part of
+    /// an address: a URL is something a person copies, shares, and leaves in a history, and a token outlives
+    /// this window. Deleting a device's own row deletes this cookie too, in
+    /// <see cref="HandleForgetSelfAsync"/>, so revoking means the phone stops working and not merely that its
+    /// row is gone.
+    /// </remarks>
+    private static void OfferCredential(HttpContext http, string deviceId, string token) =>
+        http.Response.Cookies.Append(LanProtocol.CookieName, $"{deviceId}:{token}", new CookieOptions
+        {
+            Path = "/",
+            HttpOnly = true,
+            SameSite = SameSiteMode.Lax,
+        });
 
     private async Task<IResult> HandlePeersAsync(HttpContext http)
     {
@@ -239,6 +279,9 @@ public sealed class LanServerHost : IAsyncDisposable
         if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
 
         await _options.Session.ForgetOwnCredentialAsync(auth.Contact!, http.RequestAborted).ConfigureAwait(false);
+        // The row and the secret are gone from this machine, and the cookie would be the one thing left that
+        // still opens a door — so the answer that removes the device removes the browser's copy as well.
+        http.Response.Cookies.Delete(LanProtocol.CookieName, new CookieOptions { Path = "/", HttpOnly = true, SameSite = SameSiteMode.Lax });
         return Results.NoContent();
     }
 
@@ -374,9 +417,26 @@ public sealed class LanServerHost : IAsyncDisposable
     }
 
     private async Task<LanAuthResult> AuthorizeAsync(HttpContext http) =>
-        await _options.Session.AuthenticateAsync(http.Request.Headers.Authorization,
+        await _options.Session.AuthenticateAsync(CredentialOf(http.Request),
             Header(http, LanProtocol.HeaderDeviceName), Header(http, LanProtocol.HeaderDeviceKind),
             RemoteAddress(http), PeerPort(http), http.RequestAborted).ConfigureAwait(false);
+
+    /// <summary>
+    /// The credential a request carries, in the bare <c>deviceId:token</c> form the session checks, from either
+    /// transport a peer has.
+    /// </summary>
+    /// <remarks>
+    /// A peer that authors its own requests — a computer, or a page talking to itself — sends the header. A phone
+    /// browser following a plain download link can send nothing but what it already stores for this origin, and
+    /// that is what the cookie is for. The header wins when both are present, because a peer that went to the
+    /// trouble of naming its own credential means that one.
+    /// </remarks>
+    private static string CredentialOf(HttpRequest request)
+    {
+        var header = request.Headers.Authorization.ToString();
+        if (header.Length > 0) return header;
+        return request.Cookies.TryGetValue(LanProtocol.CookieName, out var cookie) ? cookie : "";
+    }
 
     private async Task<LanRefusal> AdmitAsync(LanInboundOffer offer, CancellationToken ct)
     {

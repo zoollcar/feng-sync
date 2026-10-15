@@ -499,6 +499,105 @@ public sealed class LanServerWireTests
     }
 
     [Fact]
+    public async Task The_page_opens_for_a_stranger_and_refuses_to_be_kept()
+    {
+        await using var server = await Harness.StartAsync();
+
+        // A phone has no credential when it asks for the page — that is the whole point of the page — and a
+        // cached copy would show it a pairing code that has already been spent.
+        var response = await server.LinkAsync("/p");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("charset=utf-8", Header(response, "Content-Type"), StringComparison.Ordinal);
+        Assert.Equal("no-store", Header(response, "Cache-Control"));
+        Assert.Equal("nosniff", Header(response, "X-Content-Type-Options"));
+        Assert.StartsWith("<!doctype html>", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_page_is_one_document_that_asks_nothing_off_this_machine()
+    {
+        var html = LanPhonePage.Html;
+
+        // The budget is the promise that this stays a page rather than becoming an application, and the two
+        // absence checks are the promises that keep it honest on a phone: nothing leaves the local network, and
+        // the credential lives only as long as the tab that was handed the code.
+        Assert.True(Encoding.UTF8.GetByteCount(html) <= LanPhonePage.MaximumBytes,
+            $"{Encoding.UTF8.GetByteCount(html)} 字节，上限 {LanPhonePage.MaximumBytes}");
+        Assert.DoesNotContain("http://", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("https://", html, StringComparison.Ordinal);
+        Assert.Contains("sessionStorage", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage", html, StringComparison.Ordinal);
+        // Signing a request is not available over plain HTTP, so the page must not reach for an API it has never
+        // got — crypto.subtle is undefined here, and a page that assumes it would break at the first upload.
+        Assert.DoesNotContain("crypto.subtle", html, StringComparison.Ordinal);
+        Assert.Contains("crypto.getRandomValues", html, StringComparison.Ordinal);
+        // Every route it names is one this listener maps, in the shape the mapping answers in.
+        foreach (var route in new[] { "/api/v1", "/pair", "/hello", "/inbox", "/basket/" })
+            Assert.Contains(route, html, StringComparison.Ordinal);
+        foreach (var header in new[]
+                 {
+                     LanProtocol.HeaderRel, LanProtocol.HeaderTotal, LanProtocol.HeaderMtime, LanProtocol.HeaderSession,
+                 })
+            Assert.Contains(header, html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_pairing_reply_leaves_the_credential_where_a_link_can_reach_it()
+    {
+        await using var server = await Harness.StartAsync();
+
+        var response = await server.PairRawAsync(server.Pairing.Code);
+        var cookie = Header(response, "Set-Cookie");
+
+        // A download is a link, and a link cannot carry a header, so the credential has to travel somewhere the
+        // browser will attach by itself. HttpOnly is what keeps it off the page's own reach, and Path=/ because a
+        // cookie scoped to /p would not go with a request to /api/v1.
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Contains($"{LanProtocol.CookieName}=", cookie, StringComparison.Ordinal);
+        Assert.Contains("HttpOnly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("path=/", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Secure", cookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_phone_takes_a_file_and_resumes_it_with_nothing_but_the_cookie_it_was_given()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+        server.Basket.Add(LanSendItem.Of(server.AddFile("tail.txt", "0123456789")));
+        var link = $"/api/v1/basket/{server.Basket.Single().Id:N}";
+
+        var whole = await server.LinkAsync(link);
+        var tail = await server.LinkAsync(link, new RangeHeaderValue(5, null));
+
+        // Both of these are the browser's own request, sent without a single header of ours: this is what a tap
+        // on a download link actually looks like on the wire, and range support is worthless if it only works
+        // for a client that can write an Authorization header.
+        Assert.Equal(HttpStatusCode.OK, whole.StatusCode);
+        Assert.Equal("0123456789", await whole.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.PartialContent, tail.StatusCode);
+        Assert.Equal("bytes 5-9/10", Header(tail, "Content-Range"));
+        Assert.Equal("56789", await tail.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task A_device_that_removes_itself_leaves_the_browser_with_nothing_to_send()
+    {
+        await using var server = await Harness.StartAsync();
+        var token = (await server.PairAsync(server.Pairing.Code)).Token;
+        server.Basket.Add(LanSendItem.Of(server.AddFile("a.txt", "x")));
+        Assert.Equal(HttpStatusCode.OK, (await server.LinkAsync($"/api/v1/basket/{server.Basket.Single().Id:N}")).StatusCode);
+
+        await server.ForgetSelfAsync(token);
+
+        // Revoking a device has to reach the copy the browser is holding, or deleting the row would leave the
+        // phone working off a credential this machine says it no longer has.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await server.LinkAsync($"/api/v1/basket/{server.Basket.Single().Id:N}")).StatusCode);
+    }
+
+    [Fact]
     public async Task Closing_the_listener_hands_the_armed_code_over_to_nobody()
     {
         await using var server = await Harness.StartAsync();
@@ -780,6 +879,22 @@ public sealed class LanServerWireTests
         /// <summary>A device removing its own credential, which is the one thing a peer may do to the trust list.</summary>
         public Task<HttpResponseMessage> ForgetSelfAsync(string token) =>
             SendAsync(Request(HttpMethod.Delete, "/api/v1/peers/mine", PeerId, token));
+
+        /// <summary>
+        /// A request as a browser makes it when a person taps a link: no header of ours, only what the browser
+        /// already stores for this origin.
+        /// </summary>
+        /// <remarks>
+        /// This is the shape a download has to work in. A page can put a header on its own <c>fetch</c>, but a
+        /// link the browser streams — which is the only way a phone gets a big file with a progress bar it can
+        /// resume — carries nothing but its address and its cookie.
+        /// </remarks>
+        public Task<HttpResponseMessage> LinkAsync(string path, RangeHeaderValue? range = null)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, new Uri(path, UriKind.Relative));
+            if (range is not null) request.Headers.Range = range;
+            return Http.SendAsync(request);
+        }
 
         public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request) => Http.SendAsync(request);
 

@@ -106,13 +106,13 @@ public sealed class LanSession(
     public LanHelloReply Hello(LanDeviceIdentity self) =>
         new(LanApi.WireVersion, self.DeviceId, self.DeviceName, self.Kind, pairing.IsAccepting);
 
-    /// <summary>
-    /// Turns an <c>Authorization</c> header into a contact, and refreshes when and where that device was last
-    /// seen when it does.
-    /// </summary>
-    public async Task<LanAuthResult> AuthenticateAsync(string? authorization, string? claimedName, string? claimedKind, string address, int port, CancellationToken ct = default)
+    /// <param name="credential">
+    /// The peer's <c>deviceId:token</c>, from the <c>Authorization</c> header or from the cookie a pairing reply
+    /// set — see <see cref="TrySplitCredential"/> for what either form may carry.
+    /// </param>
+    public async Task<LanAuthResult> AuthenticateAsync(string? credential, string? claimedName, string? claimedKind, string address, int port, CancellationToken ct = default)
     {
-        if (!TryReadCredential(authorization, out var deviceId, out var token)) return LanAuthResult.Rejected(LanRefusal.Unpaired);
+        if (!TrySplitCredential(credential, out var deviceId, out var token)) return LanAuthResult.Rejected(LanRefusal.Unpaired);
 
         var records = await Peers.LoadAsync(ct).ConfigureAwait(false);
         var record = records.FirstOrDefault(candidate => string.Equals(candidate.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
@@ -243,21 +243,26 @@ public sealed class LanSession(
     }
 
     /// <summary>
-    /// Reads <c>Authorization: FS-LAN &lt;deviceId&gt;:&lt;token&gt;</c>. A token is hex, so the first colon is
-    /// the only separator either side could mean.
+    /// Reads the credential a request carries: <c>deviceId:token</c>, whether it arrived in the
+    /// <c>Authorization</c> header or in the cookie a pairing reply left behind.
     /// </summary>
-    private static bool TryReadCredential(string? authorization, out string deviceId, out string token)
+    /// <remarks>
+    /// A token is hex and a device id is hex, so the first colon is the only separator either side could mean.
+    /// The scheme prefix is dropped here rather than by the caller because the two transports differ only in it.
+    /// </remarks>
+    public static bool TrySplitCredential(string? credential, out string deviceId, out string token)
     {
         deviceId = "";
         token = "";
-        if (string.IsNullOrWhiteSpace(authorization)) return false;
-        var separator = authorization.IndexOf(' ');
-        if (separator <= 0 || !string.Equals(authorization[..separator], LanProtocol.AuthScheme, StringComparison.Ordinal)) return false;
-        var remainder = authorization[(separator + 1)..];
-        var split = remainder.IndexOf(':');
-        if (split <= 0 || split == remainder.Length - 1) return false;
-        deviceId = remainder[..split];
-        token = remainder[(split + 1)..];
+        if (string.IsNullOrWhiteSpace(credential)) return false;
+        var value = credential.Trim();
+        var separator = value.IndexOf(' ');
+        if (separator > 0 && string.Equals(value[..separator], LanProtocol.AuthScheme, StringComparison.Ordinal))
+            value = value[(separator + 1)..];
+        var split = value.IndexOf(':');
+        if (split <= 0 || split == value.Length - 1) return false;
+        deviceId = value[..split];
+        token = value[(split + 1)..];
         return LanProtocol.IsPeerDeviceId(deviceId) && token.Length >= LanPeerSecretStore.TokenBytes;
     }
 
