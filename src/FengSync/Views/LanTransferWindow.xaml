@@ -306,7 +306,13 @@
                                     <StackPanel Margin="0,3">
                                         <TextBlock Text="{Binding Line}" Style="{StaticResource BodyTextStyle}"
                                                    TextTrimming="CharacterEllipsis"/>
-                                        <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding Percentage}"
+                                        <!-- Mode=OneWay is load-bearing: RangeBase.Value binds TwoWay by default and
+                                             LanProgressRow.Percentage is read-only, so the default mode makes WPF
+                                             throw a XamlParseException the moment a transfer row is realised — and
+                                             the row is realised by the layout pass a shown window does without
+                                             asking, so the first file a phone sends kills the process. CloudTransfer-
+                                             Window.xaml died the same way for the same reason. -->
+                                        <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding Percentage, Mode=OneWay}"
                                                    IsIndeterminate="{Binding IsUnknown}"/>
                                     </StackPanel>
                                 </DataTemplate>

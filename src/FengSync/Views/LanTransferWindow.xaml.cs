@@ -68,6 +68,10 @@ public partial class LanTransferWindow : Window
     private string? _paintedCode;
     private string? _paintedAddress;
     private string _chosenAddress = "";
+    // Assigning 收到文件时自动同意 from the settings file raises the same Checked event a click does, and that
+    // handler saves settings and writes the status line. So the read is marked, or every listener restart would
+    // answer a choice nobody made and overwrite the sentence the user was reading.
+    private bool _restoringToggle;
 
     /// <summary>Opens the one window this shell can have, or raises the one already open.</summary>
     internal static void ShowOrActivate(Window owner, App shell, LanTransferDependencies? dependencies = null)
@@ -167,13 +171,15 @@ public partial class LanTransferWindow : Window
         foreach (var offer in _awaiting.ToList()) Resolve(offer, accepted: false);
         _awaiting.Clear();
 
+        // Session memory, by design: a row that outlived the window would still be readable by a token issued
+        // to a peer that has since left. Before the listener is taken down rather than after, because that is
+        // the moment the peer can still ask, and these rows are bound to the screen, so they go on this thread.
+        _basket.Clear();
+        _running.Clear();
+
         await StopListenerAsync().ConfigureAwait(false);
         _client?.Dispose();
         _client = null;
-        // Session memory, by design: a row that outlived the window would still be readable by a token issued
-        // to a peer that has since left.
-        _basket.Clear();
-        _running.Clear();
     }
 
     // ------------------------------------------------------------------ listener
@@ -183,7 +189,12 @@ public partial class LanTransferWindow : Window
     /// the port or the receive directory changes, because those two are the only choices that cannot be
     /// applied to a running listener.
     /// </summary>
-    private async Task RestartListenerAsync()
+    /// <param name="preferredPort">
+    /// The number a person just applied through this window. It outranks the test seam, because a port box that
+    /// only took effect on the next launch would leave the screen showing a listener on the number it says is
+    /// busy.
+    /// </param>
+    private async Task RestartListenerAsync(int? preferredPort = null)
     {
         await StopListenerAsync();
         try { _settings = (await new SettingsStore().LoadAsync()).Settings; }
@@ -199,7 +210,7 @@ public partial class LanTransferWindow : Window
             return;
         }
 
-        var port = _deps.Port ?? _settings.LanTransferPort;
+        var port = preferredPort ?? _deps.Port ?? _settings.LanTransferPort;
         _lifetime = new CancellationTokenSource();
         LanReceiveSink sink;
         try
@@ -245,7 +256,9 @@ public partial class LanTransferWindow : Window
         _chosenAddress = _host.ListenAddresses.FirstOrDefault() ?? "";
         AddressList.ItemsSource = _host.ListenAddresses;
         AddressList.SelectedItem = _chosenAddress;
+        _restoringToggle = true;
         AutoAcceptBox.IsChecked = _settings.LanAutoAcceptFromTrusted;
+        _restoringToggle = false;
         ReceiveDirectoryText.Text = _receiveDirectory;
         await RefreshTrustedAsync();
         RefreshCode();
@@ -341,6 +354,9 @@ public partial class LanTransferWindow : Window
             // two-minute shelf life, and a stray .png in a temp folder is the one thing this must not leave.
             using (var stream = new MemoryStream(LanPairQr.Png(payload)))
             {
+                // BitmapImage is an ISupportInitialize: the decoder only runs at EndInit, and it refuses the
+                // call outright when no BeginInit opened the batch.
+                image.BeginInit();
                 image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
                 image.StreamSource = stream;
                 image.EndInit();
@@ -450,6 +466,10 @@ public partial class LanTransferWindow : Window
         if (ct.IsCancellationRequested || _teardownStarted) return Task.FromResult(false);
 
         var pending = new LanPendingOffer(offer);
+        // Registered before the row is even queued, because this is the list the teardown answers from: a
+        // question the window raised and then lost is one the peer is still waiting on, and it deserves the
+        // answer that writes nothing rather than a request hanging until the other side gives up.
+        lock (_gate) _awaiting.Add(pending);
         Dispatcher.BeginInvoke(() =>
         {
             // Re-checked here: the peer can give up between the question being raised and this window painting
@@ -873,11 +893,12 @@ public partial class LanTransferWindow : Window
         }
 
         await SaveSettingsAsync(settings => settings with { LanTransferPort = port });
-        await RestartListenerAsync();
+        await RestartListenerAsync(port);
     }
 
     private async void AutoAccept_Changed(object sender, RoutedEventArgs e)
     {
+        if (_restoringToggle) return;
         var chosen = AutoAcceptBox.IsChecked == true;
         await SaveSettingsAsync(settings => settings with { LanAutoAcceptFromTrusted = chosen });
         // The session reads the switch per write, so a running listener takes it without a restart and a
@@ -1025,6 +1046,10 @@ internal sealed class LanPendingOffer(LanInboundOffer offer)
 /// What the window needs from the shell to do any of its work, and the seams that let a test drive it without
 /// touching a network, a firewall, or a person.
 /// </summary>
+/// <param name="Port">
+/// The number the first listener takes, so a test never depends on what the developer's own settings hold. A
+/// port applied through the window's box outranks it, because that path has to be drivable too.
+/// </param>
 /// <param name="ConfirmInbound">
 /// Replaces the on-screen question. A modal dialog cannot be answered from an in-process test and this gate is
 /// asked by a request thread rather than by the UI, so the rule it enforces is reached through here — the same
