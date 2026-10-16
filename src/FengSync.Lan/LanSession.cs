@@ -27,41 +27,25 @@ public sealed record LanPairResult(LanRefusal Refusal, LanContact Contact, strin
     public bool Accepted => Refusal == LanRefusal.None && Token is not null;
 }
 
-/// <summary>One row the user put in the send basket.</summary>
+/// <summary>One local file or folder, described for serving: the name, the length, the directory flag.</summary>
 /// <param name="Bytes">
 /// The file's own length. A directory reports 0 and is labelled as a folder, because counting a subtree is a
-/// walk nobody asked for at the moment a row is added — the same reason the cloud 属性 panel leaves a folder's
+/// walk nobody asked for at the moment it is served — the same reason the cloud 属性 panel leaves a folder's
 /// size 未统计 until the user presses the button that measures it.
 /// </param>
-public sealed record LanSendItem(Guid Id, string Name, string AbsolutePath, bool IsDirectory, long Bytes, DateTimeOffset? ModifiedUtc)
+public sealed record LanSendItem(string Name, string AbsolutePath, bool IsDirectory, long Bytes, DateTimeOffset? ModifiedUtc)
 {
-    public LanBasketReply ToWire() => new(Id.ToString("N"), Name, Bytes, IsDirectory, ModifiedUtc);
-
     /// <summary>Describes a path that exists right now. The caller has already decided it may be shared.</summary>
     public static LanSendItem Of(string absolutePath)
     {
         var full = Path.GetFullPath(absolutePath);
         if (Directory.Exists(full))
-            return new(Guid.NewGuid(), Path.GetFileName(full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)), full, true, 0,
+            return new(Path.GetFileName(full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)), full, true, 0,
                 Directory.GetLastWriteTimeUtc(full));
         var file = new FileInfo(full);
         if (!file.Exists) throw new FileNotFoundException(null, full);
-        return new(Guid.NewGuid(), file.Name, full, false, file.Length, file.LastWriteTimeUtc);
+        return new(file.Name, full, false, file.Length, file.LastWriteTimeUtc);
     }
-}
-
-/// <summary>
-/// Everything a peer is allowed to read on the way out.
-/// </summary>
-/// <remarks>
-/// An interface rather than a collection because the basket is WPF-bound state in the shell, while the server
-/// must be able to serve a snapshot from a test. The one method is the whole contract: a peer may list and read
-/// what is on this list and nothing else — there is no call that takes a path.
-/// </remarks>
-public interface ILanSendSource
-{
-    /// <summary>The rows at this moment, in the order the window shows them.</summary>
-    IReadOnlyList<LanSendItem> Snapshot();
 }
 
 /// <summary>
@@ -86,7 +70,6 @@ public sealed class LanSession(
     LanPeerStore peers,
     LanPeerSecretStore secrets,
     LanPairingState pairing,
-    ILanSendSource basket,
     Func<LanInboundOffer, CancellationToken, Task<bool>>? confirmInbound = null,
     LanGroupLog? group = null)
 {
@@ -101,7 +84,6 @@ public sealed class LanSession(
 
     public LanOptions Options { get; } = options;
     public LanPeerStore Peers { get; } = peers;
-    public ILanSendSource Basket { get; } = basket;
 
     /// <summary>
     /// What this machine knows the room said. On the session rather than on the window or the listener because

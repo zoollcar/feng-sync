@@ -141,7 +141,7 @@ public sealed class LanServerWireTests
     {
         await using var server = await Harness.StartAsync();
 
-        var response = await server.GetAsync("/api/v1/basket");
+        var response = await server.GetAsync("/api/v1/log");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Equal(LanReason.PairRequired, await ReasonAsync(response));
@@ -156,10 +156,10 @@ public sealed class LanServerWireTests
 
         // A device id this list already holds, presenting a credential that was never issued to it, is a device
         // re-paired from elsewhere — not a stranger asking to pair, and the two need different sentences.
-        var stranger = await server.GetAsync("/api/v1/basket", OtherPeerId, forged);
+        var stranger = await server.GetAsync("/api/v1/log", OtherPeerId, forged);
         Assert.Equal(LanReason.PairRequired, await ReasonAsync(stranger));
 
-        var known = await server.GetAsync("/api/v1/basket", PeerId, forged);
+        var known = await server.GetAsync("/api/v1/log", PeerId, forged);
         Assert.Equal(LanReason.IdentityChanged, await ReasonAsync(known));
     }
 
@@ -336,33 +336,41 @@ public sealed class LanServerWireTests
     }
 
     [Fact]
-    public async Task The_basket_is_all_a_token_can_read_and_a_path_is_not_part_of_it()
+    public async Task The_bytes_a_room_entry_hands_over_are_the_disks_own_number_and_not_the_announcement_s()
     {
-        await using var server = await Harness.StartAsync();
+        await using var server = await Harness.StartAsync(confirm: Accepted);
         await server.PairAsync(server.Pairing.Code);
-        var shared = LanSendItem.Of(server.AddFile("可分享.txt", "可以读"));
-        server.Basket.Add(shared);
-        var outside = server.AddFile("不在篮里.txt", "不该被读到");
+        var id = "1a2b3c4d5e6f708192a3b4c5d6e7f809";
+        await server.InboxRawAsync("report.txt", "1", messageId: id);
+        // The member that announced this file said one byte, and then the bytes here grew.
+        File.WriteAllText(Path.Combine(server.Receive, "report.txt"), "0123456789");
 
-        var row = Assert.Single(await server.BasketAsync());
-        Assert.Equal("可分享.txt", row.Name);
-        // The number the phone sizes its download against is the file's own length on disk.
-        Assert.Equal(new FileInfo(shared.AbsolutePath).Length, row.Bytes);
-        Assert.False(row.IsDirectory);
-        // The route takes an id and nothing else, so no request can name a file on this machine's disk.
-        var missed = await server.GetAsync($"/api/v1/basket/{Uri.EscapeDataString(outside)}");
-        Assert.Equal(HttpStatusCode.NotFound, missed.StatusCode);
+        var response = await server.AttachmentAsync(id);
+
+        // A peer sizes its download — and the range it resumes into that download — against what it is about to be
+        // handed. Answering with the length announced when the file landed would cut the client off mid-file and
+        // never ask for the tail, so the name, the length and the modification time come off the disk.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("0123456789", await response.Content.ReadAsStringAsync());
+        Assert.Equal(10, response.Content.Headers.ContentLength);
+        // The room still reports the sentence that was said at the time; a file changing underneath an entry is
+        // not this machine's licence to rewrite what a member announced.
+        Assert.Equal(1, Assert.Single((await server.LogAsync()).Entries).Bytes);
+        // And a caller that names a path rather than an id is refused, because the id is a key in this copy of the
+        // log and never a way to point at a file on this disk.
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await server.AttachmentAsync(Path.Combine(server.Receive, "report.txt"))).StatusCode);
     }
 
     [Fact]
     public async Task A_range_request_answers_206_with_the_tail_the_phone_asked_for()
     {
-        await using var server = await Harness.StartAsync();
+        await using var server = await Harness.StartAsync(confirm: Accepted);
         var token = (await server.PairAsync(server.Pairing.Code)).Token;
-        server.Basket.Add(LanSendItem.Of(server.AddFile("tail.txt", "0123456789")));
-        var id = server.Basket.Single().Id.ToString("N");
+        var id = "2b3c4d5e6f708192a3b4c5d6e7f80910";
+        await server.InboxRawAsync("tail.txt", "0123456789", messageId: id);
 
-        var response = await server.DownloadAsync(id, token, range: new RangeHeaderValue(3, null));
+        var response = await server.AttachmentAsync(id, token: token, range: new RangeHeaderValue(3, null));
 
         Assert.Equal(HttpStatusCode.PartialContent, response.StatusCode);
         Assert.Equal("bytes", Header(response, "Accept-Ranges"));
@@ -375,11 +383,12 @@ public sealed class LanServerWireTests
     [Fact]
     public async Task A_download_names_itself_in_both_forms_so_a_Chinese_file_keeps_its_name()
     {
-        await using var server = await Harness.StartAsync();
+        await using var server = await Harness.StartAsync(confirm: Accepted);
         var token = (await server.PairAsync(server.Pairing.Code)).Token;
-        server.Basket.Add(LanSendItem.Of(server.AddFile("合同 终稿.txt", "x")));
+        var id = "3c4d5e6f708192a3b4c5d6e7f8091011";
+        await server.InboxRawAsync(Uri.EscapeDataString("合同 终稿.txt"), "x", messageId: id);
 
-        var response = await server.DownloadAsync(server.Basket.Single().Id.ToString("N"), token);
+        var response = await server.AttachmentAsync(id, token: token);
 
         var disposition = Header(response, "Content-Disposition");
         // Kestrel writes headers in ISO-8859-1, so the bare filename can only ever be a fallback; the real name
@@ -389,31 +398,19 @@ public sealed class LanServerWireTests
     }
 
     [Fact]
-    public async Task A_folder_is_only_ever_served_as_an_archive_never_as_a_bare_item()
-    {
-        await using var server = await Harness.StartAsync();
-        var token = (await server.PairAsync(server.Pairing.Code)).Token;
-        var item = LanSendItem.Of(server.AddFolder("照片", ("a.txt", "1")));
-        Assert.True(item.IsDirectory);
-        server.Basket.Add(item);
-
-        var response = await server.DownloadAsync(item.Id.ToString("N"), token);
-
-        // A single file that is not the folder it was named for is the worst possible answer to this request.
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
     public async Task The_archive_streams_onto_the_response_and_never_builds_it_on_disk()
     {
-        await using var server = await Harness.StartAsync();
+        await using var server = await Harness.StartAsync(confirm: Accepted);
         var token = (await server.PairAsync(server.Pairing.Code)).Token;
-        var folder = server.AddFolder("发送 包", ("报告+总结.txt", "一"), (@"子目录/照片 1.png", "二"));
-        Directory.CreateDirectory(Path.Combine(folder, "空目录"));
-        server.Basket.Add(LanSendItem.Of(folder));
+        var id = "4d5e6f708192a3b4c5d6e7f809101112";
+        // The tree arrives the way a folder really arrives: one directory at a time, then the files under it.
+        await server.MkdirAsync(Uri.EscapeDataString("发送 包"), messageId: id);
+        await server.MkdirAsync(Uri.EscapeDataString("发送 包/空目录"), messageId: id);
+        await server.InboxRawAsync(Uri.EscapeDataString("发送 包/报告+总结.txt"), "一", messageId: id, announcedDirectory: true);
+        await server.InboxRawAsync(Uri.EscapeDataString("发送 包/子目录/照片 1.png"), "二", messageId: id, announcedDirectory: true);
         var before = Snapshot(server.Root);
 
-        var response = await server.DownloadAsync(server.Basket.Single().Id.ToString("N"), token, archive: true);
+        var response = await server.AttachmentAsync(id, archive: true, token: token);
         var bytes = await response.Content.ReadAsByteArrayAsync();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -461,7 +458,7 @@ public sealed class LanServerWireTests
         var forgotten = await server.ForgetSelfAsync(token);
         Assert.Equal(HttpStatusCode.NoContent, forgotten.StatusCode);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, (await server.GetAsync("/api/v1/basket", token: token)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await server.GetAsync("/api/v1/log", token: token)).StatusCode);
         Assert.Empty(await server.Peers.LoadAsync());
         Assert.Empty(await server.Secrets.SecretDeviceIdsAsync());
     }
@@ -533,9 +530,9 @@ public sealed class LanServerWireTests
         // got — crypto.subtle is undefined here, and a page that assumes it would break at the first upload.
         Assert.DoesNotContain("crypto.subtle", html, StringComparison.Ordinal);
         Assert.Contains("crypto.getRandomValues", html, StringComparison.Ordinal);
-        // Every route it names is one this listener maps, in the shape the mapping answers in. The send basket is
-        // not among them any more: a phone now takes a file by the id its author minted, which is the same address
-        // a computer's own 接收 uses, so the page has no second way to point at a byte.
+        // Every route it names is one this listener maps, in the shape the mapping answers in. There is no listing
+        // of shareable rows any more: a phone takes a file by the id its author minted, which is the same address a
+        // computer's own 接收 uses, so the page has no second way to point at a byte.
         foreach (var route in new[]
                  {
                      "/api/v1", "/pair", "/hello", "/peers", "/name", "/messages", "/inbox", "/log?since=",
@@ -569,39 +566,19 @@ public sealed class LanServerWireTests
     }
 
     [Fact]
-    public async Task A_phone_takes_a_file_and_resumes_it_with_nothing_but_the_cookie_it_was_given()
-    {
-        await using var server = await Harness.StartAsync();
-        await server.PairAsync(server.Pairing.Code);
-        server.Basket.Add(LanSendItem.Of(server.AddFile("tail.txt", "0123456789")));
-        var link = $"/api/v1/basket/{server.Basket.Single().Id:N}";
-
-        var whole = await server.LinkAsync(link);
-        var tail = await server.LinkAsync(link, new RangeHeaderValue(5, null));
-
-        // Both of these are the browser's own request, sent without a single header of ours: this is what a tap
-        // on a download link actually looks like on the wire, and range support is worthless if it only works
-        // for a client that can write an Authorization header.
-        Assert.Equal(HttpStatusCode.OK, whole.StatusCode);
-        Assert.Equal("0123456789", await whole.Content.ReadAsStringAsync());
-        Assert.Equal(HttpStatusCode.PartialContent, tail.StatusCode);
-        Assert.Equal("bytes 5-9/10", Header(tail, "Content-Range"));
-        Assert.Equal("56789", await tail.Content.ReadAsStringAsync());
-    }
-
-    [Fact]
     public async Task A_device_that_removes_itself_leaves_the_browser_with_nothing_to_send()
     {
-        await using var server = await Harness.StartAsync();
+        await using var server = await Harness.StartAsync(confirm: Accepted);
         var token = (await server.PairAsync(server.Pairing.Code)).Token;
-        server.Basket.Add(LanSendItem.Of(server.AddFile("a.txt", "x")));
-        Assert.Equal(HttpStatusCode.OK, (await server.LinkAsync($"/api/v1/basket/{server.Basket.Single().Id:N}")).StatusCode);
+        var id = "5e6f708192a3b4c5d6e7f80910111213";
+        await server.InboxRawAsync("a.txt", "x", messageId: id);
+        Assert.Equal(HttpStatusCode.OK, (await server.LinkAsync($"/api/v1/attachments/{id}")).StatusCode);
 
         await server.ForgetSelfAsync(token);
 
         // Revoking a device has to reach the copy the browser is holding, or deleting the row would leave the
         // phone working off a credential this machine says it no longer has.
-        Assert.Equal(HttpStatusCode.Unauthorized, (await server.LinkAsync($"/api/v1/basket/{server.Basket.Single().Id:N}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await server.LinkAsync($"/api/v1/attachments/{id}")).StatusCode);
     }
 
     [Fact]
@@ -859,7 +836,7 @@ public sealed class LanServerWireTests
         // member fetching it later can ask for as one archive.
         Assert.Equal("tree", entry.FileName);
         Assert.Equal("tree", entry.RelativePath);
-        // A folder reports no size, which is the same choice a basket row makes: totalling a subtree is a walk
+        // A folder reports no size, which is the same choice the serving description makes: totalling a subtree is a walk
         // nobody asked for at the moment the entry is made.
         Assert.Equal(0, entry.Bytes);
 
@@ -944,7 +921,7 @@ public sealed class LanServerWireTests
         await server.InboxRawAsync("tail.txt", "0123456789", messageId: id);
 
         // The page's 接收 button answers with a row, and the row is then handed to the browser as a plain link —
-        // so the read route has to accept the same headerless shape the basket download did, or a tap on it would
+        // so the read route has to accept a request that carries nothing but that cookie, or a tap on it would
         // come back as a pairing refusal for a device that paired two requests ago.
         var link = $"/api/v1/attachments/{id}";
         var whole = await server.LinkAsync(link);
@@ -1182,9 +1159,9 @@ public sealed class LanServerWireTests
     /// One listener, one port, one directory tree, one set of stores — everything a case needs to be alone.
     /// </summary>
     /// <remarks>
-    /// The basket is a list the case adds rows to and the server reads through <see cref="BasketSource"/>, which
-    /// is the same shape the real window uses. The clock is an object a case can advance, because a code that has
-    /// aged out would otherwise cost two minutes of waiting.
+    /// The room is this machine's own copy of itself, so a case that wants a peer to read a file puts a held entry
+    /// into it rather than into a list the listener serves. The clock is an object a case can advance, because a
+    /// code that has aged out would otherwise cost two minutes of waiting.
     /// </remarks>
     private sealed class Harness : IAsyncDisposable
     {
@@ -1192,7 +1169,7 @@ public sealed class LanServerWireTests
 
         private Harness(string root, LanPairingState pairing, LanPeerStore peers, LanPeerSecretStore secrets,
             LanReceiveSink sink, TestClock clock, LanGroupRoom reader, LanPeerClient dialer,
-            LanServerOptions serverOptions, List<LanSendItem> basket)
+            LanServerOptions serverOptions)
         {
             Root = root;
             Receive = Path.Combine(root, "in");
@@ -1204,7 +1181,6 @@ public sealed class LanServerWireTests
             Reader = reader;
             Dialer = dialer;
             ServerOptions = serverOptions;
-            Basket = basket;
             Http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{serverOptions.Session.Options.Port}") };
         }
 
@@ -1231,22 +1207,7 @@ public sealed class LanServerWireTests
 
         public LanServerHost Host { get; private set; } = null!;
 
-        /// <summary>The rows the peer may list and read.</summary>
-        public List<LanSendItem> Basket { get; }
-
-        /// <summary>The same list, as the server sees it.</summary>
-        private sealed class BasketSource(List<LanSendItem> items) : ILanSendSource
-        {
-            public IReadOnlyList<LanSendItem> Snapshot() => items;
-        }
-
         public static string NewRoot() => Path.Combine(Path.GetTempPath(), "fengsync-lan-wire-" + Guid.NewGuid().ToString("N"));
-
-        /// <summary>
-        /// Files on disk are written without a preamble, because a byte order mark would silently shift every
-        /// offset a range request names and make the file longer than the content the case wrote.
-        /// </summary>
-        private static readonly Encoding Plain = new UTF8Encoding(false);
 
         /// <summary>
         /// A port to bind, taken from the ephemeral range and handed straight back.
@@ -1280,44 +1241,19 @@ public sealed class LanServerWireTests
             var sink = new LanReceiveSink(receive, AppendCounter);
             var options = new LanOptions(port ?? FreePort(), receive, autoAccept);
             var identity = await LanDeviceIdentity.LoadOrCreateAsync(Path.Combine(root, "device.json"));
-            var basket = new List<LanSendItem>();
-            var session = new LanSession(options, peers, secrets, pairing, new BasketSource(basket), confirm);
+            var session = new LanSession(options, peers, secrets, pairing, confirm);
             // A reader that is never started holds no beat: a case that presses 接收 wants one pull, decided now,
             // with nothing else in the room dialing behind it.
             var dialer = new LanPeerClient(identity, peers, secrets);
             var reader = new LanGroupRoom(identity, dialer, peers, session.Group, sink);
             var harness = new Harness(root, pairing, peers, secrets, sink, clock, reader, dialer,
-                new LanServerOptions(session, identity, pairing, sink) { Room = reader },
-                basket);
+                new LanServerOptions(session, identity, pairing, sink) { Room = reader });
             harness.Host = await LanServerHost.StartAsync(harness.ServerOptions, CancellationToken.None);
             return harness;
         }
 
         /// <summary>Moves the injected clock forward, which is how a code is aged out without waiting two minutes.</summary>
         public void AdvanceClock(int seconds) => Clock.Now = Clock.Now.AddSeconds(seconds);
-
-        public string AddFile(string relativePath, string content)
-        {
-            var path = Path.Combine(Root, "out", relativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            // No byte-order mark: a range request names offsets in the file, and a preamble the test never
-            // counted would move every one of them by three.
-            File.WriteAllText(path, content, Plain);
-            return path;
-        }
-
-        public string AddFolder(string name, params (string RelativePath, string Content)[] files)
-        {
-            var root = Path.Combine(Root, "out", name);
-            foreach (var (relative, content) in files)
-            {
-                var path = Path.Combine(root, relative);
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                File.WriteAllText(path, content, Plain);
-            }
-
-            return root;
-        }
 
         public async Task<LanHelloReply> HelloAsync() =>
             Deserialize<LanHelloReply>(await Http.GetStringAsync("/api/v1/hello"));
@@ -1428,26 +1364,8 @@ public sealed class LanServerWireTests
             return SendAsync(request);
         }
 
-        public async Task<IReadOnlyList<LanBasketReply>> BasketAsync(string? token = null)
-        {
-            var response = await GetAsync("/api/v1/basket", token: token);
-            response.EnsureSuccessStatusCode();
-            return Deserialize<List<LanBasketReply>>(await response.Content.ReadAsStringAsync());
-        }
-
         public Task<HttpResponseMessage> GetAsync(string path, string deviceId = PeerId, string? token = null) =>
             SendAsync(Request(HttpMethod.Get, path, deviceId, token));
-
-        /// <summary>
-        /// A basket download, addressed only by the id the listing gave out.
-        /// </summary>
-        /// <remarks>
-        /// The id is percent-encoded the way a browser would encode it, because a route value is something the
-        /// framework decodes and a Chinese filename must survive that exactly as a header does.
-        /// </remarks>
-        public Task<HttpResponseMessage> DownloadAsync(string id, string token, bool archive = false, RangeHeaderValue? range = null) =>
-            SendAsync(Request(HttpMethod.Get,
-                $"/api/v1/basket/{Uri.EscapeDataString(id)}{(archive ? "/zip" : "")}", PeerId, token, range));
 
         /// <summary>
         /// Asks for the bytes behind one room entry, the way a member that wants a file it was only told about does.

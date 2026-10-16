@@ -30,8 +30,8 @@ public enum LanTransferState
 /// One archived transfer.
 /// </summary>
 /// <param name="Path">
-/// What moved, in wire form for a receive and basket-relative for a send. It is a description rather than a
-/// resolvable location: a received file the user later moved is still the transfer that happened.
+/// What moved: the path it landed on for a receive, the name it went out under for a send. It is a description
+/// rather than a resolvable location: a received file the user later moved is still the transfer that happened.
 /// </param>
 /// <param name="ArchivedUtc">When it was filed, which is the ordering key and not when it started.</param>
 public sealed record LanTransferHistoryEntry(

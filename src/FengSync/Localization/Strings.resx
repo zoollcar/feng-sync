@@ -812,12 +812,6 @@ Rclone：MIT License</value>
   <data name="Lan.AutoReceiveOn" xml:space="preserve">
     <value>已设为自动接收，文件直接落到接收目录</value>
   </data>
-  <data name="Lan.BasketFile" xml:space="preserve">
-    <value>文件 · {0}</value>
-  </data>
-  <data name="Lan.BasketFolder" xml:space="preserve">
-    <value>文件夹（对方收到的是打包）</value>
-  </data>
   <data name="Lan.ChatFolder" xml:space="preserve">
     <value>文件夹</value>
   </data>

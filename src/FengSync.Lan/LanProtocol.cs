@@ -150,7 +150,7 @@ public enum LanRefusal
     /// <summary>The destination name exists and overwrite was refused.</summary>
     Conflict,
 
-    /// <summary>The named basket item is not in this session's basket.</summary>
+    /// <summary>No bytes this machine may hand over answer to the id the caller named.</summary>
     NotFound,
 
     /// <summary>

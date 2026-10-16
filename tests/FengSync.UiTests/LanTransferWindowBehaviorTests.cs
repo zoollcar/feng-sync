@@ -423,7 +423,7 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
     }
 
     [Fact]
-    public Task A_file_the_user_puts_in_the_room_is_held_here_and_offered_in_both_shapes()
+    public Task A_file_the_user_puts_in_the_room_is_held_here_and_shown_without_a_receive_button()
     {
         return RunSta(async () =>
         {
@@ -455,23 +455,15 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
                 var row = (LanChatRow)window.ChatList.Items[0];
                 Assert.Equal(Visibility.Collapsed, row.ActionVisibility);
                 Assert.Equal(Tr.Format("Lan.ChatHeld", Path.GetFileName(file)), row.Detail);
-
-                // The basket is the older drawing of the same promise: the listener still lists these rows for a
-                // device that asks /api/v1/basket, while the page on screen reads the room above them.
-                var snapshot = window.Session!.Basket.Snapshot();
-                Assert.Equal(2, snapshot.Count);
-                Assert.All(snapshot, item => Assert.True(item.AbsolutePath.StartsWith(_root, StringComparison.Ordinal),
-                    item.AbsolutePath));
             }
             finally
             {
                 await window.ShutdownAsync();
             }
 
-            // Session memory by design: a row left over from this window would still be readable by a token its
-            // peer keeps, and closing the window is supposed to close that door.
-            Assert.True(window.Basket.IsEmpty);
-            Assert.Empty(window.Session!.Basket.Snapshot());
+            // Session memory by design: the reading half of the room belongs to this window, so closing it takes
+            // away the one thing that could pull these bytes toward a peer.
+            Assert.Null(window.Room);
         });
     }
 
@@ -695,7 +687,7 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
                 Assert.Empty(Directory.EnumerateFileSystemEntries(_receive));
 
                 // And the row it was given is the one it can then download, by the id its author minted rather than
-                // by a row of this session's send basket.
+                // by the id its author minted, and by nothing a caller can build out of a path.
                 var bytes = await phone.SendAsync(
                     Authenticated(HttpMethod.Get, $"/api/v1/attachments/{messageId}", token));
                 bytes.EnsureSuccessStatusCode();

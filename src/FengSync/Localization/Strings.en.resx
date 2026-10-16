@@ -812,12 +812,6 @@ Save anyway?</value>
   <data name="Lan.AutoReceiveOn" xml:space="preserve">
     <value>Files now land in the receive folder on their own</value>
   </data>
-  <data name="Lan.BasketFile" xml:space="preserve">
-    <value>File · {0}</value>
-  </data>
-  <data name="Lan.BasketFolder" xml:space="preserve">
-    <value>Folder (the other side receives a zip)</value>
-  </data>
   <data name="Lan.ChatFolder" xml:space="preserve">
     <value>Folder</value>
   </data>

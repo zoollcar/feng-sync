@@ -57,12 +57,6 @@ public partial class LanTransferWindow : Window
     /// </summary>
     private readonly LanGroupLog _group = new();
 
-    /// <summary>
-    /// The rows a paired device may list through <c>/api/v1/basket</c>. The room's own entries are what the phone
-    /// page reads and what a member pulls, by id; this list is the older answer the listener still gives.
-    /// </summary>
-    private readonly LanSendBasket _basket = new();
-
     private readonly ObservableCollection<LanChatRow> _chat = [];
     private readonly ObservableCollection<LanRow> _trusted = [];
     private readonly ObservableCollection<LanRow> _discovered = [];
@@ -148,8 +142,6 @@ public partial class LanTransferWindow : Window
 
     internal LanGroupLog Group => _group;
 
-    internal LanSendBasket Basket => _basket;
-
     internal IReadOnlyList<string> ListenAddresses => _host?.ListenAddresses ?? [];
 
     /// <summary>
@@ -181,8 +173,9 @@ public partial class LanTransferWindow : Window
     }
 
     /// <summary>
-    /// Stops the room, the advertiser and the listener, and empties the basket. Idempotent, because the window's
-    /// own close and the application's shutdown both call it and neither may make the other throw.
+    /// Stops the room, the advertiser and the listener, and forgets the transfers that were on screen. Idempotent,
+    /// because the window's own close and the application's shutdown both call it and neither may make the other
+    /// throw.
     /// </summary>
     internal Task ShutdownAsync()
     {
@@ -202,10 +195,9 @@ public partial class LanTransferWindow : Window
         foreach (var offer in _awaiting.ToList()) Resolve(offer, accepted: false);
         _awaiting.Clear();
 
-        // Session memory, by design: a row that outlived the window would still be readable by a token issued
-        // to a peer that has since left. Before the listener is taken down rather than after, because that is
-        // the moment the peer can still ask, and these rows are bound to the screen, so they go on this thread.
-        _basket.Clear();
+        // The progress list is this window's own drawing of the transfers that were running. It is bound to the
+        // screen, so it goes here rather than on the listener's thread, and it goes on the way out because a row
+        // that survived would describe a delivery to a peer that has since left.
         _running.Clear();
 
         await StopListenerAsync().ConfigureAwait(false);
@@ -260,7 +252,7 @@ public partial class LanTransferWindow : Window
             }
 
             _session = new LanSession(new LanOptions(port, _receiveDirectory, _settings.LanAutoAcceptFromTrusted),
-                _peers, _secrets, _pairing, _basket, AskInboundAsync, _group);
+                _peers, _secrets, _pairing, AskInboundAsync, _group);
             _client ??= new LanPeerClient(_identity, _peers);
             // The room's reader is built beside the listener because it is the same pair of promises: this machine
             // answers its own <c>/log</c> here and reads everybody else's from here. It is built *before* the
@@ -691,11 +683,6 @@ public partial class LanTransferWindow : Window
     /// five uploads, and why a machine that was switched off when the file was announced can still take it
     /// tomorrow.
     /// </para>
-    /// <para>
-    /// The basket gets the same path because the listener still answers <c>/api/v1/basket</c> from it: a device
-    /// that asks that route is offered what the user put on the screen, rather than an empty list beside a full
-    /// room. The page reads the room, by the id its author minted.
-    /// </para>
     /// </remarks>
     internal int Announce(IEnumerable<string?> paths)
     {
@@ -712,7 +699,6 @@ public partial class LanTransferWindow : Window
             // with nobody holding it is a 接收 button that can only ever fail.
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { continue; }
 
-            _basket.Add([item.AbsolutePath]);
             _group.Hold(self, Guid.NewGuid().ToString("N"), item.Name, item.Bytes, item.IsDirectory,
                 item.AbsolutePath, now);
             announced++;

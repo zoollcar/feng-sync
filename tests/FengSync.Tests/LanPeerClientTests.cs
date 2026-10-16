@@ -14,7 +14,7 @@ namespace FengSync.Tests;
 /// These are the properties that only exist between the two halves: a token the peer issued lands in this
 /// machine's own credential file keyed by the <b>peer's</b> id and nowhere else, so a second client reading the
 /// same file is already paired and a <see cref="LanPeerClient.ForgetAsync"/> is a decision that survives closing
-/// the window; and a folder a person dropped in the basket arrives as the same tree, empty directories included,
+/// the window; and a folder a person named arrives as the same tree, empty directories included,
 /// because the walk and the per-file writes are one sequence with no batch concept on either side.
 /// </para>
 /// <para>
@@ -554,7 +554,7 @@ public sealed class LanPeerClientTests
             // A new window means a new room: the listener's copy of the history is memory, so it is rebuilt here
             // rather than read back from the stores that survive on disk.
             _session = new LanSession(new LanOptions(Port, Receive, true), _peers, _secrets, _pairing,
-                new EmptyBasket(), (offer, _) => Asked.PublishAsync(offer, accept: true));
+                (offer, _) => Asked.PublishAsync(offer, accept: true));
             _host = await LanServerHost.StartAsync(new LanServerOptions(_session, _identity, _pairing, _sink), CancellationToken.None);
         }
 
@@ -568,11 +568,6 @@ public sealed class LanPeerClientTests
             taken.Contains(name, StringComparer.OrdinalIgnoreCase)
                 ? $"{Path.GetFileNameWithoutExtension(name)} (1){Path.GetExtension(name)}"
                 : name;
-
-        private sealed class EmptyBasket : ILanSendSource
-        {
-            public IReadOnlyList<LanSendItem> Snapshot() => [];
-        }
     }
 
     /// <summary>Records every offer it is handed, so a case can read the one question a listener asked.</summary>

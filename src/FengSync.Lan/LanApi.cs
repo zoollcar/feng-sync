@@ -153,9 +153,6 @@ public sealed record LanInboxReply(string SavedAs, long Bytes, bool Renamed, str
 /// <summary>A directory the peer asked this machine to create.</summary>
 public sealed record LanMkdirReply(string RelativePath);
 
-/// <summary>One row of the send basket, as a phone lists it.</summary>
-public sealed record LanBasketReply(string Id, string Name, long Bytes, bool IsDirectory, DateTimeOffset? ModifiedUtc);
-
 /// <summary>
 /// One thing said in the room. <see cref="LocalSeq"/> is the answering machine's own arrival number and
 /// <see cref="HeldHere"/> is a statement about that machine, so a reader keys its watermark on the pair

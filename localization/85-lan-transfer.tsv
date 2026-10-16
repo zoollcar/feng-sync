@@ -48,11 +48,7 @@ Lan.AlreadyGone	这台设备已经不在这份列表里了	That device is no lon
 Lan.NoTrustedDevices	还没有配对过的设备	Nothing has been paired with yet
 Lan.PeerListFailed	受信设备列表没读到	The trusted device list could not be read
 # ---- 房间：一句话、一个文件、一个接收的动作 ----
-# Lan.BasketFile / Lan.BasketFolder name what the send basket lists on /api/v1/basket, the older answer the
-# listener still gives; the page and the room's own bubbles both read the room, and a bubble carries the file's
-# own name.
-Lan.BasketFile	文件 · {0}	File · {0}
-Lan.BasketFolder	文件夹（对方收到的是打包）	Folder (the other side receives a zip)
+# A bubble carries the file's own name, so nothing here labels a listing.
 Lan.Members	群里的设备	Devices in the room
 Lan.RoomEmpty	还没有人说话。让手机扫上面的码进来，或者用下面的按钮往房间里放一个文件。	Nothing has been said yet. Let a phone scan the code above, or use the buttons below to put a file in the room.
 Lan.SendFiles	发文件…	Send files…

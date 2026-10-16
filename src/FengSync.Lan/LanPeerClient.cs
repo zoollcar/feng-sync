@@ -21,7 +21,7 @@ namespace FengSync.Lan;
 /// </param>
 public sealed record LanPeerEndpoint(string DeviceId, string Address, int Port, string? DeviceName = null);
 
-/// <summary>What one basket row cost to hand over.</summary>
+/// <summary>What handing one item over cost.</summary>
 public sealed record LanSendOutcome(int Files, int Directories, long Bytes);
 
 /// <summary>
@@ -218,7 +218,7 @@ public sealed class LanPeerClient : IDisposable
     }
 
     /// <summary>
-    /// Sends one basket row. A file is one <c>/inbox</c> write; a folder is a walk — one <c>/mkdir</c> per
+    /// Sends one item. A file is one <c>/inbox</c> write; a folder is a walk — one <c>/mkdir</c> per
     /// directory it holds, including the empty ones, then one write per file — so the tree the peer receives
     /// has the shape it was given rather than a pile of names.
     /// </summary>

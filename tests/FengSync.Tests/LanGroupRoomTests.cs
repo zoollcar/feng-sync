@@ -335,7 +335,7 @@ public sealed class LanGroupRoomTests
             // One session for the life of the node: pausing a listener and bringing it back keeps the room this
             // machine holds, because a window that restarted its socket did not restart its conversation.
             var session = new LanSession(new LanOptions(port, receive, true), peers,
-                new LanPeerSecretStore(Path.Combine(root, "secrets.dat")), pairing, new EmptyBasket(),
+                new LanPeerSecretStore(Path.Combine(root, "secrets.dat")), pairing,
                 (_, _) => Task.FromResult(true));
             var node = new Node(root, identity, peers, pairing, sink, session, port);
             await node.ResumeAsync();
@@ -402,10 +402,5 @@ public sealed class LanGroupRoomTests
             Client.Dispose();
             try { Directory.Delete(_root, true); } catch (IOException) { }
         }
-    }
-
-    private sealed class EmptyBasket : ILanSendSource
-    {
-        public IReadOnlyList<LanSendItem> Snapshot() => [];
     }
 }

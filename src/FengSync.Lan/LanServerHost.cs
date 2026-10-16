@@ -207,12 +207,9 @@ public sealed class LanServerHost : IAsyncDisposable
         // somebody is adding to it.
         endpoints.MapGet("/api/v1/log", (Func<HttpContext, Task<IResult>>)HandleLogAsync);
         endpoints.MapPost("/api/v1/messages", (Func<HttpContext, Task<IResult>>)HandleSayAsync);
-        endpoints.MapGet("/api/v1/basket", (Func<HttpContext, Task<IResult>>)HandleBasketAsync);
-        endpoints.MapGet("/api/v1/basket/{id}", (Func<string, HttpContext, Task<IResult>>)HandleDownloadAsync);
-        endpoints.MapGet("/api/v1/basket/{id}/zip", (Func<string, HttpContext, Task<IResult>>)HandleArchiveAsync);
 
-        // The same two answers for the room's own entries: a peer that was told about a file asks whoever holds it,
-        // and holds it by id rather than by a row of somebody's send basket.
+        // A file a member holds is read by the id its author minted, never by a row of a listing: the room is the
+        // only thing a peer may enumerate, and an entry that names bytes this machine holds is the only path out.
         endpoints.MapGet("/api/v1/attachments/{id}", (Func<string, HttpContext, Task<IResult>>)HandleAttachmentAsync);
         endpoints.MapGet("/api/v1/attachments/{id}/zip", (Func<string, HttpContext, Task<IResult>>)HandleAttachmentArchiveAsync);
         // A member that cannot be dialed cannot dial out either, so a browser asks this machine to become the holder
@@ -517,36 +514,6 @@ public sealed class LanServerHost : IAsyncDisposable
         return Json(entry.ToWire(), StatusCodes.Status201Created);
     }
 
-    private async Task<IResult> HandleBasketAsync(HttpContext http)
-    {
-        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
-        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
-
-        // What a peer may read is exactly this list. There is no route that takes a path, which is why a token
-        // cannot be used to walk the machine's disk.
-        return Json(_options.Session.Basket.Snapshot().Select(item => item.ToWire()).ToList());
-    }
-
-    private async Task<IResult> HandleDownloadAsync(string id, HttpContext http)
-    {
-        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
-        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
-
-        var (item, error) = Find(id, wantsArchive: false);
-        if (error is not null) return error;
-        return ServeFile(http, auth.Contact!, item!);
-    }
-
-    private async Task<IResult> HandleArchiveAsync(string id, HttpContext http)
-    {
-        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
-        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
-
-        var (item, error) = Find(id, wantsArchive: true);
-        if (error is not null) return error;
-        return await ServeArchiveAsync(http, auth.Contact!, item!).ConfigureAwait(false);
-    }
-
     /// <summary>
     /// The bytes behind one room entry, addressed by the id its author minted.
     /// </summary>
@@ -620,9 +587,10 @@ public sealed class LanServerHost : IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Both read routes come through here, because a basket row and a room entry differ only in where their path
-    /// came from — and two downloads that behave differently is exactly the drift nobody notices until a phone can
-    /// resume one of them and not the other.
+    /// Both read routes come through here, because a file and its archive differ only in how the bytes are put on
+    /// the wire — and two downloads that behave differently is exactly the drift nobody notices until a phone can
+    /// resume one of them and not the other. The name is written the same way for both, so a Chinese file and its
+    /// <c>.zip</c> land under the name the entry carries.
     /// </para>
     /// <para>
     /// Range support is the whole point of this shape: a phone that drops a large download can come back for the
@@ -661,18 +629,6 @@ public sealed class LanServerHost : IAsyncDisposable
         return Written.Instance;
     }
 
-    private (LanSendItem? Item, IResult? Error) Find(string id, bool wantsArchive)
-    {
-        if (!Guid.TryParse(id, out var guid)) return (null, Answer(LanRefusal.NotFound));
-        var item = _options.Session.Basket.Snapshot().FirstOrDefault(candidate => candidate.Id == guid);
-        if (item is null) return (null, Answer(LanRefusal.NotFound));
-        if (item.IsDirectory != wantsArchive)
-            // A folder has no single-length answer: it is served as an archive, and a client that asked for the
-            // bare item would otherwise receive a file that is not the folder it named.
-            return (null, Answer(LanRefusal.BadRequest));
-        return Exists(wantsArchive, item.AbsolutePath) ? (item, null) : (null, Answer(LanRefusal.NotFound));
-    }
-
     /// <summary>
     /// The entry a caller named, when this machine can actually hand its bytes over.
     /// </summary>
@@ -706,8 +662,9 @@ public sealed class LanServerHost : IAsyncDisposable
         LanSendItem item;
         try
         {
-            // The row the window records for a delivery is the same description it would show for a basket row, so
-            // the rule that reads a path is reused rather than re-derived from the entry's own claimed size.
+            // The served item is read back off the disk rather than rebuilt from the entry's announced fields, so
+            // the name, length and modification time on the wire are the file's own and not what was announced when
+            // it was offered — an entry whose bytes later changed length must not answer with the old number.
             item = LanSendItem.Of(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
