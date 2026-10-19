@@ -114,6 +114,15 @@
   <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
  </Style>
 
+ <!-- The pairing code itself, clickable so the person on the other computer can copy the six characters
+      instead of transcribing them. It is display text first and a control second, so it hugs its own
+      content rather than taking the row height a list of commands would. -->
+ <Style x:Key="PairCodeButtonStyle" TargetType="Button" BasedOn="{StaticResource TertiaryButtonStyle}">
+  <Setter Property="Height" Value="Auto"/>
+  <Setter Property="MinHeight" Value="0"/>
+  <Setter Property="Padding" Value="10,2"/>
+ </Style>
+
  <!-- Profile list item: 76 DIP high, 3 DIP AccentBrush left indicator when selected.
       The selected state must be visible so the user can tell which Profile is active; we therefore
       restyle the template to render the indicator as a dedicated left bar instead of relying on

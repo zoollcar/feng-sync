@@ -251,7 +251,7 @@ public sealed class UiFeatureBehaviorTests
     }
 
     [Fact]
-    public void The_endpoint_manager_offers_renaming_beside_the_other_endpoint_actions()
+    public void The_endpoint_commands_live_on_the_row_menu()
     {
         RunSta(() =>
         {
@@ -261,14 +261,32 @@ public sealed class UiFeatureBehaviorTests
             try
             {
                 var window = new RemoteEndpointManagerWindow();
+                window.LoadEndpointsForTest([EndpointRow("nas", "sftp", "SFTP", "team/docs", CloudEndpointHealth.Connected)]);
 
-                // Renaming is a distinct action from editing: it moves the endpoint's identity, so it has its
-                // own AutomationId for the desktop scenario to drive, and it uses a whitelisted button style.
-                Assert.Equal("RenameCloudEndpoint", AutomationProperties.GetAutomationId(window.RenameEndpointButton));
-                Assert.NotNull(window.RenameEndpointButton.Style);
-                Assert.Equal("重命名", window.RenameEndpointButton.Content);
-                // Editing keeps its own button: the two must not be merged, because a rename migrates profiles
-                // while an edit does not.
+                // Nothing is picked, so there is nothing to act on and WPF is told not to open a menu at all —
+                // the same rule the file list follows.
+                Assert.Null(window.BuildEndpointMenu());
+
+                // This test asks about the menu, not browsing: install the selection through the seam so
+                // it cannot leave an unobserved network read running after this synchronous STA exits.
+                window.LoadEndpointsForTest([EndpointRow("nas", "sftp", "SFTP", "team/docs", CloudEndpointHealth.Connected)], selectName: "nas");
+                var menu = window.BuildEndpointMenu();
+                Assert.NotNull(menu);
+                Assert.Equal("CloudEndpointMenu", AutomationProperties.GetAutomationId(menu!));
+                // The five commands that need a row all live here now. 检查连接 keeps its own entry rather than
+                // being folded into 工具's 测试全部: the two differ in scope, and asking one endpoint is the cheap
+                // question when the list is long. 删除 names the endpoint it would delete, because the file
+                // list's own 删除… is one control away and deletes cloud objects instead.
+                Assert.Equal(
+                    ["检查连接", "重命名…", "分组与标签…", "删除“nas”…"],
+                    menu!.Items.OfType<MenuItem>().Select(item => item.Header?.ToString()));
+                // The desktop scenario drives these by id, so each one has to be reachable in the real shell.
+                Assert.Equal(
+                    ["CloudEndpointMenuCheck", "CloudEndpointMenuRename", "CloudEndpointMenuOrganize", "CloudEndpointMenuDelete"],
+                    menu.Items.OfType<MenuItem>().Select(AutomationProperties.GetAutomationId));
+
+                // Editing stays a button of its own: a rename moves the endpoint's identity and migrates the
+                // profiles that point at it, while an edit does not, so the two must not be merged into one item.
                 Assert.Equal("EditCloudEndpoint", AutomationProperties.GetAutomationId(window.EditButton));
                 window.Close();
             }
@@ -381,10 +399,9 @@ public sealed class UiFeatureBehaviorTests
                 Assert.Equal(["alpha", "beta", "", "未分组"], window.VisibleEndpoints.Select(row => row.GroupHeading));
 
                 // Installing the rows is not a gesture, so nothing is selected: the browser stays blank until
-                // the user picks a row, and the endpoint actions that need one are off.
+                // the user picks a row, and the row menu that carries 分组与标签 / 重命名 / 删除 does not exist.
                 Assert.Null(SelectedName(window));
-                Assert.Equal("OrganizeCloudEndpoint", AutomationProperties.GetAutomationId(window.OrganizeEndpointButton));
-                Assert.False(window.OrganizeEndpointButton.IsEnabled);
+                Assert.Null(window.BuildEndpointMenu());
                 // Installing the rows is not a gesture, so nothing has asked the remote service for anything.
                 AssertNoDirectoryListing(window);
 

@@ -782,9 +782,6 @@ Rclone：MIT License</value>
   <data name="Lan.Accept" xml:space="preserve">
     <value>同意</value>
   </data>
-  <data name="Lan.AddressPickHint" xml:space="preserve">
-    <value>手机连哪一个由这里选，二维码跟着它重画。装了 VPN 或虚拟网卡时，请挑局域网那一条。</value>
-  </data>
   <data name="Lan.Addresses" xml:space="preserve">
     <value>本机地址</value>
   </data>
@@ -824,6 +821,12 @@ Rclone：MIT License</value>
   <data name="Lan.ChooseDirectory" xml:space="preserve">
     <value>选择目录…</value>
   </data>
+  <data name="Lan.Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Lan.CodeCopied" xml:space="preserve">
+    <value>配对码已复制</value>
+  </data>
   <data name="Lan.CodeExpires" xml:space="preserve">
     <value>剩余 {0} 秒</value>
   </data>
@@ -833,8 +836,11 @@ Rclone：MIT License</value>
   <data name="Lan.CodeRenewing" xml:space="preserve">
     <value>正在换新码…</value>
   </data>
-  <data name="Lan.Computers" xml:space="preserve">
-    <value>发现的电脑</value>
+  <data name="Lan.CopyCode" xml:space="preserve">
+    <value>点击复制配对码</value>
+  </data>
+  <data name="Lan.CopyCodeFailed" xml:space="preserve">
+    <value>没能复制到剪贴板：</value>
   </data>
   <data name="Lan.Decline" xml:space="preserve">
     <value>拒绝</value>
@@ -853,6 +859,15 @@ Rclone：MIT License</value>
   </data>
   <data name="Lan.DiscoveryUnavailable" xml:space="preserve">
     <value>局域网发现没能起来，仍可手动填地址</value>
+  </data>
+  <data name="Lan.EtaHours" xml:space="preserve">
+    <value>{0} 小时 {1} 分</value>
+  </data>
+  <data name="Lan.EtaMinutes" xml:space="preserve">
+    <value>{0} 分 {1} 秒</value>
+  </data>
+  <data name="Lan.EtaSeconds" xml:space="preserve">
+    <value>{0} 秒</value>
   </data>
   <data name="Lan.Firewall.Added" xml:space="preserve">
     <value>已添加防火墙规则</value>
@@ -896,8 +911,14 @@ Rclone：MIT License</value>
   <data name="Lan.KindUnknown" xml:space="preserve">
     <value>未知设备</value>
   </data>
+  <data name="Lan.LeftRoom" xml:space="preserve">
+    <value>{0} 离开了这个群</value>
+  </data>
   <data name="Lan.Listening" xml:space="preserve">
     <value>正在监听端口 {0}</value>
+  </data>
+  <data name="Lan.ManageTrusted" xml:space="preserve">
+    <value>管理信任记录…</value>
   </data>
   <data name="Lan.ManualPeer" xml:space="preserve">
     <value>手动地址</value>
@@ -905,14 +926,17 @@ Rclone：MIT License</value>
   <data name="Lan.ManualPeerHint" xml:space="preserve">
     <value>写成 ip:端口。有些网络（AP 隔离）拦得住发现也拦得住连接，这一栏是唯一的兜底。</value>
   </data>
+  <data name="Lan.MemberChip" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Lan.MemberDiscovered" xml:space="preserve">
+    <value>发现的电脑</value>
+  </data>
   <data name="Lan.Members" xml:space="preserve">
     <value>群里的设备</value>
   </data>
   <data name="Lan.MyDevice" xml:space="preserve">
     <value>这台电脑</value>
-  </data>
-  <data name="Lan.NoComputersFound" xml:space="preserve">
-    <value>没发现其他电脑，可直接填下面的地址</value>
   </data>
   <data name="Lan.NoDirectory" xml:space="preserve">
     <value>接收目录不存在，监听没有启动</value>
@@ -938,11 +962,14 @@ Rclone：MIT License</value>
   <data name="Lan.PairRefused" xml:space="preserve">
     <value>与 {0} 配对没通过：{1}</value>
   </data>
+  <data name="Lan.PairUrl" xml:space="preserve">
+    <value>网址</value>
+  </data>
   <data name="Lan.Pairing" xml:space="preserve">
     <value>配对</value>
   </data>
   <data name="Lan.PairingHint" xml:space="preserve">
-    <value>手机扫下面的二维码，或在另一台电脑上输入这个码。码只用一次，两分钟就作废。</value>
+    <value>扫下面的二维码，或把网址发给另一台电脑——网址里已经带着配对码，打开就配对。码使用一次作废、两分钟作废。</value>
   </data>
   <data name="Lan.PeerAddressInvalid" xml:space="preserve">
     <value>地址要写成 ip:端口</value>
@@ -958,9 +985,6 @@ Rclone：MIT License</value>
   </data>
   <data name="Lan.PeerPaired" xml:space="preserve">
     <value>已与 {0} 配对</value>
-  </data>
-  <data name="Lan.PeerRow" xml:space="preserve">
-    <value>{0}:{1} · {2}</value>
   </data>
   <data name="Lan.Pending" xml:space="preserve">
     <value>等你确认</value>
@@ -979,9 +1003,6 @@ Rclone：MIT License</value>
   </data>
   <data name="Lan.PortBusy" xml:space="preserve">
     <value>端口被占用，请换一个</value>
-  </data>
-  <data name="Lan.PortHint" xml:space="preserve">
-    <value>防火墙规则里写的是这个端口。换端口后规则要重新加，手机也得重新配对。</value>
   </data>
   <data name="Lan.PortRange" xml:space="preserve">
     <value>端口要在 {0} 到 {1} 之间</value>
@@ -1079,6 +1100,9 @@ Rclone：MIT License</value>
   <data name="Lan.RoomEmpty" xml:space="preserve">
     <value>还没有人说话。让手机扫上面的码进来，或者用下面的按钮往房间里放一个文件。</value>
   </data>
+  <data name="Lan.RoomMembersEmpty" xml:space="preserve">
+    <value>还没有别的设备在群里</value>
+  </data>
   <data name="Lan.RoomReceived" xml:space="preserve">
     <value>已收到 {0}（{1}）</value>
   </data>
@@ -1115,6 +1139,9 @@ Rclone：MIT License</value>
   <data name="Lan.SizeUnknown" xml:space="preserve">
     <value>大小未知</value>
   </data>
+  <data name="Lan.SpeedEta" xml:space="preserve">
+    <value>{0} · 还剩 {1}</value>
+  </data>
   <data name="Lan.StartFailed" xml:space="preserve">
     <value>监听没能起来：</value>
   </data>
@@ -1133,8 +1160,20 @@ Rclone：MIT License</value>
   <data name="Lan.Title" xml:space="preserve">
     <value>局域网快传</value>
   </data>
+  <data name="Lan.TrustedCount" xml:space="preserve">
+    <value>已信任 {0} 台设备</value>
+  </data>
+  <data name="Lan.TrustedDialogHint" xml:space="preserve">
+    <value>这份名单存在磁盘上，关掉窗口也还在。取消信任后，那台设备要重新扫码才能再进来。</value>
+  </data>
+  <data name="Lan.TrustedDialogTitle" xml:space="preserve">
+    <value>信任记录</value>
+  </data>
   <data name="Lan.TrustedRow" xml:space="preserve">
     <value>{0} · {1} · 上次联系 {2}</value>
+  </data>
+  <data name="Lan.TrustedWindowName" xml:space="preserve">
+    <value>信任记录窗口</value>
   </data>
   <data name="Lan.UnnamedDevice" xml:space="preserve">
     <value>来自 {0} 的设备</value>
@@ -1802,9 +1841,6 @@ Rclone：MIT License</value>
   <data name="Mgr.BulletField" xml:space="preserve">
     <value> · {0}：{1}</value>
   </data>
-  <data name="Mgr.BusyCreate" xml:space="preserve">
-    <value>正在新建…</value>
-  </data>
   <data name="Mgr.BusyLogin" xml:space="preserve">
     <value>正在登录…</value>
   </data>
@@ -1829,9 +1865,6 @@ Rclone：MIT License</value>
   <data name="Mgr.CacheClearedPartial" xml:space="preserve">
     <value>已清理挂载缓存：{0} / {1} 个文件；其余正被挂载占用，已保留。</value>
   </data>
-  <data name="Mgr.CannotCreateSyncTask" xml:space="preserve">
-    <value>无法创建同步任务。</value>
-  </data>
   <data name="Mgr.CannotReconnectProvider" xml:space="preserve">
     <value>只有需要浏览器授权的端点可以重新登录；{0} 请直接编辑端点参数。</value>
   </data>
@@ -1849,9 +1882,6 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.CheckEndpoint" xml:space="preserve">
     <value>检查连接</value>
-  </data>
-  <data name="Mgr.CheckEndpointName" xml:space="preserve">
-    <value>检查所选云盘端点的连接与容量</value>
   </data>
   <data name="Mgr.Checking" xml:space="preserve">
     <value>正在检查…</value>
@@ -1935,12 +1965,6 @@ Rclone：MIT License</value>
   <data name="Mgr.CopyShareLink" xml:space="preserve">
     <value>复制分享链接…</value>
   </data>
-  <data name="Mgr.CreateSyncTask" xml:space="preserve">
-    <value>创建同步任务</value>
-  </data>
-  <data name="Mgr.CreateSyncTaskName" xml:space="preserve">
-    <value>从所选云盘端点创建同步任务</value>
-  </data>
   <data name="Mgr.CreatingFolder" xml:space="preserve">
     <value>正在创建文件夹“{0}”…</value>
   </data>
@@ -1972,8 +1996,8 @@ Rclone：MIT License</value>
   <data name="Mgr.DeleteEllipsis" xml:space="preserve">
     <value>删除…</value>
   </data>
-  <data name="Mgr.DeleteEndpointName" xml:space="preserve">
-    <value>删除所选云盘端点</value>
+  <data name="Mgr.DeleteEndpointMenuItem" xml:space="preserve">
+    <value>删除“{0}”…</value>
   </data>
   <data name="Mgr.DeleteEndpointTitle" xml:space="preserve">
     <value>删除端点</value>
@@ -2382,17 +2406,8 @@ Rclone：MIT License</value>
   <data name="Mgr.OpeningNewEndpointWindow" xml:space="preserve">
     <value>正在打开新建端点窗口…</value>
   </data>
-  <data name="Mgr.OpeningSyncWizard" xml:space="preserve">
-    <value>正在打开同步向导…</value>
-  </data>
   <data name="Mgr.OrganizeEndpoint" xml:space="preserve">
     <value>分组与标签…</value>
-  </data>
-  <data name="Mgr.OrganizeEndpointName" xml:space="preserve">
-    <value>设置所选云盘端点的分组与标签</value>
-  </data>
-  <data name="Mgr.OrganizeRowLabel" xml:space="preserve">
-    <value>整理</value>
   </data>
   <data name="Mgr.Paste" xml:space="preserve">
     <value>粘贴</value>
@@ -2454,9 +2469,6 @@ Rclone：MIT License</value>
   <data name="Mgr.PickEndpoint" xml:space="preserve">
     <value>请先选择一个端点。</value>
   </data>
-  <data name="Mgr.PickEndpointForSyncTask" xml:space="preserve">
-    <value>请先选择要创建同步任务的端点。</value>
-  </data>
   <data name="Mgr.PickEndpointToEdit" xml:space="preserve">
     <value>请先选择要编辑的端点。</value>
   </data>
@@ -2468,9 +2480,6 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.PickMountToReconnect" xml:space="preserve">
     <value>请先选择要重新挂载的挂载点。</value>
-  </data>
-  <data name="Mgr.PreparingSyncTask" xml:space="preserve">
-    <value>正在准备同步任务…</value>
   </data>
   <data name="Mgr.Preview" xml:space="preserve">
     <value>预览</value>
@@ -2577,9 +2586,6 @@ Rclone：MIT License</value>
   <data name="Mgr.RenameEllipsis" xml:space="preserve">
     <value>重命名…</value>
   </data>
-  <data name="Mgr.RenameEndpointName" xml:space="preserve">
-    <value>重命名所选云盘端点</value>
-  </data>
   <data name="Mgr.RenameEndpointPrompt" xml:space="preserve">
     <value>端点“{0}”的新名称（只能包含字母、数字、下划线或连字符）：</value>
   </data>
@@ -2594,9 +2600,6 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.Renamed" xml:space="preserve">
     <value>已重命名为：{0}</value>
-  </data>
-  <data name="Mgr.Renaming" xml:space="preserve">
-    <value>正在重命名…</value>
   </data>
   <data name="Mgr.RenamingItem" xml:space="preserve">
     <value>正在重命名“{0}”…</value>
@@ -2719,27 +2722,6 @@ Rclone：MIT License</value>
   </data>
   <data name="Mgr.Subtitle" xml:space="preserve">
     <value>管理云盘端点与挂载，并浏览和传输文件。</value>
-  </data>
-  <data name="Mgr.SyncRowLabel" xml:space="preserve">
-    <value>同步</value>
-  </data>
-  <data name="Mgr.SyncTaskCancelled" xml:space="preserve">
-    <value>已取消创建同步任务。</value>
-  </data>
-  <data name="Mgr.SyncTaskCreated" xml:space="preserve">
-    <value>已创建同步任务“{0}”：{1} → {2}</value>
-  </data>
-  <data name="Mgr.SyncTaskListFailed" xml:space="preserve">
-    <value>无法读取同步任务列表：{0}</value>
-  </data>
-  <data name="Mgr.SyncWizard" xml:space="preserve">
-    <value>同步向导</value>
-  </data>
-  <data name="Mgr.SyncWizardName" xml:space="preserve">
-    <value>打开一键双向同步向导</value>
-  </data>
-  <data name="Mgr.SyncWizardTaskCreated" xml:space="preserve">
-    <value>已创建双向同步任务“{0}”：{1} ↔ {2}</value>
   </data>
   <data name="Mgr.TargetReadFailed" xml:space="preserve">
     <value>无法读取目标目录</value>

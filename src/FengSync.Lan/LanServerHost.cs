@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -35,6 +36,17 @@ public sealed record LanServerOptions(
     /// </remarks>
     public LanGroupRoom? Room { get; init; }
 
+    /// <summary>
+    /// Where this listener measures the transfers it moves, when the window already keeps one.
+    /// </summary>
+    /// <remarks>
+    /// The window hands in the same board the room pulls through, so a file arriving from a phone and a folder
+    /// being pulled off another computer are two rows of one table. Absent is a listener that keeps its own, which
+    /// is what a harness that mapped the routes and nothing else gets — and it still answers
+    /// <c>/api/v1/progress</c>, it simply has nobody else reading it.
+    /// </remarks>
+    public LanTransferBoard? Board { get; init; }
+
     public LanOptions Validate()
     {
         Session.Options.Validate();
@@ -61,11 +73,30 @@ public sealed record LanServerOptions(
 /// </remarks>
 public sealed class LanServerHost : IAsyncDisposable
 {
+    /// <summary>
+    /// The URL prefix the built page's hashed files are served under, with its trailing slash.
+    /// </summary>
+    /// <remarks>
+    /// The route template spends it as a literal segment, so what a handler receives is only the part after it; this
+    /// is what puts the two back together to form the name the build embedded.
+    /// </remarks>
+    private const string LanWebAssetRoot = "assets/";
+
     private readonly LanServerOptions _options;
+    private readonly LanTransferBoard _transfers;
     private WebApplication? _app;
     private IReadOnlyList<string> _listenAddresses = [];
 
-    private LanServerHost(LanServerOptions options) => _options = options;
+    private LanServerHost(LanServerOptions options)
+    {
+        _options = options;
+        _transfers = options.Board ?? new LanTransferBoard();
+    }
+
+    /// <summary>
+    /// What this listener has moved and how fast, as the page polls it and the window reads it.
+    /// </summary>
+    public LanTransferBoard Transfers => _transfers;
 
     /// <summary>Raises the first decision a stranger's bytes face, before anybody else can react to it.</summary>
     public event Action<LanAdmissionEventArgs>? AdmissionDecided;
@@ -193,6 +224,13 @@ public sealed class LanServerHost : IAsyncDisposable
         // pairing is something a person does, so it has to have somewhere to be done from.
         endpoints.MapGet("/p", (Func<HttpContext, Task<IResult>>)HandlePageAsync);
 
+        // The page's own script and stylesheet, embedded at build time. Immutable because every name carries the
+        // hash of its content, so a cached copy can only ever be the right one.
+        // The parameter is nullable on purpose: a catch-all matches a trailing slash with nothing after it, and an
+        // empty route value binds to null rather than to "". The answer for that is still this protocol's 404,
+        // which is why the handler takes it rather than the framework answering 400 before the route is reached.
+        endpoints.MapGet("/assets/{**path}", (Func<string?, HttpContext, Task<IResult>>)HandleAssetAsync);
+
         endpoints.MapGet("/api/v1/hello", (Func<HttpContext, Task<IResult>>)HandleHelloAsync);
         endpoints.MapPost("/api/v1/pair", (Func<HttpContext, Task<IResult>>)HandlePairAsync);
         endpoints.MapGet("/api/v1/peers", (Func<HttpContext, Task<IResult>>)HandlePeersAsync);
@@ -200,6 +238,10 @@ public sealed class LanServerHost : IAsyncDisposable
         // Two verbs about the same row seen from the other side: a device correcting what it is called, and a
         // device taking itself off the list.
         endpoints.MapPost("/api/v1/name", (Func<HttpContext, Task<IResult>>)HandleNameAsync);
+        // …and a third about the room rather than the list: a device saying it is going away. Nobody has to say
+        // this — a lease that is not renewed expires on its own — but a phone that is closing its tab can, and
+        // hearing it is the difference between a device row that vanishes at once and one that lingers.
+        endpoints.MapDelete("/api/v1/presence/mine", (Func<HttpContext, Task<IResult>>)HandleLeaveAsync);
         endpoints.MapPost("/api/v1/inbox", (Func<HttpContext, Task<IResult>>)HandleInboxAsync);
         endpoints.MapPost("/api/v1/mkdir", (Func<HttpContext, Task<IResult>>)HandleMkdirAsync);
 
@@ -207,6 +249,12 @@ public sealed class LanServerHost : IAsyncDisposable
         // somebody is adding to it.
         endpoints.MapGet("/api/v1/log", (Func<HttpContext, Task<IResult>>)HandleLogAsync);
         endpoints.MapPost("/api/v1/messages", (Func<HttpContext, Task<IResult>>)HandleSayAsync);
+
+        // What this machine is moving right now, in the same numbers its own window draws. A page cannot see a
+        // socket it does not own — the bytes of an upload leave its hands long before they land, and a download is
+        // handed to the browser's own downloader — so the only honest source for a bar is the side doing the
+        // writing, which is this one.
+        endpoints.MapGet("/api/v1/progress", (Func<HttpContext, Task<IResult>>)HandleProgressAsync);
 
         // A file a member holds is read by the id its author minted, never by a row of a listing: the room is the
         // only thing a peer may enumerate, and an entry that names bytes this machine holds is the only path out.
@@ -230,12 +278,91 @@ public sealed class LanServerHost : IAsyncDisposable
     /// No caching, because a page a phone keeps would show a pairing code that has already been spent — the code
     /// is good for exactly one try, and the only honest answer to the second is a refusal. No sniffing, because
     /// the bytes are this process's own and there is nothing for a browser to second-guess about them.
+    /// <para>
+    /// The document itself is the built shell, not a page written here: everything it shows lives in the two assets
+    /// it references, and those are the only requests it makes. A build that embedded nothing answers with a
+    /// sentence instead of an empty page, because a blank screen on a phone is indistinguishable from a broken
+    /// computer.
+    /// </para>
     /// </remarks>
     private Task<IResult> HandlePageAsync(HttpContext http)
     {
         http.Response.Headers["Cache-Control"] = "no-store";
         http.Response.Headers["X-Content-Type-Options"] = "nosniff";
-        return Task.FromResult<IResult>(Results.Text(LanPhonePage.Html, LanPhonePage.ContentType, LanPhonePage.Body));
+
+        if (!LanWebAssets.TryGet("index.html", out var page))
+        {
+            return Task.FromResult<IResult>(Results.Text(
+                "这个程序集里没有手机页面：它是在 SkipWebBuild=true 下构建的。请重新构建 Feng Sync。",
+                "text/plain; charset=utf-8", Encoding.UTF8, StatusCodes.Status503ServiceUnavailable));
+        }
+
+        http.Response.ContentType = page.ContentType;
+        http.Response.ContentLength = page.Bytes.Length;
+        return WriteAsync(http, page.Bytes);
+    }
+
+    /// <summary>
+    /// One file of the built page, addressed by the name the shell references it under.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every name carries the hash of its own content, which is the whole reason this route may answer
+    /// <c>immutable</c>: a new build produces new names, so a cached copy of an old one is never stale — it is
+    /// simply never asked for again. The shell is the one thing that must not be cached, and it is served by the
+    /// route above with <c>no-store</c>.
+    /// </para>
+    /// <para>
+    /// A miss is this protocol's own 404 rather than the framework's, and the lookup is an allowlist rather than a
+    /// path join: the set of names is fixed at build time, so a caller can only ever ask for a file that exists.
+    /// The normalisation in front of it is the second door — a route value arrives percent-decoded once, and a
+    /// second encoding of <c>..</c> would otherwise be a path this method composed rather than one it looked up.
+    /// </para>
+    /// </remarks>
+    private Task<IResult> HandleAssetAsync(string? path, HttpContext http)
+    {
+        // The route has already spent the literal "assets" segment, and the embedded name still has it, so the two
+        // halves are put back together here rather than the route being widened to a catch-all over the whole site.
+        if (!TryAssetPath(path, out var name) || !LanWebAssets.TryGet($"{LanWebAssetRoot}{name}", out var asset))
+        {
+            http.Response.Headers["Cache-Control"] = "no-store";
+            return Task.FromResult(Answer(LanRefusal.NotFound));
+        }
+
+        http.Response.ContentType = asset.ContentType;
+        // Written explicitly rather than left to the framework: a body written straight onto the response has no
+        // length it could infer, and a phone on a slow link is the one client that notices a chunked download.
+        http.Response.ContentLength = asset.Bytes.Length;
+        http.Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
+        http.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return WriteAsync(http, asset.Bytes);
+    }
+
+    /// <summary>
+    /// Whether a route value is a shape this build could have produced.
+    /// </summary>
+    /// <remarks>
+    /// Refusing <c>%</c> is what closes the double-decoding path: the framework has already decoded the value once,
+    /// so anything still holding an escape is a name no build ever minted.
+    /// </remarks>
+    private static bool TryAssetPath(string? path, out string normalized)
+    {
+        normalized = "";
+        if (string.IsNullOrEmpty(path)) return false;
+        if (path.Contains('\\') || path.Contains(':') || path.Contains('\0') || path.Contains('%')) return false;
+
+        var segments = path.Split('/');
+        if (segments.Any(segment => segment.Length == 0 || segment == "." || segment == "..")) return false;
+
+        normalized = string.Join('/', segments);
+        return true;
+    }
+
+    /// <summary>Puts bytes on the response and answers with nothing, having already written the body itself.</summary>
+    private static async Task<IResult> WriteAsync(HttpContext http, byte[] bytes)
+    {
+        await http.Response.Body.WriteAsync(bytes, http.RequestAborted).ConfigureAwait(false);
+        return Results.Empty;
     }
 
     private Task<IResult> HandleHelloAsync(HttpContext http) =>
@@ -311,6 +438,24 @@ public sealed class LanServerHost : IAsyncDisposable
     }
 
     /// <summary>
+    /// Lets a peer say it is leaving the room, without giving up its credential.
+    /// </summary>
+    /// <remarks>
+    /// The distinction this route exists to keep: <c>DELETE /api/v1/peers/mine</c> is a device revoking itself,
+    /// and this is a device saying goodbye. A phone whose tab is closing has not decided to stop trusting this
+    /// computer, and a room that treated the two the same would make a person re-scan a code every time they put
+    /// their phone down. Like the self-forget route it carries no id, so it can only ever be about the caller.
+    /// </remarks>
+    private async Task<IResult> HandleLeaveAsync(HttpContext http)
+    {
+        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
+        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
+
+        _options.Session.LeaveRoom(auth.Contact!);
+        return Results.NoContent();
+    }
+
+    /// <summary>
     /// Lets a peer correct the name this machine lists it under, which is the only way a 改名 reaches here.
     /// </summary>
     /// <remarks>
@@ -370,25 +515,35 @@ public sealed class LanServerHost : IAsyncDisposable
         // leaves every other route covered.
         if (http.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit) limit.MaxRequestBodySize = null;
 
+        // The row this write draws, filed under a key the completion can close even when the sink had to rename
+        // the file on the way in. It carries the sender's session and message id so a page can attach its own
+        // upload row — and the entry in the room — to the very bytes it is watching.
+        var key = LanTransferBoard.InboundKey(contact.DeviceId, wire);
+        var messageId = Header(http, LanProtocol.HeaderMessage);
         LanReceived received;
         try
         {
             received = await _options.Sink
                 .ReceiveAsync(http.Request.Body, wire, offer.DeclaredBytes, ReportedWriteUtc(http),
-                    ProgressFor(contact, wire, offer.DeclaredBytes, inbound: true), http.RequestAborted)
+                    ProgressFor(key, contact, wire, offer.DeclaredBytes, inbound: true, offer.Session,
+                        messageId.Length == 0 ? null : messageId),
+                    http.RequestAborted)
                 .ConfigureAwait(false);
         }
         catch (LanTransferException ex)
         {
+            FinishTransfer(key, contact, wire, inbound: true, 0, ex.Message);
             return Answer(ex.Refusal);
         }
         catch (Exception ex) when (ex is OperationCanceledException or IOException)
         {
             // The peer went away mid-body. The sink deleted its staging file, there is no response to write,
             // and the transfer list shows the row as cancelled rather than as this exception.
+            FinishTransfer(key, contact, wire, inbound: true, 0, ex.Message);
             return Results.Empty;
         }
 
+        FinishTransfer(key, contact, wire, inbound: true, received.Bytes);
         InboxReceived?.Invoke(new LanInboxEventArgs(contact, received, offer.Session));
         TagArrival(http, contact, received.RelativePath, received.Bytes, storedIsDirectory: false);
         return Json(new LanInboxReply(received.Name, received.Bytes, received.Renamed, received.RelativePath),
@@ -515,6 +670,38 @@ public sealed class LanServerHost : IAsyncDisposable
     }
 
     /// <summary>
+    /// Everything this machine is moving, or has just finished moving.
+    /// </summary>
+    /// <remarks>
+    /// Read-only and credential-checked like every other route that answers about this machine: what somebody is
+    /// transferring is a fact about the people in the room, not something an unpaired browser gets to watch. The
+    /// list is short by construction — a finished row leaves after
+    /// <see cref="LanTransferBoard.KeepFinished"/> — so a page polling twice a second is not pulling a log.
+    /// </remarks>
+    private async Task<IResult> HandleProgressAsync(HttpContext http)
+    {
+        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
+        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
+
+        var rows = _transfers.Snapshot().Select(tick => new LanTransferWire(
+            tick.Id,
+            tick.Direction == LanTransferDirection.Received ? "in" : "out",
+            tick.DeviceId,
+            tick.DeviceName,
+            tick.Path,
+            tick.Bytes,
+            tick.TotalBytes,
+            Math.Round(tick.BytesPerSecond),
+            tick.StartedUnixMilliseconds,
+            tick.Session,
+            tick.MessageId,
+            tick.Done,
+            tick.Error)).ToList();
+
+        return Json(new LanProgressReply(LanApi.WireVersion, rows));
+    }
+
+    /// <summary>
     /// The bytes behind one room entry, addressed by the id its author minted.
     /// </summary>
     /// <remarks>
@@ -530,7 +717,7 @@ public sealed class LanServerHost : IAsyncDisposable
 
         var (item, error) = Held(id, wantsArchive: false);
         if (error is not null) return error;
-        return ServeFile(http, auth.Contact!, item!);
+        return await ServeFileAsync(http, auth.Contact!, item!, id).ConfigureAwait(false);
     }
 
     /// <summary>A held folder, as one archive, for the member that wants the whole tree rather than file by file.</summary>
@@ -541,7 +728,7 @@ public sealed class LanServerHost : IAsyncDisposable
 
         var (item, error) = Held(id, wantsArchive: true);
         if (error is not null) return error;
-        return await ServeArchiveAsync(http, auth.Contact!, item!).ConfigureAwait(false);
+        return await ServeArchiveAsync(http, auth.Contact!, item!, id).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -583,7 +770,7 @@ public sealed class LanServerHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Puts one local file on the response, with range support and the name the peer needs back.
+    /// Puts one local file on the response, with range support, the name the peer needs back, and a byte count.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -598,15 +785,110 @@ public sealed class LanServerHost : IAsyncDisposable
     /// than handed to <c>Results.File</c>, because that call would answer a single ASCII filename and a Chinese
     /// download name is precisely what the peer needs intact.
     /// </para>
+    /// <para>
+    /// It is copied here rather than handed to <c>Results.File</c> for a second reason: that call goes through
+    /// sendfile, which moves the bytes in the kernel and leaves this process no place to count them. A download is
+    /// half of what the feature promises to show progress for, so the loop has to be ours. The three answers a range
+    /// can get are preserved exactly — 200 with the whole length, 206 with the window it served and the total it is
+    /// a window into, and 416 naming the length it could not satisfy.
+    /// </para>
     /// </remarks>
-    private IResult ServeFile(HttpContext http, LanContact peer, LanSendItem item)
+    private async Task<IResult> ServeFileAsync(HttpContext http, LanContact peer, LanSendItem item, string messageId)
     {
         OutboundDelivered?.Invoke(new LanOutboundEventArgs(peer, item, IsArchive: false));
         http.Response.Headers.ContentDisposition = Attachment(item.Name);
-        return Results.File(item.AbsolutePath, "application/octet-stream", fileDownloadName: null, enableRangeProcessing: true);
+
+        var length = item.Bytes;
+        var (start, count, partial) = RangeOf(http, length);
+        if (count < 0)
+        {
+            http.Response.StatusCode = StatusCodes.Status416RangeNotSatisfiable;
+            http.Response.Headers.ContentRange = $"bytes */{length}";
+            return Results.Empty;
+        }
+
+        http.Response.Headers.AcceptRanges = "bytes";
+        http.Response.ContentType = "application/octet-stream";
+        http.Response.ContentLength = count;
+        if (partial)
+        {
+            http.Response.StatusCode = StatusCodes.Status206PartialContent;
+            http.Response.Headers.ContentRange = $"bytes {start}-{start + count - 1}/{length}";
+        }
+
+        var key = LanTransferBoard.OutboundKey(messageId);
+        // A resumed download starts where the phone left off, so the row counts the whole file rather than the tail:
+        // a bar that began at 60% because the phone reconnected is the honest picture of one delivery.
+        RaiseTransfer(_transfers.Begin(key, LanTransferDirection.Sent, peer, item.Name, length,
+            messageId: messageId), peer, item.Name, inbound: false);
+
+        var buffer = new byte[81920];
+        var sent = 0L;
+        try
+        {
+            await using var file = new FileStream(item.AbsolutePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                buffer.Length, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            file.Seek(start, SeekOrigin.Begin);
+            while (sent < count)
+            {
+                var want = (int)Math.Min(buffer.Length, count - sent);
+                var got = await file.ReadAsync(buffer.AsMemory(0, want), http.RequestAborted).ConfigureAwait(false);
+                if (got <= 0) break;
+                await http.Response.Body.WriteAsync(buffer.AsMemory(0, got), http.RequestAborted).ConfigureAwait(false);
+                sent += got;
+                RaiseTransfer(_transfers.Report(key, start + sent), peer, item.Name, inbound: false);
+            }
+
+            FinishTransfer(key, peer, item.Name, inbound: false, start + sent);
+        }
+        // A peer that dropped mid-file leaves a truncated download on its own disk and nothing here. There is no
+        // response left to write — the status and headers went out with the first flush — so the row is closed and
+        // the connection is left to Kestrel.
+        catch (Exception ex) when (ex is OperationCanceledException or IOException)
+        {
+            FinishTransfer(key, peer, item.Name, inbound: false, start + sent, ex.Message);
+        }
+
+        return Results.Empty;
     }
 
-    private async Task<IResult> ServeArchiveAsync(HttpContext http, LanContact peer, LanSendItem item)
+    /// <summary>
+    /// The window a <c>Range</c> header asked for, or a negative count when it cannot be satisfied.
+    /// </summary>
+    /// <remarks>
+    /// One range only. A multi-range request would need a multipart body, and nothing in this protocol asks for
+    /// one: a phone resuming a download sends a single <c>bytes=N-</c>, and answering the whole file to anything
+    /// more exotic is what the framework did before this loop existed.
+    /// </remarks>
+    private static (long Start, long Count, bool Partial) RangeOf(HttpContext http, long length)
+    {
+        var range = http.Request.GetTypedHeaders().Range;
+        if (range is null || range.Ranges.Count != 1 || length <= 0) return (0, length, false);
+
+        var asked = range.Ranges.First();
+        long start;
+        long end;
+        if (asked.From is { } from)
+        {
+            if (from < 0 || from >= length) return (-1, -1, false);
+            start = from;
+            end = asked.To is { } to ? Math.Min(to, length - 1) : length - 1;
+        }
+        else if (asked.To is { } suffix)
+        {
+            if (suffix <= 0) return (-1, -1, false);
+            start = Math.Max(0, length - suffix);
+            end = length - 1;
+        }
+        else
+        {
+            return (0, length, false);
+        }
+
+        return end < start ? (-1, -1, false) : (start, end - start + 1, true);
+    }
+
+    private async Task<IResult> ServeArchiveAsync(HttpContext http, LanContact peer, LanSendItem item, string messageId)
     {
         OutboundDelivered?.Invoke(new LanOutboundEventArgs(peer, item, IsArchive: true));
         // The archive is written onto the response, so its length is unknown and the transfer is chunked; a
@@ -618,13 +900,25 @@ public sealed class LanServerHost : IAsyncDisposable
         // never closed. So this one response lifts that gate, which is what lets the central directory land;
         // every other route keeps Kestrel's protection untouched.
         if (http.Features.Get<IHttpBodyControlFeature>() is { } body) body.AllowSynchronousIO = true;
+
+        // A tree announces no size, so this row has a rate and no fraction — which is the same answer the window
+        // gives for a folder arriving the other way.
+        var key = LanTransferBoard.OutboundKey(messageId);
+        RaiseTransfer(_transfers.Begin(key, LanTransferDirection.Sent, peer, item.Name, totalBytes: 0,
+            messageId: messageId), peer, item.Name, inbound: false);
+        var counted = new LanCountingStream(http.Response.Body, moved =>
+            RaiseTransfer(_transfers.Report(key, moved), peer, item.Name, inbound: false));
         try
         {
-            await LanZipStream.WriteAsync(http.Response.Body, item.AbsolutePath, http.RequestAborted).ConfigureAwait(false);
+            await LanZipStream.WriteAsync(counted, item.AbsolutePath, http.RequestAborted).ConfigureAwait(false);
+            FinishTransfer(key, peer, item.Name, inbound: false, counted.Total);
         }
         // A peer that dropped mid-archive leaves a truncated file on the phone and nothing here. There is no
         // response left to write: the status and the headers went out with the first flush.
-        catch (Exception ex) when (ex is OperationCanceledException or IOException) { }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException)
+        {
+            FinishTransfer(key, peer, item.Name, inbound: false, counted.Total, ex.Message);
+        }
 
         return Written.Instance;
     }
@@ -714,28 +1008,38 @@ public sealed class LanServerHost : IAsyncDisposable
         PairAttempted?.Invoke(new LanPairAttemptEventArgs(contact, refusal));
 
     /// <summary>
-    /// A progress reporter that raises at most one event per megabyte or per quarter second.
+    /// A progress reporter for one write, filed on the board under the key its completion closes.
     /// </summary>
     /// <remarks>
-    /// A tick per read would put twelve thousand dispatcher posts on the UI thread for one large file, and the
-    /// bar would look smoother while the window got slower. The first and last values always pass, because a
-    /// transfer that reported nothing until it finished is not progress.
+    /// <para>
+    /// The rate and the throttling both live in <see cref="LanTransferBoard"/> now, so the row this raises and the
+    /// row <c>/api/v1/progress</c> answers with are the same numbers read from the same samples. What is left here
+    /// is the translation into the event a window already knows.
+    /// </para>
+    /// <para>
+    /// A tick per read would put twelve thousand dispatcher posts on the UI thread for one large file, and the bar
+    /// would look smoother while the window got slower. The board lets the first tick, the last tick, and one per
+    /// quarter second through, which is the same shape this used to enforce by hand.
+    /// </para>
     /// </remarks>
-    private IProgress<long> ProgressFor(LanContact contact, string path, long totalBytes, bool inbound)
+    private IProgress<long> ProgressFor(
+        string key, LanContact contact, string path, long totalBytes, bool inbound, string? session = null, string? messageId = null)
     {
-        var started = Stopwatch.GetTimestamp();
-        var lastBytes = -1L;
-        var lastRaised = started;
+        var direction = inbound ? LanTransferDirection.Received : LanTransferDirection.Sent;
+        RaiseTransfer(_transfers.Begin(key, direction, contact, path, totalBytes, session, messageId), contact, path, inbound);
         return new LambdaProgress(value =>
-        {
-            var now = Stopwatch.GetTimestamp();
-            var moved = lastBytes < 0 || value - lastBytes >= 1024 * 1024;
-            var aged = (now - lastRaised) >= Stopwatch.Frequency / 4;
-            if (!(moved || aged) && value != totalBytes) return;
-            lastBytes = value;
-            lastRaised = now;
-            TransferProgress?.Invoke(new LanProgressEventArgs(contact, path, value, totalBytes, inbound));
-        });
+            RaiseTransfer(_transfers.Report(key, value), contact, path, inbound));
+    }
+
+    /// <summary>Closes a transfer and raises its last tick, so a row on screen does not stay half-drawn.</summary>
+    private void FinishTransfer(string key, LanContact contact, string path, bool inbound, long bytes, string? error = null) =>
+        RaiseTransfer(_transfers.Complete(key, bytes, error), contact, path, inbound);
+
+    private void RaiseTransfer(LanTransferSnapshot? tick, LanContact contact, string path, bool inbound)
+    {
+        if (tick is null) return;
+        TransferProgress?.Invoke(new LanProgressEventArgs(contact, path, tick.Bytes, tick.TotalBytes, inbound,
+            tick.Id, tick.BytesPerSecond, tick.Done, tick.Error));
     }
 
     private IResult Json(object? body, int statusCode = StatusCodes.Status200OK) =>

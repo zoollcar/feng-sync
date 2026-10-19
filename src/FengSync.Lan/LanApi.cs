@@ -198,5 +198,41 @@ public sealed record LanNameRequest(string? DeviceName);
 /// <summary>The name this machine kept, which is the peer's answer when the claimed one was too long to store.</summary>
 public sealed record LanNameReply(string DeviceName);
 
+/// <summary>
+/// One transfer as the page sees it.
+/// </summary>
+/// <param name="Direction">
+/// <c>in</c> or <c>out</c>. A page shows a received row and a sent row differently, and it cannot infer which from
+/// who the peer is: the same phone is on both ends of two different transfers.
+/// </param>
+/// <param name="Speed">
+/// Bytes per second, measured by this machine. The page shows it as given rather than timing the poll interval
+/// itself, because a rate derived from a poll is the rate of the poll.
+/// </param>
+/// <param name="Session">
+/// The <c>X-FS-Session</c> the sender named, which is how a page attaches one row of a folder to the batch it
+/// started. Null for a transfer that named none — a download, a pull, or a peer that knows nothing of sessions.
+/// </param>
+/// <param name="Msg">
+/// The message id the transfer belongs to, so a page can put a bar inside the bubble that offered the file.
+/// </param>
+public sealed record LanTransferWire(
+    string Id,
+    string Direction,
+    string DeviceId,
+    string Name,
+    string Path,
+    long Bytes,
+    long Total,
+    double Speed,
+    long Started,
+    string? Session,
+    string? Msg,
+    bool Done,
+    string? Error);
+
+/// <summary>Everything this machine is moving, or has just finished moving.</summary>
+public sealed record LanProgressReply(int V, IReadOnlyList<LanTransferWire> Transfers);
+
 /// <summary>The only body shape a refusal ever takes.</summary>
 public sealed record LanErrorReply(string Error, string Reason);

@@ -37,6 +37,16 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # The phone page is built by MSBuild before the C# compiles, and its output is embedded into
+      # FengSync.Lan as resources — so the toolchain has to be here before the first build, not after it.
+      # The version is the one web/package.json pins engines to; `npm ci` reads the lockfile beside it.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
       - name: Restore and build
         shell: pwsh
         run: dotnet build ./FengSync.sln -c $env:CONFIGURATION --nologo

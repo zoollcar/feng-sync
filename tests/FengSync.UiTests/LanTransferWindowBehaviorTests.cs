@@ -342,8 +342,10 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
             await window.OpenAsync();
             try
             {
-                Assert.Single(window.TrustedList.Items);
-                Assert.Equal(Visibility.Collapsed, window.TrustedEmptyText.Visibility);
+                // The list itself is a file on disk and has its own window now; what this column carries is the
+                // way in and a count, because "who has ever been trusted" and "who is in the room" are different
+                // questions and showing them together made them read as one.
+                Assert.Equal(Tr.Format("Lan.TrustedCount", 1), window.TrustedCountText.Text);
                 Assert.True(window.Session!.AutoAcceptFromTrusted);
                 Assert.True(window.Room!.AutoReceive);
 
@@ -634,10 +636,55 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
                 Assert.True(url.StartsWith("http://", StringComparison.Ordinal), url);
                 Assert.Contains($":{port}/p", url);
                 Assert.False(url.Contains("token", StringComparison.OrdinalIgnoreCase), url);
+                // The same URL in a box beside the code, and it is the self-pairing one: the code rides in the
+                // fragment, so a person who copies this line onto another computer has paired it by opening it
+                // rather than being asked to retype the six characters they just copied alongside. Read-only, so
+                // the box cannot become a place a person edits the address in.
+                Assert.Equal(url, window.PairUrlBox.Text);
+                Assert.Contains($"#k={code}", window.PairUrlBox.Text);
+                Assert.Contains("&d=", window.PairUrlBox.Text);
+                Assert.Contains("&v=1", window.PairUrlBox.Text);
+                Assert.Contains("&e=", window.PairUrlBox.Text);
+                Assert.True(window.PairUrlBox.IsReadOnly);
 
-                // 重新生成 replaces the spent-or-aging code, and the window repaints the picture for it.
+                // 重新生成 replaces the spent-or-aging code, and the window repaints the picture for it — the box
+                // and the picture move together, because the code is in both of them.
                 window.RegenerateButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await WaitUntil(() => window.PairCodeText.Text != code, "重新生成没有换掉配对码");
+                Assert.Contains($"#k={window.PairCodeText.Text}", window.PairUrlBox.Text);
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
+    [Fact]
+    public Task The_six_characters_can_be_clicked_away_instead_of_transcribed()
+    {
+        return RunSta(async () =>
+        {
+            var window = NewWindow(FreePort());
+            var copied = new List<string>();
+            window.CopyToClipboard = copied.Add;
+            await window.OpenAsync();
+            try
+            {
+                var code = window.PairCodeText.Text;
+                // Nothing is claimed before the click: the line under the code says what the click would do, and
+                // only the click turns that into 已复制.
+                Assert.Equal(Tr.F("Lan.CopyCode"), window.PairCopyHintText.Text);
+
+                window.CopyPairCodeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(code, Assert.Single(copied));
+                Assert.Equal(Tr.F("Lan.CodeCopied"), window.PairCopyHintText.Text);
+
+                // A new code makes that claim false — what sits in the clipboard is the one the pairing state has
+                // already thrown away — so the line goes back to offering the click.
+                window.RegenerateButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await WaitUntil(() => window.PairCodeText.Text != code, "重新生成没有换掉配对码");
+                Assert.Equal(Tr.F("Lan.CopyCode"), window.PairCopyHintText.Text);
             }
             finally
             {
@@ -700,8 +747,123 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
         });
     }
 
-    // ------------------------------------------------------------------ harness
+    [Fact]
+    public Task A_device_that_stops_saying_it_is_here_leaves_the_room_and_the_room_says_so()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                Assert.Equal(Visibility.Visible, window.MemberEmptyText.Visibility);
 
+                window.Presence.Seen(new LanRoomMember(StrangerId, "小明的手机", LanProtocol.KindPhone, "192.168.1.5", 0,
+                    DateTimeOffset.UtcNow, Discovered: false));
+
+                var chip = Assert.IsType<LanMemberRow>(Assert.Single(window.MemberList.Items));
+                Assert.Equal("小明的手机", chip.Name);
+                Assert.Contains(Tr.F("Lan.KindPhone"), chip.Detail);
+                Assert.Equal(Visibility.Collapsed, window.MemberEmptyText.Visibility);
+
+                // A phone whose browser was closed cannot send anything, so this absence — not an event — is what
+                // 退群 means. The sweep is the same clock the window's own tick runs on, moved past the lease.
+                window.Presence.Sweep(DateTimeOffset.UtcNow + LanRoomPresence.DefaultTimeToLive + TimeSpan.FromSeconds(1));
+                await WaitUntil(() => window.MemberList.Items.Count == 0, "断连的设备没有退群");
+                Assert.Equal(Visibility.Visible, window.MemberEmptyText.Visibility);
+                // …and the room says it, because a chip that vanished with no explanation is a list that lied.
+                Assert.Equal(Tr.Format("Lan.LeftRoom", "小明的手机"), window.Group.Entries[^1].Text);
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
+    [Fact]
+    public Task A_computer_heard_on_the_subnet_is_in_the_room_too_and_leaves_without_a_word()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                var now = DateTimeOffset.UtcNow;
+                window.Presence.Seen(new LanRoomMember(ReturningId, "客厅的台式机", LanProtocol.KindUnknown, "192.168.1.9",
+                    port, now, Discovered: true));
+
+                // 发现的电脑 belongs in the room's device list and not only in a corner of the pairing panel: it is
+                // the machine a person is most likely to pair with next, and a device list that left it out made
+                // them hunt for it somewhere else.
+                var chip = Assert.IsType<LanMemberRow>(Assert.Single(window.MemberList.Items));
+                Assert.Equal("客厅的台式机", chip.Name);
+                Assert.Contains(Tr.F("Lan.MemberDiscovered"), chip.Detail);
+                Assert.Contains($"192.168.1.9:{port}", chip.Detail);
+
+                window.Presence.Sweep(now + LanRoomPresence.DefaultTimeToLive + TimeSpan.FromSeconds(1));
+
+                // It leaves silently: it never joined anything, so a line announcing its departure would narrate
+                // a membership it does not have. The room therefore stays empty.
+                Assert.Empty(window.MemberList.Items);
+                Assert.Empty(window.Group.Entries);
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
+    [Fact]
+    public Task The_trusted_list_has_its_own_window_and_forgetting_there_takes_the_credential_with_it()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var now = DateTimeOffset.UtcNow;
+            await new LanPeerStore().RememberAsync(new LanPeerRecord(ReturningId, "旧手机", LanProtocol.KindPhone,
+                now, now, port, ["192.168.1.30"]));
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                var dialog = new LanTrustedDevicesWindow(new LanPeerStore(), deviceId => window.Session!.ForgetAsync(deviceId));
+                await dialog.RefreshAsync();
+                try
+                {
+                    var row = Assert.IsType<LanRow>(Assert.Single(dialog.Rows));
+                    Assert.Equal("旧手机", row.Name);
+                    Assert.Contains(Tr.F("Lan.KindPhone"), row.Detail);
+                    Assert.Contains("192.168.1.30", row.Detail);
+                    Assert.Equal(Visibility.Collapsed, dialog.EmptyText.Visibility);
+
+                    // The button is the whole interface of this window, so the click is what a case has to make —
+                    // and laying the list out is the only thing that instantiates the row template the button
+                    // lives in.
+                    Realise(dialog.TrustedList, 560, 360);
+                    Descendants<Button>(dialog.TrustedList).Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    await WaitUntil(() => dialog.Rows.Count == 0, "取消信任没有把行去掉");
+
+                    // Both halves, which is the point of the dialog owning a verb rather than a store: a row left
+                    // behind in the file would let the device back in, and a live token without a row would too.
+                    Assert.Empty(await new LanPeerStore().LoadAsync());
+                    Assert.Equal(Tr.Format("Lan.Forgotten", "旧手机"), dialog.StatusText.Text);
+                    Assert.Equal(Visibility.Visible, dialog.EmptyText.Visibility);
+                }
+                finally { dialog.Close(); }
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------ harness
     /// <summary>
     /// A window pointed at its own port and its own receive directory, with discovery off. Every case gets one,
     /// because a listener left running would answer the next test's pairing code.
@@ -724,6 +886,89 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
     /// <summary>A request body in the shape this protocol reads, so a case sends what the shipped page sends.</summary>
     private static StringContent Body<T>(T payload) =>
         new(JsonSerializer.Serialize(payload, LanApi.Json), Encoding.UTF8, "application/json");
+
+    /// <summary>
+    /// The sentence a transfer row puts beside the name, and the silence it keeps when there is nothing to say.
+    /// </summary>
+    /// <remarks>
+    /// The three cases that are not the happy one matter as much as it does. A rate of zero is the board's first
+    /// quarter second, and "0 B/s" there reads as a transfer that has stalled rather than one that just started. A
+    /// folder declares no length at all, so there is no arrival to count down to — the rate is still worth saying,
+    /// the time is not. And a transfer already at its total has nothing left to wait for.
+    /// </remarks>
+    [Fact]
+    public void A_transfer_row_says_its_speed_and_the_time_left_in_the_same_sentence()
+    {
+        const long megabyte = 1024 * 1024;
+
+        Assert.Equal("", LanTransferWindow.SpeedLine(0, 0, 3 * megabyte));
+        Assert.Equal("", LanTransferWindow.SpeedLine(0, 0, 0));
+
+        var counted = LanTransferWindow.SpeedLine(megabyte, megabyte, 3 * megabyte);
+        Assert.StartsWith("1.0 MB/s", counted, StringComparison.Ordinal);
+        Assert.Contains(Tr.Format("Lan.EtaSeconds", 2), counted, StringComparison.Ordinal);
+
+        // No total: the rate alone, and no countdown invented out of a number nobody sent.
+        Assert.Equal("1.0 MB/s", LanTransferWindow.SpeedLine(megabyte, megabyte, 0));
+
+        // Nothing left: the same, because a "还剩 0 秒" is a sentence about a wait that is already over.
+        Assert.Equal("1.0 MB/s", LanTransferWindow.SpeedLine(megabyte, 3 * megabyte, 3 * megabyte));
+
+        // A long wait is written in the units a person would say it in, not in five hundred seconds.
+        var slow = LanTransferWindow.SpeedLine(1024, 0, 500 * 1024L);
+        Assert.Contains(Tr.Format("Lan.EtaMinutes", 8, 20), slow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_finished_row_keeps_its_last_number_but_drops_the_rate()
+    {
+        var row = new LanProgressRow("接收 a.bin ← 手机（1M / 2M）", true);
+        Assert.Equal(Visibility.Collapsed, row.RateVisibility);
+
+        row.Update("接收 a.bin ← 手机（1M / 2M）", 50, "1.0 MB/s");
+        Assert.Equal(Visibility.Visible, row.RateVisibility);
+        Assert.Equal(50d, row.Percentage, 3);
+        Assert.Null(row.FinishedAt);
+
+        row.Finish(LanTransferState.Completed, "");
+        Assert.Equal(Visibility.Collapsed, row.RateVisibility);
+        Assert.Equal(100d, row.Percentage);
+        // The stamp is what the one-second tick sweeps on; a row that never sets it would sit in the strip for the
+        // rest of the session.
+        Assert.NotNull(row.FinishedAt);
+    }
+
+    [Fact]
+    public void A_bubble_takes_its_bar_away_when_the_pull_is_over_without_forgetting_what_it_says()
+    {
+        var entry = new LanGroupMessage
+        {
+            MessageId = Guid.NewGuid().ToString("N"),
+            AuthorDeviceId = StrangerId,
+            AuthorName = "小明的手机",
+            Kind = LanGroupKind.File,
+            FileName = "季度 报告.txt",
+            RelativePath = "季度 报告.txt",
+            Bytes = 2048,
+            CreatedUtc = DateTimeOffset.UtcNow,
+            HeldHere = true,
+        };
+        var row = new LanChatRow(entry, isMine: false);
+
+        row.SetProgress(1024, 2048, "1.0 MB/s");
+        Assert.Equal(Visibility.Visible, row.ProgressVisibility);
+        Assert.Equal(Visibility.Visible, row.RateVisibility);
+        Assert.Contains("1.0 MB/s", row.AutomationLine, StringComparison.Ordinal);
+
+        // The sentence about where the bytes landed arrives on a different event than the last progress tick, so
+        // the bar has to be takeable down on its own — otherwise a finished pull keeps a full bar until the fetch
+        // event happens to arrive.
+        row.ClearProgress();
+        Assert.Equal(Visibility.Collapsed, row.ProgressVisibility);
+        Assert.Equal(Visibility.Collapsed, row.RateVisibility);
+        Assert.DoesNotContain("1.0 MB/s", row.AutomationLine, StringComparison.Ordinal);
+        Assert.Equal("季度 报告.txt", row.Body);
+    }
 
     /// <summary>
     /// One call carrying the credential a pairing just handed out, in the header form rather than the cookie form —

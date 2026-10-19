@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/*
+  One palette, in one place.
+
+  Light and quiet on purpose: this page is opened on a phone in a room where somebody is already looking at a
+  computer, and the two surfaces show the same numbers — so the page takes the desktop window's calm rather than
+  inventing a second visual language for the same feature. Colour is reserved for the two things that need it: the
+  accent that means "this is moving", and the red that means "this stopped".
+*/
+@theme {
+  --color-canvas: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-line: #e6e8ec;
+  --color-ink: #14171f;
+  --color-muted: #6b7280;
+  --color-accent: #2563eb;
+  --color-accent-ink: #1d4ed8;
+  --color-accent-soft: #eff4ff;
+  --color-ok: #059669;
+  --color-danger: #dc2626;
+
+  --radius-card: 16px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.08);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  input {
+    font: inherit;
+    color: inherit;
+  }
+
+  ::selection {
+    background: #dbeafe;
+  }
+}
+
+/* A bar with no total: one stripe crossing the track, so a folder in flight reads as movement rather than as 0%. */
+.bar-slide {
+  animation: fs-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes fs-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

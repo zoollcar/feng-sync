@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
@@ -464,6 +464,27 @@ public sealed class LanServerWireTests
     }
 
     [Fact]
+    public async Task A_device_that_says_goodbye_leaves_the_room_without_giving_up_its_credential()
+    {
+        await using var server = await Harness.StartAsync();
+        var reply = await server.PairAsync(server.Pairing.Code);
+        // Pairing is itself a sighting, so the room already holds the device before anything else is said.
+        Assert.Contains(server.ServerOptions.Session.Presence.Members, member => member.DeviceId == PeerId);
+
+        var goodbye = await server.LeaveRoomAsync(reply.Token);
+        Assert.Equal(HttpStatusCode.NoContent, goodbye.StatusCode);
+        Assert.DoesNotContain(server.ServerOptions.Session.Presence.Members, member => member.DeviceId == PeerId);
+
+        // Two different things, and the difference is the whole reason this route exists: a phone whose browser
+        // was closed is not a phone that has to scan the code again. Its row is still here, its token still
+        // works, and asking anything at all puts it back in the room.
+        Assert.Single(await server.Peers.LoadAsync());
+        Assert.Contains(PeerId, await server.Secrets.SecretDeviceIdsAsync());
+        Assert.NotNull(await server.LogAsync());
+        Assert.Contains(server.ServerOptions.Session.Presence.Members, member => member.DeviceId == PeerId);
+    }
+
+    [Fact]
     public async Task An_unknown_route_still_answers_this_protocol_instead_of_a_plain_404_page()
     {
         await using var server = await Harness.StartAsync();
@@ -496,6 +517,65 @@ public sealed class LanServerWireTests
     }
 
     [Fact]
+    public async Task The_progress_board_answers_only_a_device_this_machine_knows()
+    {
+        await using var server = await Harness.StartAsync();
+
+        // What somebody is transferring is a fact about the people in the room, not something an unpaired browser
+        // gets to watch.
+        var anonymous = await server.ProgressRawAsync();
+
+        Assert.True(anonymous.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
+            anonymous.StatusCode.ToString());
+    }
+
+    [Fact]
+    public async Task A_pushed_file_appears_on_the_board_as_a_received_row_ending_where_it_landed()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        var token = (await server.PairAsync(server.Pairing.Code)).Token;
+        var content = new byte[300_000];
+        new Random(11).NextBytes(content);
+
+        var reply = await server.SendInboxAsync("big.bin", content, content.Length, mtime: null, token: token);
+        var progress = await server.ProgressAsync(token);
+
+        var row = Assert.Single(progress.Transfers);
+        Assert.Equal("in", row.Direction);
+        Assert.Equal("big.bin", row.Path);
+        Assert.Equal(reply.Bytes, row.Bytes);
+        Assert.Equal(content.Length, row.Total);
+        // The row a page polls for is the same one the window drew, and it ends on the bytes the sink published
+        // rather than on what the sender claimed it would send.
+        Assert.True(row.Done);
+        Assert.Null(row.Error);
+    }
+
+    [Fact]
+    public async Task A_download_appears_on_the_board_as_a_sent_row_naming_the_entry_it_served()
+    {
+        await using var server = await Harness.StartAsync(confirm: Accepted);
+        var token = (await server.PairAsync(server.Pairing.Code)).Token;
+        var id = "3c4d5e6f708192a3b4c5d6e7f80910";
+        await server.InboxRawAsync("tail.txt", "0123456789", messageId: id);
+
+        var download = await server.AttachmentAsync(id, token: token);
+        Assert.Equal("0123456789", await download.Content.ReadAsStringAsync());
+
+        var progress = await server.ProgressAsync(token);
+
+        // The arrival is still on the board beside it, which is the point of a list rather than a single slot:
+        // both directions of one room are visible at once.
+        Assert.Contains(progress.Transfers, row => row.Direction == "in" && row.Path == "tail.txt" && row.Done);
+        var sent = Assert.Single(progress.Transfers, row => row.Direction == "out");
+        Assert.Equal("tail.txt", sent.Path);
+        Assert.Equal(10, sent.Bytes);
+        Assert.Equal(10, sent.Total);
+        Assert.Equal(id, sent.Msg);
+        Assert.True(sent.Done);
+    }
+
+    [Fact]
     public async Task The_page_opens_for_a_stranger_and_refuses_to_be_kept()
     {
         await using var server = await Harness.StartAsync();
@@ -513,38 +593,109 @@ public sealed class LanServerWireTests
     }
 
     [Fact]
-    public void The_page_is_one_document_that_asks_nothing_off_this_machine()
+    public void The_built_page_is_embedded_and_asks_nothing_off_this_machine()
     {
-        var html = LanPhonePage.Html;
+        var html = Encoding.UTF8.GetString(LanWebAssets.Require("index.html").Bytes);
+        var script = string.Join('\n', LanWebAssets.All.Values
+            .Where(asset => asset.Path != "index.html")
+            .Select(asset => Encoding.UTF8.GetString(asset.Bytes)));
 
-        // The budget is the promise that this stays a page rather than becoming an application, and the two
-        // absence checks are the promises that keep it honest on a phone: nothing leaves the local network, and
-        // the credential lives only as long as the tab that was handed the code.
-        Assert.True(Encoding.UTF8.GetByteCount(html) <= LanPhonePage.MaximumBytes,
-            $"{Encoding.UTF8.GetByteCount(html)} 字节，上限 {LanPhonePage.MaximumBytes}");
+        // The promise the old twenty-kilobyte budget was making is now made by two other things: everything the
+        // page needs is inside this assembly, and the whole of it still arrives in one breath over a phone's Wi-Fi.
+        var total = LanWebAssets.All.Values.Sum(asset => (long)asset.Bytes.Length);
+        Assert.True(total <= LanWebAssets.MaximumTotalBytes, $"{total} 字节，上限 {LanWebAssets.MaximumTotalBytes}");
+        Assert.True(Encoding.UTF8.GetByteCount(html) <= LanWebAssets.MaximumHtmlBytes,
+            $"index.html {Encoding.UTF8.GetByteCount(html)} 字节，上限 {LanWebAssets.MaximumHtmlBytes}");
+
+        Assert.Contains("id=\"root\"", html, StringComparison.Ordinal);
+        // The document itself must reach nowhere. The bundle does carry the SVG and MathML namespace URIs React
+        // writes into every element it creates, and React's own error-page links; what it must never do is ask for
+        // any of them, which is what the next two checks are about.
         Assert.DoesNotContain("http://", html, StringComparison.Ordinal);
         Assert.DoesNotContain("https://", html, StringComparison.Ordinal);
-        Assert.Contains("sessionStorage", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("localStorage", html, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"(?:fetch|XMLHttpRequest|importScripts|new\s+Worker)\s*\(\s*[""']https?://", script);
+        Assert.DoesNotMatch(@"(?:src|href)\s*=\s*[""']https?://", script);
+
+        // The credential lives only as long as the tab that was handed the code.
+        Assert.Contains("sessionStorage", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage", script, StringComparison.Ordinal);
         // Signing a request is not available over plain HTTP, so the page must not reach for an API it has never
         // got — crypto.subtle is undefined here, and a page that assumes it would break at the first upload.
-        Assert.DoesNotContain("crypto.subtle", html, StringComparison.Ordinal);
-        Assert.Contains("crypto.getRandomValues", html, StringComparison.Ordinal);
-        // Every route it names is one this listener maps, in the shape the mapping answers in. There is no listing
-        // of shareable rows any more: a phone takes a file by the id its author minted, which is the same address a
-        // computer's own 接收 uses, so the page has no second way to point at a byte.
+        Assert.Contains("getRandomValues", script, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"crypto\s*\.\s*subtle", script);
+
+        // Every route it names is one this listener maps, in the shape the mapping answers in. Written out in full
+        // rather than assembled from a prefix, so that a minifier folding two literals cannot hide one of them.
         foreach (var route in new[]
                  {
-                     "/api/v1", "/pair", "/hello", "/peers", "/name", "/messages", "/inbox", "/log?since=",
-                     "/attachments/", "/receive",
+                     "/api/v1/hello", "/api/v1/pair", "/api/v1/peers", "/api/v1/name", "/api/v1/messages",
+                     "/api/v1/inbox", "/api/v1/log?since=", "/api/v1/progress", "/api/v1/presence/mine",
+                     "/api/v1/attachments/", "/zip", "/receive",
                  })
-            Assert.Contains(route, html, StringComparison.Ordinal);
+            Assert.Contains(route, script, StringComparison.Ordinal);
         foreach (var header in new[]
                  {
                      LanProtocol.HeaderRel, LanProtocol.HeaderTotal, LanProtocol.HeaderMtime, LanProtocol.HeaderSession,
-                     LanProtocol.HeaderMessage, LanProtocol.HeaderKind,
+                     LanProtocol.HeaderMessage, LanProtocol.HeaderKind, LanProtocol.HeaderDeviceName,
+                     LanProtocol.HeaderDeviceKind,
                  })
-            Assert.Contains(header, html, StringComparison.Ordinal);
+            Assert.Contains(header, script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_built_assets_are_named_by_the_url_they_are_served_under()
+    {
+        var keys = LanWebAssets.All.Keys.ToList();
+
+        Assert.Contains("index.html", keys);
+        Assert.Contains(keys, key => key.StartsWith("assets/", StringComparison.Ordinal) && key.EndsWith(".js", StringComparison.Ordinal));
+        Assert.Contains(keys, key => key.StartsWith("assets/", StringComparison.Ordinal) && key.EndsWith(".css", StringComparison.Ordinal));
+        // The name a build produced comes from a file path, so the separator is the build machine's; what a caller
+        // asks for is a URL, and the two must not be the same string.
+        Assert.DoesNotContain(keys, key => key.Contains('\\'));
+    }
+
+    [Fact]
+    public async Task Every_asset_the_page_names_is_served_immutably_with_a_length()
+    {
+        await using var server = await Harness.StartAsync();
+        var html = Encoding.UTF8.GetString(LanWebAssets.Require("index.html").Bytes);
+        var referenced = System.Text.RegularExpressions.Regex
+            .Matches(html, "(?:src|href)=\"(/assets/[^\"]+)\"")
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.NotEmpty(referenced);
+        foreach (var path in referenced)
+        {
+            var response = await server.LinkAsync(path);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            // Every name carries the hash of its content, which is what makes this safe: a new build produces new
+            // names, so a cached copy of an old one is never stale — it is simply never asked for again.
+            Assert.Equal("public, max-age=31536000, immutable", Header(response, "Cache-Control"));
+            Assert.Equal("nosniff", Header(response, "X-Content-Type-Options"));
+            Assert.True(response.Content.Headers.ContentLength > 0);
+            Assert.Equal(response.Content.Headers.ContentLength,
+                (await response.Content.ReadAsByteArrayAsync()).LongLength);
+        }
+    }
+
+    [Theory]
+    [InlineData("/assets/nope.js")]
+    [InlineData("/assets/")]
+    [InlineData("/assets/%252e%252e/LanServerHost.cs")]
+    public async Task An_unknown_or_traversing_asset_is_the_protocol_404(string path)
+    {
+        await using var server = await Harness.StartAsync();
+
+        var response = await server.LinkAsync(path);
+
+        // A miss is this protocol's own answer rather than the framework's: a peer that asked the wrong machine
+        // should not learn that from an HTML page.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(LanReason.NotFound, await ReasonAsync(response));
     }
 
     [Fact]
@@ -1342,6 +1493,17 @@ public sealed class LanServerWireTests
         public Task<HttpResponseMessage> LogRawQueryAsync(string since, string? token = null) =>
             GetAsync($"/api/v1/log?since={Uri.EscapeDataString(since)}", token: token);
 
+        /// <summary>What this machine is moving right now, in the numbers its own window draws.</summary>
+        public async Task<LanProgressReply> ProgressAsync(string? token = null)
+        {
+            var response = await ProgressRawAsync(token);
+            response.EnsureSuccessStatusCode();
+            return Deserialize<LanProgressReply>(await response.Content.ReadAsStringAsync());
+        }
+
+        public Task<HttpResponseMessage> ProgressRawAsync(string? token = null) =>
+            GetAsync("/api/v1/progress", token: token);
+
         /// <summary>Says something in the room, from the device its credential names.</summary>
         public async Task<LanMessageWire> SayAsync(string text, string? token = null)
         {
@@ -1382,6 +1544,13 @@ public sealed class LanServerWireTests
         /// <summary>A device removing its own credential, which is the one thing a peer may do to the trust list.</summary>
         public Task<HttpResponseMessage> ForgetSelfAsync(string token) =>
             SendAsync(Request(HttpMethod.Delete, "/api/v1/peers/mine", PeerId, token));
+
+        /// <summary>
+        /// A device saying it is going away, which is not the same as revoking itself: the row and the token stay,
+        /// and only the room's idea of who is present changes.
+        /// </summary>
+        public Task<HttpResponseMessage> LeaveRoomAsync(string token) =>
+            SendAsync(Request(HttpMethod.Delete, "/api/v1/presence/mine", PeerId, token));
 
         /// <summary>
         /// Asks this machine to become the holder of one room entry: the move a member makes when it cannot dial

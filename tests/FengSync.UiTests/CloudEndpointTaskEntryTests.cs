@@ -17,140 +17,68 @@ using Xunit;
 namespace FengSync.UiTests;
 
 /// <summary>
-/// 云盘管理里 E 组四个入口的真实路径：从一个端点建同步任务（E1）、双向同步向导（E2）、导出诊断（E3）、
-/// 首启引导（E5）。规则本身在 <see cref="CloudSyncTaskTests"/> / <see cref="CloudDiagnosticsReportTests"/> /
-/// <see cref="CloudFirstRunGuideTests"/> 里；这里要证明的是**点击真的走到了那里** —— 草稿那一侧填对了、
-/// 存盘是读—加—写而不是覆盖、取消不写、诊断文件真的落盘而且里面没有凭据。
+/// 云盘管理里 E 组还留着入口的两项的真实路径：导出诊断（E3）与首启引导（E5）。规则本身在
+/// <see cref="CloudDiagnosticsReportTests"/> / <see cref="CloudFirstRunGuideTests"/> 里；这里要证明的是
+/// **点击真的走到了那里** —— 诊断文件真的落盘而且里面没有凭据、引导只问一次、「不再问」真的被记住。
 /// </summary>
 /// <remarks>
-/// 三个对话框（编辑同步任务、双向同步向导、诊断存到哪）各自只接管**问**的那一下，写盘与建任务仍然走
-/// 真的代码路径。用 <c>??</c> 兜回真弹窗会在测试里挂一个无人可答的模态框，所以接缝答 <c>null</c> 就是取消。
+/// <para>E1（从端点建同步任务）与 E2（双向同步向导）的入口随左侧「同步」一行一起下线：主窗口已经有「新建同步」，
+/// 云盘管理不再重复提供。它们的规则层（<c>CloudSyncTask</c> / <c>CloudSyncWizardWindow</c>）仍然保留，但这扇窗里
+/// 已经没有控件能点到，所以这里不再有它们的用例。</para>
+/// <para>两个对话框（诊断存到哪、要不要看引导）各自只接管**问**的那一下，写盘仍然走真的代码路径。用
+/// <c>??</c> 兜回真弹窗会在测试里挂一个无人可答的模态框，所以接缝答 <c>null</c> 就是取消。</para>
 /// </remarks>
 [Collection(ProcessWideStateCollection.Name)]
 public sealed class CloudEndpointTaskEntryTests
 {
-    /// <summary>The endpoint the window has selected, and the folder the browser is sitting in.</summary>
+    /// <summary>The endpoint the window has selected.</summary>
     private const string Endpoint = "work";
-    private const string Folder = "team/docs";
 
-    // ------------------------------------------------------------------ E1
-
-    [Fact]
-    public async Task Creating_a_task_from_an_endpoint_prefills_the_cloud_side_with_the_folder_being_browsed()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Browsing_without_a_synchronization_context_updates_the_window_on_its_dispatcher(bool succeeds)
     {
         await WithWindow(async (window, root) =>
         {
-            SyncProfile? draft = null;
-            window.EditSyncProfile = profile => { draft = profile; return profile; };
-            window.ShowListing(Folder, []);
+            var context = SynchronizationContext.Current;
+            Task browse;
+            try
+            {
+                // An STA caller can own the controls without installing a WPF context. Force the HTTP
+                // answer to arrive later, so the continuation really does start on a pool thread.
+                SynchronizationContext.SetSynchronizationContext(null);
+                browse = window.NavigateToAsync("docs");
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(context); }
 
-            await Click(window.CreateSyncTaskButton);
-
-            Assert.NotNull(draft);
-            // 云端那侧是浏览到的目录，本地那侧留空等用户自己点「浏览…」。
-            Assert.Equal("gdrive://work/team/docs", draft!.RightPath);
-            Assert.Equal("", draft.LeftPath);
-            Assert.Equal(SyncMode.TwoWay, draft.Mode);
-            Assert.Contains(Folder, draft.Description, StringComparison.Ordinal);
-
-            // 真的存下来了，而且名字是默认名。
-            var saved = await Saved(root, expectedCount: 1);
-            var mine = Assert.Single(saved, profile => profile.Name == draft.Name);
-            Assert.Equal("gdrive://work/team/docs", mine.RightPath);
-        });
+            await browse;
+            Assert.True(window.Dispatcher.CheckAccess());
+            if (succeeds)
+            {
+                Assert.Equal("report.txt", Assert.Single(window.VisibleEntries).Name);
+                Assert.Contains("docs", await File.ReadAllTextAsync(Path.Combine(root, "cloud-bookmarks.json")));
+            }
+            else
+            {
+                Assert.Empty(window.VisibleEntries);
+                Assert.Contains("无法读取目录", window.StatusText.Text);
+            }
+        }, handler: new DelayedListing(succeeds));
     }
 
-    [Fact]
-    public async Task Creating_a_task_keeps_the_ones_that_were_already_there()
+    private sealed class DelayedListing(bool succeeds) : HttpMessageHandler
     {
-        // SaveAsync 是整份覆盖，所以「加一个」必须是读—加—写三步。少读一步就是把别人的任务弄没了。
-        await WithWindow(async (window, root) =>
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var store = new ProfileStore(ProfilesPath(root));
-            var existing = SyncProfile.Create("早已存在的任务", @"C:\a", "gdrive://nas/a");
-            await store.SaveAsync([existing]);
-            window.EditSyncProfile = profile => profile;
-
-            await Click(window.CreateSyncTaskButton);
-
-            var saved = await Saved(root, expectedCount: 2);
-            Assert.Equal(2, saved.Count);
-            Assert.Contains(saved, profile => profile.Id == existing.Id);
-        });
-    }
-
-    [Fact]
-    public async Task Cancelling_the_editor_saves_nothing()
-    {
-        await WithWindow(async (window, root) =>
-        {
-            window.EditSyncProfile = _ => null;
-
-            await Click(window.CreateSyncTaskButton);
-
-            Assert.Empty(await Saved(root, expectedCount: 0));
-            Assert.False(string.IsNullOrWhiteSpace(window.StatusText.Text));
-        });
-    }
-
-    [Fact]
-    public async Task The_create_button_is_disabled_when_no_endpoint_is_selected()
-    {
-        // 没有选中行的时候按钮按不动 —— 没有端点就问不出「云端那一侧填什么」。
-        await WithWindow(async (window, _) =>
-        {
-            window.LoadEndpointsForTest([]);
-            Assert.False(window.CreateSyncTaskButton.IsEnabled);
-        });
-    }
-
-    // ------------------------------------------------------------------ E2
-
-    [Fact]
-    public async Task The_wizard_saves_a_bidirectional_task_as_soon_as_it_is_answered()
-    {
-        // 「一键」的含义就是不再开 Profile 编辑器：两格都已经在向导里挑过了。
-        await WithWindow(async (window, root) =>
-        {
-            window.ShowSyncWizard = () => new CloudSyncTask.Plan("reports ↔ work", @"C:\reports", "gdrive://work/reports", "");
-
-            await Click(window.SyncWizardButton);
-
-            var mine = Assert.Single(await Saved(root, expectedCount: 1));
-            Assert.Equal("reports ↔ work", mine.Name);
-            Assert.Equal(@"C:\reports", mine.LeftPath);
-            Assert.Equal("gdrive://work/reports", mine.RightPath);
-            Assert.Equal(SyncMode.TwoWay, mine.Mode);
-        });
-    }
-
-    [Fact]
-    public async Task A_wizard_answer_with_two_remote_sides_is_refused_before_anything_is_written()
-    {
-        // 接缝可以被测试装、也可以被以后某个调用方装，所以校验在存盘之前还要再做一次 ——
-        // profiles.json 是这个程序里写坏了最贵的一个文件。
-        await WithWindow(async (window, root) =>
-        {
-            window.ShowSyncWizard = () => new CloudSyncTask.Plan("两端都是云端", "gdrive://work", "s3://photos", "");
-
-            await Click(window.SyncWizardButton);
-
-            Assert.Empty(await Saved(root, expectedCount: 0));
-            Assert.False(string.IsNullOrWhiteSpace(window.StatusText.Text));
-        });
-    }
-
-    [Fact]
-    public async Task Cancelling_the_wizard_saves_nothing()
-    {
-        await WithWindow(async (window, root) =>
-        {
-            window.ShowSyncWizard = () => null;
-
-            await Click(window.SyncWizardButton);
-
-            Assert.Empty(await Saved(root, expectedCount: 0));
-        });
+            await Task.Delay(20, cancellationToken).ConfigureAwait(false);
+            return new HttpResponseMessage(succeeds ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable)
+            {
+                Content = new StringContent(succeeds
+                    ? "{\"list\":[{\"Name\":\"report.txt\",\"Path\":\"report.txt\",\"Size\":12,\"IsDir\":false}]}"
+                    : "{}")
+            };
+        }
     }
 
     // ------------------------------------------------------------------ E3
@@ -291,29 +219,6 @@ public sealed class CloudEndpointTaskEntryTests
         throw new TimeoutException($"等待「{what}」超时。");
     }
 
-    /// <summary>The profiles as they are on disk, once the write has landed. Pass the number to wait for so a
-    /// pre-existing file does not return early and mask a missing save.</summary>
-    private static async Task<IReadOnlyList<SyncProfile>> Saved(string root, int expectedCount)
-    {
-        var path = ProfilesPath(root);
-        string? text = null;
-        await WaitUntil(() =>
-        {
-            text = Read(path);
-            if (text is null) return expectedCount == 0; // a missing file satisfies an "empty" expectation
-            var parsed = JsonSerializer.Deserialize<List<SyncProfile>>(text);
-            return parsed is not null && parsed.Count >= expectedCount;
-        }, "the profile store to be written");
-        return text is null ? [] : JsonSerializer.Deserialize<List<SyncProfile>>(text) ?? [];
-    }
-
-    private static string? Read(string path)
-    {
-        try { return File.Exists(path) ? File.ReadAllText(path) : null; }
-        catch (IOException) { return null; }
-    }
-
-    private static string ProfilesPath(string root) => Path.Combine(root, "profiles.json");
     private static string SettingsPath(string root) => Path.Combine(root, "FengSync.local.json");
 
     /// <summary>
@@ -325,13 +230,14 @@ public sealed class CloudEndpointTaskEntryTests
     /// <param name="loadEndpoints">Whether to pre-populate the endpoint list. Tests that need an empty
     /// state (the first-run guide path is one) pass <see langword="false"/>; everything else gets the
     /// default rows.</param>
-    private static Task WithWindow(Func<RemoteEndpointManagerWindow, string, Task> test, bool loadEndpoints = true) => RunSta(async () =>
+    private static Task WithWindow(Func<RemoteEndpointManagerWindow, string, Task> test, bool loadEndpoints = true,
+        HttpMessageHandler? handler = null) => RunSta(async () =>
     {
         var root = NewDirectory();
         var previousShell = AppServices.TryCurrent;
         var previousDataDir = Environment.GetEnvironmentVariable("FENGSYNC_DATA_DIR");
         Environment.SetEnvironmentVariable("FENGSYNC_DATA_DIR", root);
-        var http = new HttpClient(new SilentRclone()) { BaseAddress = new Uri("http://rc.test/") };
+        using var http = new HttpClient(handler ?? new SilentRclone()) { BaseAddress = new Uri("http://rc.test/") };
         var client = new RcloneRcClient(http, new Uri("http://rc.test/"), "user", "pass");
         var queue = new CloudTransferQueue(new CloudTransferJournalStore(root), _ => Task.FromResult(client));
         // The window resolves the mount service from the installed shell, and the rclone behind that shell is

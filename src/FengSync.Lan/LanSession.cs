@@ -71,7 +71,8 @@ public sealed class LanSession(
     LanPeerSecretStore secrets,
     LanPairingState pairing,
     Func<LanInboundOffer, CancellationToken, Task<bool>>? confirmInbound = null,
-    LanGroupLog? group = null)
+    LanGroupLog? group = null,
+    LanRoomPresence? presence = null)
 {
     private readonly object _gate = new();
     private readonly HashSet<string> _agreedThisSession = new(StringComparer.OrdinalIgnoreCase);
@@ -91,6 +92,17 @@ public sealed class LanSession(
     /// in it, and the window draws whatever is in it. It is memory, so closing the window is leaving the room.
     /// </summary>
     public LanGroupLog Group { get; } = group ?? new LanGroupLog();
+
+    /// <summary>
+    /// Who is in the room right now.
+    /// </summary>
+    /// <remarks>
+    /// Fed from here because this is the one place every authenticated request passes through, which makes it the
+    /// only honest source for "that device is still here": a phone polling the room every three seconds renews its
+    /// own lease as a side effect of asking, and one whose browser was closed stops renewing it and ages out
+    /// without anybody having to notice an absence.
+    /// </remarks>
+    public LanRoomPresence Presence { get; } = presence ?? new LanRoomPresence();
 
     /// <summary>
     /// Whether a device that was already trusted before this window opened may write without being asked.
@@ -136,6 +148,10 @@ public sealed class LanSession(
         // Only a device already in the list has its sighting recorded; an unknown id was refused above, so this
         // cannot grow the trusted list out of a header.
         await Peers.RememberContactAsync(deviceId, address, port, DateTimeOffset.UtcNow, ct).ConfigureAwait(false);
+        // …and the same sighting is what keeps it in the room. The address and port are this request's, so a
+        // device that moved between access points is in the list at the place it can actually be reached.
+        Presence.Seen(new LanRoomMember(contact.DeviceId, contact.DeviceName, contact.Kind, address, port,
+            DateTimeOffset.UtcNow, Discovered: false));
         return new LanAuthResult(LanRefusal.None, contact);
     }
 
@@ -165,6 +181,12 @@ public sealed class LanSession(
         var token = await secrets.IssueAsync(deviceId, ct).ConfigureAwait(false);
         var peer = await Peers.RememberAsync(new LanPeerRecord(deviceId, contact.DeviceName, contact.Kind,
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, port, [address]), ct).ConfigureAwait(false);
+
+        // A device that just spent a code is in the room from this moment, and its own first poll will renew
+        // that. Marking it here rather than waiting for the poll is what makes the join line and the device row
+        // appear together instead of a beat apart.
+        Presence.Seen(new LanRoomMember(contact.DeviceId, contact.DeviceName, contact.Kind, address, port,
+            DateTimeOffset.UtcNow, Discovered: false));
 
         // A device that pairs mid-session has not been agreed to yet, even though it now has a token: pairing
         // proves it read the code, not that a person wants its files.
@@ -209,8 +231,21 @@ public sealed class LanSession(
         var forgotten = await Peers.ForgetAsync(deviceId, ct).ConfigureAwait(false);
         await secrets.ForgetAsync(deviceId, ct).ConfigureAwait(false);
         lock (_gate) _agreedThisSession.Remove(deviceId);
+        // Trust and presence are two different questions and this answers both: a device that is no longer
+        // trusted has no business being listed as a member of the room either.
+        Presence.Forget(deviceId);
         return forgotten;
     }
+
+    /// <summary>
+    /// Takes a device out of the room because it said it was leaving.
+    /// </summary>
+    /// <remarks>
+    /// The credential is deliberately left alone. A phone that closes its tab has not revoked anything — it is
+    /// simply not here — and forgetting it would make a person re-scan a code every time they put their phone
+    /// down. Only <see cref="ForgetAsync"/> means "this device may not come back".
+    /// </remarks>
+    public bool LeaveRoom(LanContact contact) => Presence.Forget(contact.DeviceId);
 
     /// <summary>
     /// Lets a peer remove its own credential. It cannot remove anybody else's — the route carries no id to
@@ -271,6 +306,6 @@ public sealed class LanSession(
     {
         LanProtocol.KindWindows => LanProtocol.KindWindows,
         LanProtocol.KindPhone => LanProtocol.KindPhone,
-        _ => "unknown",
+        _ => LanProtocol.KindUnknown,
     };
 }

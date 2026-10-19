@@ -1,0 +1,82 @@
+<Window x:Class="FengSync.Views.LanTrustedDevicesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fluent="clr-namespace:FluentIcons.Wpf;assembly=FluentIcons.Wpf"
+        xmlns:l="clr-namespace:FengSync.Localization"
+        Title="{Binding [Lan.TrustedDialogTitle], Source={l:Lang}}"
+        Width="620"
+        Height="520"
+        MinWidth="480"
+        MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        AutomationProperties.AutomationId="LanTrustedDevicesWindow"
+        AutomationProperties.Name="{Binding [Lan.TrustedWindowName], Source={l:Lang}}">
+    <DockPanel>
+        <!-- 这一行说清楚这份名单是什么：它是一份留在磁盘上的文件，关掉窗口它还在，所以"取消信任"是一个
+             会一直生效的决定，而不是一次会话里的勾选。 -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceSubtleBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="14,10">
+            <DockPanel LastChildFill="True">
+                <fluent:FluentIcon DockPanel.Dock="Left" Icon="ShieldKeyhole" Width="16" Height="16" FontSize="16"
+                                   Margin="0,2,8,0" Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Style="{StaticResource LibraryIconStyle}"/>
+                <TextBlock Text="{Binding [Lan.TrustedDialogHint], Source={l:Lang}}"
+                           Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap"/>
+            </DockPanel>
+        </Border>
+
+        <!-- 底部：一句状态话（刚取消了谁的信任），和一个关掉窗口的按钮。 -->
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0" Padding="14,10">
+            <DockPanel LastChildFill="True">
+                <Button DockPanel.Dock="Right" x:Name="CloseButton" AutomationProperties.AutomationId="LanTrustedCloseButton"
+                        Content="{Binding [Lan.Close], Source={l:Lang}}" Click="Close_Click"
+                        Style="{StaticResource SecondaryButtonStyle}"/>
+                <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="LanTrustedStatus"
+                           Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+            </DockPanel>
+        </Border>
+
+        <Grid Margin="14,12">
+            <ListView x:Name="TrustedList" AutomationProperties.AutomationId="LanTrustedList"
+                      BorderThickness="0" Background="Transparent"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListView.ItemContainerStyle>
+                    <!-- A row is not selectable: the only thing on it anybody clicks is 取消信任. -->
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Focusable" Value="False"/>
+                        <Setter Property="IsTabStop" Value="False"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0,3"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Detail}"/>
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel LastChildFill="True">
+                            <Button DockPanel.Dock="Right" Content="{Binding [Lan.Forget], Source={l:Lang}}"
+                                    AutomationProperties.AutomationId="LanForgetPeerButton"
+                                    Style="{StaticResource TertiaryButtonStyle}"
+                                    Click="ForgetPeer_Click" Tag="{Binding}" VerticalAlignment="Center"/>
+                            <StackPanel Margin="0,2,10,2">
+                                <TextBlock Text="{Binding Name}" Style="{StaticResource BodyStrongTextStyle}"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionTextStyle}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <TextBlock x:Name="EmptyText" AutomationProperties.AutomationId="LanTrustedEmpty"
+                       Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center"
+                       HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+                       Text="{Binding [Lan.NoTrustedDevices], Source={l:Lang}}"/>
+        </Grid>
+    </DockPanel>
+</Window>

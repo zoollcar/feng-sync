@@ -5,18 +5,20 @@
 Lan.Title	局域网快传	LAN quick transfer
 Lan.WindowName	局域网快传窗口	LAN quick transfer window
 Lan.Pairing	配对	Pairing
-Lan.PairingHint	手机扫下面的二维码，或在另一台电脑上输入这个码。码只用一次，两分钟就作废。	Scan the code below with a phone, or type this code on the other computer. A code works once and goes stale after two minutes.
+Lan.PairingHint	扫下面的二维码，或把网址发给另一台电脑——网址里已经带着配对码，打开就配对。码使用一次作废、两分钟作废。	Scan the code below, or send this address to the other computer — it already carries the pairing code, so opening it pairs. A code works once and goes stale after two minutes.
 Lan.Regenerate	换一个新码	New code
 Lan.CodeExpires	剩余 {0} 秒	{0} seconds left
 Lan.CodeRenewing	正在换新码…	Replacing the code…
 Lan.CodeRegenerated	新配对码：{0}	New pairing code: {0}
+Lan.CopyCode	点击复制配对码	Click to copy the pairing code
+Lan.CodeCopied	配对码已复制	Pairing code copied
+Lan.CopyCodeFailed	没能复制到剪贴板：	Could not copy to the clipboard:
 Lan.QrFailed	二维码没能画出来，配对码仍可用	The QR code could not be drawn; the pairing code still works
 Lan.Addresses	本机地址	This computer's addresses
-Lan.AddressPickHint	手机连哪一个由这里选，二维码跟着它重画。装了 VPN 或虚拟网卡时，请挑局域网那一条。	The phone connects to whichever of these you pick, and the QR code follows. With a VPN or a virtual adapter, choose the LAN one.
+Lan.PairUrl	网址	Web address
 Lan.Listening	正在监听端口 {0}	Listening on port {0}
 Lan.Port	端口	Port
 Lan.ApplyPort	应用	Apply
-Lan.PortHint	防火墙规则里写的是这个端口。换端口后规则要重新加，手机也得重新配对。	The firewall rule names this port. After a change the rule has to be added again and the phone has to pair again.
 Lan.PortRange	端口要在 {0} 到 {1} 之间	The port must be between {0} and {1}
 Lan.PortBusy	端口被占用，请换一个	The port is taken; choose another
 Lan.DiscoveryUnavailable	局域网发现没能起来，仍可手动填地址	LAN discovery did not start; you can still type an address
@@ -47,9 +49,20 @@ Lan.Forgotten	已取消对 {0} 的信任	{0} is no longer trusted
 Lan.AlreadyGone	这台设备已经不在这份列表里了	That device is no longer on the list
 Lan.NoTrustedDevices	还没有配对过的设备	Nothing has been paired with yet
 Lan.PeerListFailed	受信设备列表没读到	The trusted device list could not be read
+# ---- 信任记录：一份会留在磁盘上的名单，所以它有自己的窗口 ----
+Lan.ManageTrusted	管理信任记录…	Manage trusted devices…
+Lan.TrustedCount	已信任 {0} 台设备	{0} trusted device(s)
+Lan.TrustedDialogTitle	信任记录	Trusted devices
+Lan.TrustedWindowName	信任记录窗口	Trusted devices window
+Lan.TrustedDialogHint	这份名单存在磁盘上，关掉窗口也还在。取消信任后，那台设备要重新扫码才能再进来。	This list lives on disk and outlives the window. A device you forget has to scan the code again before it can come back.
+Lan.Close	关闭	Close
 # ---- 房间：一句话、一个文件、一个接收的动作 ----
 # A bubble carries the file's own name, so nothing here labels a listing.
 Lan.Members	群里的设备	Devices in the room
+Lan.RoomMembersEmpty	还没有别的设备在群里	No other device is in the room yet
+Lan.MemberChip	{0} · {1}	{0} · {1}
+Lan.MemberDiscovered	发现的电脑	Found on the LAN
+Lan.LeftRoom	{0} 离开了这个群	{0} left this room
 Lan.RoomEmpty	还没有人说话。让手机扫上面的码进来，或者用下面的按钮往房间里放一个文件。	Nothing has been said yet. Let a phone scan the code above, or use the buttons below to put a file in the room.
 Lan.SendFiles	发文件…	Send files…
 Lan.SendFolder	发文件夹…	Send a folder…
@@ -62,9 +75,6 @@ Lan.ChatFolder	文件夹	Folder
 Lan.ChatHeld	已在本机：{0}	Held here: {0}
 Lan.RoomReceived	已收到 {0}（{1}）	Received {0} ({1})
 Lan.RoomRefused	{0} 没能收到：{1}	{0} could not be fetched: {1}
-Lan.Computers	发现的电脑	Computers found
-Lan.NoComputersFound	没发现其他电脑，可直接填下面的地址	No other computer answered; type the address below instead
-Lan.PeerRow	{0}:{1} · {2}	{0}:{1} · {2}
 Lan.ManualPeer	手动地址	Manual address
 Lan.ManualPeerHint	写成 ip:端口。有些网络（AP 隔离）拦得住发现也拦得住连接，这一栏是唯一的兜底。	Format: ip:port. Some networks (AP isolation) block both discovery and the connection, so this box is the only way through.
 Lan.CheckPeer	先看它在不在	Is it there?
@@ -90,6 +100,10 @@ Lan.Sent	已发出 {0} · {1} · 给 {2}	Sent {0} · {1} · to {2}
 Lan.SentArchive	已把 {0} 打包发给 {1}，压缩包不能续传	{0} was zipped and sent to {1}; an archive cannot be resumed
 Lan.ProgressIn	接收 {0} ← {1}（{2} / {3}）	Receiving {0} from {1} ({2} / {3})
 Lan.ProgressOut	发送 {0} → {1}（{2} / {3}）	Sending {0} to {1} ({2} / {3})
+Lan.SpeedEta	{0} · 还剩 {1}	{0} · {1} left
+Lan.EtaSeconds	{0} 秒	{0}s
+Lan.EtaMinutes	{0} 分 {1} 秒	{0}m {1}s
+Lan.EtaHours	{0} 小时 {1} 分	{0}h {1}m
 Lan.SizeUnknown	大小未知	size unknown
 Lan.History	历史	History
 Lan.NoHistory	还没有通过局域网收发的记录	Nothing has moved over the LAN yet

@@ -33,3 +33,5 @@ FreeFileSync
 *.p12
 id_rsa
 id_ed25519
+web/node_modules/
+web/dist/

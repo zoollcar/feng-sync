@@ -21,6 +21,10 @@
 > `LanguageCoverageTests.DeferredMigrationFiles` 这份例外清单已删除 —— 现在这两份文件与新文件受**同一条**规则约束，
 > WPF shell 里不再有任何用户可见的中文硬编码。见 §2 的 F。
 >
+> **G 批次（左列收敛）未提交**（2026-10-19）。云盘管理左列删掉「同步」「整理」两行：同步归主窗口的「新建同步」，
+> 端点的重命名 / 分组与标签 / 检查连接 / 删除进**端点行右键菜单**，`刷新列表` 进「工具」行。E1/E2 的入口随之下线
+> （规则层保留）。见 §2 的 G。
+>
 > **F 收尾跑门禁时暴露了两个已提交的回归**（都不在 F 的改动范围内，是 E 组之前就进 `dev` 的）：
 > 1. **`AppLanguageStartup.ApplySavedLanguage()` 在 UI 线程上 sync-over-async，磁盘上一旦有
 >    `FengSync.local.json` 就死锁**。进程活着、无窗口、CPU 0 —— 桌面应用等于起不来。
@@ -307,6 +311,31 @@ TwoWay 或 OneWayToSource 绑定`。窗口构造时抛在 `Application.Run` 里 
 15 分钟超时才报错**（日志停在 `A total of 1 test files matched the specified pattern.`）。看到这个症状时先查
 `tasklist` 里有没有残留的 `FengSync.exe`，不要先怀疑测试本身。
 
+### 批次 G —— 云盘管理左列收敛（**未提交**，2026-10-19）
+
+用户要求把左列的按钮带收掉一截：同步归主窗口，整理归端点行的右键菜单。
+
+- **「同步」一行删除**：`同步向导` / `创建同步任务` 两个按钮连同接缝（`EditSyncProfile` / `ShowSyncWizard` /
+  `AskEndpoint`）一起下线 —— 主窗口已有「新建同步」，这扇窗不再重复提供。**规则层保留**：`CloudSyncTask` 与
+  `CloudSyncWizardWindow` 仍在仓库里、仍由 `CloudSyncTaskTests` 覆盖纯规则，但这扇窗里已经没有控件能点到它们。
+  要恢复就把入口接回去；要清理是另一次独立决定（删掉它们要连 `Task.*` / `SyncWizard.*` 27 个键一起删）。
+- **「整理」一行删除**：`重命名… / 分组与标签… / 删除` 与 `检查连接` 搬进**端点行的右键菜单**
+  （`BuildEndpointMenu`，代码搭的，AutomationId `CloudEndpointMenu`，四项分别是
+  `CloudEndpointMenuCheck/Rename/Organize/Delete`）。右键先选中指针下那一行（`PreviewMouseRightButtonDown`），
+  否则「删除」作用的是用户离开时选中的那一行；没有选中行时不弹菜单（`e.Handled = true`）。删除项带端点名
+  （`Mgr.DeleteEndpointMenuItem`），与一控件之隔的文件行 `删除…` 区分开 —— 两者删的东西完全不同。
+- **`刷新列表` 移进「工具」行**（新 AutomationId `RefreshCloudEndpoints`）。它与 `测试全部` 问的是同一类问题
+  （「外面有什么」），而且是这一行里唯一不改变任何东西的命令。
+- **`检查连接` 与 `测试全部` 不是同一个东西**，所以两个都留着：前者只探选中那一个端点、把结果写回那一行；
+  后者按 `ProbeConcurrency = 3` 探当前列表里的**全部**并给一行汇总。把前者收进右键菜单，是因为列表很长时
+  「只问这一个」才是便宜的那个问题。
+- 门禁连带：`LanguageCoverageTests` 要求「每个键都被用到」，随行的 **20 个 `Mgr.*` 键**已从
+  `30-cloud-manager.tsv` 删除并重新生成两份 `.resx`（1781 → 1761 条）。`CloudEndpointTaskEntryTests` 删掉
+  E1/E2 的七个用例、保留 E3/E5；`UiFeatureBehaviorTests` 里两处按钮断言改成断言行菜单；
+  `sftp-ui` 场景改成**右键开菜单再点「重命名…」/「分组与标签…」**，并给 `RefreshCloudEndpoints` 加了矩形断言。
+- 左列的宽度注释也重写了：MinWidth 仍是 420，但「工具」行现在是五个按钮，窄端最多折成两行 —— 原来
+  「四行各自一行」的实测结论已经不成立。
+
 ### E5 的模态首启引导 vs. UI 场景（测试夹具问题，不是回归）
 
 上面两条修完之后 `cloud-transfers` 仍然红，但换了个位置：**「The transfer window did not close.」**（跑三次都红；
@@ -491,13 +520,15 @@ D 组的测试要点：`MountOptionsSettings` → RC 载荷的**键名断言**�
 
 | # | 内容 | 关键改动 |
 | --- | --- | --- |
-| E1 | 从端点创建同步任务 | ✅ `CloudSyncTask.OfferFor` 拼云端那一侧（默认填「浏览器所在目录」，不是端点根），`EditSyncProfile` 接缝 + 既有 `ProfileEditorWindow` 预填打开；保存走 `ProfileStore` 的读—加—写，不覆盖 |
-| E2 | 一键双向同步向导 | ✅ `CloudSyncWizardWindow`（代码搭的两格表单）+ `CloudSyncTask.WizardOfferFor`（少一格、云端那侧不是端点、两格相同、两端都是远端全部在存盘**前**拒绝）；`ShowSyncWizard` 接缝答 `null` = 用户取消 |
+| E1 | 从端点创建同步任务 | ⚠️ **入口已随批次 G 下线**（主窗口的「新建同步」承担同一件事），规则层 `CloudSyncTask.OfferFor` 保留：拼云端那一侧（默认填「浏览器所在目录」，不是端点根）；原先的保存走 `ProfileStore` 的读—加—写，不覆盖 |
+| E2 | 一键双向同步向导 | ⚠️ **入口已随批次 G 下线**，`CloudSyncWizardWindow` + `CloudSyncTask.WizardOfferFor` 保留（少一格、云端那侧不是端点、两格相同、两端都是远端全部在存盘**前**拒绝） |
 | E3 | 诊断导出 | ✅ `CloudDiagnosticsReport.Compose`（纯函数），`CloudDiagnosticsReport.RedactProxy` 只脱敏代理的 userinfo；**永远不导出 `rclone.conf`**；端点段只写名字/类型/Provider/前缀（值一律留空，承接 A7 的导出形状） |
 | E4 | i18n | ✅ `Tr.F` / `{l:Lang}` 绑定，资源文件 `Strings.resx` + `Strings.en.resx` 由 `localization/*.tsv` 经 `scripts/New-StringsResx.py` 生成；`AppLanguageContext` 进程级单例，**设置页可在 zh-CN 与 English 之间切换**；中文为中性集合（缺英文时回退到一直存在的措辞） |
 | E5 | 首启引导 | ✅ `CloudFirstRunGuide.ShouldShow` 仅在「`CloudGuideSeen == false` **且**端点数为 0」时返回真（已建过端点的人不会被吵）；`CloudFirstRunPrompt` 的「不再提示」与「稍后再说」是两种结果，前者写 `CloudGuideSeen`，后者什么都不写 |
 
-**E 组的接缝全部就位**：`EditSyncProfile` / `ShowSyncWizard` / `AskDiagnosticsFile` / `ShowFirstRunGuide` / `MaybeShowFirstRunGuideAsync` / `AskEndpoint` / `AskLocalFolder` —— 任何一个没装都走真窗，装了却答 `null` 一律是用户取消（**不是**「没装接缝」，`??` 兜到真弹窗会在测试里挂一个无人可答的模态框）。
+**E 组的接缝**：`AskDiagnosticsFile` / `ShowFirstRunGuide` / `MaybeShowFirstRunGuideAsync` / `AskLocalFolder` ——
+任何一个没装都走真窗，装了却答 `null` 一律是用户取消（**不是**「没装接缝」，`??` 兜到真弹窗会在测试里挂一个无人可答的模态框）。
+`EditSyncProfile` / `ShowSyncWizard` / `AskEndpoint` 三个已随批次 G 的「同步」行一起删除。
 
 **Deferred migration debt —— ✅ 已清零（批次 F，2026-10-06）**：`LanguageCoverageTests.DeferredMigrationFiles` 这份例外清单**已删除**，`MainWindow.xaml.cs` 与 `Views/RemoteEndpointManagerWindow.xaml.cs` 里 392 处中文字面量已迁进资源表。现在 shell 里**任何**用户可见的中文硬编码都会被门禁报出来，没有豁免名单。做法与两个坑见 §2 的「批次 F」。
 

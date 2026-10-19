@@ -696,15 +696,12 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <summary>
     /// Keeps the endpoint actions in step with the selection. Only a provider whose descriptor requires a
     /// browser authorization can be re-authorized, so the button is hidden for the rest rather than failing
-    /// after the click.
+    /// after the click. The commands that moved to the row menu need no state here: the menu itself is only
+    /// built when there is a row to build it for (see <see cref="BuildEndpointMenu"/>).
     /// </summary>
     private void UpdateEndpointButtons()
     {
         EditButton.IsEnabled = Selected is not null;
-        CheckButton.IsEnabled = Selected is not null;
-        RenameEndpointButton.IsEnabled = Selected is not null;
-        OrganizeEndpointButton.IsEnabled = Selected is not null;
-        CreateSyncTaskButton.IsEnabled = Selected is not null;
         // Follows the rows on screen rather than everything that was loaded: the button sits beside the
         // search box, and its status line reports how many it probed, so a filter that is not applied would
         // make the two disagree.
@@ -785,114 +782,6 @@ public partial class RemoteEndpointManagerWindow : Window
         });
     }
 
-    /// <summary>
-    /// E1 的接缝：拿一份填好云端那一侧的草稿去问用户，答回来编辑后的 Profile（或取消）。
-    /// 没装接缝时走真的 <see cref="ProfileEditorWindow"/>；装了却答 <see langword="null"/> 就是**用户取消**，
-    /// 不是「没装接缝」——用 <c>??</c> 兜到真弹窗会在测试里打开一个无人可答的模态框。
-    /// </summary>
-    internal Func<SyncProfile, SyncProfile?>? EditSyncProfile { get; set; }
-
-    /// <summary>
-    /// 从选中的端点开一个同步任务。云端那一侧由 <see cref="CloudSyncTask"/> 决定（浏览到哪个目录就填哪个目录），
-    /// 本地那一侧留空 —— 替用户猜一个本地路径比让他在编辑器里点一次「浏览…」更糟。
-    /// 编辑器是既有的那个：Profile 的字段、校验与保存规则都已经在那里了，再造一个表单只会分岔。
-    /// </summary>
-    private async void CreateSyncTask_Click(object sender, RoutedEventArgs e)
-    {
-        if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickEndpointForSyncTask"); return; }
-        await RunBusyAsync(CreateSyncTaskButton, Tr.F("Mgr.BusyCreate"), Tr.F("Mgr.PreparingSyncTask"), async () =>
-        {
-            var store = new ProfileStore();
-            IReadOnlyList<SyncProfile> profiles;
-            try { profiles = await store.LoadAsync(); }
-            catch (Exception ex) { StatusText.Text = Tr.Format("Mgr.SyncTaskListFailed", RcloneUiError.Describe(ex, "sync-task-list")); return; }
-
-            var offer = CloudSyncTask.OfferFor(account, _browsedEndpoint, _currentPath,
-                [.. profiles.Select(profile => profile.Name)]);
-            if (offer.Plan is not { } plan) { StatusText.Text = offer.Refusal ?? Tr.F("Mgr.CannotCreateSyncTask"); return; }
-
-            // TwoWay is also the model default; it is written out because the button says 同步任务 and the
-            // editor opens on 双向同步, so a later change to that default must not silently move this entry.
-            var draft = SyncProfile.Create(plan.Name, plan.LeftPath, plan.RightPath) with
-            {
-                Description = plan.Description,
-                Mode = SyncMode.TwoWay
-            };
-            var edited = EditSyncProfile is { } edit ? edit(draft) : ShowProfileEditor(draft);
-            if (edited is null) { StatusText.Text = Tr.F("Mgr.SyncTaskCancelled"); return; }
-
-            // Load-append-write rather than UpdateAsync: this profile has no Id in the store yet, and
-            // SaveAsync rewrites the whole file, so the others have to travel with it.
-            await store.SaveAsync([.. profiles.Where(profile => profile.Id != edited.Id), edited]);
-            SyncProfileNotifier.RaiseSaved(edited);
-            StatusText.Text = Tr.Format("Mgr.SyncTaskCreated", edited.Name, edited.LeftPath, edited.RightPath);
-        });
-    }
-
-    private SyncProfile? ShowProfileEditor(SyncProfile draft)
-    {
-        var editor = new ProfileEditorWindow(draft, _settings) { Owner = this };
-        return editor.ShowDialog() == true ? editor.SavedProfile : null;
-    }
-
-    /// <summary>
-    /// E2 的接缝：问用户要一份两格填好的草稿，答回来计划或取消。没装接缝时走真的
-    /// <see cref="CloudSyncWizardWindow"/>；装了却答 <see langword="null"/> 就是**用户取消**。
-    /// </summary>
-    internal Func<CloudSyncTask.Plan?>? ShowSyncWizard { get; set; }
-
-    /// <summary>
-    /// E2 的接缝：向导里「选择…」那一下。默认走既有的 <see cref="RemoteEndpointPickerWindow"/> ——
-    /// 它是主窗口加云端端点时用的同一个窗，所以向导里挑出来的端点与主窗口里能用的完全是同一批。
-    /// </summary>
-    internal Func<string, string?, string?>? AskEndpoint { get; set; }
-
-    /// <summary>
-    /// 双向同步向导（E2）。与 E1 的差别只有两处：本地那一侧也是用户挑的（而不是留空），
-    /// 以及建完就存、不再开 Profile 编辑器 —— 那是「一键」的含义。校验全在
-    /// <see cref="CloudSyncTask.WizardOfferFor"/>，所以少一格或两格相同都在存盘**之前**被说清。
-    /// </summary>
-    private async void SyncWizard_Click(object sender, RoutedEventArgs e)
-    {
-        await RunBusyAsync(SyncWizardButton, Tr.F("Mgr.BusyCreate"), Tr.F("Mgr.OpeningSyncWizard"), async () =>
-        {
-            var store = new ProfileStore();
-            IReadOnlyList<SyncProfile> profiles;
-            try { profiles = await store.LoadAsync(); }
-            catch (Exception ex) { StatusText.Text = Tr.Format("Mgr.SyncTaskListFailed", RcloneUiError.Describe(ex, "sync-wizard-list")); return; }
-
-            var names = profiles.Select(profile => profile.Name).ToList();
-            var plan = ShowSyncWizard is { } show ? show() : RunSyncWizard(names);
-            if (plan is null) { StatusText.Text = Tr.F("Mgr.SyncTaskCancelled"); return; }
-            // Re-checked here rather than trusted from the wizard: the seam can be installed by a test or by
-            // a future caller, and profiles.json is the one place a bad row is expensive to undo.
-            var offer = CloudSyncTask.WizardOfferFor(plan.LeftPath, plan.RightPath, names);
-            if (offer.Plan is not { } checkedPlan) { StatusText.Text = offer.Refusal ?? Tr.F("Mgr.CannotCreateSyncTask"); return; }
-
-            var profile = SyncProfile.Create(checkedPlan.Name, checkedPlan.LeftPath, checkedPlan.RightPath) with
-            {
-                Description = checkedPlan.Description,
-                Mode = SyncMode.TwoWay
-            };
-            await store.SaveAsync([.. profiles, profile]);
-            SyncProfileNotifier.RaiseSaved(profile);
-            StatusText.Text = Tr.Format("Mgr.SyncWizardTaskCreated", profile.Name, profile.LeftPath, profile.RightPath);
-        });
-    }
-
-    private CloudSyncTask.Plan? RunSyncWizard(IReadOnlyCollection<string> existingNames)
-    {
-        var wizard = new CloudSyncWizardWindow(existingNames, askEndpoint: AskEndpoint ?? ShowEndpointPicker)
-        { Owner = this };
-        return wizard.ShowDialog() == true ? wizard.Result : null;
-    }
-
-    private string? ShowEndpointPicker(string side, string? initial)
-    {
-        var picker = new RemoteEndpointPickerWindow(side, initial) { Owner = this };
-        return picker.ShowDialog() == true ? picker.ResultUri : null;
-    }
-
     private async void Edit_Click(object sender, RoutedEventArgs e)
     {
         if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.PickEndpointToEdit"); return; }
@@ -927,12 +816,13 @@ public partial class RemoteEndpointManagerWindow : Window
     /// <summary>
     /// Asks the endpoint to list its own root and to report its quota, then records the answer on the row so
     /// the list keeps showing it. This is the only place a stale Google Drive token becomes visible before a
-    /// transfer fails on it.
+    /// transfer fails on it. Reached from the row menu, because a question about one endpoint belongs with the
+    /// endpoint — 工具's 测试全部 asks it about every one of them.
     /// </summary>
-    private async void Check_Click(object sender, RoutedEventArgs e)
+    private async Task CheckEndpointAsync()
     {
         if (EndpointList.SelectedItem is not CloudEndpointRow row) { StatusText.Text = Tr.F("Mgr.SelectEndpointToCheck"); return; }
-        await RunBusyAsync(CheckButton, Tr.F("Mgr.Checking"), Tr.Format("Mgr.CheckingEndpoint", row.Account.Name), async () =>
+        await RunBusyAsync(Tr.Format("Mgr.CheckingEndpoint", row.Account.Name), async () =>
         {
             row.Status = new CloudEndpointStatus(CloudEndpointHealth.Checking, "");
             row.Status = await CloudEndpointStatusService.ProbeAsync(row.Account);
@@ -944,10 +834,10 @@ public partial class RemoteEndpointManagerWindow : Window
     /// Renames an endpoint. The prompt validates against a snapshot taken before it opens, so a colliding
     /// name is refused inline rather than after a rename attempt has already touched rclone.conf.
     /// </summary>
-    private async void RenameEndpoint_Click(object sender, RoutedEventArgs e)
+    private async Task RenameEndpointAsync()
     {
         if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.SelectEndpointToRename"); return; }
-        await RunBusyAsync(RenameEndpointButton, Tr.F("Mgr.Renaming"), Tr.F("Mgr.ReadingMounts"), async () =>
+        await RunBusyAsync(Tr.F("Mgr.ReadingMounts"), async () =>
         {
             // Scanned fresh rather than reused from the list: a mount that appeared since the last refresh
             // would be stranded by the rename, and the check is the only thing standing in the way.
@@ -974,12 +864,12 @@ public partial class RemoteEndpointManagerWindow : Window
     /// file, so the row is updated in place rather than reloaded: a reload would throw away the connection
     /// status and quota a check had already paid for.
     /// </summary>
-    private async void OrganizeEndpoint_Click(object sender, RoutedEventArgs e)
+    private async Task OrganizeEndpointAsync()
     {
         if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.SelectEndpointToOrganize"); return; }
         var row = _accounts.FirstOrDefault(candidate => candidate.Account.Name == account.Name);
         if (row is null) return;
-        await RunBusyAsync(OrganizeEndpointButton, Tr.F("Endpoint.Saving"), Tr.F("Mgr.SavingOrganization"), async () =>
+        await RunBusyAsync(Tr.F("Mgr.SavingOrganization"), async () =>
         {
             var dialog = new CloudEndpointOrganizationWindow(account.Name, account.Metadata?.Group,
                 account.Metadata?.Tags, _loaded.Select(other => other.Group).Where(group => group.Length > 0)) { Owner = this };
@@ -1224,7 +1114,7 @@ public partial class RemoteEndpointManagerWindow : Window
         });
     }
 
-    private async void Delete_Click(object sender, RoutedEventArgs e)
+    private async Task DeleteEndpointAsync()
     {
         if (Selected is not CloudEndpointAccount account) { StatusText.Text = Tr.F("Mgr.SelectEndpointToDelete"); return; }
         var relatedMounts = _mounts.Where(m => string.Equals(m.RemoteName, account.Name, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -1234,22 +1124,83 @@ public partial class RemoteEndpointManagerWindow : Window
             if (!TextPrompt.Confirm(this, Tr.F("Mgr.DeleteEndpointTitle"), Tr.Format("Mgr.DeleteEndpointWithMounts", account.Name, relatedMounts.Count, detail), danger: true)) return;
         }
         else if (!TextPrompt.Confirm(this, Tr.F("Mgr.DeleteEndpointTitle"), Tr.Format("Mgr.ConfirmDeleteEndpoint", account.Name), danger: true)) return;
-        await RunBusyAsync(DeleteButton, Tr.F("Schedule.Deleting"), Tr.Format("Mgr.DeletingEndpoint", account.Name), async () => { await CloudEndpointService.DeleteAsync(account.Name); await RefreshAsync(); StatusText.Text = Tr.Format("Mgr.EndpointDeleted", account.Name); });
+        await RunBusyAsync(Tr.Format("Mgr.DeletingEndpoint", account.Name), async () => { await CloudEndpointService.DeleteAsync(account.Name); await RefreshAsync(); StatusText.Text = Tr.Format("Mgr.EndpointDeleted", account.Name); });
     }
 
-    private async Task RunBusyAsync(Button button, string busyText, string status, Func<Task> action)
+    /// <summary>
+    /// Explorer's rule: the row under the pointer becomes the selection before the menu opens. Without this a
+    /// right-click on a row the user is not on would offer commands for the row they left selected, and 删除
+    /// would then delete the wrong endpoint.
+    /// </summary>
+    private void EndpointList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (ItemsControl.ContainerFromElement(EndpointList, (DependencyObject)e.OriginalSource) is not ListBoxItem row) return;
+        row.IsSelected = true;
+        row.Focus();
+    }
+
+    /// <summary>Builds the endpoint row menu. It depends on the selection, so it is rebuilt on each open.</summary>
+    private void EndpointList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (BuildEndpointMenu() is not { } menu) { e.Handled = true; return; }
+        EndpointList.ContextMenu = menu;
+    }
+
+    /// <summary>
+    /// The commands that act on one endpoint, or <see langword="null"/> when no row is picked. They used to be
+    /// four buttons under 整理 plus 检查连接 under 端点; all five need a selection, so a row menu is where they
+    /// belong — and 删除 as a red button on a permanent strip was one stray click from an endpoint.
+    /// 检查连接 keeps its own place here rather than being folded into 工具's 测试全部: the two differ in scope,
+    /// and asking one endpoint is the cheap question when the list is long.
+    /// </summary>
+    internal ContextMenu? BuildEndpointMenu()
+    {
+        if (Selected is not CloudEndpointAccount account) return null;
+        var menu = new ContextMenu();
+        // Built in code, so nothing in the XAML names it for UI Automation; the ids are what let the desktop
+        // scenario reach it in the real shell, exactly as CloudRowMenu does for the file list.
+        AutomationProperties.SetAutomationId(menu, "CloudEndpointMenu");
+        AutomationProperties.SetAutomationId(Add(menu, Tr.F("Mgr.CheckEndpoint"), CheckEndpointAsync), "CloudEndpointMenuCheck");
+        menu.Items.Add(new Separator());
+        AutomationProperties.SetAutomationId(Add(menu, Tr.F("Mgr.RenameEllipsis"), RenameEndpointAsync), "CloudEndpointMenuRename");
+        AutomationProperties.SetAutomationId(Add(menu, Tr.F("Mgr.OrganizeEndpoint"), OrganizeEndpointAsync), "CloudEndpointMenuOrganize");
+        menu.Items.Add(new Separator());
+        // Named with the endpoint so the confirmation that follows is unmistakably about this row, not the
+        // file list's 删除… which sits one control away and deletes cloud objects instead of an endpoint.
+        var delete = Add(menu, Tr.Format("Mgr.DeleteEndpointMenuItem", account.Name), DeleteEndpointAsync);
+        AutomationProperties.SetAutomationId(delete, "CloudEndpointMenuDelete");
+        return menu;
+    }
+
+    /// <summary>
+    /// The row-menu form: the command has no button of its own to show the busy text on, so the status line is
+    /// the whole of the feedback. Everything else — the re-entrancy guard, the error report, the one message box
+    /// — is the same run.
+    /// </summary>
+    private Task RunBusyAsync(string status, Func<Task> action) => RunBusyAsync(null, null, status, action);
+
+    private async Task RunBusyAsync(Button? button, string? busyText, string status, Func<Task> action)
     {
         if (_busy) return;
         _busy = true;
-        var original = button.Content;
-        try { button.IsEnabled = false; button.Content = busyText; StatusText.Text = status; await action(); }
+        var original = button?.Content;
+        try
+        {
+            if (button is not null) { button.IsEnabled = false; button.Content = busyText; }
+            StatusText.Text = status;
+            await action();
+        }
         catch (Exception ex)
         {
             var message = RcloneUiError.Describe(ex, "endpoint-manager-action");
             StatusText.Text = message;
             MessageBox.Show(message, Tr.F("Mgr.RemoteEndpointsTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally { button.IsEnabled = true; button.Content = original; _busy = false; }
+        finally
+        {
+            if (button is not null) { button.IsEnabled = true; button.Content = original; }
+            _busy = false;
+        }
     }
 
     private async void RefreshMounts_Click(object sender, RoutedEventArgs e)
@@ -1342,13 +1293,22 @@ public partial class RemoteEndpointManagerWindow : Window
         {
             StatusText.Text = Tr.F("Mgr.ReadingDirectory");
             var items = await _files.ListAsync(account.Name, _currentPath);
-            BackButton.IsEnabled = !_currentPath.Equals(account.RootPath, StringComparison.OrdinalIgnoreCase);
-            ShowListing(_currentPath, items);
-            // Only a listing that arrived is a visit. A directory that failed to read is remembered by the error
-            // in the status line, not as somewhere the user can jump back to.
-            await RecordVisitAsync(account.Name, _currentPath);
+            // An STA caller need not have a DispatcherSynchronizationContext. Both the listing and its
+            // bookmark updates belong to this window's dispatcher regardless of the caller's context.
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                BackButton.IsEnabled = !_currentPath.Equals(account.RootPath, StringComparison.OrdinalIgnoreCase);
+                ShowListing(_currentPath, items);
+                // Only a listing that arrived is a visit. A directory that failed to read is remembered by the error
+                // in the status line, not as somewhere the user can jump back to.
+                await RecordVisitAsync(account.Name, _currentPath);
+            }).Task.Unwrap();
         }
-        catch (Exception ex) { StatusText.Text = Tr.F("Mgr.DirectoryReadFailed") + RcloneUiError.Describe(ex, "cloud-file-list"); }
+        catch (Exception ex)
+        {
+            await Dispatcher.InvokeAsync(() =>
+                StatusText.Text = Tr.F("Mgr.DirectoryReadFailed") + RcloneUiError.Describe(ex, "cloud-file-list"));
+        }
     }
 
     /// <summary>
@@ -2904,13 +2864,18 @@ public partial class RemoteEndpointManagerWindow : Window
         Add(menu, selected.Count == 1 ? Tr.F("Mgr.Properties") : Tr.Format("Mgr.ViewPropertiesSelected", selected.Count),
             selected.Count == 1 ? new Func<Task>(() => ShowDetailsAsync(selected[0])) : () => { ShowSelectionDetails(); return Task.CompletedTask; });
         return menu;
+    }
 
-        static void Add(ContextMenu menu, string header, Func<Task> action)
-        {
-            var item = new MenuItem { Header = header };
-            item.Click += async (_, _) => await action();
-            menu.Items.Add(item);
-        }
+    /// <summary>
+    /// Adds one command to a menu built in code. Returns the item so a caller that needs an AutomationId — the
+    /// endpoint menu does, the file menu names its items by their text — can set one.
+    /// </summary>
+    private static MenuItem Add(ContextMenu menu, string header, Func<Task> action)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += async (_, _) => await action();
+        menu.Items.Add(item);
+        return item;
     }
 
     private void OpenTransfers_Click(object sender, RoutedEventArgs e) => ShowTransferWindow();

@@ -782,9 +782,6 @@ Save anyway?</value>
   <data name="Lan.Accept" xml:space="preserve">
     <value>Accept</value>
   </data>
-  <data name="Lan.AddressPickHint" xml:space="preserve">
-    <value>The phone connects to whichever of these you pick, and the QR code follows. With a VPN or a virtual adapter, choose the LAN one.</value>
-  </data>
   <data name="Lan.Addresses" xml:space="preserve">
     <value>This computer's addresses</value>
   </data>
@@ -824,6 +821,12 @@ Save anyway?</value>
   <data name="Lan.ChooseDirectory" xml:space="preserve">
     <value>Choose a folder…</value>
   </data>
+  <data name="Lan.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Lan.CodeCopied" xml:space="preserve">
+    <value>Pairing code copied</value>
+  </data>
   <data name="Lan.CodeExpires" xml:space="preserve">
     <value>{0} seconds left</value>
   </data>
@@ -833,8 +836,11 @@ Save anyway?</value>
   <data name="Lan.CodeRenewing" xml:space="preserve">
     <value>Replacing the code…</value>
   </data>
-  <data name="Lan.Computers" xml:space="preserve">
-    <value>Computers found</value>
+  <data name="Lan.CopyCode" xml:space="preserve">
+    <value>Click to copy the pairing code</value>
+  </data>
+  <data name="Lan.CopyCodeFailed" xml:space="preserve">
+    <value>Could not copy to the clipboard:</value>
   </data>
   <data name="Lan.Decline" xml:space="preserve">
     <value>Decline</value>
@@ -853,6 +859,15 @@ Save anyway?</value>
   </data>
   <data name="Lan.DiscoveryUnavailable" xml:space="preserve">
     <value>LAN discovery did not start; you can still type an address</value>
+  </data>
+  <data name="Lan.EtaHours" xml:space="preserve">
+    <value>{0}h {1}m</value>
+  </data>
+  <data name="Lan.EtaMinutes" xml:space="preserve">
+    <value>{0}m {1}s</value>
+  </data>
+  <data name="Lan.EtaSeconds" xml:space="preserve">
+    <value>{0}s</value>
   </data>
   <data name="Lan.Firewall.Added" xml:space="preserve">
     <value>The firewall rule was added</value>
@@ -896,8 +911,14 @@ Save anyway?</value>
   <data name="Lan.KindUnknown" xml:space="preserve">
     <value>Unknown device</value>
   </data>
+  <data name="Lan.LeftRoom" xml:space="preserve">
+    <value>{0} left this room</value>
+  </data>
   <data name="Lan.Listening" xml:space="preserve">
     <value>Listening on port {0}</value>
+  </data>
+  <data name="Lan.ManageTrusted" xml:space="preserve">
+    <value>Manage trusted devices…</value>
   </data>
   <data name="Lan.ManualPeer" xml:space="preserve">
     <value>Manual address</value>
@@ -905,14 +926,17 @@ Save anyway?</value>
   <data name="Lan.ManualPeerHint" xml:space="preserve">
     <value>Format: ip:port. Some networks (AP isolation) block both discovery and the connection, so this box is the only way through.</value>
   </data>
+  <data name="Lan.MemberChip" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Lan.MemberDiscovered" xml:space="preserve">
+    <value>Found on the LAN</value>
+  </data>
   <data name="Lan.Members" xml:space="preserve">
     <value>Devices in the room</value>
   </data>
   <data name="Lan.MyDevice" xml:space="preserve">
     <value>This computer</value>
-  </data>
-  <data name="Lan.NoComputersFound" xml:space="preserve">
-    <value>No other computer answered; type the address below instead</value>
   </data>
   <data name="Lan.NoDirectory" xml:space="preserve">
     <value>The receive folder does not exist, so nothing is listening</value>
@@ -938,11 +962,14 @@ Save anyway?</value>
   <data name="Lan.PairRefused" xml:space="preserve">
     <value>Pairing with {0} did not work: {1}</value>
   </data>
+  <data name="Lan.PairUrl" xml:space="preserve">
+    <value>Web address</value>
+  </data>
   <data name="Lan.Pairing" xml:space="preserve">
     <value>Pairing</value>
   </data>
   <data name="Lan.PairingHint" xml:space="preserve">
-    <value>Scan the code below with a phone, or type this code on the other computer. A code works once and goes stale after two minutes.</value>
+    <value>Scan the code below, or send this address to the other computer — it already carries the pairing code, so opening it pairs. A code works once and goes stale after two minutes.</value>
   </data>
   <data name="Lan.PeerAddressInvalid" xml:space="preserve">
     <value>Please write the address as ip:port</value>
@@ -958,9 +985,6 @@ Save anyway?</value>
   </data>
   <data name="Lan.PeerPaired" xml:space="preserve">
     <value>Paired with {0}</value>
-  </data>
-  <data name="Lan.PeerRow" xml:space="preserve">
-    <value>{0}:{1} · {2}</value>
   </data>
   <data name="Lan.Pending" xml:space="preserve">
     <value>Waiting for you</value>
@@ -979,9 +1003,6 @@ Save anyway?</value>
   </data>
   <data name="Lan.PortBusy" xml:space="preserve">
     <value>The port is taken; choose another</value>
-  </data>
-  <data name="Lan.PortHint" xml:space="preserve">
-    <value>The firewall rule names this port. After a change the rule has to be added again and the phone has to pair again.</value>
   </data>
   <data name="Lan.PortRange" xml:space="preserve">
     <value>The port must be between {0} and {1}</value>
@@ -1079,6 +1100,9 @@ Save anyway?</value>
   <data name="Lan.RoomEmpty" xml:space="preserve">
     <value>Nothing has been said yet. Let a phone scan the code above, or use the buttons below to put a file in the room.</value>
   </data>
+  <data name="Lan.RoomMembersEmpty" xml:space="preserve">
+    <value>No other device is in the room yet</value>
+  </data>
   <data name="Lan.RoomReceived" xml:space="preserve">
     <value>Received {0} ({1})</value>
   </data>
@@ -1115,6 +1139,9 @@ Save anyway?</value>
   <data name="Lan.SizeUnknown" xml:space="preserve">
     <value>size unknown</value>
   </data>
+  <data name="Lan.SpeedEta" xml:space="preserve">
+    <value>{0} · {1} left</value>
+  </data>
   <data name="Lan.StartFailed" xml:space="preserve">
     <value>The listener did not start:</value>
   </data>
@@ -1133,8 +1160,20 @@ Save anyway?</value>
   <data name="Lan.Title" xml:space="preserve">
     <value>LAN quick transfer</value>
   </data>
+  <data name="Lan.TrustedCount" xml:space="preserve">
+    <value>{0} trusted device(s)</value>
+  </data>
+  <data name="Lan.TrustedDialogHint" xml:space="preserve">
+    <value>This list lives on disk and outlives the window. A device you forget has to scan the code again before it can come back.</value>
+  </data>
+  <data name="Lan.TrustedDialogTitle" xml:space="preserve">
+    <value>Trusted devices</value>
+  </data>
   <data name="Lan.TrustedRow" xml:space="preserve">
     <value>{0} · {1} · last seen {2}</value>
+  </data>
+  <data name="Lan.TrustedWindowName" xml:space="preserve">
+    <value>Trusted devices window</value>
   </data>
   <data name="Lan.UnnamedDevice" xml:space="preserve">
     <value>A device at {0}</value>
@@ -1802,9 +1841,6 @@ Started: {1:yyyy-MM-dd HH:mm:ss}
   <data name="Mgr.BulletField" xml:space="preserve">
     <value> · {0}: {1}</value>
   </data>
-  <data name="Mgr.BusyCreate" xml:space="preserve">
-    <value>Creating…</value>
-  </data>
   <data name="Mgr.BusyLogin" xml:space="preserve">
     <value>Signing in…</value>
   </data>
@@ -1829,9 +1865,6 @@ Started: {1:yyyy-MM-dd HH:mm:ss}
   <data name="Mgr.CacheClearedPartial" xml:space="preserve">
     <value>Cleared the mount cache: {0} / {1} files; the rest are in use by a mount and were kept.</value>
   </data>
-  <data name="Mgr.CannotCreateSyncTask" xml:space="preserve">
-    <value>The sync job could not be created.</value>
-  </data>
   <data name="Mgr.CannotReconnectProvider" xml:space="preserve">
     <value>Only endpoints that need browser authorization can be signed in again; for {0}, edit the endpoint parameters directly.</value>
   </data>
@@ -1849,9 +1882,6 @@ Started: {1:yyyy-MM-dd HH:mm:ss}
   </data>
   <data name="Mgr.CheckEndpoint" xml:space="preserve">
     <value>Check connection</value>
-  </data>
-  <data name="Mgr.CheckEndpointName" xml:space="preserve">
-    <value>Check the connection and capacity of the selected cloud endpoint</value>
   </data>
   <data name="Mgr.Checking" xml:space="preserve">
     <value>Checking…</value>
@@ -1935,12 +1965,6 @@ Continue?</value>
   <data name="Mgr.CopyShareLink" xml:space="preserve">
     <value>Copy share link…</value>
   </data>
-  <data name="Mgr.CreateSyncTask" xml:space="preserve">
-    <value>Create sync job</value>
-  </data>
-  <data name="Mgr.CreateSyncTaskName" xml:space="preserve">
-    <value>Create a sync job from the selected cloud endpoint</value>
-  </data>
   <data name="Mgr.CreatingFolder" xml:space="preserve">
     <value>Creating the folder “{0}”…</value>
   </data>
@@ -1972,8 +1996,8 @@ Continue?</value>
   <data name="Mgr.DeleteEllipsis" xml:space="preserve">
     <value>Delete…</value>
   </data>
-  <data name="Mgr.DeleteEndpointName" xml:space="preserve">
-    <value>Delete the selected cloud endpoint</value>
+  <data name="Mgr.DeleteEndpointMenuItem" xml:space="preserve">
+    <value>Delete “{0}”…</value>
   </data>
   <data name="Mgr.DeleteEndpointTitle" xml:space="preserve">
     <value>Delete endpoint</value>
@@ -2382,17 +2406,8 @@ Continue?</value>
   <data name="Mgr.OpeningNewEndpointWindow" xml:space="preserve">
     <value>Opening the new endpoint window…</value>
   </data>
-  <data name="Mgr.OpeningSyncWizard" xml:space="preserve">
-    <value>Opening the sync wizard…</value>
-  </data>
   <data name="Mgr.OrganizeEndpoint" xml:space="preserve">
     <value>Groups and tags…</value>
-  </data>
-  <data name="Mgr.OrganizeEndpointName" xml:space="preserve">
-    <value>Set the group and tags of the selected cloud endpoint</value>
-  </data>
-  <data name="Mgr.OrganizeRowLabel" xml:space="preserve">
-    <value>Organize</value>
   </data>
   <data name="Mgr.Paste" xml:space="preserve">
     <value>Paste</value>
@@ -2454,9 +2469,6 @@ Continue?</value>
   <data name="Mgr.PickEndpoint" xml:space="preserve">
     <value>Select an endpoint first.</value>
   </data>
-  <data name="Mgr.PickEndpointForSyncTask" xml:space="preserve">
-    <value>Select the endpoint to create the sync task from first.</value>
-  </data>
   <data name="Mgr.PickEndpointToEdit" xml:space="preserve">
     <value>Select the endpoint to edit first.</value>
   </data>
@@ -2468,9 +2480,6 @@ Continue?</value>
   </data>
   <data name="Mgr.PickMountToReconnect" xml:space="preserve">
     <value>Select the mount point to remount first.</value>
-  </data>
-  <data name="Mgr.PreparingSyncTask" xml:space="preserve">
-    <value>Preparing the sync job…</value>
   </data>
   <data name="Mgr.Preview" xml:space="preserve">
     <value>Preview</value>
@@ -2577,9 +2586,6 @@ It will be cancelled first and then mounted once more with the same settings.</v
   <data name="Mgr.RenameEllipsis" xml:space="preserve">
     <value>Rename…</value>
   </data>
-  <data name="Mgr.RenameEndpointName" xml:space="preserve">
-    <value>Rename the selected cloud endpoint</value>
-  </data>
   <data name="Mgr.RenameEndpointPrompt" xml:space="preserve">
     <value>New name for the endpoint “{0}” (letters, digits, underscore or hyphen only):</value>
   </data>
@@ -2594,9 +2600,6 @@ It will be cancelled first and then mounted once more with the same settings.</v
   </data>
   <data name="Mgr.Renamed" xml:space="preserve">
     <value>Renamed to: {0}</value>
-  </data>
-  <data name="Mgr.Renaming" xml:space="preserve">
-    <value>Renaming…</value>
   </data>
   <data name="Mgr.RenamingItem" xml:space="preserve">
     <value>Renaming “{0}”…</value>
@@ -2719,27 +2722,6 @@ It will be cancelled first and then mounted once more with the same settings.</v
   </data>
   <data name="Mgr.Subtitle" xml:space="preserve">
     <value>Manage cloud endpoints and mounts, and browse and transfer files.</value>
-  </data>
-  <data name="Mgr.SyncRowLabel" xml:space="preserve">
-    <value>Sync</value>
-  </data>
-  <data name="Mgr.SyncTaskCancelled" xml:space="preserve">
-    <value>Creating the sync job was cancelled.</value>
-  </data>
-  <data name="Mgr.SyncTaskCreated" xml:space="preserve">
-    <value>Created the sync job "{0}": {1} -&gt; {2}</value>
-  </data>
-  <data name="Mgr.SyncTaskListFailed" xml:space="preserve">
-    <value>The sync job list could not be read: {0}</value>
-  </data>
-  <data name="Mgr.SyncWizard" xml:space="preserve">
-    <value>Sync wizard</value>
-  </data>
-  <data name="Mgr.SyncWizardName" xml:space="preserve">
-    <value>Open the one-tap two-way sync wizard</value>
-  </data>
-  <data name="Mgr.SyncWizardTaskCreated" xml:space="preserve">
-    <value>Created the two-way sync job "{0}": {1} ↔ {2}</value>
   </data>
   <data name="Mgr.TargetReadFailed" xml:space="preserve">
     <value>Could not read the destination folder</value>

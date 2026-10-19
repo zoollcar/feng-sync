@@ -28,6 +28,17 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- One chip for a device in the room, whether it was paired or merely heard on the subnet: the two are
+             told apart by the detail line, not by looking like different kinds of thing. -->
+        <Style x:Key="MemberChipBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+            <Setter Property="MaxWidth" Value="240"/>
+        </Style>
     </Window.Resources>
     <DockPanel>
         <!-- 底部状态行：整个窗口只有一句话的空间来报告启动失败、端口被占、防火墙被取消这类事实。 -->
@@ -93,7 +104,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="12"/>
-                <ColumnDefinition Width="392"/>
+                <ColumnDefinition Width="404"/>
             </Grid.ColumnDefinitions>
 
             <!-- ================= 房间 ================= -->
@@ -101,6 +112,50 @@
                     BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
                     CornerRadius="{StaticResource RadiusMedium}">
                 <DockPanel LastChildFill="True">
+
+                    <!-- ================= 群里的设备 =================
+                         这一条回答的是"此刻谁在群里"，不是"谁曾经被信任过"——信任记录是一份留在磁盘上的名单，
+                         它有自己的窗口。一台设备停止说话（手机关了网页、电脑关了窗口）就从这里消失，因为房间
+                         是此刻的事；而一台只广播过自己、还没配对过的电脑也在这里，因为发现它就是给它一个被
+                         选中的机会。 -->
+                    <Border DockPanel.Dock="Top"
+                            Background="{DynamicResource SurfaceSubtleBrush}"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                            Padding="12,8" Margin="12,12,12,0" CornerRadius="{StaticResource RadiusMedium}">
+                        <DockPanel LastChildFill="True">
+                            <TextBlock DockPanel.Dock="Left" Text="{Binding [Lan.Members], Source={l:Lang}}"
+                                       Style="{StaticResource BodyStrongTextStyle}" VerticalAlignment="Top"
+                                       Margin="0,4,10,0"/>
+                            <Grid>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="58">
+                                    <ItemsControl x:Name="MemberList" AutomationProperties.AutomationId="LanMemberList"
+                                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Style="{StaticResource MemberChipBorderStyle}">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Name}" Style="{StaticResource BodyStrongTextStyle}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionTextStyle}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                                <TextBlock x:Name="MemberEmptyText" AutomationProperties.AutomationId="LanMemberEmpty"
+                                           Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center"
+                                           Margin="0,4,0,4" TextWrapping="Wrap"
+                                           Text="{Binding [Lan.RoomMembersEmpty], Source={l:Lang}}"/>
+                            </Grid>
+                        </DockPanel>
+                    </Border>
 
                     <!-- 陌生设备的第一笔要在这里点「同意」，所以这一栏在没有待确认项时整块收起：
                          一个没人能按的按钮组比空白更让人怀疑是不是坏了。 -->
@@ -150,8 +205,19 @@
                             <ListView.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Margin="0,3">
-                                        <TextBlock Text="{Binding Line}" Style="{StaticResource BodyTextStyle}"
-                                                   TextTrimming="CharacterEllipsis"/>
+                                        <!-- 名字在左、速度在右：一行里两件事各自靠边，长文件名被截断时也不会把速度挤没。 -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Line}" Style="{StaticResource BodyTextStyle}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Rate}" Visibility="{Binding RateVisibility}"
+                                                       Style="{StaticResource CaptionTextStyle}" Margin="8,0,0,0"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
                                         <!-- Mode=OneWay is load-bearing here for the same reason it is in the
                                              bubble template: LanProgressRow.Percentage is read-only. -->
                                         <ProgressBar Height="4" Minimum="0" Maximum="100"
@@ -224,6 +290,12 @@
                                                            Style="{StaticResource CaptionTextStyle}"
                                                            Foreground="{DynamicResource TextSecondaryBrush}"
                                                            TextWrapping="Wrap"/>
+                                                <!-- 速度在气泡里单独一行：气泡的宽度是内容撑出来的，把它挤在同一行会
+                                                     让每一条正在拉取的句子都跟着速度的位数抖动。 -->
+                                                <TextBlock Text="{Binding Rate}" Visibility="{Binding RateVisibility}"
+                                                           Style="{StaticResource CaptionTextStyle}" Margin="0,4,0,0"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                                           TextWrapping="Wrap"/>
                                                 <!-- Mode=OneWay is load-bearing: RangeBase.Value binds TwoWay by
                                                      default and LanChatRow.Percentage is read-only, so the default
                                                      mode throws a XamlParseException the first time a pulling row is
@@ -252,7 +324,9 @@
 
             <Rectangle Grid.Column="1" Fill="{DynamicResource BorderSubtleBrush}"/>
 
-            <!-- ================= 这个群里的设备 ================= -->
+            <!-- ================= 配对、信任记录、手动地址、历史 =================
+                 这一栏是关于"这台电脑怎么让别的设备进来"，不是关于房间里此刻有谁——后者在左边那条设备条上。
+                 信任记录尤其不在这里：它是一份会留在磁盘上的名单，所以它有自己的窗口，这一栏只留一个入口。 -->
             <Border Grid.Column="2" Background="{DynamicResource SurfaceBrush}"
                     BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
                     CornerRadius="{StaticResource RadiusMedium}" Padding="14">
@@ -262,77 +336,81 @@
                         <TextBlock Text="{Binding [Lan.PairingHint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}"
                                    TextWrapping="Wrap" Margin="0,4,0,0"/>
 
-                        <Border Margin="0,12,0,0" Background="White" CornerRadius="{StaticResource RadiusMedium}"
-                                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" Padding="6"
-                                HorizontalAlignment="Center">
-                            <Image x:Name="QrImage" AutomationProperties.AutomationId="LanQrImage"
-                                   Width="164" Height="164" Stretch="Uniform"/>
-                        </Border>
+                        <!-- 二维码在左、本机地址在右：地址是"手机连哪一个"的选择，选中的那一条决定二维码和
+                             下面那行网址印什么，所以两者并排读起来才是同一个决定的两半。 -->
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="White" CornerRadius="{StaticResource RadiusMedium}"
+                                    BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" Padding="6"
+                                    VerticalAlignment="Top">
+                                <Image x:Name="QrImage" AutomationProperties.AutomationId="LanQrImage"
+                                       Width="164" Height="164" Stretch="Uniform"/>
+                            </Border>
+                            <DockPanel Grid.Column="2" LastChildFill="True">
+                                <TextBlock DockPanel.Dock="Top" Text="{Binding [Lan.Addresses], Source={l:Lang}}"
+                                           Style="{StaticResource BodyStrongTextStyle}"/>
+                                <ListBox x:Name="AddressList" AutomationProperties.AutomationId="LanAddressList"
+                                         SelectionChanged="AddressList_SelectionChanged" Margin="0,4,0,0"/>
+                            </DockPanel>
+                        </Grid>
 
-                        <TextBlock x:Name="PairCodeText" AutomationProperties.AutomationId="LanPairCode"
-                                   Style="{StaticResource DisplayTitleTextStyle}" HorizontalAlignment="Center"
-                                   Margin="0,10,0,0"/>
+                        <!-- 六位码本身是可以点走的：另一台电脑上的人多半要把它贴进聊天窗口，而手抄六个字符正是
+                             这条路上最容易出错的一步。复制成功的提示占自己的一行，不去改倒计时那一行——它每秒都在被重写。 -->
+                        <Button x:Name="CopyPairCodeButton" AutomationProperties.AutomationId="LanCopyPairCode"
+                                Click="CopyPairCode_Click" Cursor="Hand" HorizontalAlignment="Center"
+                                Margin="0,8,0,0"
+                                Style="{StaticResource PairCodeButtonStyle}"
+                                ToolTip="{Binding [Lan.CopyCode], Source={l:Lang}}"
+                                AutomationProperties.Name="{Binding [Lan.CopyCode], Source={l:Lang}}">
+                            <TextBlock x:Name="PairCodeText" AutomationProperties.AutomationId="LanPairCode"
+                                       Style="{StaticResource DisplayTitleTextStyle}"/>
+                        </Button>
+                        <!-- The line under the code has two states and never changes height: what a click does, and
+                             that it just happened. A line that only appeared after a click would push the countdown
+                             and everything below it down for the two seconds it was up. -->
+                        <TextBlock x:Name="PairCopyHintText" AutomationProperties.AutomationId="LanPairCopyHint"
+                                   Style="{StaticResource CaptionTextStyle}" HorizontalAlignment="Center"
+                                   Margin="0,2,0,0" Text=""/>
                         <TextBlock x:Name="PairRemainingText" AutomationProperties.AutomationId="LanPairRemaining"
                                    Style="{StaticResource CaptionTextStyle}" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        <!-- 网址和配对码印在同一块地方，并且是可以选中复制的：另一台电脑上的人要么扫，要么敲。
+                             里面只有两分钟就作废的码，所以它能安全地留在屏幕上被人抄走。 -->
+                        <DockPanel Margin="0,8,0,0">
+                            <TextBlock DockPanel.Dock="Left" Text="{Binding [Lan.PairUrl], Source={l:Lang}}"
+                                       Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center"
+                                       Margin="0,0,6,0"/>
+                            <TextBox x:Name="PairUrlBox" AutomationProperties.AutomationId="LanPairUrl"
+                                     IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="NoWrap"
+                                     VerticalContentAlignment="Center"/>
+                        </DockPanel>
                         <Button x:Name="RegenerateButton" AutomationProperties.AutomationId="LanRegenerateButton"
                                 Content="{Binding [Lan.Regenerate], Source={l:Lang}}" Click="Regenerate_Click"
                                 Style="{StaticResource SecondaryButtonStyle}" Margin="0,10,0,0" HorizontalAlignment="Center"/>
 
-                        <TextBlock Text="{Binding [Lan.Addresses], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"
-                                   Margin="0,16,0,0"/>
-                        <TextBlock Text="{Binding [Lan.AddressPickHint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}"
-                                   TextWrapping="Wrap" Margin="0,2,0,4"/>
-                        <ListBox x:Name="AddressList" AutomationProperties.AutomationId="LanAddressList"
-                                 SelectionChanged="AddressList_SelectionChanged" MaxHeight="88"/>
-
-                        <TextBlock Text="{Binding [Lan.PortHint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}"
-                                   TextWrapping="Wrap" Margin="0,8,0,0"/>
-
-                        <TextBlock Text="{Binding [Lan.Members], Source={l:Lang}}" Style="{StaticResource SectionTitleTextStyle}"
-                                   Margin="0,16,0,0"/>
-                        <ListView x:Name="TrustedList" AutomationProperties.AutomationId="LanTrustedList"
-                                  BorderThickness="0" Background="Transparent" MaxHeight="176"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <DockPanel LastChildFill="True" Margin="0,2">
-                                        <Button DockPanel.Dock="Right" Content="{Binding [Lan.Forget], Source={l:Lang}}"
-                                                AutomationProperties.AutomationId="LanForgetPeerButton"
-                                                Style="{StaticResource TertiaryButtonStyle}"
-                                                Click="ForgetPeer_Click" Tag="{Binding}"/>
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Name}" Style="{StaticResource BodyStrongTextStyle}"/>
-                                            <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionTextStyle}"/>
-                                        </StackPanel>
-                                    </DockPanel>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                        <TextBlock x:Name="TrustedEmptyText" AutomationProperties.AutomationId="LanTrustedEmpty"
-                                   Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap"
-                                   Text="{Binding [Lan.NoTrustedDevices], Source={l:Lang}}"/>
-
-                        <TextBlock Text="{Binding [Lan.Computers], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"
-                                   Margin="0,16,0,0"/>
-                        <ListView x:Name="DiscoveredList" AutomationProperties.AutomationId="LanDiscoveredList"
-                                  BorderThickness="0" Background="Transparent" MaxHeight="112"
-                                  SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Margin="0,2">
-                                        <TextBlock Text="{Binding Name}" Style="{StaticResource BodyStrongTextStyle}"/>
-                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionTextStyle}"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                        <TextBlock x:Name="DiscoveredEmptyText" AutomationProperties.AutomationId="LanDiscoveredEmpty"
-                                   Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap"
-                                   Text="{Binding [Lan.NoComputersFound], Source={l:Lang}}"/>
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="{Binding [Lan.TrustedDialogTitle], Source={l:Lang}}"
+                                           Style="{StaticResource BodyStrongTextStyle}"/>
+                                <TextBlock x:Name="TrustedCountText" AutomationProperties.AutomationId="LanTrustedCount"
+                                           Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" x:Name="ManageTrustedButton"
+                                    AutomationProperties.AutomationId="LanManageTrustedButton"
+                                    Content="{Binding [Lan.ManageTrusted], Source={l:Lang}}" Click="ManageTrusted_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Top"/>
+                        </Grid>
 
                         <!-- 手动地址在界面上一直可达：AP 隔离之类的网络拦得住发现也拦得住连接，这里没有软件解法。 -->
                         <TextBlock Text="{Binding [Lan.ManualPeer], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"
-                                   Margin="0,12,0,0"/>
+                                   Margin="0,16,0,0"/>
                         <TextBox x:Name="PeerAddressBox" AutomationProperties.AutomationId="LanPeerAddressBox"
                                  Margin="0,4,0,0"/>
                         <TextBlock Text="{Binding [Lan.ManualPeerHint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}"

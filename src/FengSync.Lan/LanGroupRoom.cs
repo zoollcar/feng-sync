@@ -21,7 +21,14 @@ public sealed record LanRoomFetchEventArgs(LanGroupMessage? Entry, string? Lande
 /// The length the entry announced, or 0 when nothing measured it — a folder arrives as one archive whose size the
 /// room never agreed on, and a window that was handed 0 has no percentage to draw.
 /// </param>
-public sealed record LanRoomProgressEventArgs(LanGroupMessage Entry, long Bytes, long TotalBytes);
+/// <param name="SpeedBytesPerSecond">Measured by <see cref="LanTransferBoard"/>, which the page polls too.</param>
+/// <param name="IsDone">The pull settled, either way.</param>
+public sealed record LanRoomProgressEventArgs(
+    LanGroupMessage Entry,
+    long Bytes,
+    long TotalBytes,
+    double SpeedBytesPerSecond = 0,
+    bool IsDone = false);
 
 /// <summary>
 /// The reading half of the room: what this machine does on its own to keep up with what the other members said,
@@ -51,7 +58,9 @@ public sealed class LanGroupRoom(
     LanPeerClient client,
     LanPeerStore peers,
     LanGroupLog group,
-    LanReceiveSink sink) : IAsyncDisposable
+    LanReceiveSink sink,
+    LanRoomPresence? presence = null,
+    LanTransferBoard? board = null) : IAsyncDisposable
 {
     /// <summary>
     /// How often the room is re-read. Short enough that a sentence typed on another machine appears while both
@@ -62,6 +71,12 @@ public sealed class LanGroupRoom(
     private readonly object _gate = new();
     private readonly Dictionary<string, long> _watermarks = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _stop = new();
+
+    /// <summary>
+    /// Where a pull's rate is measured, so the window and the page read the same number. A room built without one
+    /// still works and still reports; it simply keeps its own board nobody else can see.
+    /// </summary>
+    private readonly LanTransferBoard _board = board ?? new LanTransferBoard();
 
     /// <summary>
     /// One pull at a time. It also closes the one race this class has: a beat that auto-receives an entry and a
@@ -140,6 +155,12 @@ public sealed class LanGroupRoom(
             }
 
             lock (_gate) _watermarks[row.DeviceId] = reply.Head;
+            // The reply is this machine's own evidence that the member is up: it answered, on this address, a
+            // moment ago. Renewing the lease here is what keeps a computer whose own window is idle in the room —
+            // and it is deliberately after the watermark, so a member that answered is never recorded as present
+            // on the strength of a read that failed.
+            presence?.Seen(new LanRoomMember(row.DeviceId, row.DeviceName, row.Kind, member.Address, member.Port,
+                DateTimeOffset.UtcNow, Discovered: false));
         }
     }
 
@@ -247,11 +268,23 @@ public sealed class LanGroupRoom(
     private Task<string> TakeFileAsync(LanPeerEndpoint member, LanGroupMessage entry, CancellationToken ct) =>
         client.ReadAttachmentAsync(member, entry.MessageId, archive: false, async stream =>
         {
-            // The announced length is the sender's own claim, and the sink treats 0 as "not stated" — the two
-            // checks it can make without a claim are the publish and the post-publish size.
-            var landed = await sink.ReceiveAsync(stream, entry.RelativePath ?? entry.FileName,
-                entry.Bytes, sourceWriteUtc: null, ReportFor(entry, entry.Bytes), ct).ConfigureAwait(false);
-            return landed.RelativePath;
+            var progress = ReportFor(member, entry, entry.Bytes);
+            try
+            {
+                // The announced length is the sender's own claim, and the sink treats 0 as "not stated" — the two
+                // checks it can make without a claim are the publish and the post-publish size.
+                var landed = await sink.ReceiveAsync(stream, entry.RelativePath ?? entry.FileName,
+                    entry.Bytes, sourceWriteUtc: null, progress, ct).ConfigureAwait(false);
+                progress?.Finish(landed.Bytes, null);
+                return landed.RelativePath;
+            }
+            catch (Exception ex)
+            {
+                // A pull that broke is still a row on screen, and a row that never closes reads as a transfer that
+                // is still going. The refusal the caller answers with is unchanged.
+                progress?.Finish(0, ex.Message);
+                throw;
+            }
         }, ct);
 
     /// <summary>
@@ -277,7 +310,7 @@ public sealed class LanGroupRoom(
         client.ReadAttachmentAsync(member, entry.MessageId, archive: true, async stream =>
         {
             var root = LanRelativePath.RootOf(entry.RelativePath ?? entry.FileName ?? "");
-            var staged = await StageArchiveAsync(stream, entry, root, ct).ConfigureAwait(false);
+            var staged = await StageArchiveAsync(member, stream, entry, root, ct).ConfigureAwait(false);
             try
             {
                 using var file = File.OpenRead(staged);
@@ -305,16 +338,17 @@ public sealed class LanGroupRoom(
         }, ct);
 
     /// <summary>Writes the archive a member is handing over into the receive directory, under a hidden name.</summary>
-    private async Task<string> StageArchiveAsync(Stream body, LanGroupMessage entry, string root, CancellationToken ct)
+    private async Task<string> StageArchiveAsync(LanPeerEndpoint member, Stream body, LanGroupMessage entry, string root, CancellationToken ct)
     {
         var full = sink.AbsolutePathOf(SyncInternalPaths.TransferTemporary($"{root}.zip"));
+        RoomProgress? reported = null;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             await using var file = File.Create(full);
             // The tree's own announced size is 0, so this reports what has been read against nothing: a window
             // draws it as a pull in flight rather than as a bar stuck at a percentage nobody measured.
-            var reported = ReportFor(entry, totalBytes: 0);
+            reported = ReportFor(member, entry, totalBytes: 0);
             var buffer = new byte[81920];
             long read = 0;
             int got;
@@ -325,27 +359,51 @@ public sealed class LanGroupRoom(
                 reported?.Report(read);
             }
 
+            reported?.Finish(read, null);
             return full;
         }
-        catch
+        catch (Exception ex)
         {
             TryDeleteArchive(full);
+            reported?.Finish(0, ex.Message);
             throw;
         }
     }
 
     /// <summary>
-    /// The callback one pull reports into, or <see langword="null"/> when nobody is watching. Raised inline on the
-    /// thread reading the peer's socket, because a <see cref="Progress{T}"/> captured under a dispatcher would post
-    /// every buffer's worth of bytes onto it and the window would spend the transfer laying out instead of
-    /// receiving.
+    /// The callback one pull reports into, or <see langword="null"/> when nobody is watching.
     /// </summary>
-    private IProgress<long>? ReportFor(LanGroupMessage entry, long totalBytes) =>
-        Progress is null ? null : new RoomProgress(this, entry, totalBytes);
-
-    private sealed class RoomProgress(LanGroupRoom room, LanGroupMessage entry, long totalBytes) : IProgress<long>
+    /// <remarks>
+    /// The rate is sampled by <see cref="LanTransferBoard"/> and this raises only when the board says a tick is due.
+    /// That is a change of behaviour worth naming: this used to fire once per 80 KiB read, which is twelve hundred
+    /// dispatcher posts a second on a fast wire — the window would spend the transfer laying out instead of
+    /// receiving, which is the failure the push path's throttle already existed to prevent.
+    /// </remarks>
+    private RoomProgress? ReportFor(LanPeerEndpoint member, LanGroupMessage entry, long totalBytes)
     {
-        public void Report(long value) => room.Progress?.Invoke(new LanRoomProgressEventArgs(entry, value, totalBytes));
+        if (Progress is null) return null;
+
+        var key = LanTransferBoard.PullKey(entry.MessageId);
+        var contact = new LanContact(member.DeviceId, entry.AuthorName, LanProtocol.KindWindows, member.Address, member.Port);
+        _board.Begin(key, LanTransferDirection.Received, contact, entry.FileName ?? entry.RelativePath ?? "",
+            totalBytes, messageId: entry.MessageId);
+        return new RoomProgress(this, entry, key);
+    }
+
+    private sealed class RoomProgress(LanGroupRoom room, LanGroupMessage entry, string key) : IProgress<long>
+    {
+        public void Report(long value)
+        {
+            if (room._board.Report(key, value) is not { } tick) return;
+            room.Progress?.Invoke(new LanRoomProgressEventArgs(entry, tick.Bytes, tick.TotalBytes,
+                tick.BytesPerSecond, tick.Done));
+        }
+
+        public void Finish(long bytes, string? error)
+        {
+            if (room._board.Complete(key, bytes, error) is not { } tick) return;
+            room.Progress?.Invoke(new LanRoomProgressEventArgs(entry, tick.Bytes, tick.TotalBytes, 0d, true));
+        }
     }
 
     private static void TryDeleteArchive(string path)

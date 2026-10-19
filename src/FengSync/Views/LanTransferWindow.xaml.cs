@@ -49,6 +49,21 @@ public partial class LanTransferWindow : Window
     /// <summary>How often the countdown and the printed code are re-read off the pairing state.</summary>
     private static readonly TimeSpan Tick = TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// How long 已复制 stays under the code. Long enough to be noticed on a screen somebody is looking away
+    /// from, short enough that it is gone before the countdown beside it needs the room.
+    /// </summary>
+    private static readonly TimeSpan CopyHintLinger = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// How long a finished transfer row stays in the list before the tick takes it away.
+    /// </summary>
+    /// <remarks>
+    /// Long enough to read the last number a transfer ever wrote, short enough that a folder of twenty files does
+    /// not turn the strip into a wall of full bars. The room already carries the permanent record of what landed.
+    /// </remarks>
+    private const long FinishedLingerMs = 5000;
+
     private readonly LanTransferDependencies _deps;
     private readonly App? _shell;
 
@@ -57,13 +72,31 @@ public partial class LanTransferWindow : Window
     /// </summary>
     private readonly LanGroupLog _group = new();
 
+    /// <summary>
+    /// Who is in the room right now, which is a different question from who has ever been trusted.
+    /// </summary>
+    /// <remarks>
+    /// One instance for the life of the window, handed to both the session and the room's reader so the two
+    /// halves of this machine's own traffic renew the same lease. It survives a listener restart the way the log
+    /// does: changing the port moves the door, and a device that is still announcing itself is still here.
+    /// </remarks>
+    private readonly LanRoomPresence _presence = new();
+
     private readonly ObservableCollection<LanChatRow> _chat = [];
-    private readonly ObservableCollection<LanRow> _trusted = [];
-    private readonly ObservableCollection<LanRow> _discovered = [];
+    private readonly ObservableCollection<LanMemberRow> _members = [];
     private readonly ObservableCollection<LanRow> _pending = [];
     private readonly ObservableCollection<LanProgressRow> _transfers = [];
     private readonly ObservableCollection<LanRow> _history = [];
     private readonly Dictionary<string, LanChatRow> _rows = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// The computers this socket has heard, newest last, for the manual-address fallback to suggest.
+    /// </summary>
+    /// <remarks>
+    /// Not the room's device list — that one is <see cref="_presence"/>, which knows who is here <i>now</i>. This
+    /// is only "what address should the box already hold", and a stale entry in it costs nothing because the
+    /// probe in front of pairing answers whether anything is there.
+    /// </remarks>
+    private readonly List<LanDiscoveredPeer> _found = [];
     private readonly List<LanPendingOffer> _awaiting = [];
     private readonly Dictionary<string, LanProgressRow> _running = [];
     private readonly object _gate = new();
@@ -80,6 +113,7 @@ public partial class LanTransferWindow : Window
     private LanPeerClient? _client;
     private LanTransferHistoryRepository? _archive;
     private DispatcherTimer? _timer;
+    private DispatcherTimer? _copyHintTimer;
     private CancellationTokenSource? _lifetime;
     private Task _teardown = Task.CompletedTask;
     private bool _teardownStarted;
@@ -115,8 +149,7 @@ public partial class LanTransferWindow : Window
         _shell = shell;
         InitializeComponent();
         ChatList.ItemsSource = _chat;
-        TrustedList.ItemsSource = _trusted;
-        DiscoveredList.ItemsSource = _discovered;
+        MemberList.ItemsSource = _members;
         PendingList.ItemsSource = _pending;
         TransferList.ItemsSource = _transfers;
         HistoryList.ItemsSource = _history;
@@ -125,10 +158,19 @@ public partial class LanTransferWindow : Window
         // composer, so its events arrive on whichever thread spoke. Everything they touch is on the dispatcher.
         _group.Appended += entry => OnUi(() => ShowEntry(entry));
         _group.Trimmed += entry => OnUi(() => ForgetEntry(entry));
+        // Presence is fed from a request thread, a poll thread and the discovery socket, and every one of those
+        // touches the device strip. A departure is also a line in the room, because a phone whose browser was
+        // closed is exactly the thing a person would otherwise have to guess at.
+        _presence.Joined += member => OnUi(() => ShowMember(member));
+        _presence.Updated += member => OnUi(() => ShowMember(member));
+        _presence.Left += member => OnUi(() => DropMember(member));
         // WPF has no Opened event on Window; ContentRendered is the one that means "the person can see it",
         // and it fires once rather than on every re-hive the way Loaded does.
         ContentRendered += async (_, _) => await OpenAsync();
         UpdateEmptyHints();
+        // The line under the code has two states and only two: what a click does, and that it just happened.
+        // Starting it empty would leave the copy affordance to a hover tooltip nobody has a reason to try.
+        PairCopyHintText.Text = Tr.F("Lan.CopyCode");
     }
 
     /// <summary>The seams a test installs in place of a network, a firewall prompt, or a person.</summary>
@@ -142,7 +184,17 @@ public partial class LanTransferWindow : Window
 
     internal LanGroupLog Group => _group;
 
+    /// <summary>The room's device list, which is a lease rather than a file: it is what 退群 is measured against.</summary>
+    internal LanRoomPresence Presence => _presence;
+
     internal IReadOnlyList<string> ListenAddresses => _host?.ListenAddresses ?? [];
+
+    /// <summary>
+    /// Where a copied pairing code goes. A seam for the same reason <c>CloudTransferWindow</c> has one: the
+    /// clipboard belongs to the machine and to whoever is using it, so a test asserts what this window asked to
+    /// be copied rather than reading back whatever the last test left there.
+    /// </summary>
+    internal Action<string>? CopyToClipboard { get; set; }
 
     /// <summary>
     /// Raises the listener. Internal rather than a private <c>Opened</c> handler because a window an in-process
@@ -156,10 +208,25 @@ public partial class LanTransferWindow : Window
         _shell?.LatchLanTransfer(this);
         await RestartListenerAsync();
         await LoadHistoryAsync();
-        _timer = new DispatcherTimer { Interval = Tick };
-        _timer.Tick += (_, _) => RefreshCode();
-        _timer.Start();
+        StartTick();
         await CheckFirewallAsync();
+    }
+
+    /// <summary>
+    /// Starts the one-second tick, if it is not already running.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not tied to the listener's lifetime, because it is not about the listener: it redraws the
+    /// countdown and expires the room's presence leases, and both of those have to keep happening while the
+    /// listener is being rebuilt under them. A tick that stopped with the listener would freeze the countdown on
+    /// a port change and, worse, leave a phone that had gone away sitting in the room for the rest of the session.
+    /// </remarks>
+    private void StartTick()
+    {
+        if (_timer is not null) return;
+        _timer = new DispatcherTimer { Interval = Tick };
+        _timer.Tick += (_, _) => { RefreshCode(); SweepPresence(); SweepFinished(); };
+        _timer.Start();
     }
 
     protected override void OnClosed(EventArgs e)
@@ -199,6 +266,13 @@ public partial class LanTransferWindow : Window
         // screen, so it goes here rather than on the listener's thread, and it goes on the way out because a row
         // that survived would describe a delivery to a peer that has since left.
         _running.Clear();
+
+        // The one place the tick actually stops: this is the window going away, not the listener being rebuilt.
+        _timer?.Stop();
+        _timer = null;
+        // The copy hint's timer is a one-shot about a code that no longer exists once this window is gone.
+        _copyHintTimer?.Stop();
+        _copyHintTimer = null;
 
         await StopListenerAsync().ConfigureAwait(false);
         _client?.Dispose();
@@ -252,14 +326,14 @@ public partial class LanTransferWindow : Window
             }
 
             _session = new LanSession(new LanOptions(port, _receiveDirectory, _settings.LanAutoAcceptFromTrusted),
-                _peers, _secrets, _pairing, AskInboundAsync, _group);
+                _peers, _secrets, _pairing, AskInboundAsync, _group, _presence);
             _client ??= new LanPeerClient(_identity, _peers);
             // The room's reader is built beside the listener because it is the same pair of promises: this machine
             // answers its own <c>/log</c> here and reads everybody else's from here. It is built *before* the
             // listener because the listener answers on its behalf — a phone cannot dial anybody, so its 接收 is
             // this machine's own receive, and a route that reached back into the window for the room would be a
             // second, later copy of a promise the window already made.
-            _room = new LanGroupRoom(_identity, _client, _peers, _group, sink)
+            _room = new LanGroupRoom(_identity, _client, _peers, _group, sink, _presence)
             {
                 AutoReceive = _settings.LanAutoAcceptFromTrusted,
             };
@@ -295,7 +369,7 @@ public partial class LanTransferWindow : Window
         AutoReceiveBox.IsChecked = _settings.LanAutoAcceptFromTrusted;
         _restoringToggle = false;
         ReceiveDirectoryText.Text = _receiveDirectory;
-        await RefreshTrustedAsync();
+        await RefreshTrustedSummaryAsync();
         RefreshCode();
         StartDiscovery(port);
         // Started after the screen has its rows, so the first beat's arrivals are painted onto a window that is
@@ -308,7 +382,6 @@ public partial class LanTransferWindow : Window
     /// <summary>Takes the room, the listener and the advertiser down, leaving the window's own state intact.</summary>
     private async Task StopListenerAsync()
     {
-        _timer?.Stop();
         if (_room is { } room)
         {
             _room = null;
@@ -347,8 +420,11 @@ public partial class LanTransferWindow : Window
         try
         {
             _discovery = LanDiscoveryService.Start(_identity.DeviceId, _identity.DeviceName, port);
-            // A datagram arrives on the socket's thread, so only the row crosses onto the dispatcher.
-            _discovery.PeerFound += peer => Dispatcher.BeginInvoke(() => RememberDiscovered(peer));
+            // Two events off one socket, and the difference is what each one is for. Every announcement renews
+            // that computer's place in the room, because a machine repeating itself is still a machine that is
+            // up; only a changed one is worth putting an address in the manual box for.
+            _discovery.PeerSeen += peer => OnUi(() => OnPeerSeen(peer));
+            _discovery.PeerFound += peer => OnUi(() => OnPeerFound(peer));
         }
         catch (LanTransferException)
         {
@@ -389,22 +465,61 @@ public partial class LanTransferWindow : Window
         if (_pairing is null) return;
         var code = _pairing.Arm();
         var remaining = _pairing.RemainingSeconds;
+        // A code that just changed makes the last 已复制 a lie: what is sitting in the clipboard is the one the
+        // pairing state has already thrown away.
+        if (!string.Equals(PairCodeText.Text, code, StringComparison.Ordinal)) HideCopyHint();
         PairCodeText.Text = code;
         PairRemainingText.Text = remaining > 0
             ? Tr.Format("Lan.CodeExpires", remaining)
             : Tr.F("Lan.CodeRenewing");
         var address = _chosenAddress.Length > 0 ? _chosenAddress : _host?.ListenAddresses.FirstOrDefault() ?? "";
-        if (address.Length == 0 || (_paintedCode == code && _paintedAddress == address)) return;
-        PaintQr(code, address, remaining);
+        if (address.Length == 0)
+        {
+            if (PairUrlBox.Text.Length > 0) PairUrlBox.Text = "";
+            return;
+        }
+        // Repainted only when the code or the address moved, and then the box and the picture are written from
+        // one string: the typed form of the same thing the picture carries. Scanning is one way in and copying is
+        // the other, and whoever is copying needs the URL that pairs — the code rides in the fragment, so opening
+        // it is the pairing rather than a page asking for the six characters that were copied along with it.
+        if (_paintedCode == code && _paintedAddress == address) return;
+        var url = PairingUrl(code, address, remaining);
+        if (!string.Equals(PairUrlBox.Text, url, StringComparison.Ordinal)) PairUrlBox.Text = url;
+        _paintedCode = code;
+        _paintedAddress = address;
+        PaintQr(url);
     }
 
-    private void PaintQr(string code, string address, int remainingSeconds)
+    /// <summary>
+    /// The URL this window hands out, which is the same one the picture carries rather than a bare address.
+    /// </summary>
+    /// <remarks>
+    /// The code belongs in it: copying this line onto another computer is the act a scanner performs, and a page
+    /// that then asked for six characters it had just been handed would only be asking for a typo. The fragment
+    /// is also what keeps the code out of any server's access log, which is the reason the picture already put it
+    /// there. Falls back to the plain address when this machine's identity cannot be printed, because a URL that
+    /// still reaches the page — and can have the code typed into it — is worth more than an empty box.
+    /// </remarks>
+    private string PairingUrl(string code, string address, int remainingSeconds)
+    {
+        var plain = LanPairQr.BuildUrl(IpOf(address), PortOf(address));
+        if (_identity is null) return plain;
+        try
+        {
+            return LanPairQr.BuildPayload(LanPairQr.For(_identity, IpOf(address), PortOf(address), code,
+                DateTimeOffset.UtcNow, remainingSeconds));
+        }
+        catch (Exception)
+        {
+            return plain;
+        }
+    }
+
+    private void PaintQr(string payload)
     {
         if (_identity is null) return;
         try
         {
-            var payload = LanPairQr.BuildPayload(LanPairQr.For(_identity, IpOf(address), PortOf(address), code,
-                DateTimeOffset.UtcNow, remainingSeconds));
             var image = new System.Windows.Media.Imaging.BitmapImage();
             // The bytes go straight into the bitmap and are never written out: a pairing QR is a secret with a
             // two-minute shelf life, and a stray .png in a temp folder is the one thing this must not leave.
@@ -419,11 +534,9 @@ public partial class LanTransferWindow : Window
             }
             image.Freeze();
             QrImage.Source = image;
-            // The address is what a person reads aloud to a colleague; the code in it is spent within two
-            // minutes, which is why the whole line is safe to show and a token never would be.
-            QrImage.ToolTip = LanPairQr.BuildUrl(IpOf(address), PortOf(address));
-            _paintedCode = code;
-            _paintedAddress = address;
+            // The picture and the box say the same thing, down to the code: what a person reads aloud, and what
+            // a browser does when it opens the line, is the one URL this window is handing out.
+            QrImage.ToolTip = payload;
         }
         catch (Exception ex)
         {
@@ -432,6 +545,45 @@ public partial class LanTransferWindow : Window
             QrImage.Source = null;
             Say(Tr.F("Lan.QrFailed") + Describe(ex));
         }
+    }
+
+    /// <summary>
+    /// The six characters, straight to the clipboard. A pairing code is short enough to retype and exactly the
+    /// kind of short string a person mistypes, so the screen offers the copy instead of the transcription.
+    /// </summary>
+    private void CopyPairCode_Click(object sender, RoutedEventArgs e)
+    {
+        var code = PairCodeText.Text;
+        if (string.IsNullOrEmpty(code)) return;
+        try { (CopyToClipboard ?? Clipboard.SetText)(code); }
+        catch (Exception ex)
+        {
+            // The clipboard is a machine-wide resource somebody else can be holding, and failing to take it is
+            // not a reason to lose the code — it is still on screen, which is how it was being read out anyway.
+            Say(Tr.F("Lan.CopyCodeFailed") + Describe(ex));
+            return;
+        }
+        ShowCopyHint();
+    }
+
+    private void ShowCopyHint()
+    {
+        if (_copyHintTimer is null)
+        {
+            _copyHintTimer = new DispatcherTimer { Interval = CopyHintLinger };
+            _copyHintTimer.Tick += (_, _) => HideCopyHint();
+        }
+        PairCopyHintText.Text = Tr.F("Lan.CodeCopied");
+        // Restarted rather than merely started: a second click while the first hint is up buys the full two
+        // seconds again instead of the remainder of the first one.
+        _copyHintTimer.Stop();
+        _copyHintTimer.Start();
+    }
+
+    private void HideCopyHint()
+    {
+        _copyHintTimer?.Stop();
+        PairCopyHintText.Text = Tr.F("Lan.CopyCode");
     }
 
     private static string IpOf(string addressPort)
@@ -505,15 +657,63 @@ public partial class LanTransferWindow : Window
         // next tick overwrites.
         if (args.Accepted) _group.AppendSystem(Tr.Format("Lan.JoinedRoom", who), DateTimeOffset.UtcNow);
         else Say(Tr.Format("Lan.PairRefused", who, LanPeerPresentation.Refusal(args.Refusal)));
-        _ = RefreshTrustedAsync();
+        _ = RefreshTrustedSummaryAsync();
     }
 
     private void OnPeerRenamed(LanPeerRenamedEventArgs args)
     {
         var was = string.IsNullOrWhiteSpace(args.PreviousName) ? Tr.F("Lan.KindUnknown") : args.PreviousName;
         _group.AppendSystem(Tr.Format("Lan.RenamedPeer", was, args.Contact.DeviceName), DateTimeOffset.UtcNow);
-        _ = RefreshTrustedAsync();
+        _ = RefreshTrustedSummaryAsync();
     }
+
+    // ------------------------------------------------------------------ who is in the room
+
+    /// <summary>
+    /// Adds or refreshes one chip in the room's device strip.
+    /// </summary>
+    /// <remarks>
+    /// Keyed on the device id rather than appended, because a device that moved between access points is the
+    /// same device at a different address and a list that grew a second chip for it would read as two phones.
+    /// </remarks>
+    private void ShowMember(LanRoomMember member)
+    {
+        var row = new LanMemberRow(MemberName(member), MemberDetail(member), member);
+        var index = _members.ToList().FindIndex(candidate =>
+            string.Equals(candidate.Member.DeviceId, member.DeviceId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) _members.Add(row);
+        else _members[index] = row;
+        UpdateEmptyHints();
+    }
+
+    /// <summary>
+    /// Takes a chip away because that device is no longer here.
+    /// </summary>
+    /// <remarks>
+    /// A device that was only ever heard on the subnet leaves silently: it never joined anything, so saying it
+    /// left would be narrating a membership it does not have. A paired one gets a line, because its departure is
+    /// the whole of what 退群 means and a chip that vanished with no explanation is a list that lied.
+    /// </remarks>
+    private void DropMember(LanRoomMember member)
+    {
+        var index = _members.ToList().FindIndex(candidate =>
+            string.Equals(candidate.Member.DeviceId, member.DeviceId, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0) _members.RemoveAt(index);
+        if (!member.Discovered)
+            _group.AppendSystem(Tr.Format("Lan.LeftRoom", MemberName(member)), DateTimeOffset.UtcNow);
+        UpdateEmptyHints();
+    }
+
+    /// <summary>Expires the leases that ran out, which is how a phone whose browser was closed actually leaves.</summary>
+    private void SweepPresence() => _presence.Sweep(DateTimeOffset.UtcNow);
+
+    private string MemberName(LanRoomMember member) => string.IsNullOrWhiteSpace(member.DeviceName)
+        ? Tr.F("Lan.KindUnknown")
+        : member.DeviceName;
+
+    /// <summary>What the chip says under the name: what kind of thing it is, and where it is.</summary>
+    private static string MemberDetail(LanRoomMember member) => Tr.Format("Lan.MemberChip",
+        member.Discovered ? Tr.F("Lan.MemberDiscovered") : LanPeerPresentation.Kind(member.Kind), member.Where);
 
     // ------------------------------------------------------------------ the room on screen
 
@@ -586,7 +786,17 @@ public partial class LanTransferWindow : Window
     {
         // A pull reports against the length the entry announced; a folder's archive announces no length at all, so
         // its row draws a bar in flight rather than a percentage nobody measured.
-        if (_rows.TryGetValue(args.Entry.MessageId, out var row)) row.SetProgress(args.Bytes, args.TotalBytes);
+        if (!_rows.TryGetValue(args.Entry.MessageId, out var row)) return;
+        // The last tick of a pull is the board saying it is over, and the bubble's own line about where the bytes
+        // landed arrives on a different event — so the bar is taken down here rather than waiting for it.
+        if (args.IsDone)
+        {
+            row.SetProgress(args.Bytes, args.TotalBytes);
+            row.ClearProgress();
+            return;
+        }
+
+        row.SetProgress(args.Bytes, args.TotalBytes, SpeedLine(args.SpeedBytesPerSecond, args.Bytes, args.TotalBytes));
     }
 
     private void OnRoomFetched(LanRoomFetchEventArgs args)
@@ -858,18 +1068,52 @@ public partial class LanTransferWindow : Window
             LanTransferState.Completed, DateTimeOffset.UtcNow));
     }
 
+    /// <summary>
+    /// One tick of a transfer, from whichever of the four paths is moving the bytes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The row is keyed by the board's own id when there is one. A path alone cannot tell two files of the same
+    /// name apart, and a room can hold both at once — the id is what the board measured, so it is what this list
+    /// groups by. Inbound keeps the older <see cref="InKey"/> shape because <see cref="CloseInbound"/> finds the
+    /// row a landed file belongs to through it, and the board's inbound id is that same pair with a prefix.
+    /// </para>
+    /// <para>
+    /// A finished tick ends the row rather than leaving it: the sentence 「已收到 X」 is already in the room, and a
+    /// list that only ever grows would turn every session into a scroll of dead bars.
+    /// </para>
+    /// </remarks>
     private void OnProgress(LanProgressEventArgs args)
     {
-        var key = InKey(args.Contact.DeviceId, args.Path);
+        var key = args.IsInbound
+            ? InKey(args.Contact.DeviceId, args.Path)
+            : string.IsNullOrEmpty(args.TransferId) ? InKey(args.Contact.DeviceId, args.Path) : args.TransferId;
+        var hasTotal = args.TotalBytes > 0;
         var line = ProgressLine(args.Path, args.Contact, args.Bytes, args.TotalBytes, args.IsInbound);
-        if (!_running.TryGetValue(key, out var row))
+
+        if (args.IsDone)
         {
-            row = new LanProgressRow(line, args.TotalBytes > 0);
+            // The row stays in the map until the sweep takes it: the sentence about where the bytes actually
+            // landed arrives on a different event, and it is that sentence which turns a finished row into a
+            // useful one. Removing it here would leave only the size the sender claimed.
+            if (_running.TryGetValue(key, out var finished))
+                finished.Finish(args.Error is null ? LanTransferState.Completed : LanTransferState.Failed,
+                    args.Error ?? "");
+            return;
+        }
+
+        if (!_running.TryGetValue(key, out var row) || row.FinishedAt is not null)
+        {
+            // A key already holding a finished row is a second transfer of the same name, not a continuation of
+            // the one that is over: the old row keeps its own place in the list and this one starts from zero.
+            row = new LanProgressRow(line, hasTotal);
             _running[key] = row;
             _transfers.Add(row);
             UpdateEmptyHints();
         }
-        row.Update(line, args.TotalBytes > 0 ? 100d * args.Bytes / args.TotalBytes : -1);
+
+        row.Update(line, hasTotal ? 100d * args.Bytes / args.TotalBytes : -1,
+            SpeedLine(args.SpeedBytesPerSecond, args.Bytes, args.TotalBytes));
     }
 
     private string ProgressLine(string path, LanContact contact, long bytes, long totalBytes, bool inbound) =>
@@ -878,6 +1122,54 @@ public partial class LanTransferWindow : Window
                 totalBytes > 0 ? ByteSize.Format(totalBytes) : Tr.F("Lan.SizeUnknown"))
             : Tr.Format("Lan.ProgressOut", Path.GetFileName(path), Who(contact), ByteSize.Format(bytes),
                 totalBytes > 0 ? ByteSize.Format(totalBytes) : Tr.F("Lan.SizeUnknown"));
+
+    /// <summary>
+    /// The speed and the time left, as one sentence, or nothing at all.
+    /// </summary>
+    /// <remarks>
+    /// Silence is the honest answer for the first quarter second of a transfer, when the board has one sample and
+    /// nothing to divide — a row reading "0 B/s" at that moment looks stuck rather than new. The same silence
+    /// covers a folder, whose size nobody declared: a rate without a total is a speed with no arrival in it, and
+    /// the line above already says what is moving.
+    /// </remarks>
+    internal static string SpeedLine(double bytesPerSecond, long bytes, long totalBytes)
+    {
+        var rate = LanTransferSpeed.Format(bytesPerSecond);
+        if (rate.Length == 0) return "";
+
+        var seconds = totalBytes > bytes && bytesPerSecond > 0
+            ? (long)Math.Ceiling((totalBytes - bytes) / bytesPerSecond)
+            : 0;
+        return seconds <= 0 ? rate : Tr.Format("Lan.SpeedEta", rate, EtaText(seconds));
+    }
+
+    private static string EtaText(long seconds) => seconds switch
+    {
+        < 60 => Tr.Format("Lan.EtaSeconds", seconds),
+        < 3600 => Tr.Format("Lan.EtaMinutes", seconds / 60, seconds % 60),
+        _ => Tr.Format("Lan.EtaHours", seconds / 3600, seconds % 3600 / 60),
+    };
+
+    /// <summary>
+    /// Takes finished rows off the list once they have been readable for a moment.
+    /// </summary>
+    /// <remarks>
+    /// Runs on the tick the window already has. The pause is the same idea as the board's own: a bar that vanishes
+    /// on the same frame it fills gives nobody the chance to see that it finished, and the row is the only place
+    /// the last speed of a transfer was ever written.
+    /// </remarks>
+    private void SweepFinished()
+    {
+        if (_transfers.Count == 0) return;
+        var now = Environment.TickCount64;
+        var gone = _transfers.Where(row => row.FinishedAt is { } at && now - at >= FinishedLingerMs).ToList();
+        if (gone.Count == 0) return;
+
+        foreach (var row in gone) _transfers.Remove(row);
+        foreach (var key in _running.Where(pair => pair.Value.FinishedAt is not null).Select(pair => pair.Key).ToList())
+            _running.Remove(key);
+        UpdateEmptyHints();
+    }
 
     /// <summary>
     /// Marks an inbound row done. The exact wire path is the key, and a landed file is stored under a name this
@@ -980,7 +1272,7 @@ public partial class LanTransferWindow : Window
         PeerStatusText.Text = hello is null
             ? Tr.F("Lan.PeerNoAnswer")
             : Tr.Format("Lan.PeerAnswers", hello.DeviceName, $"{address}:{port}", LanPeerPresentation.Kind(hello.Kind));
-        if (hello is not null) RememberDiscovered(new LanDiscoveredPeer(hello.DeviceId, hello.DeviceName, address, port));
+        if (hello is not null) NoteDiscovered(new LanDiscoveredPeer(hello.DeviceId, hello.DeviceName, address, port));
     }
 
     private async void PairPeer_Click(object sender, RoutedEventArgs e)
@@ -998,22 +1290,24 @@ public partial class LanTransferWindow : Window
             await _client.PairAsync(new LanPeerEndpoint(hello.DeviceId, address, port), PeerCodeBox.Text);
             PeerStatusText.Text = Tr.Format("Lan.PeerPaired", hello.DeviceName);
             PeerCodeBox.Clear();
-            RememberDiscovered(new LanDiscoveredPeer(hello.DeviceId, hello.DeviceName, address, port));
+            NoteDiscovered(new LanDiscoveredPeer(hello.DeviceId, hello.DeviceName, address, port));
         }
         catch (LanTransferException ex) { PeerStatusText.Text = LanPeerPresentation.Refusal(ex.Refusal); }
         catch (Exception ex) { PeerStatusText.Text = Tr.F("Lan.PeerNoAnswer") + Describe(ex); }
     }
 
     /// <summary>
-    /// A peer address typed or selected. Kept as a parse rather than a guess: the manual box is the one path
-    /// that works when discovery cannot, so an unparseable address has to be named rather than sent.
+    /// A peer address typed, or the last computer that announced itself. Kept as a parse rather than a guess: the
+    /// manual box is the one path that works when discovery cannot, so an unparseable address has to be named
+    /// rather than sent.
     /// </summary>
     private bool TryPeerTarget(out string address, out int port)
     {
         port = CurrentPort();
         var typed = (PeerAddressBox.Text ?? "").Trim();
-        if (typed.Length == 0 && DiscoveredList.SelectedItem is LanRow { Tag: LanPeerEndpoint found })
+        if (typed.Length == 0 && _found.Count > 0)
         {
+            var found = _found[^1];
             address = found.Address;
             port = found.Port;
             return true;
@@ -1038,49 +1332,80 @@ public partial class LanTransferWindow : Window
     private Task<LanHelloReply?> HelloAsync(string address, int port) =>
         _client?.HelloAsync(address, port) ?? Task.FromResult<LanHelloReply?>(null);
 
-    private void RememberDiscovered(LanDiscoveredPeer peer)
+    /// <summary>
+    /// Every announcement, whether or not it says anything new.
+    /// </summary>
+    /// <remarks>
+    /// A computer repeating its own name every two seconds is the only heartbeat this side ever gets from a
+    /// machine it has not paired with, and it is what keeps a discovered computer in the room's device list
+    /// instead of letting it flicker out between two beats.
+    /// </remarks>
+    private void OnPeerSeen(LanDiscoveredPeer peer) => _presence.Seen(new LanRoomMember(peer.DeviceId, peer.DeviceName,
+        LanProtocol.KindUnknown, peer.Address, peer.Port, DateTimeOffset.UtcNow, Discovered: true));
+
+    /// <summary>A computer that just said something new — a first sighting, a rename, or a new address.</summary>
+    private void OnPeerFound(LanDiscoveredPeer peer) => NoteDiscovered(peer);
+
+    /// <summary>
+    /// Keeps the newest address of a computer this window has heard of, and offers it in the manual box.
+    /// </summary>
+    private void NoteDiscovered(LanDiscoveredPeer peer)
     {
-        var existing = _discovered.FirstOrDefault(row => row.Tag is LanPeerEndpoint endpoint
-            && string.Equals(endpoint.DeviceId, peer.DeviceId, StringComparison.OrdinalIgnoreCase));
-        var row = new LanRow(peer.DeviceName,
-            Tr.Format("Lan.PeerRow", peer.Address, peer.Port, LanPeerPresentation.Kind(LanProtocol.KindWindows)),
-            new LanPeerEndpoint(peer.DeviceId, peer.Address, peer.Port));
-        if (existing is null) _discovered.Add(row);
-        else _discovered[_discovered.IndexOf(existing)] = row;
+        var index = _found.FindIndex(candidate => string.Equals(candidate.DeviceId, peer.DeviceId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) _found.Add(peer);
+        else _found[index] = peer;
         // The manual box follows the announcement rather than the other way round: a person who typed an
         // address and then saw the same machine announce itself should not lose what they wrote.
         if (string.IsNullOrWhiteSpace(PeerAddressBox.Text)) PeerAddressBox.Text = $"{peer.Address}:{peer.Port}";
-        UpdateEmptyHints();
     }
 
     // ------------------------------------------------------------------ device list & directory
 
-    private async Task RefreshTrustedAsync()
+    /// <summary>
+    /// How many devices this machine would let back in without a fresh code.
+    /// </summary>
+    /// <remarks>
+    /// A count and not a list, because the list is a file on disk that outlives this window and the room's own
+    /// device strip is about who is here now. The two are different questions and showing both in one column
+    /// made them read as one — so the list has its own window and this is only the way in.
+    /// </remarks>
+    private async Task RefreshTrustedSummaryAsync()
     {
         if (_peers is null) return;
         try
         {
             var records = await _peers.LoadAsync();
-            _trusted.Clear();
-            foreach (var record in records.OrderByDescending(candidate => candidate.LastSeenUtc))
-                _trusted.Add(new LanRow(
-                    string.IsNullOrWhiteSpace(record.DeviceName) ? Tr.F("Lan.KindUnknown") : record.DeviceName,
-                    Tr.Format("Lan.TrustedRow", LanPeerPresentation.Kind(record.Kind),
-                        record.SeenAddresses.Count > 0 ? record.SeenAddresses[^1] : record.DeviceId,
-                        record.LastSeenUtc.ToLocalTime().ToString("g")), record));
+            TrustedCountText.Text = records.Count == 0
+                ? Tr.F("Lan.NoTrustedDevices")
+                : Tr.Format("Lan.TrustedCount", records.Count);
         }
         catch (Exception ex) { Say(Tr.F("Lan.PeerListFailed") + Describe(ex)); }
-        UpdateEmptyHints();
     }
 
-    private async void ForgetPeer_Click(object sender, RoutedEventArgs e)
+    private void ManageTrusted_Click(object sender, RoutedEventArgs e)
     {
-        if (_session is null || (sender as Button)?.Tag is not LanRow { Tag: LanPeerRecord record }) return;
-        // Two things go, not one: the row the user is looking at and the credential behind it. A forgotten
-        // device that still holds a live token would keep writing files into the receive directory.
-        var forgotten = await _session.ForgetAsync(record.DeviceId);
-        Say(forgotten ? Tr.Format("Lan.Forgotten", record.DeviceName) : Tr.F("Lan.AlreadyGone"));
-        await RefreshTrustedAsync();
+        if (_peers is null) return;
+        // Modal, and owned by this window: forgetting a device is a decision about the file this listener reads
+        // on every request, so it belongs in front of the window that is answering them rather than beside it.
+        new LanTrustedDevicesWindow(_peers, ForgetPeerAsync) { Owner = this }.ShowDialog();
+        _ = RefreshTrustedSummaryAsync();
+    }
+
+    /// <summary>
+    /// Un-trusts one device: its row, and the credential this machine issued to it.
+    /// </summary>
+    /// <remarks>
+    /// Both halves, always. The session does that in one call, and it is the one used whenever a listener
+    /// exists. When none does — the window is open with an unwritable receive directory, so nothing is
+    /// listening — the row still has to come off and the credential still has to go, because a leftover secret
+    /// would authenticate a device whose row is gone the moment a listener starts again.
+    /// </remarks>
+    private async Task<bool> ForgetPeerAsync(string deviceId)
+    {
+        if (_session is { } session) return await session.ForgetAsync(deviceId);
+        var forgotten = await _peers!.ForgetAsync(deviceId);
+        if (_secrets is not null) await _secrets.ForgetAsync(deviceId);
+        return forgotten;
     }
 
     private string? ResolveReceiveDirectory(string? saved)
@@ -1169,8 +1494,7 @@ public partial class LanTransferWindow : Window
 
     private void UpdateEmptyHints()
     {
-        TrustedEmptyText.Visibility = _trusted.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
-        DiscoveredEmptyText.Visibility = _discovered.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+        MemberEmptyText.Visibility = _members.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         HistoryEmptyText.Visibility = _history.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         TransferBorder.Visibility = _transfers.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         PendingBorder.Visibility = _pending.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1215,11 +1539,22 @@ public partial class LanTransferWindow : Window
 /// A row that shows two lines of text and carries whatever the button in that row needs to act on.
 /// </summary>
 /// <remarks>
-/// One type for four lists on purpose: a trusted device, a discovered computer, a question waiting to be
-/// answered, and a history line are all a name, a detail, and a payload — and a per-list row class would have
-/// made the payload's type a compile-time accident rather than the thing the click handler checks.
+/// One type for the two lists that carry a payload: a question waiting to be answered and a history line are
+/// both a name, a detail, and the thing the row is about — and a per-list row class would have made the
+/// payload's type a compile-time accident rather than the thing the click handler checks.
 /// </remarks>
 public sealed record LanRow(string Name, string Detail, object? Tag);
+
+/// <summary>
+/// One device in the room's strip: what it is called, what kind of thing it is and where, and the sighting it
+/// was drawn from.
+/// </summary>
+/// <remarks>
+/// A type of its own rather than another <see cref="LanRow"/>, because nothing here is clickable and the thing
+/// it carries is a live sighting rather than a payload — a strip whose chips all looked like the rows that have
+/// buttons would invite somebody to click one.
+/// </remarks>
+public sealed record LanMemberRow(string Name, string Detail, LanRoomMember Member);
 
 /// <summary>
 /// One line of the room as the screen draws it.
@@ -1240,6 +1575,7 @@ public sealed record LanRow(string Name, string Detail, object? Tag);
 public sealed class LanChatRow(LanGroupMessage entry, bool isMine) : INotifyPropertyChanged
 {
     private string _detail = "";
+    private string _rate = "";
     private bool _showsProgress;
     private double _percentage;
     private bool _isUnknown;
@@ -1287,29 +1623,61 @@ public sealed class LanChatRow(LanGroupMessage entry, bool isMine) : INotifyProp
 
     public Visibility ProgressVisibility => _showsProgress ? Visibility.Visible : Visibility.Collapsed;
 
+    /// <summary>The speed of the pull this bubble is drawing, or nothing before the board has measured one.</summary>
+    public string Rate => _rate;
+
+    public Visibility RateVisibility => _rate.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
     public double Percentage => _percentage;
 
     public bool IsUnknown => _isUnknown;
 
     /// <summary>What a screen reader says for the whole row, so a row is reachable by name without being selectable.</summary>
-    public string AutomationLine => string.Join(" · ", new[] { Body, _detail }.Where(part => part.Length > 0));
+    public string AutomationLine =>
+        string.Join(" · ", new[] { Body, _detail, _rate }.Where(part => part.Length > 0));
 
     /// <summary>Says what this machine now knows about the bytes behind the entry, and takes the in-flight bar with it.</summary>
     public void SetDetail(string detail)
     {
         _detail = detail;
         _showsProgress = false;
+        SetRate("");
         Raise(nameof(Detail), nameof(DetailVisibility), nameof(ProgressVisibility), nameof(AutomationLine));
+    }
+
+    /// <summary>
+    /// Takes the in-flight bar away without touching what the row says.
+    /// </summary>
+    /// <remarks>
+    /// The last tick of a pull arrives on the progress event, while the sentence about where the bytes landed
+    /// arrives on the fetch event. Clearing here is what keeps a bubble that has finished from drawing a bar that
+    /// will never move again during the moment between the two.
+    /// </remarks>
+    public void ClearProgress()
+    {
+        if (!_showsProgress && _rate.Length == 0) return;
+        _showsProgress = false;
+        SetRate("");
+        Raise(nameof(ProgressVisibility), nameof(AutomationLine));
     }
 
     /// <summary>One tick of a pull this machine is doing right now.</summary>
     /// <param name="totalBytes">The length the entry announced, or 0 when nothing measured it.</param>
-    public void SetProgress(long bytes, long totalBytes)
+    /// <param name="rate">The measured speed and the time left, already written as one sentence.</param>
+    public void SetProgress(long bytes, long totalBytes, string rate = "")
     {
         _showsProgress = true;
         _isUnknown = totalBytes <= 0;
         _percentage = totalBytes > 0 ? Math.Min(100d, 100d * bytes / totalBytes) : 0d;
+        SetRate(rate);
         Raise(nameof(ProgressVisibility), nameof(Percentage), nameof(IsUnknown));
+    }
+
+    private void SetRate(string rate)
+    {
+        if (_rate == rate) return;
+        _rate = rate;
+        Raise(nameof(Rate), nameof(RateVisibility), nameof(AutomationLine));
     }
 
     private string Author => string.IsNullOrWhiteSpace(Entry.AuthorName) ? Tr.F("Lan.KindUnknown") : Entry.AuthorName;
@@ -1326,6 +1694,7 @@ public sealed class LanChatRow(LanGroupMessage entry, bool isMine) : INotifyProp
 public sealed class LanProgressRow : INotifyPropertyChanged
 {
     private string _line;
+    private string _rate = "";
     private double _percentage;
     private bool _isUnknown;
 
@@ -1339,15 +1708,26 @@ public sealed class LanProgressRow : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string Line => _line;
+
+    /// <summary>The measured speed and the time left, or nothing before the board has two samples.</summary>
+    public string Rate => _rate;
+
+    public Visibility RateVisibility => _rate.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
     public double Percentage => _percentage;
+
     public bool IsUnknown => _isUnknown;
 
-    public void Update(string line, double percentage)
+    /// <summary>When this row finished, so the tick can take it away after a moment — null while it is running.</summary>
+    public long? FinishedAt { get; private set; }
+
+    public void Update(string line, double percentage, string rate = "")
     {
         _line = line;
         // A negative percentage is "no total was declared", which the bar already draws as indeterminate; the
         // value stays at zero so the fill never sits at a number nobody measured.
         _percentage = percentage < 0 ? 0 : Math.Min(100, percentage);
+        SetRate(rate);
         Raise(nameof(Line));
         Raise(nameof(Percentage));
     }
@@ -1356,10 +1736,22 @@ public sealed class LanProgressRow : INotifyPropertyChanged
     {
         _isUnknown = false;
         _percentage = 100;
+        FinishedAt = Environment.TickCount64;
         _line = string.IsNullOrWhiteSpace(detail) ? _line : $"{_line} · {detail}";
+        // A rate belongs to a transfer that is still going. Left on a finished row it reads as a promise the row
+        // has already stopped keeping.
+        SetRate("");
         Raise(nameof(Line));
         Raise(nameof(Percentage));
         Raise(nameof(IsUnknown));
+    }
+
+    private void SetRate(string rate)
+    {
+        if (_rate == rate) return;
+        _rate = rate;
+        Raise(nameof(Rate));
+        Raise(nameof(RateVisibility));
     }
 
     private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

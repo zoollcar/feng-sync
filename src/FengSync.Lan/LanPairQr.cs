@@ -40,7 +40,11 @@ public static class LanPairQr
     /// <summary>Screen pixels per QR module. Below this a phone camera at arm's length stops resolving it.</summary>
     public const int DefaultModulePixels = 5;
 
-    /// <summary>The address a person can type or read aloud, with no secret in it.</summary>
+    /// <summary>
+    /// The address alone: what a person reads aloud, and what the window falls back to when this machine cannot
+    /// print its own identity. It reaches the page but does not pair by itself — <see cref="BuildPayload"/> is
+    /// the URL that does.
+    /// </summary>
     public static string BuildUrl(string address, int port) => $"http://{address}:{port}{PagePath}";
 
     /// <summary>
@@ -60,6 +64,11 @@ public static class LanPairQr
     /// The URL a scanner produces. Rejects anything it could not have read back, so a broken picture is a
     /// crash on this side rather than a phone that shows a page with nothing filled in.
     /// </summary>
+    /// <remarks>
+    /// This is the one URL this machine hands out: the picture carries it and the window's address box shows the
+    /// very same string, because copying the line onto another computer is the act a scanner performs and a page
+    /// that then asked for the six characters it had just been given would only be asking for a typo.
+    /// </remarks>
     public static string BuildPayload(LanPairTarget target)
     {
         if (!LanPairCode.TryNormalise(target.Code, out var code)) throw new ArgumentException("配对码不是一张二维码能印的东西。", nameof(target));

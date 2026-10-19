@@ -1535,7 +1535,14 @@ try {
       # that the daemon resolved the new name, and that the obscured password survived the section copy.
       # Creating a copy instead of moving would leave the old name behind, which the row scan below catches.
       $renamedName = 'ui_renamed_' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
-      Click (Find-Id $manager 'RenameCloudEndpoint')
+      # 重命名 / 分组与标签 / 检查连接 / 删除 都搬进了端点行的右键菜单：它们都要先选中一行，而一条常驻的按钮带
+      # 大部分时候是灰的。菜单是 BuildEndpointMenu 每次打开时用代码搭的，XAML 里根本没有它 —— 所以「真的能点到」
+      # 只有真外壳能证明，这也是这一段走右键而不是直接调处理器的原因。
+      $endpointRow = Find-NameContaining (Find-Id $manager 'CloudEndpointList') $remoteName 30
+      Select-UiOrAncestor $endpointRow
+      Invoke-RightClickGesture $endpointRow
+      $endpointMenu = Wait-Until { try { Find-ContextMenuInApp 'CloudEndpointMenu' } catch { $null } } '端点行的右键菜单没有出现。' 15
+      Click (Find-Name $endpointMenu '重命名…' 10)
       $renamePrompt = Find-WindowLike '重命名端点' 30
       Set-Text (Find-Id $renamePrompt 'TextPromptNameBox') $renamedName
       Click (Find-Id $renamePrompt 'TextPromptConfirm')
@@ -1565,7 +1572,7 @@ try {
       Wait-Until { try { $null -ne (Find-Name $manager '取消收藏' 2) } catch { $false } } '改名之后收藏按钮不再认得这个目录是收藏。' 15 | Out-Null
       # The endpoint list's toolbar sits in a 340 px column, so every control in it has to survive the wrap
       # rather than being clipped away.
-      foreach ($id in @('CloudEndpointSearch', 'CloudEndpointSort', 'CloudEndpointSortDirection', 'CheckAllCloudEndpoints', 'ExportCloudEndpoints', 'ImportCloudEndpoints')) { Assert-RectangleInside (Find-Id $manager $id) $manager "endpoint list/$id" }
+      foreach ($id in @('CloudEndpointSearch', 'CloudEndpointSort', 'CloudEndpointSortDirection', 'RefreshCloudEndpoints', 'CheckAllCloudEndpoints', 'ExportCloudEndpoints', 'ImportCloudEndpoints')) { Assert-RectangleInside (Find-Id $manager $id) $manager "endpoint list/$id" }
       # Searching is not a cosmetic filter: a query that matches nothing has to empty the file pane too, and a
       # query that matches the endpoint has to bring both back. Asserting only the list would miss a pane left
       # showing the contents of an endpoint the user can no longer see.
@@ -1601,7 +1608,11 @@ try {
       # Grouping and tagging live in this application's own metadata file, so the only proof that the dialog
       # writes them is to reopen it and read the boxes back. The heading and the tag search are what make the
       # two fields worth setting, so both are checked through the list rather than through the store.
-      Click (Find-Id $manager 'OrganizeCloudEndpoint')
+      $endpointRow = Find-NameContaining (Find-Id $manager 'CloudEndpointList') $renamedName 30
+      Select-UiOrAncestor $endpointRow
+      Invoke-RightClickGesture $endpointRow
+      $endpointMenu = Wait-Until { try { Find-ContextMenuInApp 'CloudEndpointMenu' } catch { $null } } '端点行的右键菜单没有出现。' 15
+      Click (Find-Name $endpointMenu '分组与标签…' 10)
       $organize = Find-WindowById 'CloudEndpointOrganizationWindow'
       Set-Text (Find-Id $organize 'EndpointGroupBox') 'ui-group'
       Set-Text (Find-Id $organize 'EndpointTagsBox') 'ui-tag, second-tag'
@@ -1613,7 +1624,11 @@ try {
       Wait-Until { try { $null -ne (Find-NameContaining (Find-Id $manager 'CloudEndpointList') $renamedName 2) } catch { $false } } 'Searching by tag did not find the tagged endpoint.' 30 | Out-Null
       Set-Text (Find-Id $manager 'CloudEndpointSearch') ''
       Wait-Until { try { (Find-Name $manager 'remote-proof.txt' 2).Current.Name -eq 'remote-proof.txt' } catch { $false } } 'Clearing the tag search did not restore the browser.' 30 | Out-Null
-      Click (Find-Id $manager 'OrganizeCloudEndpoint')
+      $endpointRow = Find-NameContaining (Find-Id $manager 'CloudEndpointList') $renamedName 30
+      Select-UiOrAncestor $endpointRow
+      Invoke-RightClickGesture $endpointRow
+      $endpointMenu = Wait-Until { try { Find-ContextMenuInApp 'CloudEndpointMenu' } catch { $null } } '端点行的右键菜单没有出现。' 15
+      Click (Find-Name $endpointMenu '分组与标签…' 10)
       $organize = Find-WindowById 'CloudEndpointOrganizationWindow'
       if ((Get-Text (Find-Id $organize 'EndpointGroupBox')) -ne 'ui-group') { throw "The endpoint's group was not persisted: '$(Get-Text (Find-Id $organize 'EndpointGroupBox'))'." }
       if ((Get-Text (Find-Id $organize 'EndpointTagsBox')) -ne 'ui-tag、second-tag') { throw "The endpoint's tags were not persisted: '$(Get-Text (Find-Id $organize 'EndpointTagsBox'))'." }

@@ -138,6 +138,18 @@ public sealed class LanDiscoveryService : IAsyncDisposable
     /// <summary>A computer that said something this window had not heard before.</summary>
     public event Action<LanDiscoveredPeer>? PeerFound;
 
+    /// <summary>
+    /// Every announcement this socket accepted, including the ones that said exactly what the last one did.
+    /// </summary>
+    /// <remarks>
+    /// A separate event from <see cref="PeerFound"/> because the two answer different questions. "Is there
+    /// something new to show" is asked once per change, and repainting a list twice a second is what
+    /// <see cref="LanDiscovery.IsNewInformation"/> exists to prevent. "Is that computer still there" is asked
+    /// every time it speaks, and a subscriber holding a lease on presence has to hear the repeats — a heartbeat
+    /// that is only delivered when it carries news is not a heartbeat at all.
+    /// </remarks>
+    public event Action<LanDiscoveredPeer>? PeerSeen;
+
     private LanDiscoveryService(string deviceId, string payload, int port, Socket socket, IReadOnlyList<string> broadcasts)
     {
         _deviceId = deviceId;
@@ -287,13 +299,17 @@ public sealed class LanDiscoveryService : IAsyncDisposable
 
     private void Record(LanDiscoveredPeer peer)
     {
+        bool news;
         lock (_gate)
         {
-            if (_known.TryGetValue(peer.DeviceId, out var known) && !LanDiscovery.IsNewInformation(known, peer)) return;
-            _known[peer.DeviceId] = peer;
+            news = !_known.TryGetValue(peer.DeviceId, out var known) || LanDiscovery.IsNewInformation(known, peer);
+            if (news) _known[peer.DeviceId] = peer;
         }
 
-        PeerFound?.Invoke(peer);
+        // The heartbeat first and unconditionally, the news only when there is some: a listener that is merely
+        // repeating itself is still a listener that is up, and that is the whole of what a presence lease needs.
+        PeerSeen?.Invoke(peer);
+        if (news) PeerFound?.Invoke(peer);
     }
 
     /// <summary>Stops announcing, stops listening, and frees the port.</summary>

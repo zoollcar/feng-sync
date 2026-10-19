@@ -15,7 +15,6 @@ Mgr.BrowserEmptyDetail	选中一个端点后，这里会显示它的文件和目
 Mgr.BrowserEmptyHint	请在左侧选择云盘端点	Select a cloud drive endpoint on the left
 Mgr.BrowserTitle	文件浏览器	File browser
 Mgr.BulletField	 · {0}：{1}	 · {0}: {1}
-Mgr.BusyCreate	正在新建…	Creating…
 Mgr.BusyLogin	正在登录…	Signing in…
 Mgr.BusyNew	正在新建…	Creating…
 Mgr.BusyOpen	正在打开…	Opening…
@@ -24,10 +23,8 @@ Mgr.CacheAlreadyEmpty	挂载缓存已经是空的（{0}）。	The mount cache is
 Mgr.CacheClearFailed	清理缓存失败：{0}	Clearing the cache failed: {0}
 Mgr.CacheCleared	已清理挂载缓存：{0} 个文件。	Cleared the mount cache: {0} files.
 Mgr.CacheClearedPartial	已清理挂载缓存：{0} / {1} 个文件；其余正被挂载占用，已保留。	Cleared the mount cache: {0} / {1} files; the rest are in use by a mount and were kept.
-Mgr.CannotCreateSyncTask	无法创建同步任务。	The sync job could not be created.
 Mgr.CannotReconnectProvider	只有需要浏览器授权的端点可以重新登录；{0} 请直接编辑端点参数。	Only endpoints that need browser authorization can be signed in again; for {0}, edit the endpoint parameters directly.
 Mgr.CheckEndpoint	检查连接	Check connection
-Mgr.CheckEndpointName	检查所选云盘端点的连接与容量	Check the connection and capacity of the selected cloud endpoint
 Mgr.Clear	清除	Clear
 Mgr.ClearCache	清理缓存	Clear cache
 Mgr.ClearCacheName	清理挂载缓存	Clear the mount cache
@@ -39,10 +36,8 @@ Mgr.ColumnModified	修改时间	Modified
 Mgr.ColumnName	名称	Name
 Mgr.ColumnSize	大小	Size
 Mgr.ColumnType	类型	Type
-Mgr.CreateSyncTask	创建同步任务	Create sync job
-Mgr.CreateSyncTaskName	从所选云盘端点创建同步任务	Create a sync job from the selected cloud endpoint
 Mgr.Delete	删除	Delete
-Mgr.DeleteEndpointName	删除所选云盘端点	Delete the selected cloud endpoint
+Mgr.DeleteEndpointMenuItem	删除“{0}”…	Delete “{0}”…
 Mgr.Descending	降序	Descending
 Mgr.Download	下载	Download
 Mgr.DownloadName	下载所选文件	Download the selected files
@@ -101,19 +96,14 @@ Mgr.NoMountsToRestore	没有需要恢复的挂载。	There are no mounts to rest
 Mgr.OpenTransfersName	打开云盘传输窗口	Open the cloud transfer window
 Mgr.OpenTrash	打开回收站	Open recycle bin
 Mgr.OpeningNewEndpointWindow	正在打开新建端点窗口…	Opening the new endpoint window…
-Mgr.OpeningSyncWizard	正在打开同步向导…	Opening the sync wizard…
 Mgr.OrganizeEndpoint	分组与标签…	Groups and tags…
-Mgr.OrganizeEndpointName	设置所选云盘端点的分组与标签	Set the group and tags of the selected cloud endpoint
-Mgr.OrganizeRowLabel	整理	Organize
 Mgr.Paste	粘贴	Paste
 Mgr.PasteName	把剪贴板中的项目粘贴到当前目录	Paste the items on the clipboard into the current folder
 Mgr.PathNavigationName	当前路径导航	Current path navigation
 Mgr.PathWithPrefix	{0}:/{1}    （前缀 /{2}，由 rclone 强制，无法越界）	{0}:/{1}    (prefix /{2}, enforced by rclone, cannot be stepped outside)
 Mgr.PickEndpoint	请先选择一个端点。	Select an endpoint first.
-Mgr.PickEndpointForSyncTask	请先选择要创建同步任务的端点。	Select the endpoint to create the sync task from first.
 Mgr.PickEndpointToEdit	请先选择要编辑的端点。	Select the endpoint to edit first.
 Mgr.PickMountToReconnect	请先选择要重新挂载的挂载点。	Select the mount point to remount first.
-Mgr.PreparingSyncTask	正在准备同步任务…	Preparing the sync job…
 Mgr.RecentJumpName	跳到最近访问的目录	Jump to a recently visited folder
 Mgr.RecoveryRowLabel	恢复	Recover
 Mgr.ReconnectAborted	重新挂载已中止：原挂载未能取消。\n	Remounting was stopped: the original mount could not be cancelled.\n
@@ -132,7 +122,6 @@ Mgr.RefreshList	刷新列表	Refresh list
 Mgr.RefreshListName	刷新云盘端点列表	Refresh the cloud endpoint list
 Mgr.RefreshMountsName	刷新挂载列表	Refresh the mount list
 Mgr.Rename	重命名	Rename
-Mgr.RenameEndpointName	重命名所选云盘端点	Rename the selected cloud endpoint
 Mgr.RestoreMounts	一键恢复	Restore all
 Mgr.RestoreMountsName	恢复上次的挂载	Restore the mounts from last time
 Mgr.RestoreMountsPrompt	将恢复 {0} 个上次的挂载：\n{1}	This will restore {0} mounts from last time:\n{1}
@@ -151,13 +140,6 @@ Mgr.StatusConnectedNoQuota	“{0}”连接正常；该服务不提供容量信�
 Mgr.StatusConnectedWithQuota	“{0}”连接正常，{1}。	"{0}" is connected, {1}.
 Mgr.StatusFailed	“{0}”{1}：{2}	"{0}" {1}: {2}
 Mgr.Subtitle	管理云盘端点与挂载，并浏览和传输文件。	Manage cloud endpoints and mounts, and browse and transfer files.
-Mgr.SyncTaskCancelled	已取消创建同步任务。	Creating the sync job was cancelled.
-Mgr.SyncTaskCreated	已创建同步任务“{0}”：{1} → {2}	Created the sync job "{0}": {1} -> {2}
-Mgr.SyncTaskListFailed	无法读取同步任务列表：{0}	The sync job list could not be read: {0}
-Mgr.SyncWizard	同步向导	Sync wizard
-Mgr.SyncWizardName	打开一键双向同步向导	Open the one-tap two-way sync wizard
-Mgr.SyncRowLabel	同步	Sync
-Mgr.SyncWizardTaskCreated	已创建双向同步任务“{0}”：{1} ↔ {2}	Created the two-way sync job "{0}": {1} ↔ {2}
 Mgr.TestAll	测试全部	Test all
 Mgr.TestAllName	检查全部云盘端点的连接与容量	Check the connection and capacity of every cloud endpoint
 Mgr.ToolsLabel	工具	Tools
@@ -371,7 +353,6 @@ Mgr.RenameEndpointTitle	重命名端点	Rename endpoint
 Mgr.RenameFailedTitle	重命名失败	Renaming failed
 Mgr.RenamePrompt	“{0}”的新名称：	New name for “{0}”:
 Mgr.Renamed	已重命名为：{0}	Renamed to: {0}
-Mgr.Renaming	正在重命名…	Renaming…
 Mgr.RenamingItem	正在重命名“{0}”…	Renaming “{0}”…
 Mgr.RestoreEllipsis	还原…	Restore…
 Mgr.RestoreSelected	还原所选的 {0} 项…	Restore the {0} selected items…

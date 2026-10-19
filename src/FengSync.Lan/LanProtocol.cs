@@ -56,6 +56,16 @@ public static class LanProtocol
     public const string KindWindows = "windows";
     public const string KindPhone = "phone";
 
+    /// <summary>
+    /// What a device is when nothing has said otherwise.
+    /// </summary>
+    /// <remarks>
+    /// A name rather than a null, because "we do not know" is a state the room genuinely holds — a computer heard
+    /// on UDP never says what it is, and a row that showed nothing there would read as a device that failed to
+    /// describe itself rather than one nobody has asked.
+    /// </remarks>
+    public const string KindUnknown = "unknown";
+
     /// <summary>How long one armed code stays answerable, and how often a fresh one replaces an expired one.</summary>
     public const int PairCodeLifetimeSeconds = 120;
 

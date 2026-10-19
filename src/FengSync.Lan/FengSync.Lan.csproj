@@ -1,5 +1,38 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!--
+      The phone page is a React application in web/, beside src/ rather than inside this project: a toolchain that
+      watches its own sources has no business being compiled by the SDK that also globs them.
+    -->
+    <WebRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\web'))</WebRoot>
+    <WebDist>$(WebRoot)\dist\</WebDist>
+    <WebStamp>$(WebDist).fengsync-build.stamp</WebStamp>
+    <!--
+      An escape hatch for a build that genuinely does not need the page: `dotnet build -p:SkipWebBuild=true`. The
+      assembly then carries no page and GET /p answers 503 with a sentence rather than an empty document. Switching
+      this property on or off changes what is embedded without changing any input timestamp, so rebuild with
+      `-t:Rebuild` when you switch it.
+    -->
+    <SkipWebBuild Condition="'$(SkipWebBuild)' == ''">false</SkipWebBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Only what can change the bundle. node_modules and dist are deliberately absent: dist is this target's own
+      output, and an input that the output overwrites would make the target run on every build forever.
+    -->
+    <WebSource Include="$(WebRoot)\src\**\*" />
+    <WebSource Include="$(WebRoot)\index.html" />
+    <WebSource Include="$(WebRoot)\package.json" />
+    <WebSource Include="$(WebRoot)\package-lock.json" />
+    <WebSource Include="$(WebRoot)\vite.config.ts" />
+    <WebSource Include="$(WebRoot)\tsconfig.json" />
+  </ItemGroup>
+
   <ItemGroup>
     <!--
       Kestrel inside a desktop process. A FrameworkReference rather than individual Microsoft.AspNetCore.*
@@ -14,4 +47,91 @@
   <ItemGroup>
     <ProjectReference Include="..\FengSync.Core\FengSync.Core.csproj" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <WebBuildActive Condition="'$(SkipWebBuild)' != 'true' and '$(DesignTimeBuild)' != 'true' and Exists('$(WebRoot)\package.json')">true</WebBuildActive>
+  </PropertyGroup>
+
+  <!-- A checkout without web/ is a broken checkout, not a build that silently ships no page. -->
+  <Target Name="WebRequireSources"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(SkipWebBuild)' != 'true' and '$(DesignTimeBuild)' != 'true' and !Exists('$(WebRoot)\package.json')">
+    <Error Text="找不到 $(WebRoot)\package.json：web/ 没有随仓库检出，或 WebRoot 路径不对。若本次构建确实不需要手机页面，传 -p:SkipWebBuild=true。" />
+  </Target>
+
+  <!--
+    Checked only when nothing has been installed yet: a machine that already ran npm once has the toolchain, and
+    paying for two process launches on every build to be told so is not worth it.
+  -->
+  <Target Name="WebToolchainCheck"
+          Condition="'$(WebBuildActive)' == 'true' and !Exists('$(WebRoot)\node_modules\.package-lock.json')">
+    <Exec Command="node --version &amp;&amp; npm --version"
+          WorkingDirectory="$(WebRoot)"
+          IgnoreExitCode="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Normal">
+      <Output TaskParameter="ExitCode" PropertyName="_WebToolchainExit" />
+    </Exec>
+    <Error Condition="'$(_WebToolchainExit)' != '0'"
+           Text="构建手机页面需要 PATH 上的 Node.js 与 npm（Node 22 及以上）。装好后再构建；若本次构建确实不需要手机页面，传 -p:SkipWebBuild=true。" />
+  </Target>
+
+  <!-- Incremental on the lockfile, which is the only thing `npm ci` reads. -->
+  <Target Name="WebRestore"
+          DependsOnTargets="WebToolchainCheck"
+          Condition="'$(WebBuildActive)' == 'true'"
+          Inputs="$(WebRoot)\package-lock.json;$(WebRoot)\package.json"
+          Outputs="$(WebRoot)\node_modules\.package-lock.json">
+    <Error Condition="!Exists('$(WebRoot)\package-lock.json')"
+           Text="web/package-lock.json 不存在。先在 web/ 跑一次 npm install 并提交 lockfile。" />
+    <Exec Command="npm ci --no-audit --no-fund --loglevel=error"
+          WorkingDirectory="$(WebRoot)"
+          EnvironmentVariables="CI=true" />
+  </Target>
+
+  <!-- Incremental on the sources that can change the bundle; the stamp is what makes it so. -->
+  <Target Name="WebBuild"
+          DependsOnTargets="WebRestore"
+          Condition="'$(WebBuildActive)' == 'true'"
+          Inputs="@(WebSource)"
+          Outputs="$(WebDist)index.html;$(WebStamp)">
+    <Exec Command="npm run build"
+          WorkingDirectory="$(WebRoot)"
+          EnvironmentVariables="CI=true" />
+    <Touch Files="$(WebStamp)" AlwaysCreate="true" />
+  </Target>
+
+  <!--
+    Embedded here rather than copied beside the executable, for two reasons this repository has already paid for: a
+    loose file rides in the hash of every release manifest, and a web root on disk is a second thing a publish can
+    forget. The logical name keeps the URL path — `web/assets/index-abc.js` — because the default name replaces the
+    separators with dots and a content hash already contains one.
+  -->
+  <Target Name="EmbedWebAssets"
+          DependsOnTargets="WebBuild"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(WebBuildActive)' == 'true'">
+    <Error Condition="!Exists('$(WebDist)index.html')"
+           Text="npm run build 完成了，但 $(WebDist)index.html 不存在。检查 web/vite.config.ts 的 build.outDir。" />
+    <!--
+      Two item groups, in this order, and the order is load-bearing: metadata of an item cannot be referenced in
+      the same ItemGroup that creates it, so the files are collected first and named second. The separator inside
+      the name is whatever the build machine uses; LanWebAssets normalises it to `/` on the way in.
+    -->
+    <ItemGroup>
+      <_WebFile Include="$(WebDist)**\*" Exclude="$(WebDist)**\*.map;$(WebDist)**\*.stamp" />
+    </ItemGroup>
+    <ItemGroup>
+      <EmbeddedResource Include="@(_WebFile)">
+        <LogicalName>web/%(_WebFile.RecursiveDir)%(_WebFile.Filename)%(_WebFile.Extension)</LogicalName>
+        <!--
+          WithCulture=false keeps the SDK from reading a name like `index-abc.js` as a culture suffix and moving the
+          file into a satellite assembly. Do NOT also set Culture=neutral here: that metadata is exactly what
+          routes a resource into CoreGenerateSatelliteAssemblies, which is how the page ended up in a
+          `neutral\FengSync.Lan.resources.dll` nobody ever loads.
+        -->
+        <WithCulture>false</WithCulture>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
 </Project>
