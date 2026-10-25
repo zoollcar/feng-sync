@@ -61,7 +61,29 @@ Lan.Close	关闭	Close
 Lan.Members	群里的设备	Devices in the room
 Lan.RoomMembersEmpty	还没有别的设备在群里	No other device is in the room yet
 Lan.MemberChip	{0} · {1}	{0} · {1}
-Lan.MemberDiscovered	发现的电脑	Found on the LAN
+Lan.MemberDiscovered	发现的电脑（未配对）	Found on the LAN (not paired)
+Lan.Invitable	可邀请设备	Invitable devices
+Lan.InvitableEmpty	局域网上还没有可邀请的设备	Nothing on the LAN to invite yet
+Lan.MemberVia	在 {0} 上	on {0}
+Lan.MemberAway	{0}（离开）	{0} (away)
+Lan.IncompletePair	配对不完整，需要补全	Pairing unfinished
+Lan.Invite	邀请	Invite
+Lan.InviteSent	已邀请，等待同意	Invited, waiting for an answer
+Lan.InviteOldPeer	补全	Finish pairing
+Lan.InviteSending	已邀请 {0}，等对方点同意	Asked {0} to join; waiting for them to agree
+Lan.InviteAccepted	{0} 同意进群了	{0} agreed to join
+Lan.InviteDeclined	{0} 拒绝了这个邀请	{0} turned the invitation down
+Lan.InviteNoAnswer	{0} 没有在时限内回应	{0} did not answer in time
+Lan.InviteTooOld	{0} 上的版本太旧，请改用右侧的配对码	{0} is running an older build; use the pairing code on the right
+Lan.InviteUnreachable	没能把邀请送到 {0}	The invitation did not reach {0}
+Lan.InviteNeedsGateway	这台设备没有自己的监听，暂时只能由它连接的那台电脑代为邀请	That device has no listener of its own, so only the computer it is connected to can invite it for now
+Lan.InviteAskTitle	有人想让你进群	Somebody wants you in their room
+Lan.InviteAskHint	同意之后，两边就能互相发文字和文件。	Agreeing lets the two machines send each other text and files.
+Lan.InviteAskDetail	{0} 想加入 · {1} 秒内有效	{0} asking to join · open for {1} seconds
+Lan.InviteFrom	{0} 邀请你进群	{0} invited you to join
+Lan.InviteAsking	{0} 想让你进群，在左边点同意或拒绝	{0} wants you in their room; accept or decline on the left
+Lan.InviteRefused	已拒绝 {0} 的邀请	Turned down {0}'s invitation
+Lan.InviteAnswerFailed	没能接受 {0} 的邀请：{1}	Could not accept {0}'s invitation: {1}
 Lan.LeftRoom	{0} 离开了这个群	{0} left this room
 Lan.RoomEmpty	还没有人说话。让手机扫上面的码进来，或者用下面的按钮往房间里放一个文件。	Nothing has been said yet. Let a phone scan the code above, or use the buttons below to put a file in the room.
 Lan.SendFiles	发文件…	Send files…
@@ -70,7 +92,9 @@ Lan.Send	发送	Send
 Lan.Receive	接收	Receive
 Lan.JoinedRoom	{0} 加入了这个群	{0} joined this room
 Lan.Announced	已在房间里放出 {0} 项，谁要谁自己点接收	Put {0} item(s) in the room; whoever wants it takes it
+Lan.NoOneToReceive	已在本机放出 {0} 项，但还没有配对过的电脑能看到。在右侧填上对方的配对码，配对之后对方才收得到。	Put {0} item(s) in this machine's copy, but no paired computer can see them yet. Enter the other computer's code on the right; until then nobody else can take them.
 Lan.AnnouncedNothing	没有东西被放出，选中的路径可能已经不在了	Nothing was announced; the paths you picked may already be gone
+Lan.NoOneToHear	还没有配对过的电脑，这句话只有本机看得到。在右侧填上对方的配对码，配对之后才能互相收发。	No paired computer can hear this yet, so the sentence is only in this window. Enter the other computer's code on the right to talk both ways.
 Lan.ChatFolder	文件夹	Folder
 Lan.ChatHeld	已在本机：{0}	Held here: {0}
 Lan.RoomReceived	已收到 {0}（{1}）	Received {0} ({1})
@@ -140,3 +164,5 @@ Lan.Refuse.VerificationFailed	落地的大小或修改时间与声明不符	The 
 Lan.Refuse.PortUnavailable	端口被别的程序占着	Another program holds that port
 Lan.Refuse.BadRequest	请求本身不完整	The request itself was unusable
 Lan.Refuse.MessageTooLong	这句话太长了，发短一点	This sentence is too long; say it in fewer characters
+Lan.Refuse.InviteExpired	这个邀请已经过期了	That invitation has expired
+Lan.Refuse.InviteConflict	对方手上的邀请太多了，稍后再试	The other machine is holding too many invitations; try again shortly

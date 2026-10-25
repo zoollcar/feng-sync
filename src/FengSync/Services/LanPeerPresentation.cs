@@ -36,6 +36,8 @@ internal static class LanPeerPresentation
         LanRefusal.PortUnavailable => Tr.F("Lan.Refuse.PortUnavailable"),
         LanRefusal.BadRequest => Tr.F("Lan.Refuse.BadRequest"),
         LanRefusal.MessageTooLong => Tr.F("Lan.Refuse.MessageTooLong"),
+        LanRefusal.InviteExpired => Tr.F("Lan.Refuse.InviteExpired"),
+        LanRefusal.InviteConflict => Tr.F("Lan.Refuse.InviteConflict"),
         _ => Tr.F("Lan.Refuse.BadRequest"),
     };
 

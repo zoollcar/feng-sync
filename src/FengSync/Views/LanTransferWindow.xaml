@@ -157,6 +157,105 @@
                         </DockPanel>
                     </Border>
 
+                    <!-- ================= 可邀请设备 =================
+                         这一条与上面那条是两件不同的事，所以是两条而不是一条里加标记：上面的每一个都是"这台电脑
+                         已经同意过的设备"，下面每一个都是"还没有同意过的"。一台只在网段上广播过名字的电脑属于
+                         下面——它没有证明任何事，也没有本机签发的凭证，房间既不会去读它也不会给它送东西。把两者
+                         混在一条里，屏幕上就会出现一种"看起来在群里、其实收不到"的设备。 -->
+                    <Border DockPanel.Dock="Top" x:Name="InviteBorder"
+                            Background="{DynamicResource SurfaceSubtleBrush}"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                            Padding="12,8" Margin="12,8,12,0" CornerRadius="{StaticResource RadiusMedium}">
+                        <DockPanel LastChildFill="True">
+                            <TextBlock DockPanel.Dock="Left" Text="{Binding [Lan.Invitable], Source={l:Lang}}"
+                                       Style="{StaticResource BodyStrongTextStyle}" VerticalAlignment="Top"
+                                       Margin="0,4,10,0"/>
+                            <Grid>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="58">
+                                    <ItemsControl x:Name="InviteList" AutomationProperties.AutomationId="LanInviteList"
+                                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <!-- 每个候选都带一个按钮，因为"知道这台机器在网段上"和"请它进群"是同一行的两件事：
+                                                     要让用户点的那一步就长在那台设备旁边，而不是先选中再去找别处的按钮。
+                                                     按钮只在真的问得出去的时候画出来——自己不该听的手机也能被邀请，问题是交给
+                                                     转发它的那台成员；那条成员也不在时，这一行没有按钮，而不是一个按下去只会
+                                                     被拒绝的按钮。 -->
+                                                <Border Style="{StaticResource MemberChipBorderStyle}">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" Style="{StaticResource BodyStrongTextStyle}"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionTextStyle}"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                        </StackPanel>
+                                                        <Button Grid.Column="1" Content="{Binding ActionText}"
+                                                                Tag="{Binding}" Click="Invite_Click"
+                                                                Visibility="{Binding ActionVisibility}"
+                                                                IsEnabled="{Binding ActionEnabled}"
+                                                                Style="{StaticResource TertiaryButtonStyle}" Margin="8,0,0,0"
+                                                                VerticalAlignment="Center"
+                                                                AutomationProperties.AutomationId="LanInviteButton"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                                <TextBlock x:Name="InviteEmptyText" AutomationProperties.AutomationId="LanInviteEmpty"
+                                           Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center"
+                                           Margin="0,4,0,4" TextWrapping="Wrap"
+                                           Text="{Binding [Lan.InvitableEmpty], Source={l:Lang}}"/>
+                            </Grid>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- ================= 有人想进群 =================
+                         与下面"陌生设备要发文件"那张卡是两件事，所以是两张卡：同意一个文件落地，和同意一台设备从此进群，
+                         分量完全不同，混在一张列表里点错一次的代价也不一样。整块在没有邀请时收起。 -->
+                    <Border DockPanel.Dock="Top" x:Name="InviteAskBorder"
+                            Background="{DynamicResource AccentSubtleBackgroundBrush}"
+                            CornerRadius="{StaticResource RadiusMedium}" Padding="10" Margin="12,8,12,0">
+                        <StackPanel>
+                            <TextBlock Text="{Binding [Lan.InviteAskTitle], Source={l:Lang}}" Style="{StaticResource BodyStrongTextStyle}"/>
+                            <TextBlock Text="{Binding [Lan.InviteAskHint], Source={l:Lang}}" Style="{StaticResource CaptionTextStyle}"
+                                       TextWrapping="Wrap" Margin="0,2,0,6"/>
+                            <DockPanel LastChildFill="True">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button x:Name="AcceptInviteButton" AutomationProperties.AutomationId="LanAcceptInviteButton"
+                                            Content="{Binding [Lan.Accept], Source={l:Lang}}" Click="AcceptInvite_Click"
+                                            Style="{StaticResource PrimaryButtonStyle}"/>
+                                    <Button x:Name="DeclineInviteButton" AutomationProperties.AutomationId="LanDeclineInviteButton"
+                                            Content="{Binding [Lan.Decline], Source={l:Lang}}" Click="DeclineInvite_Click"
+                                            Style="{StaticResource TertiaryButtonStyle}" Margin="6,0,0,0"/>
+                                </StackPanel>
+                                <ListView x:Name="InviteAskList" AutomationProperties.AutomationId="LanInviteAskList"
+                                          BorderThickness="0" Background="Transparent" MaxHeight="120"
+                                          SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,1">
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource BodyStrongTextStyle}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource CaptionTextStyle}"
+                                                           TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </DockPanel>
+                        </StackPanel>
+                    </Border>
+
                     <!-- 陌生设备的第一笔要在这里点「同意」，所以这一栏在没有待确认项时整块收起：
                          一个没人能按的按钮组比空白更让人怀疑是不是坏了。 -->
                     <Border DockPanel.Dock="Top" x:Name="PendingBorder"

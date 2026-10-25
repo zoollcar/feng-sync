@@ -84,19 +84,43 @@ public partial class LanTransferWindow : Window
 
     private readonly ObservableCollection<LanChatRow> _chat = [];
     private readonly ObservableCollection<LanMemberRow> _members = [];
+    /// <summary>The devices this machine could ask to join, and the ones it has already asked.</summary>
+    private readonly ObservableCollection<LanInviteRow> _invitable = [];
+    /// <summary>
+    /// Invitations somebody else is asking <i>this</i> machine to accept, one row per question.
+    /// </summary>
+    /// <remarks>
+    /// A list rather than a single row, because two computers can find this one at the same moment and a window
+    /// that only showed the last question would drop an answer somebody is waiting for. The oldest is answered
+    /// first, which is the order they arrived in and the order the callers will time out in.
+    /// </remarks>
+    private readonly ObservableCollection<LanRow> _inviteAsks = [];
     private readonly ObservableCollection<LanRow> _pending = [];
     private readonly ObservableCollection<LanProgressRow> _transfers = [];
     private readonly ObservableCollection<LanRow> _history = [];
     private readonly Dictionary<string, LanChatRow> _rows = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
-    /// The computers this socket has heard, newest last, for the manual-address fallback to suggest.
+    /// Every computer this socket has heard, with when it last said so.
     /// </summary>
     /// <remarks>
-    /// Not the room's device list — that one is <see cref="_presence"/>, which knows who is here <i>now</i>. This
-    /// is only "what address should the box already hold", and a stale entry in it costs nothing because the
-    /// probe in front of pairing answers whether anything is there.
+    /// A broadcast is evidence that a machine is <i>there</i>, not that it is in the room, so this feeds the
+    /// invitation list and nothing else. The timestamp is what lets a machine that was switched off leave the
+    /// list: an announcement repeats every two seconds, and one that stopped repeating is gone.
     /// </remarks>
-    private readonly List<LanDiscoveredPeer> _found = [];
+    private readonly Dictionary<string, (LanDiscoveredPeer Peer, DateTimeOffset SeenUtc)> _found =
+        new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Counts the one-second ticks so the peer list is re-read on a slower beat than it is swept.</summary>
+    private int _rosterBeats;
+    /// <summary>The peer list as last read, which is the only source of "this machine agreed with that one".</summary>
+    private IReadOnlyList<LanPeerRecord> _peerRows = [];
+    /// <summary>Who this machine can actually call, which is what separates a member from a row that needs finishing.</summary>
+    private IReadOnlySet<string> _credentialed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Devices a member reported, which is how another computer's phone becomes invitable here.</summary>
+    private readonly List<LanMemberWire> _relayed = [];
+    /// <summary>Devices this window has invited and not yet heard back from.</summary>
+    private readonly HashSet<string> _invited = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The last merged roster, so a detail line can name the member a phone talks through.</summary>
+    private IReadOnlyDictionary<string, LanRosterEntry> _roster = new Dictionary<string, LanRosterEntry>();
     private readonly List<LanPendingOffer> _awaiting = [];
     private readonly Dictionary<string, LanProgressRow> _running = [];
     private readonly object _gate = new();
@@ -105,7 +129,22 @@ public partial class LanTransferWindow : Window
     private LanDeviceIdentity? _identity;
     private LanPeerStore? _peers;
     private LanPeerSecretStore? _secrets;
+    /// <summary>
+    /// What other machines handed this one. Shared with the listener rather than created twice, because the
+    /// credential store's gate is per instance: two over the same file would load-modify-write over each other,
+    /// and the loser of that race is a member that suddenly cannot be dialled.
+    /// </summary>
+    private LanPeerSecretStore? _received;
     private LanPairingState? _pairing;
+    /// <summary>
+    /// The invitations this machine is holding, shared with the listener that opens them.
+    /// </summary>
+    /// <remarks>
+    /// One instance for the life of the window, like the log and the presence: the listener puts a question in it
+    /// when a peer asks, this window answers it when a person clicks, and the request that asked is waiting on
+    /// exactly this object. Recreating it on a listener restart would abandon every question in flight.
+    /// </remarks>
+    private LanInviteBoard? _invites;
     private LanSession? _session;
     private LanServerHost? _host;
     private LanGroupRoom? _room;
@@ -150,6 +189,8 @@ public partial class LanTransferWindow : Window
         InitializeComponent();
         ChatList.ItemsSource = _chat;
         MemberList.ItemsSource = _members;
+        InviteList.ItemsSource = _invitable;
+        InviteAskList.ItemsSource = _inviteAsks;
         PendingList.ItemsSource = _pending;
         TransferList.ItemsSource = _transfers;
         HistoryList.ItemsSource = _history;
@@ -160,10 +201,11 @@ public partial class LanTransferWindow : Window
         _group.Trimmed += entry => OnUi(() => ForgetEntry(entry));
         // Presence is fed from a request thread, a poll thread and the discovery socket, and every one of those
         // touches the device strip. A departure is also a line in the room, because a phone whose browser was
-        // closed is exactly the thing a person would otherwise have to guess at.
-        _presence.Joined += member => OnUi(() => ShowMember(member));
-        _presence.Updated += member => OnUi(() => ShowMember(member));
-        _presence.Left += member => OnUi(() => DropMember(member));
+        // closed is exactly the thing a person would otherwise have to guess at. What the strip shows is not
+        // presence itself but the roster: presence only says whether a member is here right now.
+        _presence.Joined += member => OnUi(RefreshRoster);
+        _presence.Updated += member => OnUi(RefreshRoster);
+        _presence.Left += member => OnUi(() => OnMemberLeft(member));
         // WPF has no Opened event on Window; ContentRendered is the one that means "the person can see it",
         // and it fires once rather than on every re-hive the way Loaded does.
         ContentRendered += async (_, _) => await OpenAsync();
@@ -188,6 +230,9 @@ public partial class LanTransferWindow : Window
     internal LanRoomPresence Presence => _presence;
 
     internal IReadOnlyList<string> ListenAddresses => _host?.ListenAddresses ?? [];
+
+    /// <summary>This machine's own id, which is what an invitation has to name to be addressed here.</summary>
+    internal string? DeviceId => _identity?.DeviceId;
 
     /// <summary>
     /// Where a copied pairing code goes. A seam for the same reason <c>CloudTransferWindow</c> has one: the
@@ -225,7 +270,17 @@ public partial class LanTransferWindow : Window
     {
         if (_timer is not null) return;
         _timer = new DispatcherTimer { Interval = Tick };
-        _timer.Tick += (_, _) => { RefreshCode(); SweepPresence(); SweepFinished(); };
+        _timer.Tick += (_, _) =>
+        {
+            RefreshCode();
+            SweepPresence();
+            SweepInvites();
+            SweepFinished();
+            // The peer list is written by the listener as well as by this window — a device that accepts an
+            // invitation from here lands in it — so the strips are re-read from disk on a slow beat. Three
+            // seconds is the room's own poll interval, which is already the rate at which membership changes.
+            if (++_rosterBeats % 3 == 0) _ = RefreshRosterAsync();
+        };
         _timer.Start();
     }
 
@@ -261,6 +316,11 @@ public partial class LanTransferWindow : Window
         // rather than a hang — so it gets the one that writes nothing.
         foreach (var offer in _awaiting.ToList()) Resolve(offer, accepted: false);
         _awaiting.Clear();
+
+        // Every invitation in here was going to be answered by this window, and the callers waiting on them are
+        // owed the one answer that writes nothing. Clearing before the listener stops is what lets their requests
+        // return instead of hanging until their own timeout.
+        _invites?.Clear();
 
         // The progress list is this window's own drawing of the transfers that were running. It is bound to the
         // screen, so it goes here rather than on the listener's thread, and it goes on the way out because a row
@@ -315,6 +375,7 @@ public partial class LanTransferWindow : Window
             _identity ??= await LanDeviceIdentity.LoadOrCreateAsync(ct: _lifetime.Token);
             _peers ??= new LanPeerStore();
             _secrets ??= new LanPeerSecretStore();
+            _received ??= new LanPeerSecretStore(LanPeerClient.DefaultReceivedPath());
             _archive ??= new LanTransferHistoryRepository();
             _pairing ??= new LanPairingState();
             sink = new LanReceiveSink(_receiveDirectory, CloudFileNames.KeepBothName);
@@ -325,9 +386,21 @@ public partial class LanTransferWindow : Window
                 return;
             }
 
+            // Built once and kept, so a question already on screen survives a port change — see the field. The
+            // events are subscribed inside the same guard, because a restart that subscribed again would paint
+            // every arriving invitation twice.
+            if (_invites is null)
+            {
+                _invites = new LanInviteBoard();
+                AttachInviteEvents(_invites);
+            }
             _session = new LanSession(new LanOptions(port, _receiveDirectory, _settings.LanAutoAcceptFromTrusted),
-                _peers, _secrets, _pairing, AskInboundAsync, _group, _presence);
-            _client ??= new LanPeerClient(_identity, _peers);
+                _peers, _secrets, _pairing, AskInboundAsync, _group, _presence, _received, _invites);
+            _client ??= new LanPeerClient(_identity, _peers, _received, issued: _secrets);
+            // The number every peer is told to dial back. It is set here rather than only at construction because
+            // this object outlives the listener: applying a new port rebuilds everything below it, and a client
+            // still announcing the old number would send every peer to an address that stopped answering.
+            _client.ListenPort = port;
             // The room's reader is built beside the listener because it is the same pair of promises: this machine
             // answers its own <c>/log</c> here and reads everybody else's from here. It is built *before* the
             // listener because the listener answers on its behalf — a phone cannot dial anybody, so its 接收 is
@@ -338,8 +411,19 @@ public partial class LanTransferWindow : Window
                 AutoReceive = _settings.LanAutoAcceptFromTrusted,
             };
             _host = await LanServerHost.StartAsync(
-                new LanServerOptions(_session, _identity, _pairing, sink) { Room = _room }, _lifetime.Token);
+                new LanServerOptions(_session, _identity, _pairing, sink)
+                {
+                    Room = _room,
+                    Client = _client,
+                    // A phone cannot hear the subnet, so the invitation list it shows is this window's own. The
+                    // dictionary is replaced whole on every refresh, so a reader here sees either the list before
+                    // that refresh or the one after it and never a half-written one.
+                    Invitable = () => [.. _roster.Values.Where(row => row.State != LanDeviceState.Member)],
+                }, _lifetime.Token);
             AttachRoomEvents(_room);
+            // The strips are drawn from the peer list, which outlives every window — so a device paired in an
+            // earlier session is a member on the first paint rather than three seconds later.
+            await RefreshRosterAsync();
         }
         catch (LanTransferException ex) when (ex.Refusal == LanRefusal.PortUnavailable)
         {
@@ -385,6 +469,10 @@ public partial class LanTransferWindow : Window
         if (_room is { } room)
         {
             _room = null;
+            // What the room said about its own members belonged to that room. A listener that comes back is a new
+            // reader with nothing heard yet, and its first beat reports an empty table — which is not a change, so
+            // nothing would ever clear these rows if they were left here.
+            _relayed.Clear();
             // Before the host: a poll that is still reading a peer belongs to this window, and the peer it is
             // waiting on has no business holding a listener that is already being torn down.
             try { await room.DisposeAsync(); }
@@ -452,6 +540,218 @@ public partial class LanTransferWindow : Window
         // belong to the dispatcher.
         room.Progress += args => OnUi(() => OnRoomProgress(args));
         room.Fetched += args => OnUi(() => OnRoomFetched(args));
+        // The room's own membership, which is how a device on somebody else's list becomes an invitation on this
+        // one's screen. It is not a member here until this machine has agreed with it, so it belongs on the second
+        // strip — the same place a device heard on the subnet goes.
+        room.MembersChanged += () => OnUi(OnRoomMembersChanged);
+    }
+
+    /// <summary>Takes the members the room just reported and redraws the two strips from them.</summary>
+    /// <remarks>
+    /// Only the peer store is re-read, and only because a row that arrived this way may be a device whose own
+    /// record this machine has since written — the relayed table itself is a value, so the comparison decides
+    /// whether anything has to be redrawn at all.
+    /// </remarks>
+    private void OnRoomMembersChanged()
+    {
+        if (_room is null) return;
+        var relayed = _room.RelayedMembers;
+        if (relayed.Count == _relayed.Count && relayed.SequenceEqual(_relayed)) return;
+
+        _relayed.Clear();
+        _relayed.AddRange(relayed);
+        RefreshRoster();
+    }
+
+    /// <summary>
+    /// Listens for invitations, which are the one thing in this window raised by a request thread rather than by
+    /// the UI.
+    /// </summary>
+    /// <remarks>
+    /// An invitation addressed to somebody else is ignored here and not answered: it is a member's question to a
+    /// phone, the phone answers it in the page it is looking at, and a computer that answered on its behalf would
+    /// be joining a device to a room it never agreed to. Phase three is what makes that question visible on the
+    /// phone; until then it simply lapses, which costs the inviter one token.
+    /// </remarks>
+    private void AttachInviteEvents(LanInviteBoard board)
+    {
+        board.Opened += invite => OnUi(() => InviteArrived(invite));
+        board.Lapsed += invite => OnUi(() => WithdrawInviteAsk(invite));
+    }
+
+    // ------------------------------------------------------------------ invitations
+
+    /// <summary>
+    /// Puts one invitation on screen, or takes the row away when the question is no longer this machine's to answer.
+    /// </summary>
+    /// <remarks>
+    /// Internal rather than private so a test can drive the question without a second listener: the row, the two
+    /// buttons and what 同意 writes are the whole of this side, and none of them needs a socket to be wrong.
+    /// </remarks>
+    internal void InviteArrived(LanPendingInvite invite)
+    {
+        if (!invite.IsFor(_identity?.DeviceId)) return;
+        if (_inviteAsks.Any(row => row.Tag is LanPendingInvite pending && pending.InviteId == invite.InviteId)) return;
+
+        var row = new LanRow(Tr.Format("Lan.InviteFrom", NameOf(invite.From.DeviceName)), InviteAskDetail(invite), invite);
+        _inviteAsks.Add(row);
+        InviteAskList.SelectedItem = row;
+        UpdateEmptyHints();
+        Say(Tr.Format("Lan.InviteAsking", NameOf(invite.From.DeviceName)));
+    }
+
+    /// <summary>
+    /// What an invitation's row says under the name: what is being asked, and how long it stays answerable.
+    /// </summary>
+    /// <remarks>
+    /// No countdown, deliberately. The row takes itself away when the invitation lapses, which is the signal a
+    /// person needs; a number that changes every second would mean rebuilding the row every second, and a list row
+    /// replaced under the pointer loses the selection the two buttons act on.
+    /// </remarks>
+    private static string InviteAskDetail(LanPendingInvite invite) =>
+        Tr.Format("Lan.InviteAskDetail", LanPeerPresentation.Kind(invite.From.Kind),
+            LanProtocol.InviteLifetimeSeconds);
+
+    private void WithdrawInviteAsk(LanPendingInvite invite)
+    {
+        var row = _inviteAsks.FirstOrDefault(candidate =>
+            candidate.Tag is LanPendingInvite pending && pending.InviteId == invite.InviteId);
+        if (row is null) return;
+        _inviteAsks.Remove(row);
+        UpdateEmptyHints();
+    }
+
+    private void AcceptInvite_Click(object sender, RoutedEventArgs e) => _ = AnswerInviteAsync(true);
+
+    private void DeclineInvite_Click(object sender, RoutedEventArgs e) => _ = AnswerInviteAsync(false);
+
+    /// <summary>
+    /// Answers the selected invitation, or the oldest one when nothing is selected — the same rule the inbound
+    /// file question follows, and for the same reason: there is usually exactly one and nobody should have to
+    /// point at it first.
+    /// </summary>
+    internal async Task AnswerInviteAsync(bool accepted)
+    {
+        var pending = (InviteAskList.SelectedItem as LanRow)?.Tag as LanPendingInvite
+            ?? _inviteAsks.FirstOrDefault()?.Tag as LanPendingInvite;
+        if (pending is null)
+        {
+            Say(Tr.F("Lan.NothingToAnswer"));
+            return;
+        }
+
+        // The row goes first, so a slow credential write cannot leave a button looking unpressed.
+        WithdrawInviteAsk(pending);
+        if (_session is null) return;
+
+        try
+        {
+            var result = await _session.AnswerInviteAsync(pending.InviteId, accepted, answerer: null,
+                _lifetime?.Token ?? CancellationToken.None);
+            if (!accepted)
+            {
+                Say(Tr.Format("Lan.InviteRefused", NameOf(pending.From.DeviceName)));
+                return;
+            }
+
+            if (result.Accepted)
+            {
+                _group.AppendSystem(Tr.Format("Lan.JoinedRoom", NameOf(pending.From.DeviceName)), DateTimeOffset.UtcNow);
+                await RefreshRosterAsync();
+                await RefreshTrustedSummaryAsync();
+                return;
+            }
+
+            Say(Tr.Format("Lan.InviteAnswerFailed", NameOf(pending.From.DeviceName),
+                LanPeerPresentation.Refusal(result.Refusal)));
+        }
+        catch (Exception ex) when (ConvergesAnyway(ex))
+        {
+            // The window closed, or the credential file could not be written. Either way the invitation is gone
+            // and the inviter is told no, which is the honest outcome rather than a yes nobody could carry out.
+            Say(Tr.Format("Lan.InviteAnswerFailed", NameOf(pending.From.DeviceName), LanPeerPresentation.Refusal(LanRefusal.Declined)));
+        }
+    }
+
+    /// <summary>
+    /// Asks one device on the invitation strip to join the room, and reports what it said.
+    /// </summary>
+    /// <remarks>
+    /// The wait is the feature: this method does not return until somebody on the other machine has clicked, or
+    /// until their invitation ages out. That is why the strip marks the device 已邀请 for as long as it takes
+    /// rather than pretending the request was a delivery.
+    /// </remarks>
+    internal async Task<LanRefusal> InviteAsync(LanRosterEntry entry)
+    {
+        if (_client is null) return LanRefusal.BadRequest;
+
+        // A device with no listener — a phone browser — is reached through the member that holds it, and inviting
+        // it means asking that member to carry the question. It is the same call the phone's own page makes, and
+        // the same one this window makes to a computer; only the address differs.
+        LanPeerEndpoint target;
+        if (entry.IsDialable)
+        {
+            target = new LanPeerEndpoint(entry.DeviceId, entry.Address, entry.Port, entry.DeviceName);
+        }
+        else if (entry.GatewayDeviceId is { } gateway
+            && _roster.TryGetValue(gateway, out var host) && host.IsDialable)
+        {
+            target = new LanPeerEndpoint(host.DeviceId, host.Address, host.Port, host.DeviceName);
+        }
+        else
+        {
+            // Nothing holds it, so there is nobody to ask: a question sent nowhere would sit unanswered for a
+            // minute and a half and then read as the device ignoring us.
+            Say(Tr.F("Lan.InviteNeedsGateway"));
+            return LanRefusal.BadRequest;
+        }
+
+        _invited.Add(entry.DeviceId);
+        RefreshRoster();
+        Say(Tr.Format("Lan.InviteSending", NameOf(entry.DeviceName)));
+        try
+        {
+            var reply = await _client.InviteAsync(target, entry.IsDialable ? null : entry.DeviceId, entry.DeviceName,
+                _lifetime?.Token ?? CancellationToken.None);
+            var name = NameOf(entry.DeviceName);
+            switch (LanInviteOutcome.Parse(reply.Decision))
+            {
+                case LanInviteDecision.Accepted:
+                    _group.AppendSystem(Tr.Format("Lan.InviteAccepted", name), DateTimeOffset.UtcNow);
+                    await RefreshRosterAsync();
+                    return LanRefusal.None;
+                case LanInviteDecision.Declined:
+                    Say(Tr.Format("Lan.InviteDeclined", name));
+                    return LanRefusal.Declined;
+                default:
+                    Say(Tr.Format("Lan.InviteNoAnswer", name));
+                    return LanRefusal.InviteExpired;
+            }
+        }
+        catch (LanTransferException ex) when (ex.Refusal == LanRefusal.NotFound)
+        {
+            // A build that predates the invitation route answers this protocol's own 404, and the honest reading
+            // is that the other computer is older — not that the device vanished.
+            Say(Tr.Format("Lan.InviteTooOld", NameOf(entry.DeviceName)));
+            return ex.Refusal;
+        }
+        catch (Exception ex) when (ConvergesAnyway(ex))
+        {
+            Say(Tr.Format("Lan.InviteUnreachable", NameOf(entry.DeviceName)));
+            return LanRefusal.BadRequest;
+        }
+        finally
+        {
+            // The mark is only ever "we are waiting", so it comes off whichever way the wait ended.
+            _invited.Remove(entry.DeviceId);
+            RefreshRoster();
+        }
+    }
+
+    private async void Invite_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not LanInviteRow row) return;
+        await InviteAsync(row.Entry);
     }
 
     // ------------------------------------------------------------------ pairing
@@ -670,50 +970,173 @@ public partial class LanTransferWindow : Window
     // ------------------------------------------------------------------ who is in the room
 
     /// <summary>
-    /// Adds or refreshes one chip in the room's device strip.
+    /// How long an announcement keeps a computer in the invitation list. A broadcast repeats every two seconds,
+    /// so this is five missed beats: long enough that a dropped datagram does not make a row flicker, short enough
+    /// that a machine switched off is gone before the person wonders whether the list is stale.
+    /// </summary>
+    private static readonly TimeSpan LanDiscoveryLease = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Re-reads what the roster is built from, then repaints both device strips.
     /// </summary>
     /// <remarks>
-    /// Keyed on the device id rather than appended, because a device that moved between access points is the
-    /// same device at a different address and a list that grew a second chip for it would read as two phones.
+    /// The peer list is a file the listener also writes — a device that pairs with this machine, or accepts an
+    /// invitation from it, lands there without this window touching anything — so the strips are rebuilt from disk
+    /// on a slow beat rather than only when this window itself changes something.
     /// </remarks>
-    private void ShowMember(LanRoomMember member)
+    private async Task RefreshRosterAsync()
     {
-        var row = new LanMemberRow(MemberName(member), MemberDetail(member), member);
-        var index = _members.ToList().FindIndex(candidate =>
-            string.Equals(candidate.Member.DeviceId, member.DeviceId, StringComparison.OrdinalIgnoreCase));
-        if (index < 0) _members.Add(row);
-        else _members[index] = row;
+        if (_peers is null) return;
+        var token = _lifetime?.Token ?? CancellationToken.None;
+        try
+        {
+            _peerRows = await _peers.LoadAsync(token);
+            _credentialed = _received is null
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(await _received.SecretDeviceIdsAsync(token), StringComparer.OrdinalIgnoreCase);
+        }
+        // A store that cannot be read this beat is the next beat's problem: the strips keep what they last knew
+        // rather than emptying themselves because a file was momentarily locked.
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException) { return; }
+        RefreshRoster();
+    }
+
+    /// <summary>
+    /// Puts the three answers about a device together and draws the two lists from them.
+    /// </summary>
+    /// <remarks>
+    /// Which list a device lands on is decided here and nowhere else, so the two strips cannot disagree about it.
+    /// A member is something this machine has agreed with <i>and</i> can call; everything else is an invitation
+    /// waiting to happen, including a pairing that only ever went one way.
+    /// </remarks>
+    private void RefreshRoster()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var fresh = _found.Values
+            .Where(seen => now - seen.SeenUtc <= LanDiscoveryLease)
+            .Select(seen => seen.Peer)
+            .ToList();
+
+        var rows = LanDeviceRoster.Merge(_identity?.DeviceId ?? "", _peerRows, _presence.Members, fresh,
+            _relayed, _credentialed, _invited);
+        _roster = rows.ToDictionary(row => row.DeviceId, StringComparer.OrdinalIgnoreCase);
+
+        SyncRows(_members, [.. rows
+            .Where(row => row.State == LanDeviceState.Member)
+            .Select(row => new LanMemberRow(NameOf(row.DeviceName), MemberDetail(row), row))]);
+        SyncRows(_invitable, [.. rows
+            .Where(row => row.State != LanDeviceState.Member)
+            .Select(row => new LanInviteRow(NameOf(row.DeviceName), InviteDetail(row), row))]);
         UpdateEmptyHints();
     }
 
     /// <summary>
-    /// Takes a chip away because that device is no longer here.
+    /// Brings one list to the shape asked for, touching only the rows that differ.
+    /// </summary>
+    /// <remarks>
+    /// A rebuild would work and would flicker: these lists are refreshed on every announcement and every lease
+    /// change, which is several times a second on a busy subnet, and a chip that is removed and re-added moves
+    /// under the pointer of whoever was about to click it. The rows are records, so "the same" is a value compare.
+    /// </remarks>
+    private static void SyncRows<T>(ObservableCollection<T> target, IReadOnlyList<T> wanted)
+    {
+        for (var index = 0; index < wanted.Count; index++)
+        {
+            if (index < target.Count && Equals(target[index], wanted[index])) continue;
+            if (index < target.Count) target[index] = wanted[index];
+            else target.Add(wanted[index]);
+        }
+
+        while (target.Count > wanted.Count) target.RemoveAt(target.Count - 1);
+    }
+
+    /// <summary>
+    /// A member stopped saying it was here.
     /// </summary>
     /// <remarks>
     /// A device that was only ever heard on the subnet leaves silently: it never joined anything, so saying it
-    /// left would be narrating a membership it does not have. A paired one gets a line, because its departure is
-    /// the whole of what 退群 means and a chip that vanished with no explanation is a list that lied.
+    /// left would be narrating a membership it does not have. A member gets a line, because its departure is the
+    /// whole of what 退群 means and a chip that vanished with no explanation is a list that lied.
     /// </remarks>
-    private void DropMember(LanRoomMember member)
+    private void OnMemberLeft(LanRoomMember member)
     {
-        var index = _members.ToList().FindIndex(candidate =>
-            string.Equals(candidate.Member.DeviceId, member.DeviceId, StringComparison.OrdinalIgnoreCase));
-        if (index >= 0) _members.RemoveAt(index);
         if (!member.Discovered)
-            _group.AppendSystem(Tr.Format("Lan.LeftRoom", MemberName(member)), DateTimeOffset.UtcNow);
-        UpdateEmptyHints();
+            _group.AppendSystem(Tr.Format("Lan.LeftRoom", NameOf(member.DeviceName)), DateTimeOffset.UtcNow);
+        RefreshRoster();
     }
 
     /// <summary>Expires the leases that ran out, which is how a phone whose browser was closed actually leaves.</summary>
     private void SweepPresence() => _presence.Sweep(DateTimeOffset.UtcNow);
 
-    private string MemberName(LanRoomMember member) => string.IsNullOrWhiteSpace(member.DeviceName)
-        ? Tr.F("Lan.KindUnknown")
-        : member.DeviceName;
+    /// <summary>
+    /// Ages out the invitations nobody answered.
+    /// </summary>
+    /// <remarks>
+    /// The sweep is also what raises 失效 for a question this window is showing: without it a row would sit there
+    /// offering a yes the board has already stopped accepting, and the click would be answered with 已过期. The
+    /// board's own <see cref="LanInviteBoard.Lapsed"/> event usually removes the row first, so this loop is the
+    /// second door rather than the only one.
+    /// </remarks>
+    private void SweepInvites()
+    {
+        if (_invites is null) return;
+        var now = DateTimeOffset.UtcNow;
+        _invites.Sweep(now);
 
-    /// <summary>What the chip says under the name: what kind of thing it is, and where it is.</summary>
-    private static string MemberDetail(LanRoomMember member) => Tr.Format("Lan.MemberChip",
-        member.Discovered ? Tr.F("Lan.MemberDiscovered") : LanPeerPresentation.Kind(member.Kind), member.Where);
+        var stale = _inviteAsks
+            .Where(row => row.Tag is LanPendingInvite pending && !pending.IsOpenAt(now))
+            .ToList();
+        if (stale.Count == 0) return;
+        foreach (var row in stale) _inviteAsks.Remove(row);
+        UpdateEmptyHints();
+    }
+
+    private static string NameOf(string? deviceName) =>
+        string.IsNullOrWhiteSpace(deviceName) ? Tr.F("Lan.KindUnknown") : deviceName!;
+
+    /// <summary>What a member's chip says under the name: what kind of thing it is, and where it is.</summary>
+    private string MemberDetail(LanRosterEntry entry)
+    {
+        var where = Where(entry);
+        var line = where.Length == 0
+            ? LanPeerPresentation.Kind(entry.Kind)
+            : Tr.Format("Lan.MemberChip", LanPeerPresentation.Kind(entry.Kind), where);
+        return entry.Online ? line : Tr.Format("Lan.MemberAway", line);
+    }
+
+    /// <summary>
+    /// What an invitation's chip says: why it is not a member, and where it is.
+    /// </summary>
+    private string InviteDetail(LanRosterEntry entry)
+    {
+        var what = entry.State switch
+        {
+            LanDeviceState.Incomplete => Tr.F("Lan.IncompletePair"),
+            LanDeviceState.Invited => Tr.F("Lan.InviteSent"),
+            // A computer heard on the subnet has told this machine nothing about itself — discovery carries a
+            // name and a port and no kind — so the row says what it is on the strength of how it was found.
+            _ when entry.Kind == LanProtocol.KindUnknown => Tr.F("Lan.MemberDiscovered"),
+            _ => LanPeerPresentation.Kind(entry.Kind),
+        };
+        var where = Where(entry);
+        return where.Length == 0 ? what : Tr.Format("Lan.MemberChip", what, where);
+    }
+
+    /// <summary>
+    /// Where a device is, said in the only way that is true of it.
+    /// </summary>
+    /// <remarks>
+    /// A phone answers nowhere, so its chip names the member it talks through instead of an address nothing could
+    /// be dialled at. That is also the row an invitation to it has to be sent to.
+    /// </remarks>
+    private string Where(LanRosterEntry entry)
+    {
+        if (entry.IsDialable) return entry.Where;
+        if (entry.GatewayDeviceId is { Length: > 0 } gateway)
+            return Tr.Format("Lan.MemberVia",
+                _roster.TryGetValue(gateway, out var host) ? NameOf(host.DeviceName) : gateway);
+        return entry.Address;
+    }
 
     // ------------------------------------------------------------------ the room on screen
 
@@ -873,11 +1296,16 @@ public partial class LanTransferWindow : Window
         var refusal = _group.TryAppendText(SelfContact(), text, DateTimeOffset.UtcNow, out _, id);
         if (refusal != LanRefusal.None) return refusal;
 
-        await FanOutAsync(async member =>
+        var told = await FanOutAsync(async member =>
         {
             if (_client is null) return;
             await _client.SayAsync(member, said, id, _lifetime?.Token ?? CancellationToken.None);
         });
+        // A sentence in a room with nobody paired into it is the one failure this window cannot otherwise see:
+        // the local append succeeded, no member was dialled, and no member will ever poll this copy back — so the
+        // sentence sits on screen looking delivered. Saying it out loud is the whole answer; the sentence itself
+        // is not refused, because the machine it was typed on is entitled to its own copy of what it said.
+        if (told == 0) Say(Tr.F("Lan.NoOneToHear"));
         return LanRefusal.None;
     }
 
@@ -894,7 +1322,7 @@ public partial class LanTransferWindow : Window
     /// tomorrow.
     /// </para>
     /// </remarks>
-    internal int Announce(IEnumerable<string?> paths)
+    internal async Task<int> AnnounceAsync(IEnumerable<string?> paths)
     {
         if (_identity is null) return 0;
         var self = SelfContact();
@@ -914,7 +1342,18 @@ public partial class LanTransferWindow : Window
             announced++;
         }
 
-        Say(announced > 0 ? Tr.Format("Lan.Announced", announced) : Tr.F("Lan.AnnouncedNothing"));
+        if (announced == 0)
+        {
+            Say(Tr.F("Lan.AnnouncedNothing"));
+            return 0;
+        }
+
+        // 谁要谁自己点接收 describes an audience. A row announced into a room nobody is paired into has no
+        // audience at all — no other machine will ever poll this copy — so that line would be a promise this
+        // window cannot keep, and it says what is actually true instead.
+        Say(await ReachableAsync() is { Count: 0 }
+            ? Tr.Format("Lan.NoOneToReceive", announced)
+            : Tr.Format("Lan.Announced", announced));
         return announced;
     }
 
@@ -923,17 +1362,19 @@ public partial class LanTransferWindow : Window
     /// <summary>
     /// Hands one finished sentence to every member this machine can dial, at the same time.
     /// </summary>
+    /// <returns>
+    /// How many members it was handed to. Zero is not an error — it is the room having nobody paired into it,
+    /// which is the caller's one chance to say so rather than let a sentence look delivered.
+    /// </returns>
     /// <remarks>
     /// Concurrently because the wait is a dead member's own timeout, and a room of five must not pay it five
     /// times before the composer's box clears.
     /// </remarks>
-    private async Task FanOutAsync(Func<LanPeerEndpoint, Task> tell)
+    private async Task<int> FanOutAsync(Func<LanPeerEndpoint, Task> tell)
     {
-        if (_client is null || _room is null) return;
-        IReadOnlyList<LanPeerEndpoint> members;
-        try { members = await _room.ReachableMembersAsync(_lifetime?.Token ?? CancellationToken.None); }
-        catch (Exception ex) when (ConvergesAnyway(ex)) { return; }
-        catch (Exception ex) { Say(Tr.F("Lan.PeerListFailed") + Describe(ex)); return; }
+        if (_client is null) return 0;
+        var members = await ReachableAsync();
+        if (members.Count == 0) return 0;
 
         try
         {
@@ -944,6 +1385,24 @@ public partial class LanTransferWindow : Window
             })]);
         }
         catch (Exception ex) when (ConvergesAnyway(ex)) { }
+
+        return members.Count;
+    }
+
+    /// <summary>
+    /// The members this machine could say something to: paired, Windows, and remembered at an address.
+    /// </summary>
+    /// <remarks>
+    /// Discovery is deliberately not enough. A computer heard on the subnet has proved nothing, holds no
+    /// credential this listener would accept, and is never dialled by the room's own reader either — so a
+    /// window that treated its chip as an audience would be promising a delivery that cannot happen.
+    /// </remarks>
+    private async Task<IReadOnlyList<LanPeerEndpoint>> ReachableAsync()
+    {
+        if (_room is null) return [];
+        try { return await _room.ReachableMembersAsync(_lifetime?.Token ?? CancellationToken.None); }
+        catch (Exception ex) when (ConvergesAnyway(ex)) { return []; }
+        catch (Exception ex) { Say(Tr.F("Lan.PeerListFailed") + Describe(ex)); return []; }
     }
 
     /// <summary>
@@ -1198,26 +1657,26 @@ public partial class LanTransferWindow : Window
 
     private void Window_Drop(object sender, DragEventArgs e) => AcceptDrop(e);
 
-    private void AcceptDrop(DragEventArgs e)
+    private async void AcceptDrop(DragEventArgs e)
     {
         e.Handled = true;
         if (e.Data.GetData(DataFormats.FileDrop) is not string[] dropped) return;
-        Announce(dropped);
+        await AnnounceAsync(dropped);
     }
 
     private void Window_DragOver(object sender, DragEventArgs e) =>
         e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
 
-    private void AddFiles_Click(object sender, RoutedEventArgs e)
+    private async void AddFiles_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog { Multiselect = true, Title = Tr.F("Lan.SendFiles") };
-        if (dialog.ShowDialog(this) == true) Announce(dialog.FileNames);
+        if (dialog.ShowDialog(this) == true) await AnnounceAsync(dialog.FileNames);
     }
 
-    private void AddFolder_Click(object sender, RoutedEventArgs e)
+    private async void AddFolder_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFolderDialog { Title = Tr.F("Lan.SendFolder"), Multiselect = true };
-        if (dialog.ShowDialog(this) == true) Announce(dialog.FolderNames);
+        if (dialog.ShowDialog(this) == true) await AnnounceAsync(dialog.FolderNames);
     }
 
     private async void SaveDeviceName_Click(object sender, RoutedEventArgs e) => await RenameSelfAsync(DeviceNameBox.Text);
@@ -1307,7 +1766,9 @@ public partial class LanTransferWindow : Window
         var typed = (PeerAddressBox.Text ?? "").Trim();
         if (typed.Length == 0 && _found.Count > 0)
         {
-            var found = _found[^1];
+            // The most recent announcement, because a machine that moved between access points is the same
+            // machine at a new address and the newest one is the only address worth writing to.
+            var found = _found.Values.MaxBy(seen => seen.SeenUtc).Peer;
             address = found.Address;
             port = found.Port;
             return true;
@@ -1336,12 +1797,25 @@ public partial class LanTransferWindow : Window
     /// Every announcement, whether or not it says anything new.
     /// </summary>
     /// <remarks>
-    /// A computer repeating its own name every two seconds is the only heartbeat this side ever gets from a
-    /// machine it has not paired with, and it is what keeps a discovered computer in the room's device list
-    /// instead of letting it flicker out between two beats.
+    /// A broadcast is the weakest evidence this feature has: it says a machine exists and where to write to it.
+    /// It is deliberately <b>not</b> recorded as presence — that is the one thing that made a discovered computer
+    /// indistinguishable from a member, and a list that mixed the two promised a delivery nothing could make.
+    /// What it does do is keep the row in the invitation list and renew its lease.
     /// </remarks>
-    private void OnPeerSeen(LanDiscoveredPeer peer) => _presence.Seen(new LanRoomMember(peer.DeviceId, peer.DeviceName,
-        LanProtocol.KindUnknown, peer.Address, peer.Port, DateTimeOffset.UtcNow, Discovered: true));
+    private void OnPeerSeen(LanDiscoveredPeer peer)
+    {
+        NoteDiscovered(peer);
+        RefreshRoster();
+    }
+
+    /// <summary>
+    /// One announcement, as the window hears it.
+    /// </summary>
+    /// <remarks>
+    /// Internal because the UDP socket is off in a test — two suites would compete for the port — and what is
+    /// worth pinning is what this window does with a sighting rather than the datagram parsing behind it.
+    /// </remarks>
+    internal void PeerAnnounced(LanDiscoveredPeer peer) => OnPeerSeen(peer);
 
     /// <summary>A computer that just said something new — a first sighting, a rename, or a new address.</summary>
     private void OnPeerFound(LanDiscoveredPeer peer) => NoteDiscovered(peer);
@@ -1351,9 +1825,7 @@ public partial class LanTransferWindow : Window
     /// </summary>
     private void NoteDiscovered(LanDiscoveredPeer peer)
     {
-        var index = _found.FindIndex(candidate => string.Equals(candidate.DeviceId, peer.DeviceId, StringComparison.OrdinalIgnoreCase));
-        if (index < 0) _found.Add(peer);
-        else _found[index] = peer;
+        _found[peer.DeviceId] = (peer, DateTimeOffset.UtcNow);
         // The manual box follows the announcement rather than the other way round: a person who typed an
         // address and then saw the same machine announce itself should not lose what they wrote.
         if (string.IsNullOrWhiteSpace(PeerAddressBox.Text)) PeerAddressBox.Text = $"{peer.Address}:{peer.Port}";
@@ -1374,10 +1846,12 @@ public partial class LanTransferWindow : Window
         if (_peers is null) return;
         try
         {
-            var records = await _peers.LoadAsync();
-            TrustedCountText.Text = records.Count == 0
+            // One read for both jobs: the count and the strips are two views of the same list, and reading it
+            // twice would let them disagree for as long as the second read took.
+            await RefreshRosterAsync();
+            TrustedCountText.Text = _peerRows.Count == 0
                 ? Tr.F("Lan.NoTrustedDevices")
-                : Tr.Format("Lan.TrustedCount", records.Count);
+                : Tr.Format("Lan.TrustedCount", _peerRows.Count);
         }
         catch (Exception ex) { Say(Tr.F("Lan.PeerListFailed") + Describe(ex)); }
     }
@@ -1405,6 +1879,7 @@ public partial class LanTransferWindow : Window
         if (_session is { } session) return await session.ForgetAsync(deviceId);
         var forgotten = await _peers!.ForgetAsync(deviceId);
         if (_secrets is not null) await _secrets.ForgetAsync(deviceId);
+        if (_received is not null) await _received.ForgetAsync(deviceId);
         return forgotten;
     }
 
@@ -1495,6 +1970,8 @@ public partial class LanTransferWindow : Window
     private void UpdateEmptyHints()
     {
         MemberEmptyText.Visibility = _members.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+        InviteEmptyText.Visibility = _invitable.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+        InviteAskBorder.Visibility = _inviteAsks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         HistoryEmptyText.Visibility = _history.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         TransferBorder.Visibility = _transfers.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         PendingBorder.Visibility = _pending.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1546,7 +2023,7 @@ public partial class LanTransferWindow : Window
 public sealed record LanRow(string Name, string Detail, object? Tag);
 
 /// <summary>
-/// One device in the room's strip: what it is called, what kind of thing it is and where, and the sighting it
+/// One device in the room's strip: what it is called, what kind of thing it is and where, and the roster row it
 /// was drawn from.
 /// </summary>
 /// <remarks>
@@ -1554,7 +2031,59 @@ public sealed record LanRow(string Name, string Detail, object? Tag);
 /// it carries is a live sighting rather than a payload — a strip whose chips all looked like the rows that have
 /// buttons would invite somebody to click one.
 /// </remarks>
-public sealed record LanMemberRow(string Name, string Detail, LanRoomMember Member);
+public sealed record LanMemberRow(string Name, string Detail, LanRosterEntry Entry);
+
+/// <summary>
+/// One device this machine could ask to join: the same two lines as a member's chip, and the row an invitation
+/// would be sent to.
+/// </summary>
+/// <remarks>
+/// The same shape as <see cref="LanMemberRow"/> on purpose — a candidate and a member describe the same machine,
+/// and two different wordings for "where it is" would read as two different devices — but a type of its own,
+/// because this list is where the buttons will live and that one is a list of things that have already agreed.
+/// </remarks>
+public sealed record LanInviteRow(string Name, string Detail, LanRosterEntry Entry)
+{
+    /// <summary>
+    /// What the button in this chip says, which is the state of the invitation rather than a verb.
+    /// </summary>
+    /// <remarks>
+    /// A pairing that only ever went one way reads 补全 rather than 邀请, because it is the same repair under a
+    /// different name: the device is already on this machine's list, what is missing is the credential that would
+    /// let the two machines actually talk. A device already asked says so and cannot be asked again.
+    /// </remarks>
+    public string ActionText => Entry.State switch
+    {
+        LanDeviceState.Invited => Tr.F("Lan.InviteSent"),
+        LanDeviceState.Incomplete => Tr.F("Lan.InviteOldPeer"),
+        _ => Tr.F("Lan.Invite"),
+    };
+
+    /// <summary>
+    /// Whether there is anything to press, which is the roster's answer rather than this row's own address.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A device that answers nowhere of its own has no listener to be asked — but it can still be asked, through
+    /// the member that relays it, which is exactly the branch <see cref="LanTransferWindow.InviteAsync"/> carries
+    /// out. So the chip's button follows <see cref="LanRosterEntry.CanInvite"/>: reachable directly, or reachable
+    /// through a member this roster holds and can dial. Reading <c>IsDialable</c> here instead hid the button on
+    /// precisely the row that branch exists to serve, and left the phone's owner with no way to be invited from
+    /// this screen at all.
+    /// </para>
+    /// <para>
+    /// Collapsed rather than disabled, as it always was: a row nobody can reach is not a question that is merely
+    /// not yet askable, and a dark button would read as "wait a moment". The judgement is only as fresh as the last
+    /// refresh, and that race is answered where a person can act on it: a chip that lost its gateway between the
+    /// repaint and the click is refused by <c>InviteAsync</c> in the status line, rather than by a rule each call
+    /// site re-derives and a button that quietly lies about what it can do.
+    /// </para>
+    /// </remarks>
+    public Visibility ActionVisibility => Entry.CanInvite ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>False while an invitation is already out, which is the one state where the same press means nothing.</summary>
+    public bool ActionEnabled => Entry.State != LanDeviceState.Invited;
+}
 
 /// <summary>
 /// One line of the room as the screen draws it.

@@ -44,7 +44,39 @@ export type Entry = {
   heldHere: boolean;
 };
 
-export type LogReply = { v: number; head: number; entries: Entry[] };
+/**
+ * One device the computer knows about, as it reports it.
+ *
+ * It carries no address: this is the room's own table, not a set of directions. A device that answers for itself
+ * is dialled by the computer; one that does not — this page — is reached through `gatewayDeviceId`.
+ */
+export type Member = {
+  deviceId: string;
+  deviceName: string;
+  kind: string;
+  gatewayDeviceId?: string | null;
+  lastSeenUtc: string;
+};
+
+/** An invitation the computer is holding for this page, because nothing can dial a browser. */
+export type Invite = {
+  inviteId: string;
+  fromDeviceId: string;
+  fromName: string;
+  fromKind: string;
+  address: string;
+  port: number;
+  expiresUtc: string;
+};
+
+export type LogReply = {
+  v: number;
+  head: number;
+  entries: Entry[];
+  members?: Member[] | null;
+  pendingInvites?: Invite[] | null;
+  invitable?: Member[] | null;
+};
 
 /**
  * One transfer the computer is moving.

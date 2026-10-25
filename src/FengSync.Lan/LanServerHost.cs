@@ -47,6 +47,28 @@ public sealed record LanServerOptions(
     /// </remarks>
     public LanTransferBoard? Board { get; init; }
 
+    /// <summary>
+    /// The calling half, when this listener may carry a question to another machine on a member's behalf.
+    /// </summary>
+    /// <remarks>
+    /// A device with no listener — a phone browser — can see the room and can ask, but cannot dial the machine it
+    /// wants to ask. So the one route that needs to <i>make</i> a call rather than answer one takes it from here.
+    /// Absent is a listener that only answers: a relayed invitation is then refused as a bad request rather than
+    /// quietly dropped, because a caller waiting for an answer deserves to be told nobody will ask.
+    /// </remarks>
+    public LanPeerClient? Client { get; init; }
+
+    /// <summary>
+    /// What this machine's own screen would offer as an invitation, for a device that cannot see the subnet.
+    /// </summary>
+    /// <remarks>
+    /// Discovery is the window's: it owns the socket that hears announcements, and it is the only thing that knows
+    /// which of them have been answered. So the listener asks rather than computes. Absent is a listener that
+    /// reports an empty table, which is honest for a harness and is what makes a phone's 邀请 list empty rather
+    /// than wrong.
+    /// </remarks>
+    public Func<IReadOnlyList<LanRosterEntry>>? Invitable { get; init; }
+
     public LanOptions Validate()
     {
         Session.Options.Validate();
@@ -103,6 +125,9 @@ public sealed class LanServerHost : IAsyncDisposable
 
     /// <summary>A pairing request was judged, either way, and this is who made it.</summary>
     public event Action<LanPairAttemptEventArgs>? PairAttempted;
+
+    /// <summary>An invitation was taken, either way. The answer is a person's, so it is not this event.</summary>
+    public event Action<LanInviteAttemptEventArgs>? InviteAttempted;
 
     /// <summary>A device already on the list corrected the name this machine calls it by.</summary>
     public event Action<LanPeerRenamedEventArgs>? PeerRenamed;
@@ -233,6 +258,14 @@ public sealed class LanServerHost : IAsyncDisposable
 
         endpoints.MapGet("/api/v1/hello", (Func<HttpContext, Task<IResult>>)HandleHelloAsync);
         endpoints.MapPost("/api/v1/pair", (Func<HttpContext, Task<IResult>>)HandlePairAsync);
+        // An invitation is the second door and the only other one a stranger reaches without a credential: a
+        // person on this side answers it, so there is nothing to prove before asking. A relayed one — a member
+        // asking on behalf of a phone — is authenticated inside the handler, because that is a different question.
+        endpoints.MapPost("/api/v1/invites", (Func<HttpContext, Task<IResult>>)HandleInviteAsync);
+        // The second half of the same question, and the reason it exists at all: a device with no listener is
+        // asked through this machine and cannot hold a request open to answer it, so the answer arrives on the
+        // beat that told it. A computer never needs this route — it is holding the request itself.
+        endpoints.MapPost("/api/v1/invites/{id}/answer", (Func<string, HttpContext, Task<IResult>>)HandleInviteAnswerAsync);
         endpoints.MapGet("/api/v1/peers", (Func<HttpContext, Task<IResult>>)HandlePeersAsync);
         endpoints.MapDelete("/api/v1/peers/mine", (Func<HttpContext, Task<IResult>>)HandleForgetSelfAsync);
         // Two verbs about the same row seen from the other side: a device correcting what it is called, and a
@@ -392,6 +425,189 @@ public sealed class LanServerHost : IAsyncDisposable
         OfferCredential(http, result.Peer!.DeviceId, result.Token!);
         return Json(new LanPairReply(result.Token!, LanApi.WireVersion, PeerOf(result.Peer)), StatusCodes.Status201Created);
     }
+
+    /// <summary>
+    /// Takes an invitation and holds the request open until somebody answers it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The waiting is the feature rather than an implementation detail. An invitation is a question a person
+    /// answers, and the caller that asked it has to learn the answer — otherwise it cannot know whether to keep the
+    /// credential it pre-minted, and the two machines would have to invent a second round trip to find out.
+    /// </para>
+    /// <para>
+    /// Two shapes arrive here and they are not equally trusted. An invitation addressed to this machine needs no
+    /// credential, because a person answers it and a stranger can achieve nothing but a row on a screen they cannot
+    /// click. One addressed elsewhere is a member relaying a question to a device that cannot be dialled, and that
+    /// member has to prove it is one — otherwise anybody on the subnet could put a question on a stranger's phone.
+    /// </para>
+    /// </remarks>
+    private async Task<IResult> HandleInviteAsync(HttpContext http)
+    {
+        var address = RemoteAddress(http);
+        var port = PeerPort(http);
+        LanInviteRequest? request;
+        try
+        {
+            request = await JsonSerializer.DeserializeAsync<LanInviteRequest>(http.Request.Body, LanApi.Json, http.RequestAborted)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            RaiseInviteAttempted(new LanContact("", "", "unknown", address, port), LanRefusal.BadRequest);
+            return Answer(LanRefusal.BadRequest);
+        }
+
+        // Absent means "whoever is reading this", which is a fact only this side knows — the board files a question
+        // under who it is for, so the hole is filled in here rather than guessed at there.
+        var target = request?.TargetDeviceId;
+        var direct = string.IsNullOrEmpty(target)
+            || string.Equals(target, _options.Self.DeviceId, StringComparison.OrdinalIgnoreCase);
+        if (direct && request is not null) request = request with { TargetDeviceId = _options.Self.DeviceId };
+
+        LanAuthResult? caller = null;
+        if (!direct)
+        {
+            caller = await AuthorizeAsync(http).ConfigureAwait(false);
+            if (caller.Refusal != LanRefusal.None)
+            {
+                RaiseInviteAttempted(Claimed(request, address, port), caller.Refusal);
+                return Answer(caller.Refusal);
+            }
+
+            // Where that device stands, which is what decides whether this machine can do anything with the
+            // question at all. It is asked before the board sees it, so a target nobody can reach never becomes a
+            // row on this machine's screen waiting for an answer that cannot come.
+            var row = await PeerRowAsync(target!, http.RequestAborted).ConfigureAwait(false);
+            if (row is null) return Answer(LanRefusal.Unpaired);
+            // A device that answers for itself is asked directly, by this machine, on the caller's behalf.
+            if (LanGroupRoom.EndpointFor(row) is { } relay)
+                return await RelayInviteAsync(relay, http).ConfigureAwait(false);
+            // No listener at all is a device that will be told on its own beat, and the answer comes back through
+            // the route below. A computer this machine can no longer dial is neither: it has nobody to answer, so
+            // asking would be a question left hanging until it expired.
+            if (row.Kind == LanProtocol.KindWindows) return Answer(LanRefusal.Unpaired);
+        }
+
+        var opened = _options.Session.Invite(request, caller, address, port, DateTimeOffset.UtcNow);
+        RaiseInviteAttempted(opened.Invite?.From ?? Claimed(request, address, port), opened.Refusal);
+        if (!opened.Opened || opened.Invite is null) return Answer(opened.Refusal);
+
+        // A retried request whose question is already settled answers with what happened, rather than waiting a
+        // second time for a person who has already clicked.
+        if (opened.Decision != LanInviteDecision.Pending)
+            return InviteAnswer(opened.Decision, token: null);
+
+        LanInviteDecision decision;
+        try
+        {
+            decision = await _options.Session.Invites
+                .AwaitAsync(opened.Invite.InviteId, DateTimeOffset.UtcNow, http.RequestAborted).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller hung up before anybody answered. The board has already withdrawn the question, so a row
+            // does not stay on screen about a machine that is no longer waiting.
+            return Results.Empty;
+        }
+
+        if (decision != LanInviteDecision.Accepted) return InviteAnswer(decision, token: null);
+        // The credential this machine minted for the inviter, which is the half that makes the pairing mutual. Read
+        // back rather than carried through the board: the board never sees a token it did not already hold.
+        var issued = await _options.Session.IssuedTokenForAsync(opened.Invite.From.DeviceId, http.RequestAborted)
+            .ConfigureAwait(false);
+        return InviteAnswer(decision, issued);
+    }
+
+    /// <summary>An invitation's outcome, with the credential only when it was accepted and one really exists.</summary>
+    private IResult InviteAnswer(LanInviteDecision decision, string? token) =>
+        Json(new LanInviteReply(LanInviteOutcome.For(decision), LanApi.WireVersion, token),
+            decision == LanInviteDecision.Accepted ? StatusCodes.Status201Created : StatusCodes.Status200OK);
+
+    /// <summary>This machine's row for one device, or <see langword="null"/> when it has never agreed with it.</summary>
+    private async Task<LanPeerRecord?> PeerRowAsync(string deviceId, CancellationToken ct) =>
+        (await _options.Session.Peers.LoadAsync(ct).ConfigureAwait(false))
+        .FirstOrDefault(row => string.Equals(row.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Carries an invitation to a machine this one can dial, on a member's behalf, and hands back its answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The relaying machine adds nothing to the question and decides nothing about it: it mints a grant so the
+    /// machine being asked can call it back, and then it waits exactly as the original caller would have. That is
+    /// what makes the invitation network a network rather than a star — the member that asked never needs a route
+    /// to the member being asked, only a route to somebody who has one.
+    /// </para>
+    /// <para>
+    /// A refusal from the far side is passed through rather than flattened into a failure, because the advice
+    /// differs: 请先配对 means this machine has lost the device, 对方忙 means try again in a minute, and 没有应答
+    /// means the window there is closed.
+    /// </para>
+    /// </remarks>
+    private async Task<IResult> RelayInviteAsync(LanPeerEndpoint peer, HttpContext http)
+    {
+        // A listener built without a calling half is one that only answers. Refused rather than dropped, because
+        // the caller is holding a request open and would otherwise wait out the whole invitation lifetime.
+        if (_options.Client is not { } client) return Answer(LanRefusal.BadRequest);
+
+        try
+        {
+            var reply = await client.InviteAsync(peer, ct: http.RequestAborted).ConfigureAwait(false);
+            return InviteAnswer(LanInviteOutcome.Parse(reply.Decision), token: null);
+        }
+        catch (LanTransferException ex)
+        {
+            return Answer(ex.Refusal);
+        }
+    }
+
+    /// <summary>
+    /// Takes an answer from a device that was asked through this machine because nothing could dial it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only the device the question names may answer it, and that is checked against the credential rather than
+    /// against the body: a member that is merely a messenger here must not be able to join somebody else to a room
+    /// by clicking on their behalf.
+    /// </para>
+    /// <para>
+    /// The reply carries the outcome and no credential. The answerer cannot dial the inviter — that is the whole
+    /// reason the question had to be relayed — so a token in this reply would be a secret handed to a device with
+    /// nothing to spend it on. What this machine mints stays here, and the inviter gets its half from the request
+    /// it is still holding open.
+    /// </para>
+    /// </remarks>
+    private async Task<IResult> HandleInviteAnswerAsync(string id, HttpContext http)
+    {
+        var auth = await AuthorizeAsync(http).ConfigureAwait(false);
+        if (auth.Refusal != LanRefusal.None) return Answer(auth.Refusal);
+
+        LanInviteAnswerRequest? request;
+        try
+        {
+            request = await JsonSerializer.DeserializeAsync<LanInviteAnswerRequest>(http.Request.Body, LanApi.Json, http.RequestAborted)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            return Answer(LanRefusal.BadRequest);
+        }
+
+        var result = await _options.Session
+            .AnswerInviteAsync(id, request?.Accept == true, auth.Contact, http.RequestAborted)
+            .ConfigureAwait(false);
+        return result.Refusal != LanRefusal.None
+            ? Answer(result.Refusal)
+            : InviteAnswer(result.Decision, token: null);
+    }
+
+    /// <summary>Who a refused invitation claimed to be from, for an event that still has to name somebody.</summary>
+    private static LanContact Claimed(LanInviteRequest? request, string address, int port) =>
+        new(request?.DeviceId ?? "", LanProtocol.SanitizePeerName(request?.DeviceName), LanProtocol.KindUnknown, address, port);
+
+    private void RaiseInviteAttempted(LanContact contact, LanRefusal refusal) =>
+        InviteAttempted?.Invoke(new LanInviteAttemptEventArgs(contact, refusal));
 
     /// <summary>
     /// The cookie that carries a fresh credential to a browser that cannot write a header.
@@ -634,7 +850,33 @@ public sealed class LanServerHost : IAsyncDisposable
             .Where(entry => entry.AuthorDeviceId.Length > 0)
             .Select(entry => entry.ToWire())
             .ToList();
-        return Json(new LanLogReply(LanApi.WireVersion, group.Head, entries));
+
+        // The room's own membership, which is a different disclosure from the peer list: a caller is told who else
+        // is in this conversation, never where any of them can be dialled. It is here rather than on its own route
+        // because a page already asks this question every three seconds, and a second poll would be a second
+        // schedule to keep in step with this one.
+        var members = (await _options.Session.Peers.LoadAsync(http.RequestAborted).ConfigureAwait(false))
+            .Where(record => !string.Equals(record.DeviceId, _options.Self.DeviceId, StringComparison.OrdinalIgnoreCase))
+            .Select(record => new LanMemberWire(record.DeviceId, record.DeviceName, record.Kind,
+                record.GatewayDeviceId, record.LastSeenUtc))
+            .ToList();
+
+        // Only ever the caller's own questions. A computer is asked directly and holds its own request open, so
+        // this is empty for it; a device with no listener has no other way to be told that somebody is asking.
+        var pending = _options.Session.Invites
+            .For(auth.Contact!.DeviceId, DateTimeOffset.UtcNow)
+            .Select(invite => new LanInviteWire(invite.InviteId, invite.From.DeviceId, invite.From.DeviceName,
+                invite.From.Kind, invite.From.Address, invite.From.Port, invite.ExpiresUtc))
+            .ToList();
+
+        // What this machine could ask, which is the one thing a caller with no ears of its own cannot work out.
+        var invitable = (_options.Invitable?.Invoke() ?? [])
+            .Where(row => row.State != LanDeviceState.Member
+                && !string.Equals(row.DeviceId, auth.Contact.DeviceId, StringComparison.OrdinalIgnoreCase))
+            .Select(row => new LanMemberWire(row.DeviceId, row.DeviceName, row.Kind, row.GatewayDeviceId, row.LastSeenUtc))
+            .ToList();
+
+        return Json(new LanLogReply(LanApi.WireVersion, group.Head, entries, members, pending, invitable));
     }
 
     /// <summary>

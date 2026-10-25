@@ -69,6 +69,24 @@ public static class LanProtocol
     /// <summary>How long one armed code stays answerable, and how often a fresh one replaces an expired one.</summary>
     public const int PairCodeLifetimeSeconds = 120;
 
+    /// <summary>
+    /// How long an invitation stays answerable.
+    /// </summary>
+    /// <remarks>
+    /// Shorter than a pairing code because the two are answered by different people in different places: a code
+    /// is typed on the machine that shows it, while an invitation is a question on somebody else's screen that
+    /// nobody may be sitting in front of. Ninety seconds is long enough for a person to look up and click, and
+    /// short enough that a caller waiting on the answer is not holding a request open for minutes.
+    /// </remarks>
+    public const int InviteLifetimeSeconds = 90;
+
+    /// <summary>How many invitations may be unanswered at once, across every source. The bound on a spammer.</summary>
+    public const int MaximumPendingInvites = 8;
+
+    /// <summary>Invitations one source may open inside <see cref="InviteWindowSeconds"/>.</summary>
+    public const int MaximumInvitesPerSource = 3;
+    public const int InviteWindowSeconds = 60;
+
     /// <summary>Wrong codes from one source that buy it a refusal, within <see cref="AttemptWindowSeconds"/>.</summary>
     public const int MaximumFailedAttempts = 5;
     public const int AttemptWindowSeconds = 60;
@@ -94,6 +112,31 @@ public static class LanProtocol
     /// does not hold answers 没有 this side cannot hand these bytes over.
     /// </remarks>
     public static bool IsMessageId(string? value) =>
+        value is { Length: >= 8 and <= 64 }
+        && value.All(character => Uri.IsHexDigit(character) || character == '-');
+
+    /// <summary>
+    /// Whether a value could be one of this protocol's tokens.
+    /// </summary>
+    /// <remarks>
+    /// Tokens are minted as hex of 32 random bytes, and a peer may hand one back to this machine in a pairing or
+    /// invite request — the grant that makes those calls mutual. This is the form check that keeps a body from
+    /// putting an arbitrary string into the credential file: a wrong token can only ever fail to authenticate,
+    /// but a value of the wrong shape does not belong in the file at all. The range is wider than what the
+    /// credential store mints today so a future length is not a compatibility break.
+    /// </remarks>
+    public static bool IsToken(string? value) =>
+        value is { Length: >= 32 and <= 128 } && value.All(Uri.IsHexDigit);
+
+    /// <summary>
+    /// Whether a value could be one of the ids an invitation is addressed by.
+    /// </summary>
+    /// <remarks>
+    /// Minted here as <c>Guid.ToString("N")</c>, the same shape as a message id and for the same reason: the id
+    /// is the key a pending question is filed under, and a value of any other form is a caller inventing a slot
+    /// rather than naming one.
+    /// </remarks>
+    public static bool IsInviteId(string? value) =>
         value is { Length: >= 8 and <= 64 }
         && value.All(character => Uri.IsHexDigit(character) || character == '-');
 
@@ -196,6 +239,21 @@ public enum LanRefusal
     /// every other bad request means the message was built wrong.
     /// </summary>
     MessageTooLong,
+
+    /// <summary>
+    /// Nobody answered an invitation in time, so it can no longer be joined.
+    /// </summary>
+    /// <remarks>
+    /// Its own state rather than <see cref="Conflict"/>, because the advice differs and so does the status: 408
+    /// says the request ran out of time on the far side, while 409 says something else holds that slot. A person
+    /// reading this one should try again; a person reading the other one should wait for the other machine.
+    /// </remarks>
+    InviteExpired,
+
+    /// <summary>
+    /// This machine is already holding as many invitations as it will, or the id belongs to somebody else's.
+    /// </summary>
+    InviteConflict,
 }
 
 /// <summary>The stable, machine-readable reason strings that go in a refusal body.</summary>
@@ -216,6 +274,8 @@ public static class LanReason
     public const string VerificationFailed = "verification_failed";
     public const string BadRequest = "bad_request";
     public const string MessageTooLong = "message_too_long";
+    public const string InviteExpired = "invite_expired";
+    public const string InviteConflict = "invite_conflict";
 
     /// <summary>The only mapping between a refusal and its wire token, so a body cannot drift from a code.</summary>
     public static string For(LanRefusal refusal) => refusal switch
@@ -235,6 +295,8 @@ public static class LanReason
         LanRefusal.VerificationFailed => VerificationFailed,
         LanRefusal.BadRequest => BadRequest,
         LanRefusal.MessageTooLong => MessageTooLong,
+        LanRefusal.InviteExpired => InviteExpired,
+        LanRefusal.InviteConflict => InviteConflict,
         // A refusal with no token would answer an empty reason, which is the kind of silent default this
         // protocol keeps being bitten by; unpaired is the closest truthful one and it is never selected here.
         _ => PairRequired,

@@ -64,6 +64,34 @@ public sealed class LanServerWireTests
     }
 
     [Fact]
+    public async Task A_pair_request_that_carries_a_grant_token_leaves_this_listener_able_to_call_back()
+    {
+        await using var server = await Harness.StartAsync();
+        // The shape is all that is judged here: a token this machine is handed can only ever fail to
+        // authenticate, so the check is that it is a token at all and that it is kept under its owner's id.
+        var grant = new string('a', 2 * LanPeerSecretStore.TokenBytes);
+
+        await server.PairAsync(server.Pairing.Code, grantToken: grant);
+
+        // One code, two credentials. Without this half the listener keeps a row it can never dial, and every
+        // poll of that peer answers 请先配对 for as long as the pairing exists.
+        Assert.True(await server.Received.VerifyAsync(PeerId, grant));
+    }
+
+    [Fact]
+    public async Task An_old_pair_request_without_a_grant_token_still_pairs_and_stores_no_second_credential()
+    {
+        await using var server = await Harness.StartAsync();
+
+        var reply = await server.PairAsync(server.Pairing.Code);
+
+        // A build from before the field existed must still be able to pair; what it cannot do is make this side
+        // mutual, and the honest record of that is a row with no credential behind it rather than a refusal.
+        Assert.False(string.IsNullOrEmpty(reply.Token));
+        Assert.Null(await server.Received.TokenForAsync(PeerId));
+    }
+
+    [Fact]
     public async Task A_wrong_code_is_refused_and_costs_the_typer_nothing_but_a_turn()
     {
         await using var server = await Harness.StartAsync();
@@ -89,6 +117,286 @@ public sealed class LanServerWireTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(LanReason.BadRequest, await ReasonAsync(response));
     }
+
+    // ------------------------------------------------------------------ invitations
+
+    [Fact]
+    public async Task An_invitation_addressed_here_needs_no_credential_and_waits_for_a_person()
+    {
+        await using var server = await Harness.StartAsync();
+        var grant = new string('a', 2 * LanPeerSecretStore.TokenBytes);
+        var request = Invite(server, "abc00001", grant);
+
+        // The request is opened before anybody answers, because the point of the route is that it stays open.
+        var pending = server.InviteRawAsync(request);
+        await server.WaitForInviteAsync("abc00001");
+        Assert.Equal(1, server.Invites.PendingCount);
+        Assert.False(pending.IsCompleted);
+
+        await server.ServerOptions.Session.AnswerInviteAsync("abc00001", accept: true);
+        var reply = await ReadAsync<LanInviteReply>(await pending);
+
+        Assert.Equal(LanInviteOutcome.Accepted, reply.Decision);
+        Assert.Equal(2 * LanPeerSecretStore.TokenBytes, reply.Token!.Length);
+        // Both directions, from one round trip: the inviter's grant was kept here, and the credential this machine
+        // minted for it is what the reply carries.
+        Assert.True(await server.Received.VerifyAsync(PeerId, grant));
+        Assert.True(await server.Secrets.VerifyAsync(PeerId, reply.Token));
+        // …and the row that makes it a member of the room, at the address and port the invitation declared. The
+        // port is the inviter's own and deliberately not this listener's, which is what proves the two are not
+        // confused: a member recorded at the wrong number is one nothing can ever dial.
+        var row = Assert.Single(await server.Peers.LoadAsync());
+        Assert.Equal(PeerId, row.DeviceId);
+        Assert.Equal(LanProtocol.KindWindows, row.Kind);
+        Assert.Equal(59871, row.Port);
+    }
+
+    [Fact]
+    public async Task A_declined_invitation_leaves_no_row_and_no_credential_on_either_side()
+    {
+        await using var server = await Harness.StartAsync();
+        var request = Invite(server, "abc00001", new string('b', 2 * LanPeerSecretStore.TokenBytes));
+
+        var pending = server.InviteRawAsync(request);
+        await server.WaitForInviteAsync("abc00001");
+        await server.ServerOptions.Session.AnswerInviteAsync("abc00001", accept: false);
+        var reply = await ReadAsync<LanInviteReply>(await pending);
+
+        Assert.Equal(LanInviteOutcome.Declined, reply.Decision);
+        Assert.Null(reply.Token);
+        // Nothing was written before the click, so a no costs exactly nothing: no member, no credential, and
+        // therefore nothing to clean up on the inviter's side either.
+        Assert.Empty(await server.Peers.LoadAsync());
+        Assert.Null(await server.Secrets.TokenForAsync(PeerId));
+        Assert.Null(await server.Received.TokenForAsync(PeerId));
+    }
+
+    [Fact]
+    public async Task An_invitation_nobody_answers_ends_as_expired_and_still_writes_nothing()
+    {
+        await using var server = await Harness.StartAsync();
+        var pending = server.InviteRawAsync(Invite(server, "abc00001", new string('c', 2 * LanPeerSecretStore.TokenBytes)));
+        await server.WaitForInviteAsync("abc00001");
+
+        // The window's own tick is what ages a question out, so this is the same sweep a real window runs.
+        server.Invites.Sweep(DateTimeOffset.UtcNow.AddSeconds(LanProtocol.InviteLifetimeSeconds + 1));
+        var reply = await ReadAsync<LanInviteReply>(await pending);
+
+        Assert.Equal(LanInviteOutcome.Expired, reply.Decision);
+        Assert.Null(reply.Token);
+        Assert.Empty(await server.Peers.LoadAsync());
+        Assert.Null(await server.Received.TokenForAsync(PeerId));
+    }
+
+    [Fact]
+    public async Task An_invitation_the_asker_took_back_answers_withdrawn_rather_than_expired()
+    {
+        await using var server = await Harness.StartAsync();
+        var pending = server.InviteRawAsync(Invite(server, "abc00001", new string('d', 2 * LanPeerSecretStore.TokenBytes)));
+        await server.WaitForInviteAsync("abc00001");
+
+        Assert.True(server.Invites.Withdraw("abc00001", PeerId, DateTimeOffset.UtcNow));
+        var reply = await ReadAsync<LanInviteReply>(await pending);
+
+        // The two outcomes read differently on purpose: 过期 is nobody was there, 撤回 is the machine that asked
+        // changed its mind, and the person who was about to click should be told which.
+        Assert.Equal(LanInviteOutcome.Withdrawn, reply.Decision);
+    }
+
+    [Fact]
+    public async Task An_invitation_that_is_not_well_formed_answers_this_protocols_bad_request()
+    {
+        await using var server = await Harness.StartAsync();
+
+        var response = await server.InviteRawAsync(new LanInviteRequest("abc00001", PeerId, "客厅电脑",
+            LanProtocol.KindWindows, 59871, "not-a-token", null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(LanReason.BadRequest, await ReasonAsync(response));
+        Assert.Equal(0, server.Invites.PendingCount);
+    }
+
+    [Fact]
+    public async Task A_stranger_may_not_put_a_question_on_somebody_elses_device()
+    {
+        await using var server = await Harness.StartAsync();
+        var relayed = new LanInviteRequest("abc00001", PeerId, "客厅电脑", LanProtocol.KindWindows, 59871,
+            new string('e', 2 * LanPeerSecretStore.TokenBytes), OtherPeerId);
+
+        // A relayed invitation is a member asking on behalf of a device that cannot be dialled. Without the
+        // credential there is nothing behind that claim, and anybody on the subnet could fill a stranger's screen.
+        var response = await server.InviteRawAsync(relayed);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(LanReason.PairRequired, await ReasonAsync(response));
+        Assert.Equal(0, server.Invites.PendingCount);
+    }
+
+    [Fact]
+    public async Task A_member_may_relay_an_invitation_to_a_device_that_cannot_be_dialled()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+        // The device being asked has to be one this machine actually holds: a question about a device nobody has
+        // ever paired with is a row on this machine's screen that can never be answered.
+        await PhoneAsync(server, OtherPeerId);
+        var relayed = new LanInviteRequest("abc00002", "ffffffffffffffffffffffffffffffff", "客厅电脑",
+            LanProtocol.KindWindows, 59871, new string('f', 2 * LanPeerSecretStore.TokenBytes), OtherPeerId);
+
+        var pending = server.InviteRawAsync(relayed);
+        var held = await server.WaitForInviteAsync("abc00002");
+        // Filed under who it is for, and named after the member that really asked rather than after the body.
+        Assert.Equal(OtherPeerId, held.TargetDeviceId);
+        Assert.Equal(PeerId, held.From.DeviceId);
+
+        await server.ServerOptions.Session.AnswerInviteAsync("abc00002", accept: true, answerer: new LanContact(
+            OtherPeerId, "小明的手机", LanProtocol.KindPhone, "10.0.0.9", 0));
+        var reply = await ReadAsync<LanInviteReply>(await pending);
+
+        Assert.Equal(LanInviteOutcome.Accepted, reply.Decision);
+        Assert.False(string.IsNullOrEmpty(reply.Token));
+    }
+
+    [Fact]
+    public async Task A_question_about_a_device_this_machine_has_never_agreed_with_is_refused_outright()
+    {
+        await using var server = await Harness.StartAsync();
+        var paired = await server.PairAsync(server.Pairing.Code);
+        var relayed = new LanInviteRequest("abc00004", PeerId, "客厅电脑", LanProtocol.KindWindows, 59871,
+            new string('5', 2 * LanPeerSecretStore.TokenBytes), OtherPeerId);
+
+        var response = await server.InviteRawAsync(relayed, paired.Token);
+
+        // Asking costs a question held open for its whole lifetime, so a target that is not in the peer list is
+        // refused here rather than filed and forgotten: the caller is told to pair first, which is the truth.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(LanReason.PairRequired, await ReasonAsync(response));
+        Assert.Equal(0, server.Invites.PendingCount);
+    }
+
+    [Fact]
+    public async Task Only_the_device_an_invitation_names_may_answer_it()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+        await PhoneAsync(server, OtherPeerId);
+        var relayed = new LanInviteRequest("abc00003", "ffffffffffffffffffffffffffffffff", "客厅电脑",
+            LanProtocol.KindWindows, 59871, new string('9', 2 * LanPeerSecretStore.TokenBytes), OtherPeerId);
+        var pending = server.InviteRawAsync(relayed);
+        await server.WaitForInviteAsync("abc00003");
+
+        // The member holding the question is a messenger, not the person being asked: a yes on somebody else's
+        // behalf would join a device to a room it never agreed to.
+        var answered = await server.ServerOptions.Session.AnswerInviteAsync("abc00003", accept: true,
+            answerer: new LanContact(PeerId, "小明的手机", LanProtocol.KindPhone, "10.0.0.9", 0));
+
+        Assert.Equal(LanRefusal.Declined, answered.Refusal);
+        Assert.Equal(1, server.Invites.PendingCount);
+
+        // …and the question the route is holding has to be closed, or this case would leave it waiting forever.
+        server.Invites.Withdraw("abc00003", PeerId, DateTimeOffset.UtcNow);
+        Assert.Equal(LanInviteOutcome.Withdrawn, (await ReadAsync<LanInviteReply>(await pending)).Decision);
+    }
+
+    [Fact]
+    public async Task The_beat_carries_the_room_the_questions_and_what_could_still_be_asked()
+    {
+        await using var server = await Harness.StartAsync();
+        await server.PairAsync(server.Pairing.Code);
+        // A second member of this room, and a device this machine can hear but has not agreed with. The two are
+        // different answers and travel as different lists: who is here, and who could be asked.
+        await server.Peers.RememberAsync(new LanPeerRecord(OtherPeerId, "走廊电脑", LanProtocol.KindWindows,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 59900, ["10.0.0.7"]));
+        server.Invitable.Add(new LanRosterEntry("cccccccccccccccccccccccccccccccc", "隔壁电脑",
+            LanProtocol.KindWindows, "10.0.0.8", 59901, LanDeviceState.Invitable, Online: false,
+            GatewayDeviceId: null, DateTimeOffset.UtcNow));
+
+        var reply = await server.LogAsync();
+
+        // Who is in this conversation, with no address on any of them: the room is a list of people, not directions.
+        Assert.Equal([OtherPeerId, PeerId], reply.Members!.Select(member => member.DeviceId).Order(StringComparer.Ordinal));
+        // What this machine could still ask, which is the one thing a caller with no ears of its own cannot work
+        // out for itself — a phone has no discovery, so its 邀请 list can only ever be this.
+        var invitable = Assert.Single(reply.Invitable!);
+        Assert.Equal("cccccccccccccccccccccccccccccccc", invitable.DeviceId);
+        Assert.Equal("隔壁电脑", invitable.DeviceName);
+        // …and no question, because nobody is asking this device anything.
+        Assert.Empty(reply.PendingInvites!);
+    }
+
+    [Fact]
+    public async Task A_device_with_no_listener_answers_on_the_route_built_for_it()
+    {
+        await using var server = await Harness.StartAsync();
+        var paired = await server.PairAsync(server.Pairing.Code);
+        const string phoneId = "ffffffffffffffffffffffffffffffff";
+        await PhoneAsync(server, phoneId);
+        var phoneToken = await server.Secrets.IssueAsync(phoneId);
+
+        // A member asking this machine to carry a question to a phone it holds. Nothing can dial the phone, so the
+        // question waits here and the phone hears about it on its own beat.
+        var pending = server.InviteRawAsync(new LanInviteRequest("abc00010", PeerId, "客厅电脑",
+            LanProtocol.KindWindows, 59871, new string('7', 2 * LanPeerSecretStore.TokenBytes), phoneId), paired.Token);
+        await server.WaitForInviteAsync("abc00010");
+
+        var beat = await server.LogAsync(token: phoneToken, deviceId: phoneId);
+        var asked = Assert.Single(beat.PendingInvites!);
+        Assert.Equal("abc00010", asked.InviteId);
+        Assert.Equal(PeerId, asked.FromDeviceId);
+        // Named the way this machine knows that member, not the way the body spelled it: a caller may ask on
+        // somebody's behalf but never as somebody else, so the credential's own name wins over the claim.
+        Assert.Equal("小明的手机", asked.FromName);
+
+        var answered = await server.AnswerInviteRawAsync("abc00010", accept: true, phoneToken, phoneId);
+        Assert.Equal(HttpStatusCode.Created, answered.StatusCode);
+        var reply = await ReadAsync<LanInviteReply>(answered);
+        Assert.Equal(LanInviteOutcome.Accepted, reply.Decision);
+        // No credential in this reply. The answerer cannot dial anybody — that is the whole reason the question had
+        // to be relayed — so a token here would be a secret handed to a device with nothing to spend it on.
+        Assert.Null(reply.Token);
+
+        // The inviter, still holding its own request open, is released with the answer.
+        Assert.Equal(LanInviteOutcome.Accepted, (await ReadAsync<LanInviteReply>(await pending)).Decision);
+        // And the question is gone from the beat that carried it.
+        Assert.Empty((await server.LogAsync(token: phoneToken, deviceId: phoneId)).PendingInvites!);
+    }
+
+    [Fact]
+    public async Task A_member_may_not_answer_a_question_that_names_somebody_else()
+    {
+        await using var server = await Harness.StartAsync();
+        var paired = await server.PairAsync(server.Pairing.Code);
+        const string phoneId = "ffffffffffffffffffffffffffffffff";
+        await PhoneAsync(server, phoneId);
+
+        var pending = server.InviteRawAsync(new LanInviteRequest("abc00011", PeerId, "客厅电脑",
+            LanProtocol.KindWindows, 59871, new string('8', 2 * LanPeerSecretStore.TokenBytes), phoneId), paired.Token);
+        await server.WaitForInviteAsync("abc00011");
+
+        // The member that carried the question is a messenger. A yes on the phone's behalf would join a device to a
+        // room it never agreed to, so it is refused rather than honoured.
+        var answered = await server.AnswerInviteRawAsync("abc00011", accept: true, paired.Token, PeerId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, answered.StatusCode);
+        Assert.Equal(LanReason.Declined, await ReasonAsync(answered));
+        Assert.Equal(1, server.Invites.PendingCount);
+
+        // The question the route is still holding has to be closed, or this case would leave it waiting forever.
+        server.Invites.Withdraw("abc00011", PeerId, DateTimeOffset.UtcNow);
+        Assert.Equal(LanInviteOutcome.Withdrawn, (await ReadAsync<LanInviteReply>(await pending)).Decision);
+    }
+
+    /// <summary>An invitation addressed to this listener, with a grant of the shape the credential store mints.</summary>
+    private static LanInviteRequest Invite(Harness server, string inviteId, string grant) =>
+        new(inviteId, PeerId, "客厅电脑", LanProtocol.KindWindows, 59871, grant, server.ServerOptions.Self.DeviceId);
+
+    /// <summary>
+    /// A device this machine has paired with that answers nowhere of its own: a phone browser, remembered at the
+    /// address it paired from and at no port at all.
+    /// </summary>
+    private static Task PhoneAsync(Harness server, string deviceId) =>
+        server.Peers.RememberAsync(new LanPeerRecord(deviceId, "小明的手机", LanProtocol.KindPhone,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 0, ["10.0.0.9"]));
 
     [Fact]
     public async Task A_device_id_nobody_could_have_generated_is_refused_before_the_code_is_spent()
@@ -631,6 +939,7 @@ public sealed class LanServerWireTests
                      "/api/v1/hello", "/api/v1/pair", "/api/v1/peers", "/api/v1/name", "/api/v1/messages",
                      "/api/v1/inbox", "/api/v1/log?since=", "/api/v1/progress", "/api/v1/presence/mine",
                      "/api/v1/attachments/", "/zip", "/receive",
+                     "/api/v1/invites", "/api/v1/invites/", "/answer",
                  })
             Assert.Contains(route, script, StringComparison.Ordinal);
         foreach (var header in new[]
@@ -1280,6 +1589,10 @@ public sealed class LanServerWireTests
         return reader.ReadToEnd();
     }
 
+    /// <summary>Reads one of this protocol's own bodies off a response, the way a peer does.</summary>
+    private static async Task<T> ReadAsync<T>(HttpResponseMessage response) =>
+        JsonSerializer.Deserialize<T>(await response.Content.ReadAsStringAsync(), LanApi.Json)!;
+
     private static async Task<string> ReasonAsync(HttpResponseMessage response)
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -1319,19 +1632,22 @@ public sealed class LanServerWireTests
         private string? _token;
 
         private Harness(string root, LanPairingState pairing, LanPeerStore peers, LanPeerSecretStore secrets,
-            LanReceiveSink sink, TestClock clock, LanGroupRoom reader, LanPeerClient dialer,
-            LanServerOptions serverOptions)
+            LanPeerSecretStore received, LanInviteBoard invites, LanReceiveSink sink, TestClock clock,
+            LanGroupRoom reader, LanPeerClient dialer, LanServerOptions serverOptions, List<LanRosterEntry> invitable)
         {
             Root = root;
             Receive = Path.Combine(root, "in");
             Pairing = pairing;
             Peers = peers;
             Secrets = secrets;
+            Received = received;
+            Invites = invites;
             Sink = sink;
             Clock = clock;
             Reader = reader;
             Dialer = dialer;
             ServerOptions = serverOptions;
+            Invitable = invitable;
             Http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{serverOptions.Session.Options.Port}") };
         }
 
@@ -1340,9 +1656,28 @@ public sealed class LanServerWireTests
         public LanPairingState Pairing { get; }
         public LanPeerStore Peers { get; }
         public LanPeerSecretStore Secrets { get; }
+
+        /// <summary>
+        /// What this listener was <b>given</b> — the other half of a mutual pairing. It is its own file because
+        /// <see cref="Secrets"/> is what this machine hands out, and a case about the grant has to be able to tell
+        /// which direction the credential points.
+        /// </summary>
+        public LanPeerSecretStore Received { get; }
+
+        /// <summary>
+        /// The questions this listener is holding. A case answers them the way a person would — there is no clock to
+        /// move here, because the wait a route is doing is the same wait a person's click ends.
+        /// </summary>
+        public LanInviteBoard Invites { get; }
         public LanReceiveSink Sink { get; }
         public TestClock Clock { get; }
         public HttpClient Http { get; }
+
+        /// <summary>
+        /// What this listener's own window would draw on its invitation strip. A case fills it rather than making a
+        /// window, because the listener only ever asks the window for this list and never decides it itself.
+        /// </summary>
+        public List<LanRosterEntry> Invitable { get; }
 
         /// <summary>
         /// This machine's room reader, never started. The listener answers on its behalf for a member that cannot
@@ -1389,16 +1724,24 @@ public sealed class LanServerWireTests
             var pairing = new LanPairingState(() => clock.Now);
             var peers = new LanPeerStore(Path.Combine(root, "peers.json"));
             var secrets = new LanPeerSecretStore(Path.Combine(root, "secrets.dat"));
+            var received = new LanPeerSecretStore(Path.Combine(root, "received.dat"));
             var sink = new LanReceiveSink(receive, AppendCounter);
             var options = new LanOptions(port ?? FreePort(), receive, autoAccept);
             var identity = await LanDeviceIdentity.LoadOrCreateAsync(Path.Combine(root, "device.json"));
-            var session = new LanSession(options, peers, secrets, pairing, confirm);
+            var invites = new LanInviteBoard();
+            var invitable = new List<LanRosterEntry>();
+            var session = new LanSession(options, peers, secrets, pairing, confirm, received: received, invites: invites);
             // A reader that is never started holds no beat: a case that presses 接收 wants one pull, decided now,
             // with nothing else in the room dialing behind it.
             var dialer = new LanPeerClient(identity, peers, secrets);
             var reader = new LanGroupRoom(identity, dialer, peers, session.Group, sink);
-            var harness = new Harness(root, pairing, peers, secrets, sink, clock, reader, dialer,
-                new LanServerOptions(session, identity, pairing, sink) { Room = reader });
+            var harness = new Harness(root, pairing, peers, secrets, received, invites, sink, clock, reader, dialer,
+                new LanServerOptions(session, identity, pairing, sink)
+                {
+                    Room = reader,
+                    // The window's own list, which a case fills directly: the listener asks and never decides.
+                    Invitable = () => [.. invitable],
+                }, invitable);
             harness.Host = await LanServerHost.StartAsync(harness.ServerOptions, CancellationToken.None);
             return harness;
         }
@@ -1409,9 +1752,9 @@ public sealed class LanServerWireTests
         public async Task<LanHelloReply> HelloAsync() =>
             Deserialize<LanHelloReply>(await Http.GetStringAsync("/api/v1/hello"));
 
-        public async Task<LanPairReply> PairAsync(string code, string deviceId = PeerId)
+        public async Task<LanPairReply> PairAsync(string code, string deviceId = PeerId, string? grantToken = null)
         {
-            var response = await PairRawAsync(code, deviceId);
+            var response = await PairRawAsync(code, deviceId, grantToken);
             response.EnsureSuccessStatusCode();
             var reply = Deserialize<LanPairReply>(await response.Content.ReadAsStringAsync());
             // The credential this harness presents from now on, which is what a paired peer does.
@@ -1419,8 +1762,9 @@ public sealed class LanServerWireTests
             return reply;
         }
 
-        public Task<HttpResponseMessage> PairRawAsync(string code, string deviceId = PeerId) =>
-            Http.PostAsync("/api/v1/pair", Json(new LanPairRequest(code, deviceId, "小明的手机", LanProtocol.KindPhone)));
+        public Task<HttpResponseMessage> PairRawAsync(string code, string deviceId = PeerId, string? grantToken = null) =>
+            Http.PostAsync("/api/v1/pair",
+                Json(new LanPairRequest(code, deviceId, "小明的手机", LanProtocol.KindPhone, grantToken)));
 
         public async Task<LanInboxReply> SendInboxAsync(string wire, string content, long declaredBytes, DateTimeOffset? mtime, string? token = null)
         {
@@ -1479,15 +1823,15 @@ public sealed class LanServerWireTests
         /// This copy of the room, past a watermark. A peer reads it on a timer and merges whatever is new, so the
         /// reply's shape is the whole of what a second machine can learn from this one.
         /// </summary>
-        public async Task<LanLogReply> LogAsync(long? since = null, string? token = null)
+        public async Task<LanLogReply> LogAsync(long? since = null, string? token = null, string deviceId = PeerId)
         {
-            var response = await LogRawAsync(since, token);
+            var response = await LogRawAsync(since, token, deviceId);
             response.EnsureSuccessStatusCode();
             return Deserialize<LanLogReply>(await response.Content.ReadAsStringAsync());
         }
 
-        public Task<HttpResponseMessage> LogRawAsync(long? since = null, string? token = null) =>
-            GetAsync(since is { } watermark ? $"/api/v1/log?since={watermark}" : "/api/v1/log", token: token);
+        public Task<HttpResponseMessage> LogRawAsync(long? since = null, string? token = null, string deviceId = PeerId) =>
+            GetAsync(since is { } watermark ? $"/api/v1/log?since={watermark}" : "/api/v1/log", deviceId, token);
 
         /// <summary>A <c>since</c> as a mistyped query would carry it, because the route reads a number and not a word.</summary>
         public Task<HttpResponseMessage> LogRawQueryAsync(string since, string? token = null) =>
@@ -1544,6 +1888,55 @@ public sealed class LanServerWireTests
         /// <summary>A device removing its own credential, which is the one thing a peer may do to the trust list.</summary>
         public Task<HttpResponseMessage> ForgetSelfAsync(string token) =>
             SendAsync(Request(HttpMethod.Delete, "/api/v1/peers/mine", PeerId, token));
+
+        /// <summary>
+        /// Asks this machine to let a device in, in the one shape that needs no code — and that only a person on
+        /// this side can answer.
+        /// </summary>
+        /// <remarks>
+        /// No credential unless the case asks for one, because that is the interesting half: an invitation
+        /// addressed here is the second door a stranger can knock on, and the answer is a click rather than a token.
+        /// </remarks>
+        public Task<HttpResponseMessage> InviteRawAsync(LanInviteRequest request, string? token = null,
+            string deviceId = PeerId) =>
+            SendAsync(InviteRequest(request, token, deviceId));
+
+        private HttpRequestMessage InviteRequest(LanInviteRequest request, string? token, string deviceId)
+        {
+            var message = Request(HttpMethod.Post, "/api/v1/invites", deviceId, token);
+            message.Content = Json(request);
+            return message;
+        }
+
+        /// <summary>
+        /// Waits until this listener is holding a question, so a case can answer it without guessing how long the
+        /// request took to arrive.
+        /// </summary>
+        public async Task<LanPendingInvite> WaitForInviteAsync(string inviteId)
+        {
+            for (var attempt = 0; attempt < 200; attempt++)
+            {
+                if (Invites.Find(inviteId) is { } invite) return invite;
+                await Task.Delay(10);
+            }
+
+            throw new InvalidOperationException($"没有等到邀请 {inviteId}。");
+        }
+
+        /// <summary>
+        /// Answers a held question the way a device with no listener does: on its own beat, over the route built for
+        /// exactly that, because there is no request of its own for this machine to answer.
+        /// </summary>
+        public Task<HttpResponseMessage> AnswerInviteRawAsync(string inviteId, bool accept, string? token = null,
+            string deviceId = PeerId) =>
+            SendAsync(AnswerInviteRequest(inviteId, accept, token, deviceId));
+
+        private HttpRequestMessage AnswerInviteRequest(string inviteId, bool accept, string? token, string deviceId)
+        {
+            var message = Request(HttpMethod.Post, $"/api/v1/invites/{Uri.EscapeDataString(inviteId)}/answer", deviceId, token);
+            message.Content = Json(new LanInviteAnswerRequest(accept));
+            return message;
+        }
 
         /// <summary>
         /// A device saying it is going away, which is not the same as revoking itself: the row and the token stay,

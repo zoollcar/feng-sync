@@ -7,6 +7,12 @@ namespace FengSync.Lan;
 /// <param name="DeviceId">The peer's own stable identifier — the key its token is checked against.</param>
 /// <param name="SeenAddresses">Every address this device has answered from, newest last, kept because a
 /// laptop that moved between two access points is still the same phone.</param>
+/// <param name="GatewayDeviceId">
+/// For a device that has no listener of its own, the member it talks through. A phone browser is reachable only
+/// through the computer that serves its page, so a member that learned of it from that computer names it here —
+/// which is what lets the row say 在 客厅电脑 上 rather than implying an address nothing could be dialled at.
+/// Null for a device that answers for itself.
+/// </param>
 /// <remarks>
 /// There is deliberately no field that could hold a token. The secret lives in
 /// <see cref="LanPeerSecretStore"/>, so this file can be read, copied into a bug report, or opened in an
@@ -20,7 +26,8 @@ public sealed record LanPeerRecord(
     DateTimeOffset FirstSeenUtc,
     DateTimeOffset LastSeenUtc,
     int Port = LanOptions.DefaultPort,
-    IReadOnlyList<string>? SeenAddresses = null)
+    IReadOnlyList<string>? SeenAddresses = null,
+    string? GatewayDeviceId = null)
 {
     public IReadOnlyList<string> SeenAddresses { get; init; } = SeenAddresses ?? [];
 
@@ -32,6 +39,12 @@ public sealed record LanPeerRecord(
     public const int MaximumSeenAddresses = 8;
 
     /// <summary>Records that this device just answered from this address, keeping the list newest last.</summary>
+    /// <remarks>
+    /// A port of 0 is not a number to keep. It is what a device that listens on nothing reports — a phone browser
+    /// says nothing at all, and a peer built before the port header existed says nothing either — and writing it
+    /// over a port this machine already learned would turn a dialable member into one nothing can reach. The
+    /// address is still worth recording: where a device spoke from is true even when what it listens on is unknown.
+    /// </remarks>
     public LanPeerRecord SeenFrom(string address, int port, DateTimeOffset now)
     {
         var addresses = SeenAddresses.ToList();
@@ -42,7 +55,12 @@ public sealed record LanPeerRecord(
         addresses.Add(address);
         if (addresses.Count > MaximumSeenAddresses) addresses.RemoveRange(0, addresses.Count - MaximumSeenAddresses);
 
-        return this with { LastSeenUtc = now, Port = port, SeenAddresses = addresses };
+        return this with
+        {
+            LastSeenUtc = now,
+            Port = port is >= LanOptions.MinimumPort and <= LanOptions.MaximumPort ? port : Port,
+            SeenAddresses = addresses,
+        };
     }
 }
 

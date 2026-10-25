@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { post, randomHex, reasonOf, Session } from "../api/client";
 import { Routes } from "../api/routes";
-import type { Entry, Transfer } from "../api/types";
+import type { Entry, Invite, Transfer } from "../api/types";
 import { useRoom } from "../hooks/useRoom";
 import { useTransfers } from "../hooks/useTransfers";
 import { useUpload } from "../hooks/useUpload";
@@ -26,6 +26,8 @@ export function RoomScreen({ session }: { session: ReturnType<typeof useSession>
   const [auto, setAuto] = useState(false);
   const [openSettings, setOpenSettings] = useState(false);
   const [name, setName] = useState(session.peer?.deviceName ?? "");
+  const [inviteNote, setInviteNote] = useState("");
+  const [asking, setAsking] = useState("");
   const asked = useRef(new Set<string>());
 
   // Auto-receive is this page's own promise, kept on this side: the computer is asked to take an entry it does not
@@ -75,11 +77,38 @@ export function RoomScreen({ session }: { session: ReturnType<typeof useSession>
   const members = useMemo(() => {
     const seen = new Map<string, string>();
     if (session.peer?.deviceName) seen.set(me, session.peer.deviceName);
+    // The room's own table, which the computer sends with every beat. It is what makes a member that has not
+    // spoken yet visible here: a page that only read the authors of the conversation could not name a device that
+    // has joined and stayed quiet.
+    for (const member of room.members) {
+      if (member.deviceName) seen.set(member.deviceId, member.deviceName);
+    }
     for (const entry of room.entries) {
       if (entry.authorDeviceId && entry.authorName) seen.set(entry.authorDeviceId, entry.authorName);
     }
     return [...seen.values()];
-  }, [me, room.entries, session.peer]);
+  }, [me, room.entries, room.members, session.peer]);
+
+  // Answering settles the row and says which way it came out — whose room the phone joined, or that it declined —
+  // so the note carries that sentence instead of going blank on a success, the way the outgoing invite already
+  // reports its own outcome through `askDevice`.
+  const answerInvite = useCallback(
+    async (invite: Invite, accept: boolean) => {
+      setInviteNote(await room.answerInvite(invite, accept));
+    },
+    [room],
+  );
+
+  const askDevice = useCallback(
+    async (deviceId: string) => {
+      setAsking(deviceId);
+      setInviteNote("");
+      const outcome = await room.invite(deviceId);
+      setAsking("");
+      setInviteNote(outcome.text);
+    },
+    [room],
+  );
 
   const computer = session.hello?.deviceName ?? t("title");
 
@@ -150,6 +179,33 @@ export function RoomScreen({ session }: { session: ReturnType<typeof useSession>
             </p>
           )}
 
+          {/* A question somebody asked this phone. It is the one thing on this screen that is waiting for a
+              person, so it comes before the conversation rather than after it. */}
+          {room.invites.length > 0 && (
+            <div className="mx-3 mt-3 rounded-xl border border-line bg-accent-soft px-3 py-2.5">
+              <p className="text-sm font-semibold text-ink">
+                {t("inviteAsk", room.invites[0].fromName || room.invites[0].fromDeviceId)}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted">{t("inviteAskHint")}</p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void answerInvite(room.invites[0], true)}
+                  className="h-8 rounded-lg bg-accent px-3 text-xs font-semibold text-white"
+                >
+                  {t("accept")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void answerInvite(room.invites[0], false)}
+                  className="h-8 rounded-lg border border-line bg-surface px-3 text-xs font-semibold text-muted"
+                >
+                  {t("decline")}
+                </button>
+              </div>
+            </div>
+          )}
+
           <TransferPanel transfers={transfers} />
 
           {members.length > 1 && (
@@ -158,6 +214,38 @@ export function RoomScreen({ session }: { session: ReturnType<typeof useSession>
               {members.join("、")}
             </p>
           )}
+
+          {/* Devices this computer can hear and has not agreed with. The page shows them because the computer
+              does, and pressing 邀请 is the page asking the computer to ask them — a browser has no route of its
+              own, and never will. */}
+          {room.invitable.length > 0 && (
+            <div className="mx-4 mt-2">
+              <p className="text-[11px] font-medium text-muted" title={t("invitableHint")}>
+                {t("invitable")}
+              </p>
+              <ul className="mt-1 flex flex-wrap gap-1.5">
+                {room.invitable.map((device) => (
+                  <li
+                    key={device.deviceId}
+                    className="flex items-center gap-1.5 rounded-full border border-line bg-surface py-1 pl-2.5 pr-1"
+                  >
+                    <span className="max-w-[9rem] truncate text-[11px] text-ink">
+                      {device.deviceName || device.deviceId}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={asking !== ""}
+                      onClick={() => void askDevice(device.deviceId)}
+                      className="h-6 rounded-full bg-accent-soft px-2 text-[11px] font-semibold text-accent-ink disabled:opacity-50"
+                    >
+                      {asking === device.deviceId ? t("waiting") : t("invite")}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {inviteNote && <p className="mx-4 mt-1 text-[11px] text-muted">{inviteNote}</p>}
 
           <div className="flex flex-1 flex-col">
             <MessageList

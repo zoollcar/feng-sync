@@ -899,6 +899,66 @@ Save anyway?</value>
   <data name="Lan.History" xml:space="preserve">
     <value>History</value>
   </data>
+  <data name="Lan.IncompletePair" xml:space="preserve">
+    <value>Pairing unfinished</value>
+  </data>
+  <data name="Lan.Invitable" xml:space="preserve">
+    <value>Invitable devices</value>
+  </data>
+  <data name="Lan.InvitableEmpty" xml:space="preserve">
+    <value>Nothing on the LAN to invite yet</value>
+  </data>
+  <data name="Lan.Invite" xml:space="preserve">
+    <value>Invite</value>
+  </data>
+  <data name="Lan.InviteAccepted" xml:space="preserve">
+    <value>{0} agreed to join</value>
+  </data>
+  <data name="Lan.InviteAnswerFailed" xml:space="preserve">
+    <value>Could not accept {0}'s invitation: {1}</value>
+  </data>
+  <data name="Lan.InviteAskDetail" xml:space="preserve">
+    <value>{0} asking to join · open for {1} seconds</value>
+  </data>
+  <data name="Lan.InviteAskHint" xml:space="preserve">
+    <value>Agreeing lets the two machines send each other text and files.</value>
+  </data>
+  <data name="Lan.InviteAskTitle" xml:space="preserve">
+    <value>Somebody wants you in their room</value>
+  </data>
+  <data name="Lan.InviteAsking" xml:space="preserve">
+    <value>{0} wants you in their room; accept or decline on the left</value>
+  </data>
+  <data name="Lan.InviteDeclined" xml:space="preserve">
+    <value>{0} turned the invitation down</value>
+  </data>
+  <data name="Lan.InviteFrom" xml:space="preserve">
+    <value>{0} invited you to join</value>
+  </data>
+  <data name="Lan.InviteNeedsGateway" xml:space="preserve">
+    <value>That device has no listener of its own, so only the computer it is connected to can invite it for now</value>
+  </data>
+  <data name="Lan.InviteNoAnswer" xml:space="preserve">
+    <value>{0} did not answer in time</value>
+  </data>
+  <data name="Lan.InviteOldPeer" xml:space="preserve">
+    <value>Finish pairing</value>
+  </data>
+  <data name="Lan.InviteRefused" xml:space="preserve">
+    <value>Turned down {0}'s invitation</value>
+  </data>
+  <data name="Lan.InviteSending" xml:space="preserve">
+    <value>Asked {0} to join; waiting for them to agree</value>
+  </data>
+  <data name="Lan.InviteSent" xml:space="preserve">
+    <value>Invited, waiting for an answer</value>
+  </data>
+  <data name="Lan.InviteTooOld" xml:space="preserve">
+    <value>{0} is running an older build; use the pairing code on the right</value>
+  </data>
+  <data name="Lan.InviteUnreachable" xml:space="preserve">
+    <value>The invitation did not reach {0}</value>
+  </data>
   <data name="Lan.JoinedRoom" xml:space="preserve">
     <value>{0} joined this room</value>
   </data>
@@ -926,11 +986,17 @@ Save anyway?</value>
   <data name="Lan.ManualPeerHint" xml:space="preserve">
     <value>Format: ip:port. Some networks (AP isolation) block both discovery and the connection, so this box is the only way through.</value>
   </data>
+  <data name="Lan.MemberAway" xml:space="preserve">
+    <value>{0} (away)</value>
+  </data>
   <data name="Lan.MemberChip" xml:space="preserve">
     <value>{0} · {1}</value>
   </data>
   <data name="Lan.MemberDiscovered" xml:space="preserve">
-    <value>Found on the LAN</value>
+    <value>Found on the LAN (not paired)</value>
+  </data>
+  <data name="Lan.MemberVia" xml:space="preserve">
+    <value>on {0}</value>
   </data>
   <data name="Lan.Members" xml:space="preserve">
     <value>Devices in the room</value>
@@ -943,6 +1009,12 @@ Save anyway?</value>
   </data>
   <data name="Lan.NoHistory" xml:space="preserve">
     <value>Nothing has moved over the LAN yet</value>
+  </data>
+  <data name="Lan.NoOneToHear" xml:space="preserve">
+    <value>No paired computer can hear this yet, so the sentence is only in this window. Enter the other computer's code on the right to talk both ways.</value>
+  </data>
+  <data name="Lan.NoOneToReceive" xml:space="preserve">
+    <value>Put {0} item(s) in this machine's copy, but no paired computer can see them yet. Enter the other computer's code on the right; until then nobody else can take them.</value>
   </data>
   <data name="Lan.NoTrustedDevices" xml:space="preserve">
     <value>Nothing has been paired with yet</value>
@@ -1051,6 +1123,12 @@ Save anyway?</value>
   </data>
   <data name="Lan.Refuse.IncompleteBody" xml:space="preserve">
     <value>The body arrived short</value>
+  </data>
+  <data name="Lan.Refuse.InviteConflict" xml:space="preserve">
+    <value>The other machine is holding too many invitations; try again shortly</value>
+  </data>
+  <data name="Lan.Refuse.InviteExpired" xml:space="preserve">
+    <value>That invitation has expired</value>
   </data>
   <data name="Lan.Refuse.MessageTooLong" xml:space="preserve">
     <value>This sentence is too long; say it in fewer characters</value>

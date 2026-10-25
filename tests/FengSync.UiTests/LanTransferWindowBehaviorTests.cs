@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -45,6 +45,12 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
 {
     private const string StrangerId = "9e8d7c6b5a4938271605f4e3d2c1b0a9";
     private const string ReturningId = "1a2b3c4d5e6f708192a3b4c5d6e7f809";
+    /// <summary>A computer this machine paired with and can dial — the member a phone's page is served from.</summary>
+    private const string GatewayId = "2b3c4d5e6f708192a3b4c5d6e7f80910";
+    /// <summary>The browser that has no listener of its own and is therefore only ever known through its gateway.</summary>
+    private const string PhoneId = "3c4d5e6f708192a3b4c5d6e7f8091021";
+    /// <summary>A device reported through a gateway this machine has never heard of.</summary>
+    private const string StrayId = "4d5e6f708192a3b4c5d6e7f809102132";
 
     private readonly string _root;
     private readonly string _dataRoot;
@@ -441,7 +447,7 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
                 // A path that is gone is skipped rather than announced: an entry whose bytes nobody holds is a
                 // 接收 button that can only ever fail, and a room full of those reads as damage.
                 Assert.Equal(Visibility.Visible, window.ChatEmptyText.Visibility);
-                var announced = window.Announce([file, folder, Path.Combine(_root, "不存在的.txt")]);
+                var announced = await window.AnnounceAsync([file, folder, Path.Combine(_root, "不存在的.txt")]);
                 Assert.Equal(2, announced);
 
                 var entries = window.Group.Entries;
@@ -505,6 +511,45 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
                 window.SendButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await WaitUntil(() => window.StatusText.Text == Tr.F("Lan.Refuse.MessageTooLong"), "长句没有被拒绝");
                 Assert.Equal(tooLong, window.ChatInputBox.Text);
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
+    [Fact]
+    public Task A_sentence_or_a_file_in_a_room_with_nobody_paired_says_that_nobody_else_heard_it()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var file = Path.Combine(_root, "季度 报告.txt");
+            File.WriteAllText(file, "hello");
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                // A computer heard on the subnet sits in the device strip and is not an audience: it holds no
+                // credential this machine would accept, and the room's own reader never dials it. Until now the
+                // strip was the only place that said so, and a sentence that reached nobody looked delivered —
+                // the row appeared, the box cleared, and the other machine showed nothing at all.
+                window.Presence.Seen(new LanRoomMember(ReturningId, "客厅的台式机", LanProtocol.KindUnknown,
+                    "192.168.1.9", port, DateTimeOffset.UtcNow, Discovered: true));
+
+                Assert.Equal(LanRefusal.None, await window.SayAsync("下午三点之前把报告发我"));
+                Assert.Single(window.Group.Entries);
+                Assert.Equal(Tr.F("Lan.NoOneToHear"), window.StatusText.Text);
+
+                // …and the same for a file, whose ordinary line — 谁要谁自己点接收 — would be naming somebody who
+                // cannot see it.
+                Assert.Equal(1, await window.AnnounceAsync([file]));
+                Assert.Equal(Tr.Format("Lan.NoOneToReceive", 1), window.StatusText.Text);
+
+                // Saying so is not a refusal: the machine that typed it keeps its own copy of what it said, and a
+                // computer paired a minute later still reads both rows out of this window's log.
+                Assert.Equal(2, window.ChatList.Items.Count);
             }
             finally
             {
@@ -705,7 +750,7 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
             await window.OpenAsync();
             try
             {
-                Assert.Equal(1, window.Announce([file]));
+                Assert.Equal(1, await window.AnnounceAsync([file]));
                 var messageId = Assert.Single(window.Group.Entries,
                     entry => entry.Kind == LanGroupKind.File).MessageId;
 
@@ -748,31 +793,41 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
     }
 
     [Fact]
-    public Task A_device_that_stops_saying_it_is_here_leaves_the_room_and_the_room_says_so()
+    public Task A_member_that_stops_saying_it_is_here_stays_in_the_room_and_the_room_says_it_left()
     {
         return RunSta(async () =>
         {
             var port = FreePort();
+            // A phone paired in an earlier session: the row is on disk and outlives every window, which is what
+            // makes it a member before it has said anything in this one.
+            await new LanPeerStore().RememberAsync(new LanPeerRecord(StrangerId, "小明的手机", LanProtocol.KindPhone,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 0, ["192.168.1.5"]));
+
             var window = NewWindow(port);
             await window.OpenAsync();
             try
             {
-                Assert.Equal(Visibility.Visible, window.MemberEmptyText.Visibility);
+                // In the room from the first paint, and marked away: presence is a lease on top of membership,
+                // not the thing that decides it.
+                var offline = Assert.IsType<LanMemberRow>(Assert.Single(window.MemberList.Items));
+                Assert.Equal("小明的手机", offline.Name);
+                Assert.Contains(Tr.F("Lan.KindPhone"), offline.Detail);
+                Assert.Contains("（离开）", offline.Detail);
 
                 window.Presence.Seen(new LanRoomMember(StrangerId, "小明的手机", LanProtocol.KindPhone, "192.168.1.5", 0,
                     DateTimeOffset.UtcNow, Discovered: false));
 
                 var chip = Assert.IsType<LanMemberRow>(Assert.Single(window.MemberList.Items));
-                Assert.Equal("小明的手机", chip.Name);
-                Assert.Contains(Tr.F("Lan.KindPhone"), chip.Detail);
-                Assert.Equal(Visibility.Collapsed, window.MemberEmptyText.Visibility);
+                Assert.Equal(Tr.Format("Lan.MemberChip", Tr.F("Lan.KindPhone"), "192.168.1.5"), chip.Detail);
 
                 // A phone whose browser was closed cannot send anything, so this absence — not an event — is what
                 // 退群 means. The sweep is the same clock the window's own tick runs on, moved past the lease.
                 window.Presence.Sweep(DateTimeOffset.UtcNow + LanRoomPresence.DefaultTimeToLive + TimeSpan.FromSeconds(1));
-                await WaitUntil(() => window.MemberList.Items.Count == 0, "断连的设备没有退群");
-                Assert.Equal(Visibility.Visible, window.MemberEmptyText.Visibility);
-                // …and the room says it, because a chip that vanished with no explanation is a list that lied.
+                await WaitUntil(() => window.MemberList.Items.Count == 1, "成员不该因为离开而消失");
+                // It stays a member — the pairing was not revoked, and a list that dropped it would look like the
+                // user had forgotten the device — but the room says it left, because a chip that quietly changed
+                // state is a list that lied about what happened.
+                Assert.Contains("（离开）", ((LanMemberRow)window.MemberList.Items[0]!).Detail);
                 Assert.Equal(Tr.Format("Lan.LeftRoom", "小明的手机"), window.Group.Entries[^1].Text);
             }
             finally
@@ -783,7 +838,7 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
     }
 
     [Fact]
-    public Task A_computer_heard_on_the_subnet_is_in_the_room_too_and_leaves_without_a_word()
+    public Task A_computer_heard_on_the_subnet_is_invitable_and_never_a_member()
     {
         return RunSta(async () =>
         {
@@ -792,24 +847,169 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
             await window.OpenAsync();
             try
             {
-                var now = DateTimeOffset.UtcNow;
-                window.Presence.Seen(new LanRoomMember(ReturningId, "客厅的台式机", LanProtocol.KindUnknown, "192.168.1.9",
-                    port, now, Discovered: true));
+                window.PeerAnnounced(new LanDiscoveredPeer(ReturningId, "客厅的台式机", "192.168.1.9", port));
 
-                // 发现的电脑 belongs in the room's device list and not only in a corner of the pairing panel: it is
-                // the machine a person is most likely to pair with next, and a device list that left it out made
-                // them hunt for it somewhere else.
-                var chip = Assert.IsType<LanMemberRow>(Assert.Single(window.MemberList.Items));
+                // 可邀请设备 is the whole answer to "we found each other but nothing arrives": a machine heard on
+                // the subnet has proved nothing, so it is offered as something to invite rather than listed as
+                // somebody who is already here.
+                var chip = Assert.IsType<LanInviteRow>(Assert.Single(window.InviteList.Items));
                 Assert.Equal("客厅的台式机", chip.Name);
                 Assert.Contains(Tr.F("Lan.MemberDiscovered"), chip.Detail);
                 Assert.Contains($"192.168.1.9:{port}", chip.Detail);
+                Assert.Equal(LanDeviceState.Invitable, chip.Entry.State);
 
-                window.Presence.Sweep(now + LanRoomPresence.DefaultTimeToLive + TimeSpan.FromSeconds(1));
-
-                // It leaves silently: it never joined anything, so a line announcing its departure would narrate
-                // a membership it does not have. The room therefore stays empty.
+                // …and the room's own list stays empty, with nothing said about it: it never joined anything, so
+                // narrating its arrival would be narrating a membership it does not have.
                 Assert.Empty(window.MemberList.Items);
+                Assert.Equal(Visibility.Visible, window.MemberEmptyText.Visibility);
                 Assert.Empty(window.Group.Entries);
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
+    [Fact]
+    public Task A_device_a_member_holds_gets_its_invite_button_rather_than_none_at_all()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var gatewayPort = FreePort();
+            var now = DateTimeOffset.UtcNow;
+            // 客厅电脑 is a member this machine can both read and dial. 小明的手机 is the browser it serves: it
+            // answers nowhere, so the only witness this window has of it is that computer's own report, which is
+            // what the room's poll carries and what the merge turns into a row here.
+            await new LanPeerStore().RememberAsync(new LanPeerRecord(GatewayId, "客厅电脑", LanProtocol.KindWindows,
+                now, now, gatewayPort, ["127.0.0.1"]));
+            // The credential this machine was handed for that member — the half of a pairing that lets the poll dial
+            // it at all, and the reason the merge can call it a member rather than something to finish.
+            await new LanPeerSecretStore(LanPeerClient.DefaultReceivedPath())
+                .StoreAsync(GatewayId, new string('c', 2 * LanPeerSecretStore.TokenBytes));
+
+            var gateway = RelayGateway(gatewayPort,
+                Relay(PhoneId, "小明的手机", GatewayId), Relay(StrayId, "走廊的手机", "ffffffffffffffffffffffffffffffff"));
+
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                await window.Room!.PollOnceAsync(CancellationToken.None);
+                await WaitUntil(() => window.InviteList.Items.Count == 2, "成员转发的设备没有画到可邀请里");
+
+                var chips = window.InviteList.Items.OfType<LanInviteRow>().ToList();
+                var held = Assert.Single(chips, chip => chip.Entry.DeviceId == PhoneId);
+
+                // The chip says where the phone is — on that computer — and still offers 邀请, because the question
+                // does not go to the phone. It goes to the member that serves its page, and that member answers.
+                // Without this the gateway branch of 邀请 exists in the service layer and nothing on this screen can
+                // reach it, which is how this row used to draw: no button at all.
+                Assert.Equal("小明的手机", held.Name);
+                Assert.Contains(Tr.Format("Lan.MemberVia", "客厅电脑"), held.Detail);
+                Assert.False(held.Entry.IsDialable);
+                Assert.True(held.Entry.CanInvite);
+                Assert.Equal(Visibility.Visible, held.ActionVisibility);
+
+                // …and the row whose gateway this machine does not even know keeps no button. The answer is per row,
+                // not "relayed rows now always get one", and a press that can only be refused is not an offer.
+                var stray = Assert.Single(chips, chip => chip.Entry.DeviceId == StrayId);
+                Assert.False(stray.Entry.CanInvite);
+                Assert.Equal(Visibility.Collapsed, stray.ActionVisibility);
+
+                // The member strip stays the gateway alone: a phone this machine never agreed with must not be drawn
+                // as something that has joined, and the two strips must not disagree about that.
+                var member = Assert.IsType<LanMemberRow>(Assert.Single(window.MemberList.Items));
+                Assert.Equal(GatewayId, member.Entry.DeviceId);
+
+                // Laid out, because a chip that was never measured says nothing about the button it binds: the row
+                // template is only instantiated once the list has been given a size.
+                Realise(window.InviteList);
+                var drawn = Descendants<Button>(window.InviteList)
+                    .Where(button => button.DataContext is LanInviteRow)
+                    .ToDictionary(button => ((LanInviteRow)button.DataContext!).Entry.DeviceId, StringComparer.OrdinalIgnoreCase);
+                Assert.Equal(Visibility.Visible, drawn[PhoneId].Visibility);
+                Assert.Equal(Visibility.Collapsed, drawn[StrayId].Visibility);
+            }
+            finally
+            {
+                gateway.Stop();
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
+    [Fact]
+    public Task An_invite_is_answered_by_a_person_and_joins_the_room()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                var grant = new string('a', 2 * LanPeerSecretStore.TokenBytes);
+                // The question arrives the way it really does: on the board the listener was handed, which is the
+                // same object this window answers from. Nothing here is a shortcut around the wiring.
+                var opened = window.Session!.Invites.Open(new LanInviteRequest("abc00001", ReturningId, "客厅的台式机",
+                    LanProtocol.KindWindows, port, grant, window.DeviceId), "192.168.1.9", port, DateTimeOffset.UtcNow);
+
+                Assert.True(opened.Opened);
+                // Its own strip, not the one that asks about a stranger's first file: joining a room and letting
+                // one file land are different questions and the wrong click costs differently.
+                Assert.Equal(Visibility.Visible, window.InviteAskBorder.Visibility);
+                var ask = Assert.IsType<LanRow>(Assert.Single(window.InviteAskList.Items));
+                Assert.Equal(Tr.Format("Lan.InviteFrom", "客厅的台式机"), ask.Name);
+
+                await window.AnswerInviteAsync(true);
+
+                // Agreeing is two credentials and a row — the row is what the member strip is drawn from, so it
+                // appearing there is the whole chain having worked rather than one write having been made.
+                await WaitUntil(() => window.MemberList.Items.Count == 1, "同意了，成员条上却没有那台电脑");
+                var member = Assert.IsType<LanMemberRow>(Assert.Single(window.MemberList.Items));
+                Assert.Equal("客厅的台式机", member.Name);
+                Assert.Equal(Tr.Format("Lan.JoinedRoom", "客厅的台式机"), window.Group.Entries[^1].Text);
+                Assert.Equal(Visibility.Collapsed, window.InviteAskBorder.Visibility);
+
+                var row = Assert.Single(await new LanPeerStore().LoadAsync());
+                Assert.Equal(ReturningId, row.DeviceId);
+                Assert.Equal(LanProtocol.KindWindows, row.Kind);
+
+                // The credential this machine minted for the inviter, and the one the invitation carried for this
+                // machine. Two files, because a token this machine issued and one it was handed are different
+                // things — and both have to exist or the pairing is one-way again.
+                Assert.NotNull(await new LanPeerSecretStore().TokenForAsync(ReturningId));
+                var received = new LanPeerSecretStore(LanPeerClient.DefaultReceivedPath());
+                Assert.True(await received.VerifyAsync(ReturningId, grant));
+            }
+            finally
+            {
+                await window.ShutdownAsync();
+            }
+        });
+    }
+
+    [Fact]
+    public Task An_invite_addressed_to_somebody_else_never_appears_on_this_screen()
+    {
+        return RunSta(async () =>
+        {
+            var port = FreePort();
+            var window = NewWindow(port);
+            await window.OpenAsync();
+            try
+            {
+                // A member relaying an invitation to a phone it serves. The phone is the one being asked; this
+                // window is only the messenger, and answering here would join a device that never agreed.
+                window.Session!.Invites.Open(new LanInviteRequest("abc00002", ReturningId, "客厅的台式机",
+                    LanProtocol.KindWindows, port, new string('b', 2 * LanPeerSecretStore.TokenBytes), StrangerId),
+                    "192.168.1.9", port, DateTimeOffset.UtcNow);
+
+                Assert.Empty(window.InviteAskList.Items);
+                Assert.Equal(Visibility.Collapsed, window.InviteAskBorder.Visibility);
+                Assert.Empty(window.MemberList.Items);
             }
             finally
             {
@@ -989,6 +1189,107 @@ public sealed class LanTransferWindowBehaviorTests : IDisposable
         var port = ((IPEndPoint)probe.LocalEndpoint).Port;
         probe.Stop();
         return port;
+    }
+
+    /// <summary>
+    /// One device as a member reports it: no address and no port, which is exactly the shape the room's poll
+    /// carries and the reason a row built from it has nothing of its own to test.
+    /// </summary>
+    private static LanMemberWire Relay(string deviceId, string name, string gateway) =>
+        new(deviceId, name, LanProtocol.KindPhone, gateway, DateTimeOffset.UtcNow);
+
+    /// <summary>
+    /// A member's listener, answered by this test rather than by a second window.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One process has one device identity, so a second window would be <i>this</i> machine and the room's poll
+    /// would dial nobody and merge nothing. What the window under test needs is one peer row it can reach and one
+    /// room answer naming the devices that peer holds — and the honest way to give it that is to write the reply in
+    /// this protocol's own shape and let the window's real poller come and read it, rather than adding a seam to
+    /// the window for a test to push rows through.
+    /// </para>
+    /// <para>
+    /// Only <c>invitable</c> is filled, because that is the half that travels: who a member could offer is news to
+    /// this machine, while who is already in that room is not something this machine needs told.
+    /// </para>
+    /// <para>
+    /// The socket is answered by hand rather than through <c>HttpListener</c>, because a hand-written reply cannot
+    /// be refused by a machine's URL reservations, and the only thing this case is about is what the poller does
+    /// with an answer that did arrive.
+    /// </para>
+    /// </remarks>
+    private static TcpListener RelayGateway(int port, params LanMemberWire[] invitable)
+    {
+        var body = JsonSerializer.SerializeToUtf8Bytes(
+            new LanLogReply(LanApi.WireVersion, 0, [], Invitable: invitable), LanApi.Json);
+        var head = Encoding.ASCII.GetBytes(
+            $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {body.Length}\r\n\r\n");
+        var listener = new TcpListener(IPAddress.Loopback, port);
+        listener.Start();
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                TcpClient peer;
+                try
+                {
+                    peer = await listener.AcceptTcpClientAsync();
+                }
+                // The case is over and its gateway has been stopped: there is nobody left to answer.
+                catch (ObjectDisposedException) { return; }
+                catch (SocketException) { return; }
+
+                using (peer)
+                {
+                    var stream = peer.GetStream();
+                    try
+                    {
+                        // The request is read only so the reply goes out once a caller is really there; nothing
+                        // about it changes the one answer this gateway has. "Really there" is the request's own
+                        // blank line, because a socket that opened and said nothing is not a caller, and one
+                        // read of whatever happened to arrive is not a promise that the request landed.
+                        await AwaitRequestHeadAsync(stream);
+                        await stream.WriteAsync(head);
+                        await stream.WriteAsync(body);
+                        await stream.FlushAsync();
+                    }
+                    // A reader that gave up mid-reply is the poll's own problem to report, not this one's to raise.
+                    catch (IOException) { }
+                    catch (SocketException) { }
+                }
+            }
+        });
+        return listener;
+    }
+
+    /// <summary>
+    /// Reads until the request names its own end, or until the caller goes away. A hand-written listener should not
+    /// answer a socket that opened and said nothing, and one read reports only what had happened to arrive.
+    /// </summary>
+    private static async Task AwaitRequestHeadAsync(NetworkStream stream)
+    {
+        var buffer = new byte[2048];
+        var seen = 0;
+        while (seen < buffer.Length)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(seen));
+            if (read == 0) return;
+            seen += read;
+            if (EndsRequestHead(buffer, seen)) return;
+        }
+    }
+
+    /// <summary>Whether the bytes gathered so far carry the blank line that ends an HTTP request head.</summary>
+    private static bool EndsRequestHead(byte[] buffer, int length)
+    {
+        for (var i = 3; i < length; i++)
+        {
+            if (buffer[i] == (byte)'\n' && buffer[i - 1] == (byte)'\r'
+                && buffer[i - 2] == (byte)'\n' && buffer[i - 3] == (byte)'\r') return true;
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -44,8 +44,20 @@ public sealed record LanSendOutcome(int Files, int Directories, long Bytes);
 /// </remarks>
 public sealed class LanPeerClient : IDisposable
 {
-    /// <summary>How long a stranger is allowed to take answering 这里是 Feng Sync 吗 before the window says 无应答.</summary>
+    /// <summary>
+    /// How long a stranger is allowed to take answering 这里是 Feng Sync 吗 before the window says 无应答.</summary>
     public static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// How long this side waits for somebody on the far machine to answer an invitation.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately longer than the invitation's own lifetime, because the two numbers are about different things:
+    /// the peer stops accepting an answer after <see cref="LanProtocol.InviteLifetimeSeconds"/>, and this side has to
+    /// stay on the line long enough to be told so. Timing out first would turn every unanswered invitation into a
+    /// network error the user cannot act on.
+    /// </remarks>
+    public static readonly TimeSpan InviteTimeout = TimeSpan.FromSeconds(LanProtocol.InviteLifetimeSeconds + 10);
 
     /// <summary>
     /// How long one of the small calls around a transfer may take. It is a timeout rather than an open end because
@@ -57,6 +69,7 @@ public sealed class LanPeerClient : IDisposable
     private readonly LanDeviceIdentity _self;
     private readonly LanPeerStore _members;
     private readonly LanPeerSecretStore _received;
+    private readonly LanPeerSecretStore? _issued;
     private readonly HttpClient _http;
     private readonly bool _ownsHttpClient;
 
@@ -70,13 +83,30 @@ public sealed class LanPeerClient : IDisposable
     /// <c>lan-peer-secrets.dat</c>, because that one holds what this machine handed out and a reader of either
     /// file has to be able to tell which direction the credential points.
     /// </param>
-    public LanPeerClient(LanDeviceIdentity self, LanPeerStore members, LanPeerSecretStore? received = null, HttpClient? http = null)
+    /// <param name="issued">
+    /// What this machine hands out, used for the one thing the calling half must mint: the grant that travels in a
+    /// pairing or invite request so the peer can dial back. Optional, and shared with the listener when both live
+    /// in one window — a second instance over the same file would load-modify-write over the first one's work.
+    /// </param>
+    /// <param name="listenPort">
+    /// The port this machine is itself listening on, sent as <c>X-FS-Port</c> on every call.
+    /// </param>
+    /// <remarks>
+    /// <paramref name="listenPort"/> is not a convenience. Without it the peer records the row for this machine
+    /// with port 0 — the same number a phone browser honestly reports — and a member at port 0 cannot be dialled,
+    /// so every sentence and file this machine sends reaches the other side while nothing comes back. That is the
+    /// one-way room this whole invitation feature was built to end, and the header is what makes it two-way.
+    /// </remarks>
+    public LanPeerClient(LanDeviceIdentity self, LanPeerStore members, LanPeerSecretStore? received = null,
+        HttpClient? http = null, LanPeerSecretStore? issued = null, int listenPort = 0)
     {
         _self = self;
         _members = members;
         _received = received ?? new LanPeerSecretStore(DefaultReceivedPath());
+        _issued = issued;
+        ListenPort = listenPort;
         _ownsHttpClient = http is null;
-        _http = http ?? new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(10) })
+        _http = http ?? new HttpClient(CreateHandler())
         {
             // A whole file is one request, and a gigabyte on a slow Wi-Fi link has no reasonable number of
             // seconds to promise in advance. Liveness is the caller's CancellationToken's job; short calls
@@ -85,8 +115,44 @@ public sealed class LanPeerClient : IDisposable
         };
     }
 
+    /// <summary>
+    /// The handler every peer call goes through: direct, never through a proxy.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// No proxy is not a preference. Every address this class dials is a machine on the same wire as this one — a
+    /// peer found by UDP discovery, or this process's own loopback while a test drives it. A proxy has no route to
+    /// a peer's private address, so at best it fails; at worst it accepts the call, answers for whatever it
+    /// forwards to, and then <em>two</em> peers are served by one pooled connection — after which every call
+    /// reaches the machine that answered last. That is a room where a sentence typed here lands on the wrong
+    /// computer, and a file asked of one member arrives from another.
+    /// </para>
+    /// <para>
+    /// The failure is invisible until it is not: a machine with no proxy configured behaves perfectly, and the
+    /// only machines that break are the ones running a VPN or a corporate gateway — which is to say, most of them.
+    /// Public because the rule is unobservable from behaviour in the ordinary case, so a test can only state it.
+    /// </para>
+    /// </remarks>
+    public static SocketsHttpHandler CreateHandler() => new()
+    {
+        UseProxy = false,
+        // Connections are kept across calls because a room polls every member every three seconds; a pool that
+        // outlived one transfer would still be ten minutes of handshakes saved on a link that is already slow.
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+    };
+
     /// <summary>The credential file for tokens this machine was handed. Kept apart from the one it hands out.</summary>
     public static string DefaultReceivedPath() => Path.Combine(AppDataPaths.LanTransfer, "lan-received-tokens.dat");
+
+    /// <summary>
+    /// The port this machine is listening on, declared to every peer as <c>X-FS-Port</c>.
+    /// </summary>
+    /// <remarks>
+    /// Settable rather than fixed at construction because the window rebuilds its listener when the user applies a
+    /// new port, and this object outlives that: a client still announcing the old number would keep telling every
+    /// peer to dial an address that stopped answering. 0 means "not listening", and nothing is declared.
+    /// </remarks>
+    public int ListenPort { get; set; }
 
     /// <summary>Whether this machine holds a credential for that peer, so a window can say 已配对 without a round trip.</summary>
     public Task<bool> IsPairedAsync(LanPeerEndpoint peer, CancellationToken ct = default) =>
@@ -119,29 +185,171 @@ public sealed class LanPeerClient : IDisposable
     /// <see cref="LanRefusal.BadCode"/> for a string that is not a code at all, before anything is sent, and the
     /// peer's own refusal afterwards — expired, rate limited, or an identity that changed.
     /// </exception>
+    /// <remarks>
+    /// One code buys both directions. The request carries a token this machine minted for the peer, and the reply
+    /// carries the one the peer minted for this machine; without the first half the peer would keep a row it
+    /// cannot dial and every poll of this machine would answer 请先配对.
+    /// </remarks>
     public async Task<LanPairReply> PairAsync(LanPeerEndpoint peer, string rawCode, CancellationToken ct = default)
     {
         if (!LanPairCode.TryNormalise(rawCode, out var code)) throw LanTransferException.For(LanRefusal.BadCode);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(ProbeTimeout);
-        var request = new HttpRequestMessage(HttpMethod.Post, Build("/api/v1/pair", peer.Address, peer.Port))
+        var grant = await MintGrantAsync(peer.DeviceId, ct).ConfigureAwait(false);
+        try
         {
-            Content = JsonContent(new LanPairRequest(code, _self.DeviceId, _self.DeviceName, _self.Kind)),
-        };
-        using var response = await SendAsync(request, timeout.Token).ConfigureAwait(false);
-        var reply = await ReadAsync<LanPairReply>(response, ct).ConfigureAwait(false);
-        await _received.StoreAsync(peer.DeviceId, reply.Token, ct).ConfigureAwait(false);
-        // A machine that answers /pair is a computer — no phone listens — so the kind is settled by the call
-        // succeeding rather than by anything it claimed. The name is its own claim, sanitized the way every
-        // name this application stores is, and a later 改名 or /hello is what corrects it.
-        await _members.RememberAsync(new LanPeerRecord(peer.DeviceId, LanProtocol.SanitizePeerName(peer.DeviceName),
-            LanProtocol.KindWindows, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, peer.Port, [peer.Address]), ct)
-            .ConfigureAwait(false);
-        return reply;
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(ProbeTimeout);
+            var request = new HttpRequestMessage(HttpMethod.Post, Build("/api/v1/pair", peer.Address, peer.Port))
+            {
+                Content = JsonContent(new LanPairRequest(code, _self.DeviceId, _self.DeviceName, _self.Kind, grant.Token)),
+            };
+            using var response = await SendAsync(request, timeout.Token).ConfigureAwait(false);
+            var reply = await ReadAsync<LanPairReply>(response, ct).ConfigureAwait(false);
+            // A machine that answers /pair is a computer — no phone listens — so the kind is settled by the call
+            // succeeding rather than by anything it claimed. The name is its own claim, sanitized the way every
+            // name this application stores is, and a later 改名 or /hello is what corrects it.
+            await AdoptAsync(DirectRecord(peer, LanProtocol.KindWindows), reply.Token, ct).ConfigureAwait(false);
+            return reply;
+        }
+        catch
+        {
+            await ReleaseGrantAsync(grant, ct).ConfigureAwait(false);
+            throw;
+        }
     }
 
-    /// <summary>Drops the credential this machine holds for a peer. The peer's own row is unaffected — that is what 取消信任 on the other side is for.</summary>
+    /// <summary>
+    /// Keeps the credential a peer issued and the row that lets this machine dial it.
+    /// </summary>
+    /// <remarks>
+    /// One method for pairing and for an accepted invitation, because the two ends of both are the same two
+    /// writes and a second copy would be the place they start disagreeing about which kind a peer is.
+    /// </remarks>
+    private async Task AdoptAsync(LanPeerRecord record, string token, CancellationToken ct)
+    {
+        await _received.StoreAsync(record.DeviceId, token, ct).ConfigureAwait(false);
+        await _members.RememberAsync(record, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The row a peer that answers for itself gets: its own address, its own port, no gateway.</summary>
+    private static LanPeerRecord DirectRecord(LanPeerEndpoint peer, string kind) =>
+        new(peer.DeviceId, LanProtocol.SanitizePeerName(peer.DeviceName), kind,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, peer.Port, [peer.Address]);
+
+    /// <summary>
+    /// A token minted for a peer before it has agreed to anything, because it has to travel in the request.
+    /// </summary>
+    /// <param name="WasPresent">
+    /// Whether this machine already held a credential for that device. A failed attempt drops only a token it
+    /// minted for a device that had none: forgetting one that was already there would take away a working
+    /// credential because a second attempt went wrong, which is worse than an unused string.
+    /// </param>
+    private sealed record LanGrant(LanPeerSecretStore? Store, string DeviceId, string? Token, bool WasPresent);
+
+    private async Task<LanGrant> MintGrantAsync(string deviceId, CancellationToken ct)
+    {
+        if (_issued is null) return new LanGrant(null, deviceId, null, false);
+        // An existing credential is handed over again rather than replaced. Minting a new one here would
+        // invalidate the token the peer is already using before this attempt has proved it can read a code, so
+        // a mistyped second pairing would break a working one.
+        var existing = await _issued.TokenForAsync(deviceId, ct).ConfigureAwait(false);
+        if (existing is not null) return new LanGrant(_issued, deviceId, existing, true);
+
+        var token = await _issued.IssueAsync(deviceId, ct).ConfigureAwait(false);
+        return new LanGrant(_issued, deviceId, token, false);
+    }
+
+    private static async Task ReleaseGrantAsync(LanGrant grant, CancellationToken ct)
+    {
+        if (grant.Store is null || grant.WasPresent) return;
+        try { await grant.Store.ForgetAsync(grant.DeviceId, ct).ConfigureAwait(false); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>
+    /// Drops the credential this machine holds for a peer. The peer's own row is unaffected — that is what 取消信任 on the other side is for.
+    /// </summary>
     public Task<bool> ForgetAsync(LanPeerEndpoint peer, CancellationToken ct = default) => _received.ForgetAsync(peer.DeviceId, ct);
+
+    /// <summary>
+    /// Asks a device to join the room, and waits while a person on that machine decides.
+    /// </summary>
+    /// <param name="targetDeviceId">
+    /// The device the invitation is really for, when it is not the machine being called. A phone browser cannot be
+    /// dialled, so its invitation goes to the computer serving its page and names the phone — which is the whole of
+    /// the invitation network's trick. Null invites the machine being called.
+    /// </param>
+    /// <param name="targetName">
+    /// What the relayed device is called, so the member row written for it is the name a person saw rather than a
+    /// bare identifier. Ignored for a direct invitation, whose row takes the name the peer gave itself.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// The one call in this protocol that waits on a human. Everything else is answered by a credential or by a
+    /// rule; this is answered by somebody looking at a screen and clicking, which is why its timeout is measured in
+    /// a minute and a half rather than in seconds.
+    /// </para>
+    /// <para>
+    /// It is also the only call that mints a credential before it has any right to one. The grant travels in the
+    /// request so the accepting machine can dial this one back, and it is released on every outcome but a yes —
+    /// otherwise a declined invitation would leave a working token in this machine's file for a device that has
+    /// just said no.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="LanTransferException">
+    /// <see cref="LanRefusal.NotFound"/> from a build that predates this route, which the window reads as 对方版本太旧;
+    /// <see cref="LanRefusal.RateLimited"/> or <see cref="LanRefusal.InviteConflict"/> when the far side is already
+    /// holding as many questions as it will.
+    /// </exception>
+    public async Task<LanInviteReply> InviteAsync(LanPeerEndpoint peer, string? targetDeviceId = null,
+        string? targetName = null, CancellationToken ct = default)
+    {
+        // The grant is minted for the machine that will hold the answer, which for a relayed invitation is the
+        // gateway rather than the phone: the phone has no listener, so the credential is only ever spent on the
+        // machine that can act on it.
+        var grant = await MintGrantAsync(peer.DeviceId, ct).ConfigureAwait(false);
+        var inviteId = Guid.NewGuid().ToString("N");
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(InviteTimeout);
+            var request = new HttpRequestMessage(HttpMethod.Post, Build("/api/v1/invites", peer.Address, peer.Port))
+            {
+                Content = JsonContent(new LanInviteRequest(inviteId, _self.DeviceId, _self.DeviceName, _self.Kind,
+                    ListenPort, grant.Token ?? "", targetDeviceId)),
+            };
+            // Only a relayed invitation carries a credential. A direct one is answered by a person, and sending a
+            // token to a machine that is not going to check it is one more copy of a secret in flight for nothing.
+            if (!string.IsNullOrEmpty(targetDeviceId)
+                && await TokenForAsync(peer, ct).ConfigureAwait(false) is { } credential)
+                AddCredential(request, credential);
+
+            using var response = await SendAsync(request, timeout.Token).ConfigureAwait(false);
+            var reply = await ReadAsync<LanInviteReply>(response, ct).ConfigureAwait(false);
+            if (!reply.Accepted)
+            {
+                // No is an outcome, not an exception — and it costs the inviter the token it pre-minted, because a
+                // credential for a device that has just said no is exactly what 取消信任 would have removed.
+                await ReleaseGrantAsync(grant, ct).ConfigureAwait(false);
+                return reply;
+            }
+
+            // Same two writes a pairing makes, in the same order: the credential it minted for this machine, and the
+            // row that lets this machine call it. A relayed invitation joins the device it named rather than the
+            // machine that relayed it — the gateway is named on that row, because it is the only way the room can
+            // reach a device that answers nowhere.
+            var joined = string.IsNullOrEmpty(targetDeviceId)
+                ? DirectRecord(peer, LanProtocol.KindWindows)
+                : new LanPeerRecord(targetDeviceId!, LanProtocol.SanitizePeerName(targetName), LanProtocol.KindPhone,
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 0, null, peer.DeviceId);
+            await AdoptAsync(joined, reply.Token!, ct).ConfigureAwait(false);
+            return reply;
+        }
+        catch
+        {
+            await ReleaseGrantAsync(grant, ct).ConfigureAwait(false);
+            throw;
+        }
+    }
 
     /// <summary>
     /// Reads a peer's copy of the room past the number this machine remembers for that peer.
@@ -358,8 +566,9 @@ public sealed class LanPeerClient : IDisposable
         Func<Stream, Task<T>> consume, CancellationToken ct = default)
     {
         var token = await TokenForAsync(peer, ct).ConfigureAwait(false) ?? throw LanTransferException.For(LanRefusal.Unpaired);
-        using var response = await _http.SendAsync(AttachmentRequest(peer, token, messageId, archive),
-            HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        var attachment = AttachmentRequest(peer, token, messageId, archive);
+        DeclareSelf(attachment);
+        using var response = await _http.SendAsync(attachment, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         // ReadAsync would translate the peer's own body here, and for this call the body is the file.
         if (!response.IsSuccessStatusCode)
         {
@@ -387,6 +596,7 @@ public sealed class LanPeerClient : IDisposable
     /// </summary>
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
+        DeclareSelf(request);
         HttpResponseMessage response;
         try
         {
@@ -441,6 +651,21 @@ public sealed class LanPeerClient : IDisposable
 
     private void AddCredential(HttpRequestMessage request, string token) =>
         request.Headers.Authorization = new AuthenticationHeaderValue(LanProtocol.AuthScheme, $"{_self.DeviceId}:{token}");
+
+    /// <summary>
+    /// Says where this machine can be dialled back, on every request.
+    /// </summary>
+    /// <remarks>
+    /// Every request rather than only the pairing one, because the peer's record of this machine is refreshed by
+    /// whichever call arrives: a port sent once and then dropped would be overwritten with the 0 a peer that
+    /// reports nothing gets, and the row would stop being dialable an hour later for no reason anybody could see.
+    /// </remarks>
+    private void DeclareSelf(HttpRequestMessage request)
+    {
+        if (ListenPort is < LanOptions.MinimumPort or > LanOptions.MaximumPort) return;
+        request.Headers.TryAddWithoutValidation(LanProtocol.HeaderPeerPort,
+            ListenPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
 
     private static void AddWireHeaders(HttpRequestMessage request, string relativePath, string? session, long? declaredBytes, DateTimeOffset? sourceWriteUtc)
     {

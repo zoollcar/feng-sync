@@ -56,6 +56,11 @@ public static class LanApi
         LanRefusal.NotFound => (404, LanReason.NotFound),
         LanRefusal.BadRequest => (400, LanReason.BadRequest),
 
+        // 408 rather than 409 for a question nobody answered: the request did not collide with anything, it ran
+        // out of time on the far side, and a person reading it should try again rather than wait.
+        LanRefusal.InviteExpired => (408, LanReason.InviteExpired),
+        LanRefusal.InviteConflict => (409, LanReason.InviteConflict),
+
         // The only one that is this machine's fault: the bytes were accepted, published, and then disagreed
         // with what the sender described, so a retry by the peer is not obviously the answer.
         LanRefusal.VerificationFailed => (500, LanReason.VerificationFailed),
@@ -95,6 +100,8 @@ public static class LanApi
         LanReason.VerificationFailed => LanRefusal.VerificationFailed,
         LanReason.BadRequest => LanRefusal.BadRequest,
         LanReason.MessageTooLong => LanRefusal.MessageTooLong,
+        LanReason.InviteExpired => LanRefusal.InviteExpired,
+        LanReason.InviteConflict => LanRefusal.InviteConflict,
         _ => null,
     };
 
@@ -110,6 +117,7 @@ public static class LanApi
         401 => LanRefusal.Unpaired,
         403 => LanRefusal.Declined,
         404 => LanRefusal.NotFound,
+        408 => LanRefusal.InviteExpired,
         409 => LanRefusal.Conflict,
         413 => LanRefusal.MessageTooLong,
         414 => LanRefusal.PathTooLong,
@@ -127,11 +135,18 @@ public sealed record LanHelloReply(
     bool PairingArmed);
 
 /// <summary>What a peer sends to trade a one-time code for a long-lived token.</summary>
+/// <param name="GrantToken">
+/// The credential the <b>caller</b> minted for this machine, handed over in the same request so that one code
+/// buys both directions. Without it the listener ends up holding a row it cannot dial — a peer in the device
+/// list that every poll of it fails — which is the half-duplex pairing this field exists to end. Optional,
+/// because a build from before this field existed sends none and must still be able to pair.
+/// </param>
 public sealed record LanPairRequest(
     string Code,
     [property: JsonPropertyName("deviceId")] string DeviceId,
     string DeviceName,
-    string Kind);
+    string Kind,
+    string? GrantToken = null);
 
 /// <summary>
 /// The credential, and the row this machine just wrote for the device that asked. <c>Peer</c> is the caller's
@@ -145,6 +160,109 @@ public sealed record LanPeerReply(
     string DeviceName,
     string Kind,
     DateTimeOffset FirstSeenUtc,
+    DateTimeOffset LastSeenUtc);
+
+/// <summary>
+/// An invitation to join a room, which is a pairing that needs no code because a person on the far side agrees
+/// to it instead.
+/// </summary>
+/// <param name="InviteId">
+/// Minted by the caller and repeated in every retry, because the question is answered out of band: the caller
+/// has to be able to ask about <i>this</i> invitation after the person it was shown to has clicked, and two
+/// attempts that arrived twice must not become two questions on somebody's screen.
+/// </param>
+/// <param name="Port">Where the caller is listening, so the machine that accepts can dial it back.</param>
+/// <param name="GrantToken">
+/// The credential the caller minted for the invited machine, handed over before anybody has agreed to anything.
+/// It is the other half of a mutual pairing — without it the invited machine could be reached but not reach —
+/// and the invited machine keeps it only if it says yes. Required, because an invitation that cannot be answered
+/// with a working credential is a request to invent one.
+/// </param>
+/// <param name="TargetDeviceId">
+/// Who the invitation is for. Absent or equal to the listener's own id means "you, the machine reading this";
+/// anything else is a member relaying an invitation to a device that has no listener of its own — a phone browser
+/// — and only an authenticated member may do that.
+/// </param>
+public sealed record LanInviteRequest(
+    string InviteId,
+    [property: JsonPropertyName("deviceId")] string DeviceId,
+    string DeviceName,
+    string Kind,
+    int Port,
+    string GrantToken,
+    string? TargetDeviceId = null);
+
+/// <summary>
+/// What became of an invitation. <paramref name="Token"/> is present only when it was accepted, and it is the
+/// credential the answering machine minted for the caller — the half that makes the pairing mutual.
+/// </summary>
+public sealed record LanInviteReply(string Decision, int V, string? Token = null)
+{
+    public bool Accepted => string.Equals(Decision, LanInviteOutcome.Accepted, StringComparison.Ordinal);
+}
+
+/// <summary>One invitation as a member reports it to a device that cannot be dialled.</summary>
+/// <remarks>
+/// It carries the inviter's address and port because a phone has to be able to tell its person who is asking,
+/// and because the answer goes back through the member that relayed it rather than to this address. Nothing here
+/// is a credential: the grant a relayed invitation carries never leaves the relaying machine.
+/// </remarks>
+public sealed record LanInviteWire(
+    string InviteId,
+    string FromDeviceId,
+    string FromName,
+    string FromKind,
+    string Address,
+    int Port,
+    DateTimeOffset ExpiresUtc);
+
+/// <summary>Whether the person looking at an invitation said yes.</summary>
+public sealed record LanInviteAnswerRequest(bool Accept);
+
+/// <summary>The stable strings an invitation's outcome travels as. One table, because two implementations read them.</summary>
+public static class LanInviteOutcome
+{
+    public const string Accepted = "accepted";
+    public const string Declined = "declined";
+    public const string Expired = "expired";
+    public const string Withdrawn = "withdrawn";
+
+    /// <summary>
+    /// The token for one outcome. <see cref="LanInviteDecision.Pending"/> has none, because a question that is
+    /// still open is never an answer — a caller that got here with one has a bug, and it is reported as expired
+    /// rather than invented as a fifth string nobody else reads.
+    /// </summary>
+    public static string For(LanInviteDecision decision) => decision switch
+    {
+        LanInviteDecision.Accepted => Accepted,
+        LanInviteDecision.Declined => Declined,
+        LanInviteDecision.Withdrawn => Withdrawn,
+        _ => Expired,
+    };
+
+    /// <summary>Reads an outcome back. Anything this protocol never wrote is read as expired.</summary>
+    public static LanInviteDecision Parse(string? outcome) => outcome switch
+    {
+        Accepted => LanInviteDecision.Accepted,
+        Declined => LanInviteDecision.Declined,
+        Withdrawn => LanInviteDecision.Withdrawn,
+        _ => LanInviteDecision.Expired,
+    };
+}
+
+/// <summary>
+/// One device a member knows about, as that member reports it.
+/// </summary>
+/// <remarks>
+/// It carries no address on purpose: a member is answering "who is in this room", not handing out where somebody
+/// can be dialled. A device that answers for itself is dialled through the peer list anyway, and one that does
+/// not — a phone browser — has nothing to dial, only a <see cref="GatewayDeviceId"/> to be reached through.
+/// </remarks>
+public sealed record LanMemberWire(
+    string DeviceId,
+    string DeviceName,
+    string Kind,
+    string? GatewayDeviceId,
     DateTimeOffset LastSeenUtc);
 
 /// <summary>What the receive sink decided, narrowed to what the sender can act on.</summary>
@@ -176,7 +294,30 @@ public sealed record LanMessageWire(
 /// What one machine's copy of the room holds past a number its caller named. <see cref="Head"/> is where this
 /// copy is now, which is what lets a poller record its watermark even when nothing new came across.
 /// </summary>
-public sealed record LanLogReply(int V, long Head, IReadOnlyList<LanMessageWire> Entries);
+/// <param name="Members">
+/// Who this machine has in the room, as <see cref="LanMemberWire"/> rows. It travels with the room rather than
+/// with the peer list because the two answer different questions: <c>/peers</c> is "what am I allowed to say
+/// about myself", and this is "who else is in this conversation". A device that cannot dial anybody — a phone
+/// browser — learns the room's other members from exactly one place, and this is it.
+/// </param>
+/// <param name="PendingInvites">
+/// The invitations waiting for <b>the caller</b> to answer, which is only ever non-empty for a device that
+/// cannot be dialled: a computer is asked directly and holds its own request open, while a phone is asked here
+/// and answers through <c>POST /api/v1/invites/{id}/answer</c>. Filtered by the authenticated caller, so a
+/// member never learns about a question put to somebody else.
+/// </param>
+/// <param name="Invitable">
+/// The devices this machine could offer an invitation to and has not agreed with — what its own window draws on
+/// the second strip. It travels with the room because the only machine that hears the subnet is the one running
+/// the listener: a phone has no ears of its own, and without this it could see the room but never add to it.
+/// </param>
+public sealed record LanLogReply(
+    int V,
+    long Head,
+    IReadOnlyList<LanMessageWire> Entries,
+    IReadOnlyList<LanMemberWire>? Members = null,
+    IReadOnlyList<LanInviteWire>? PendingInvites = null,
+    IReadOnlyList<LanMemberWire>? Invitable = null);
 
 /// <summary>
 /// A sentence a peer is asking this machine to remember and repeat.

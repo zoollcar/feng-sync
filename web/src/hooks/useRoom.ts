@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { post, reasonOf, request } from "../api/client";
+import { post, randomHex, reasonOf, request, Session } from "../api/client";
 import { Routes } from "../api/routes";
-import type { Entry, LogReply } from "../api/types";
+import type { Entry, Invite, LogReply, Member } from "../api/types";
 import { reasonText, t } from "../i18n/strings";
+
+/** What pressing 邀请 on a device came to. */
+export type InviteOutcome = { accepted: boolean; text: string };
 
 /**
  * This machine's copy of the room, read the way a browser can read it.
@@ -19,6 +22,12 @@ export function useRoom(active: boolean) {
   const [error, setError] = useState("");
   const [held, setHeld] = useState<Record<string, true>>({});
   const [ready, setReady] = useState(false);
+  // Who else is in this room, who this computer could still ask, and the questions it is holding for this page.
+  // All three arrive on the beat that already carries the conversation, because a phone has no second way to learn
+  // any of them: it cannot hear the subnet, and nothing can dial it back.
+  const [members, setMembers] = useState<Member[]>([]);
+  const [invitable, setInvitable] = useState<Member[]>([]);
+  const [invites, setInvites] = useState<Invite[]>([]);
   const since = useRef(0);
   const seen = useRef(new Set<string>());
 
@@ -50,6 +59,9 @@ export function useRoom(active: boolean) {
     if (!answer.body) return;
     since.current = answer.body.head || 0;
     merge(answer.body.entries ?? []);
+    setMembers(answer.body.members ?? []);
+    setInvitable(answer.body.invitable ?? []);
+    setInvites(answer.body.pendingInvites ?? []);
     setReady(true);
   }, [merge]);
 
@@ -91,5 +103,68 @@ export function useRoom(active: boolean) {
 
   const isHeld = useCallback((entry: Entry) => entry.heldHere || held[entry.messageId] === true, [held]);
 
-  return { entries, error, ready, append, receive, isHeld, refresh: poll };
+  /**
+   * Answers a question this computer is holding for this page, and settles it one of two ways.
+   *
+   * A browser cannot be dialled, so it is never asked directly: the computer keeps the inviter's request open and
+   * tells this page about it on the beat. Agreeing joins the inviter's room and says whose it is; declining leaves
+   * the invitation unopened. Either answer takes the question off screen, and the next beat brings it back only if
+   * it somehow stayed open. The invite arrives from the caller, so nothing here reads the list this beat put there.
+   */
+  const answerInvite = useCallback(async (invite: Invite, accept: boolean): Promise<string> => {
+    try {
+      const answer = await post<{ decision: string }>(Routes.answerInvite(invite.inviteId), { accept });
+      setInvites((current) => current.filter((item) => item.inviteId !== invite.inviteId));
+      if (answer.status === 200 || answer.status === 201) {
+        return accept ? t("joinedGroup", invite.fromName || invite.fromDeviceId) : t("declinedInvite");
+      }
+      return reasonText(reasonOf(answer.body));
+    } catch {
+      return t("errNet");
+    }
+  }, []);
+
+  /**
+   * Asks the computer to invite a device this page can see but cannot reach.
+   *
+   * The request is held until somebody at that machine answers, which is why this can take a minute: the page has
+   * no route to the device and never will, so the only honest place to wait is here.
+   */
+  const invite = useCallback(async (deviceId: string): Promise<InviteOutcome> => {
+    try {
+      const answer = await post<{ decision: string }>(Routes.invites, {
+        // The id is this page's own, in the shape the protocol asks for. The rest of the body describes this
+        // device, which the computer replaces with the identity it has already authenticated — a caller may ask
+        // on its own behalf and never as somebody else.
+        inviteId: randomHex(16),
+        deviceId: Session.deviceId,
+        deviceName: "",
+        kind: "phone",
+        port: 0,
+        grantToken: "",
+        targetDeviceId: deviceId,
+      });
+      if (answer.status !== 200 && answer.status !== 201) {
+        return { accepted: false, text: reasonText(reasonOf(answer.body)) };
+      }
+
+      const decision = answer.body?.decision ?? "";
+      const said =
+        decision === "accepted"
+          ? t("inviteJoined")
+          : decision === "declined"
+            ? t("inviteDeclined")
+            : decision === "withdrawn"
+              ? t("inviteWithdrawn")
+              : t("inviteExpired");
+      return { accepted: decision === "accepted", text: said };
+    } catch {
+      return { accepted: false, text: t("errNet") };
+    }
+  }, []);
+
+  return {
+    entries, error, ready, append, receive, isHeld, refresh: poll,
+    members, invitable, invites, answerInvite, invite,
+  };
 }

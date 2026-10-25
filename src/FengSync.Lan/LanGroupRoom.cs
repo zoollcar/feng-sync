@@ -68,9 +68,21 @@ public sealed class LanGroupRoom(
     /// </summary>
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
 
+    /// <summary>
+    /// How long one member's report about the room is believed.
+    /// </summary>
+    /// <remarks>
+    /// Five beats, so a member that missed one or two — a busy machine, a dropped packet — does not empty the list
+    /// of devices it had told this one about, while a member whose window closed stops being a source at all
+    /// within a quarter of a minute.
+    /// </remarks>
+    public static readonly TimeSpan RelayedMemberLifetime = PollInterval * 5;
+
     private readonly object _gate = new();
     private readonly Dictionary<string, long> _watermarks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, RelayedReport> _reports = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _stop = new();
+    private string _published = "";
 
     /// <summary>
     /// Where a pull's rate is measured, so the window and the page read the same number. A room built without one
@@ -110,6 +122,46 @@ public sealed class LanGroupRoom(
     /// </summary>
     public event Action<LanRoomProgressEventArgs>? Progress;
 
+    /// <summary>
+    /// The members this machine has been told about by the members it reads, rather than by its own agreement or
+    /// its own ears. Raised when that set changes, which is what turns another machine's room into an invitation
+    /// on this one's screen: a device a member reports is a device worth asking, not one to add quietly.
+    /// </summary>
+    public event Action? MembersChanged;
+
+    /// <summary>
+    /// The union of what each member last reported about the room, or an empty list when nobody has said anything.
+    /// </summary>
+    /// <remarks>
+    /// A report is per-member and replaced whole: if a member stops naming a device, that device leaves the room as
+    /// far as that member is concerned. A member that has gone quiet contributes nothing rather than contributing
+    /// its last word forever, which is what keeps a device that left from lingering as an invitation.
+    /// </remarks>
+    public IReadOnlyList<LanMemberWire> RelayedMembers
+    {
+        get
+        {
+            lock (_gate)
+            {
+                var cutoff = DateTimeOffset.UtcNow - RelayedMemberLifetime;
+                var merged = new Dictionary<string, LanMemberWire>(StringComparer.OrdinalIgnoreCase);
+                foreach (var report in _reports.Values)
+                {
+                    if (report.HeardUtc < cutoff) continue;
+                    foreach (var member in report.Members)
+                    {
+                        if (string.Equals(member.DeviceId, self.DeviceId, StringComparison.OrdinalIgnoreCase)) continue;
+                        merged[member.DeviceId] = member;
+                    }
+                }
+
+                return [.. merged.Values
+                    .OrderBy(member => member.DeviceName, StringComparer.CurrentCultureIgnoreCase)
+                    .ThenBy(member => member.DeviceId, StringComparer.OrdinalIgnoreCase)];
+            }
+        }
+    }
+
     /// <summary>Starts reading the room. Returns immediately; a window that wants its past before the first beat awaits <see cref="PollOnceAsync"/> itself.</summary>
     public void Start() => _loop ??= Task.Run(() => RunAsync(_stop.Token));
 
@@ -124,7 +176,7 @@ public sealed class LanGroupRoom(
     {
         foreach (var row in await MembersAsync(ct).ConfigureAwait(false))
         {
-            var member = Dial(row);
+            var member = EndpointFor(row);
             if (member is null) continue;
 
             LanLogReply reply;
@@ -161,7 +213,18 @@ public sealed class LanGroupRoom(
             // on the strength of a read that failed.
             presence?.Seen(new LanRoomMember(row.DeviceId, row.DeviceName, row.Kind, member.Address, member.Port,
                 DateTimeOffset.UtcNow, Discovered: false));
+
+            // What this member says it could invite. Kept per member rather than merged on arrival, because the
+            // useful fact is "B still offers C", and a union of every report ever received could never forget
+            // anybody. Only the invitable half travels: who is already in a room is not something this machine
+            // needs told, since it either agreed with them itself or did not.
+            if (reply.Invitable is { Count: > 0 } reported)
+                lock (_gate) _reports[row.DeviceId] = new RelayedReport(reported, DateTimeOffset.UtcNow);
+            else
+                lock (_gate) _reports.Remove(row.DeviceId);
         }
+
+        PublishRelayed();
     }
 
     /// <summary>
@@ -203,7 +266,7 @@ public sealed class LanGroupRoom(
     public async Task<IReadOnlyList<LanPeerEndpoint>> ReachableMembersAsync(CancellationToken ct = default)
     {
         var rows = await MembersAsync(ct).ConfigureAwait(false);
-        return [.. rows.Select(Dial).Where(member => member is not null).Cast<LanPeerEndpoint>()];
+        return [.. rows.Select(EndpointFor).Where(member => member is not null).Cast<LanPeerEndpoint>()];
     }
 
     /// <summary>The members this machine can reach: paired, Windows, and remembered at some address.</summary>
@@ -214,13 +277,20 @@ public sealed class LanGroupRoom(
             && !string.Equals(row.DeviceId, self.DeviceId, StringComparison.OrdinalIgnoreCase))];
     }
 
-    private static LanPeerEndpoint? Dial(LanPeerRecord row)
-    {
-        // Newest last is the store's own rule, so the address suggested here is the one that device answered from
-        // most recently — a phone or laptop that moved between access points is still the same member.
-        if (row.SeenAddresses.Count == 0) return null;
-        return new LanPeerEndpoint(row.DeviceId, row.SeenAddresses[^1], row.Port);
-    }
+    /// <summary>
+    /// Where to dial one peer row, or <see langword="null"/> when there is nowhere to dial.
+    /// </summary>
+    /// <remarks>
+    /// Newest last is the store's own rule, so the address suggested here is the one that device answered from most
+    /// recently — a phone or laptop that moved between access points is still the same member. A row without a
+    /// listener port is not dialable at all, which is the honest answer for a phone and for the one-way pairings
+    /// this protocol used to write; a caller that needs to know the difference asks about
+    /// <see cref="LanPeerRecord.Kind"/> rather than about this method's silence.
+    /// </remarks>
+    public static LanPeerEndpoint? EndpointFor(LanPeerRecord row) =>
+        row.SeenAddresses.Count == 0 || row.Port is < LanOptions.MinimumPort or > LanOptions.MaximumPort
+            ? null
+            : new LanPeerEndpoint(row.DeviceId, row.SeenAddresses[^1], row.Port, row.DeviceName);
 
     private async Task<LanRoomFetchEventArgs> PullAsync(LanGroupMessage entry, CancellationToken ct)
     {
@@ -260,7 +330,7 @@ public sealed class LanGroupRoom(
         var rows = await MembersAsync(ct).ConfigureAwait(false);
         return [.. rows
             .OrderBy(row => string.Equals(row.DeviceId, entry.AuthorDeviceId, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .Select(Dial)
+            .Select(EndpointFor)
             .Where(member => member is not null)
             .Cast<LanPeerEndpoint>()];
     }
@@ -434,6 +504,30 @@ public sealed class LanGroupRoom(
             await PollOnceAsync(ct).ConfigureAwait(false);
             if (!await timer.WaitForNextTickAsync(ct).ConfigureAwait(false)) return;
         }
+    }
+
+    /// <summary>One member's last word about who is in the room, and when it said it.</summary>
+    private sealed record RelayedReport(IReadOnlyList<LanMemberWire> Members, DateTimeOffset HeardUtc);
+
+    /// <summary>
+    /// Raises <see cref="MembersChanged"/> when the union of reports is not the one already published.
+    /// </summary>
+    /// <remarks>
+    /// The comparison is over a string of ids and names rather than over the lists, because the beat runs every
+    /// three seconds forever and a window that redrew its device list on every beat would be redrawing it for
+    /// nothing. Raised outside the lock: a handler is the window's, and it will do whatever it likes.
+    /// </remarks>
+    private void PublishRelayed()
+    {
+        var current = RelayedMembers;
+        var signature = string.Join('\n', current.Select(member => $"{member.DeviceId}\u0000{member.DeviceName}"));
+        lock (_gate)
+        {
+            if (string.Equals(signature, _published, StringComparison.Ordinal)) return;
+            _published = signature;
+        }
+
+        MembersChanged?.Invoke();
     }
 
     public async ValueTask DisposeAsync()

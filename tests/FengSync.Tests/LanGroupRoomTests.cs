@@ -194,6 +194,31 @@ public sealed class LanGroupRoomTests
     }
 
     [Fact]
+    public async Task A_member_that_reports_a_device_it_could_invite_makes_it_an_invitation_here()
+    {
+        await using var a = await Node.StartAsync("书房");
+        await using var b = await Node.StartAsync("客厅");
+        await PairBothAsync(a, b);
+        // A machine on the first computer's subnet that has not joined anything. Only that computer can hear it,
+        // so the second one can learn about it in exactly one way.
+        a.Invitable.Add(new LanRosterEntry("dddddddddddddddddddddddddddddddd", "走廊电脑", LanProtocol.KindWindows,
+            "10.0.0.8", 59901, LanDeviceState.Invitable, Online: false, GatewayDeviceId: null, DateTimeOffset.UtcNow));
+
+        var changed = new TaskCompletionSource();
+        b.Room.MembersChanged += () => changed.TrySetResult();
+        await b.Room.PollOnceAsync(CancellationToken.None);
+
+        var relayed = Assert.Single(b.Room.RelayedMembers);
+        Assert.Equal("dddddddddddddddddddddddddddddddd", relayed.DeviceId);
+        Assert.Equal("走廊电脑", relayed.DeviceName);
+        // No address travels with it: the room is a list of people, not a set of directions, and the machine that
+        // can hear the device is the one that will dial it.
+        Assert.Null(relayed.GatewayDeviceId);
+        // The window is told, because a list that changed without an event is a list that never redraws.
+        await changed.Task.WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
     public async Task Pressing_receive_twice_asks_the_room_for_the_bytes_once()
     {
         await using var a = await Node.StartAsync("书房");
@@ -308,6 +333,12 @@ public sealed class LanGroupRoomTests
 
         public LanPeerClient Client { get; }
         public LanGroupRoom Room { get; }
+
+        /// <summary>
+        /// What this node's own window would draw on its invitation strip. A case fills it rather than starting a
+        /// window, because the listener only ever asks for this list and never decides it.
+        /// </summary>
+        public List<LanRosterEntry> Invitable { get; } = [];
         public ConcurrentQueue<LanGroupMessage> Offers { get; }
         public ConcurrentQueue<LanRoomFetchEventArgs> Fetches { get; }
         public LanGroupLog Group => _session.Group;
@@ -391,7 +422,8 @@ public sealed class LanGroupRoomTests
         public async Task ResumeAsync()
         {
             if (_host is not null) return;
-            _host = await LanServerHost.StartAsync(new LanServerOptions(_session, _identity, _pairing, _sink),
+            _host = await LanServerHost.StartAsync(
+                new LanServerOptions(_session, _identity, _pairing, _sink) { Invitable = () => [.. Invitable] },
                 CancellationToken.None);
         }
 

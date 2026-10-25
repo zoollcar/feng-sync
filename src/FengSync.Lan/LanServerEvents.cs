@@ -16,6 +16,19 @@ public sealed record LanPairAttemptEventArgs(LanContact Contact, LanRefusal Refu
 }
 
 /// <summary>
+/// An invitation was judged, either way, and this is who made it.
+/// </summary>
+/// <remarks>
+/// Raised when the invitation is <b>opened</b> rather than when it is answered, because the interesting moment for
+/// a person watching the window is somebody asking to join — and the answer is theirs to give, so the window
+/// already knows it. A refusal travels too, so a machine being turned away by a peer says so instead of going quiet.
+/// </remarks>
+public sealed record LanInviteAttemptEventArgs(LanContact Contact, LanRefusal Refusal)
+{
+    public bool Accepted => Refusal == LanRefusal.None;
+}
+
+/// <summary>
 /// A device that already had a row corrected its own name. The name it was listed under before travels with it,
 /// because the thing worth showing is 改名 — and the room's older rows keep the name they were said under, so a
 /// window holding only the new one could not say what changed.

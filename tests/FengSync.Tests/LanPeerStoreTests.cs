@@ -219,8 +219,8 @@ public sealed class LanPeerStoreTests : IDisposable
 
         Assert.Equal(
             [nameof(LanPeerRecord.DeviceId), nameof(LanPeerRecord.DeviceName), nameof(LanPeerRecord.FirstSeenUtc),
-                nameof(LanPeerRecord.Kind), nameof(LanPeerRecord.LastSeenUtc), nameof(LanPeerRecord.Port),
-                nameof(LanPeerRecord.SeenAddresses)],
+                nameof(LanPeerRecord.GatewayDeviceId), nameof(LanPeerRecord.Kind), nameof(LanPeerRecord.LastSeenUtc),
+                nameof(LanPeerRecord.Port), nameof(LanPeerRecord.SeenAddresses)],
             fields);
         foreach (var name in new[] { "token", "secret", "password", "key", "credential" })
             Assert.DoesNotContain(fields, field => field.Contains(name, StringComparison.OrdinalIgnoreCase));

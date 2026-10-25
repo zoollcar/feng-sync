@@ -27,6 +27,30 @@ public sealed record LanPairResult(LanRefusal Refusal, LanContact Contact, strin
     public bool Accepted => Refusal == LanRefusal.None && Token is not null;
 }
 
+/// <summary>
+/// What saying yes to an invitation produced: the credential this machine minted for the inviter, and the row that
+/// makes it a member.
+/// </summary>
+/// <param name="Token">
+/// The credential the <b>inviter</b> will call with. It travels back in the reply, which is the half that makes an
+/// invitation a mutual pairing rather than a one-way introduction.
+/// </param>
+/// <param name="Decision">
+/// What became of the question, which is not the same as whether a credential came back: a decline and a second
+/// click on an invitation already answered both end with no token, and only the decision says which happened.
+/// </param>
+public sealed record LanInviteResult(
+    LanRefusal Refusal,
+    LanContact? Contact,
+    string? Token,
+    LanPeerRecord? Peer,
+    LanInviteDecision Decision = LanInviteDecision.Declined)
+{
+    public bool Accepted => Refusal == LanRefusal.None && Token is not null;
+
+    public static LanInviteResult Refused(LanRefusal refusal) => new(refusal, null, null, null);
+}
+
 /// <summary>One local file or folder, described for serving: the name, the length, the directory flag.</summary>
 /// <param name="Bytes">
 /// The file's own length. A directory reports 0 and is labelled as a folder, because counting a subtree is a
@@ -72,7 +96,9 @@ public sealed class LanSession(
     LanPairingState pairing,
     Func<LanInboundOffer, CancellationToken, Task<bool>>? confirmInbound = null,
     LanGroupLog? group = null,
-    LanRoomPresence? presence = null)
+    LanRoomPresence? presence = null,
+    LanPeerSecretStore? received = null,
+    LanInviteBoard? invites = null)
 {
     private readonly object _gate = new();
     private readonly HashSet<string> _agreedThisSession = new(StringComparer.OrdinalIgnoreCase);
@@ -85,6 +111,18 @@ public sealed class LanSession(
 
     public LanOptions Options { get; } = options;
     public LanPeerStore Peers { get; } = peers;
+
+    /// <summary>
+    /// Where a credential this machine was <b>given</b> is kept, which is what makes a pairing mutual.
+    /// </summary>
+    /// <remarks>
+    /// The listener hands out tokens through <c>secrets</c>; this is the other direction, and until it existed a
+    /// device that paired <i>with</i> this machine left a row here with no credential behind it — a member every
+    /// poll of which answered 请先配对. It is optional because a caller that never dials anybody (a test harness
+    /// driving one listener) has nothing to store, and because a null here must not be the difference between a
+    /// pairing that works and one that throws.
+    /// </remarks>
+    private readonly LanPeerSecretStore? _received = received;
 
     /// <summary>
     /// What this machine knows the room said. On the session rather than on the window or the listener because
@@ -103,6 +141,17 @@ public sealed class LanSession(
     /// without anybody having to notice an absence.
     /// </remarks>
     public LanRoomPresence Presence { get; } = presence ?? new LanRoomPresence();
+
+    /// <summary>
+    /// The invitations this machine is holding, waiting for a person.
+    /// </summary>
+    /// <remarks>
+    /// On the session for the same reason the log and the presence are: the listener opens an invitation when a
+    /// peer asks, the window answers it when a person clicks, and both have to be looking at one object. It is
+    /// memory, so closing the window abandons every question in it — which is the honest outcome, because the
+    /// person who was going to answer has gone.
+    /// </remarks>
+    public LanInviteBoard Invites { get; } = invites ?? new LanInviteBoard();
 
     /// <summary>
     /// Whether a device that was already trusted before this window opened may write without being asked.
@@ -182,6 +231,12 @@ public sealed class LanSession(
         var peer = await Peers.RememberAsync(new LanPeerRecord(deviceId, contact.DeviceName, contact.Kind,
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, port, [address]), ct).ConfigureAwait(false);
 
+        // The credential this caller minted for us travels in the same request, because there is no second round
+        // trip in which to hand it over. Keeping it is what makes the pairing two-way: without it this machine
+        // would hold a row it cannot dial, and every poll of that peer would answer 请先配对 forever.
+        if (_received is { } received && LanProtocol.IsToken(request.GrantToken))
+            await received.StoreAsync(deviceId, request.GrantToken!, ct).ConfigureAwait(false);
+
         // A device that just spent a code is in the room from this moment, and its own first poll will renew
         // that. Marking it here rather than waiting for the poll is what makes the join line and the device row
         // appear together instead of a beat apart.
@@ -191,6 +246,112 @@ public sealed class LanSession(
         // A device that pairs mid-session has not been agreed to yet, even though it now has a token: pairing
         // proves it read the code, not that a person wants its files.
         return new LanPairResult(LanRefusal.None, contact, token, peer);
+    }
+
+    /// <summary>
+    /// Takes an invitation and leaves it waiting for a person to answer.
+    /// </summary>
+    /// <param name="caller">
+    /// The authenticated member relaying this invitation to somebody who cannot be dialled — a phone — or
+    /// <see langword="null"/> when the invitation is addressed to this machine. The distinction is the whole
+    /// authorization rule: an invitation addressed here needs no credential because a person answers it, while one
+    /// addressed elsewhere must come from a member, or anybody on the subnet could put a question on a stranger's
+    /// phone.
+    /// </param>
+    /// <remarks>
+    /// The caller's own contact overwrites what the body claims about itself, because a member may invite on
+    /// somebody else's behalf but may never claim to <i>be</i> somebody else — the row a phone sees has to name the
+    /// machine that really asked.
+    /// </remarks>
+    public LanInviteOpenResult Invite(LanInviteRequest? request, LanAuthResult? caller, string address, int port, DateTimeOffset now)
+    {
+        if (request is null) return LanInviteOpenResult.Refused(LanRefusal.BadRequest);
+        var normalized = caller?.Contact is not { } contact
+            ? request
+            : request with { DeviceId = contact.DeviceId, DeviceName = contact.DeviceName, Kind = contact.Kind };
+        return Invites.Open(normalized, address, port, now);
+    }
+
+    /// <summary>
+    /// Answers an invitation, and — when the answer is yes and this call is the one that gave it — turns it into a
+    /// membership.
+    /// </summary>
+    /// <param name="answerer">
+    /// The device answering, when the answer arrived over the wire. It must be the device the invitation names: a
+    /// member holding a relayed question is a messenger, and answering on the phone's behalf would join it to a
+    /// room it never agreed to. <see langword="null"/> is the window answering its own question, which the board
+    /// already filtered by target.
+    /// </param>
+    public async Task<LanInviteResult> AnswerInviteAsync(string? inviteId, bool accept, LanContact? answerer = null,
+        CancellationToken ct = default)
+    {
+        var invite = Invites.Find(inviteId);
+        if (invite is null) return LanInviteResult.Refused(LanRefusal.NotFound);
+        if (answerer is not null && !invite.IsFor(answerer.DeviceId)) return LanInviteResult.Refused(LanRefusal.Declined);
+
+        // The accepting work is the commit, so it happens inside the answer rather than after it: a caller still
+        // waiting for this decision must not be told yes before the two credentials it is waiting for exist.
+        var answer = await Invites.AnswerAsync(inviteId, accept, DateTimeOffset.UtcNow,
+            accept ? pending => AcceptInviteAsync(pending, ct) : null, ct).ConfigureAwait(false);
+
+        if (answer.Refusal != LanRefusal.None) return LanInviteResult.Refused(answer.Refusal);
+        if (answer.Invite is not { } answered) return LanInviteResult.Refused(LanRefusal.NotFound);
+        if (!accept || answer.Decision != LanInviteDecision.Accepted)
+            return new LanInviteResult(LanRefusal.None, answered.From, null, null, answer.Decision);
+
+        // The credential this membership rests on, whether this call minted it or an earlier one did — a double
+        // click and a retry after a lost reply both converge on the one token that is really there.
+        var token = await secrets.TokenForAsync(answered.From.DeviceId, ct).ConfigureAwait(false);
+        return token is null
+            ? LanInviteResult.Refused(LanRefusal.NotFound)
+            : new LanInviteResult(LanRefusal.None, answered.From, token, null, answer.Decision);
+    }
+
+    /// <summary>
+    /// The credential this machine issued for one device.
+    /// </summary>
+    /// <remarks>
+    /// For the one caller that is allowed to see it: the reply to an accepted invitation, which has to carry the
+    /// token the inviter will call with. It is read back rather than passed along because the answer that mints it
+    /// is a person's click, and the request that is waiting for that click is a different thread.
+    /// </remarks>
+    public Task<string?> IssuedTokenForAsync(string deviceId, CancellationToken ct = default) =>
+        secrets.TokenForAsync(deviceId, ct);
+
+    /// <summary>
+    /// Turns an accepted invitation into two credentials and a row.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same two writes <see cref="PairAsync"/> makes, in the same order, for the same reason: the inviter keeps
+    /// what this machine mints, this machine keeps what the inviter minted, and the peer row is what lets the room
+    /// dial it. Nothing here had been written before this call — the grant the invitation carried was held in
+    /// memory — so a decline costs the inviter exactly one released token and leaves no trace on either disk.
+    /// </para>
+    /// <para>
+    /// The kind is settled as <see cref="LanProtocol.KindWindows"/> rather than read off the invitation, because a
+    /// device that can be asked this question is one that answers HTTP — no phone listens. Believing a claim of
+    /// "phone" here would file a computer under a kind the room never dials, which is a member that silently
+    /// receives nothing.
+    /// </para>
+    /// </remarks>
+    public async Task<LanInviteResult> AcceptInviteAsync(LanPendingInvite invite, CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var token = await secrets.IssueAsync(invite.From.DeviceId, ct).ConfigureAwait(false);
+        if (_received is { } received && LanProtocol.IsToken(invite.GrantToken))
+            await received.StoreAsync(invite.From.DeviceId, invite.GrantToken, ct).ConfigureAwait(false);
+
+        var peer = await Peers.RememberAsync(new LanPeerRecord(invite.From.DeviceId,
+            LanProtocol.SanitizePeerName(invite.From.DeviceName), LanProtocol.KindWindows, now, now,
+            invite.From.Port, invite.From.Address.Length > 0 ? [invite.From.Address] : []), ct).ConfigureAwait(false);
+
+        // In the room from this moment, and its own first poll will renew that. A device that was asked and said
+        // yes is a member, which is a stronger statement than a lease — so this is a sighting, not a guess.
+        Presence.Seen(new LanRoomMember(peer.DeviceId, peer.DeviceName, peer.Kind, invite.From.Address,
+            invite.From.Port, now, Discovered: false));
+
+        return new LanInviteResult(LanRefusal.None, invite.From, token, peer);
     }
 
     /// <summary>
@@ -230,7 +391,13 @@ public sealed class LanSession(
     {
         var forgotten = await Peers.ForgetAsync(deviceId, ct).ConfigureAwait(false);
         await secrets.ForgetAsync(deviceId, ct).ConfigureAwait(false);
+        // …and the credential that points the other way, because a pairing is mutual now: leaving this one
+        // behind would keep a working token for a device the user has just said may not come back.
+        if (_received is { } received) await received.ForgetAsync(deviceId, ct).ConfigureAwait(false);
         lock (_gate) _agreedThisSession.Remove(deviceId);
+        // A question from a device the user has just stopped trusting is not one to leave on screen: answering it
+        // would write back the row this call just deleted.
+        Invites.Forget(deviceId, DateTimeOffset.UtcNow);
         // Trust and presence are two different questions and this answers both: a device that is no longer
         // trusted has no business being listed as a member of the room either.
         Presence.Forget(deviceId);
