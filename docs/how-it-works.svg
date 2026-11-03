@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" font-family="system-ui, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f2a3d"/><stop offset="1" stop-color="#155e75"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="340" rx="20" fill="#f1f5f9"/>
+  <text x="60" y="52" font-size="24" font-weight="700" fill="#0f172a">三步完成一次同步，不用先猜结果</text>
+  <g>
+    <rect x="60" y="80" width="320" height="200" rx="16" fill="#ffffff" stroke="#e2e8f0"/>
+    <circle cx="100" cy="125" r="24" fill="#0ea5e9"/><text x="100" y="134" font-size="24" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+    <text x="140" y="133" font-size="26" font-weight="700" fill="#0f172a">比较</text>
+    <text x="100" y="185" font-size="20" fill="#475569">左右两端各拍一张快照，</text>
+    <text x="100" y="218" font-size="20" fill="#475569">算出哪些新增、哪些变了、</text>
+    <text x="100" y="251" font-size="20" fill="#475569">哪些只剩一边。</text>
+  </g>
+  <text x="392" y="190" font-size="36" fill="#0ea5e9">→</text>
+  <g>
+    <rect x="440" y="80" width="320" height="200" rx="16" fill="#ffffff" stroke="#e2e8f0"/>
+    <circle cx="480" cy="125" r="24" fill="#f59e0b"/><text x="480" y="134" font-size="24" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+    <text x="520" y="133" font-size="26" font-weight="700" fill="#0f172a">确认</text>
+    <text x="480" y="185" font-size="20" fill="#475569">覆盖、删除的数量和大小</text>
+    <text x="480" y="218" font-size="20" fill="#475569">先列出来给你看。危险的</text>
+    <text x="480" y="251" font-size="20" fill="#475569">操作要你点头才继续。</text>
+  </g>
+  <text x="772" y="190" font-size="36" fill="#0ea5e9">→</text>
+  <g>
+    <rect x="820" y="80" width="320" height="200" rx="16" fill="#0f2a3d"/>
+    <circle cx="860" cy="125" r="24" fill="#22c55e"/><text x="860" y="134" font-size="24" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+    <text x="900" y="133" font-size="26" font-weight="700" fill="#ffffff">同步</text>
+    <text x="860" y="185" font-size="20" fill="#cbd5e1">临时文件写好再原子提交，</text>
+    <text x="860" y="218" font-size="20" fill="#cbd5e1">可选校验；大文件下载中断</text>
+    <text x="860" y="251" font-size="20" fill="#cbd5e1">后，下次从断点继续。</text>
+  </g>
+  <text x="60" y="322" font-size="17" fill="#64748b">双向同步先建基线，冲突不会被悄悄覆盖；失败的运行不会提交新基线。</text>
+</svg>

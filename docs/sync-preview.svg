@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" font-family="system-ui, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <rect width="1200" height="560" rx="20" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect width="1200" height="64" rx="20" fill="#0f2a3d"/>
+  <rect y="40" width="1200" height="24" fill="#0f2a3d"/>
+  <circle cx="48" cy="32" r="7" fill="#f87171"/><circle cx="76" cy="32" r="7" fill="#facc15"/><circle cx="104" cy="32" r="7" fill="#4ade80"/>
+  <text x="140" y="41" font-size="22" font-weight="700" fill="#ffffff">Feng Sync — 同步预览（示意图）</text>
+  <text x="1060" y="41" font-size="18" fill="#bae6fd">双向同步</text>
+  <g font-size="20">
+    <rect x="40" y="88" width="540" height="64" rx="12" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="64" y="115" font-weight="700" fill="#1e3a5f">⬅ 左端 · 本地文件夹</text>
+    <text x="64" y="142" fill="#475569">D:\照片</text>
+    <rect x="620" y="88" width="540" height="64" rx="12" fill="#f0fdf4" stroke="#bbf7d0"/>
+    <text x="644" y="115" font-weight="700" fill="#14532d">右端 · Google Drive ➜</text>
+    <text x="644" y="142" fill="#475569">gdrive://我的云盘/照片</text>
+  </g>
+  <g font-size="21">
+    <rect x="40" y="176" width="1120" height="56" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="64" y="212" fill="#0f172a">📄 旅行/京都-01.jpg</text>
+    <text x="760" y="212" font-weight="700" fill="#0284c7">新增 → 12.4 MB</text>
+    <text x="1000" y="212" fill="#64748b">→ 传到右端</text>
+    <rect x="40" y="244" width="1120" height="56" rx="10" fill="#fffbeb" stroke="#fde68a"/>
+    <text x="64" y="280" fill="#0f172a">📄 工作/报告-2026.docx</text>
+    <text x="760" y="280" font-weight="700" fill="#d97706">两侧都改过 · 冲突</text>
+    <text x="1000" y="280" fill="#64748b">等你决定</text>
+    <rect x="40" y="312" width="1120" height="56" rx="10" fill="#fef2f2" stroke="#fecaca"/>
+    <text x="64" y="348" fill="#0f172a">📄 旧稿/草稿-v1.txt</text>
+    <text x="760" y="348" font-weight="700" fill="#dc2626">删除 · 1 个文件</text>
+    <text x="1000" y="348" fill="#64748b">超过阈值会再确认</text>
+    <rect x="40" y="380" width="1120" height="56" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="64" y="416" fill="#0f172a">📄 家庭/生日合影.png</text>
+    <text x="760" y="416" font-weight="700" fill="#16a34a">已一致 ✓</text>
+    <text x="1000" y="416" fill="#64748b">不用动</text>
+  </g>
+  <rect x="40" y="460" width="1120" height="64" rx="12" fill="#0f2a3d"/>
+  <text x="64" y="500" font-size="21" fill="#e2e8f0">将新增 12 · 覆盖 3 · 删除 2 · 共 1.2 GB</text>
+  <rect x="920" y="474" width="216" height="36" rx="18" fill="#0ea5e9"/>
+  <text x="1028" y="499" font-size="20" font-weight="700" fill="#ffffff" text-anchor="middle">确认并同步</text>
+  <text x="40" y="552" font-size="15" fill="#94a3b8">示意图：真实界面以实际版本为准；删除与覆盖在执行前都会汇总并要求确认。</text>
+</svg>
