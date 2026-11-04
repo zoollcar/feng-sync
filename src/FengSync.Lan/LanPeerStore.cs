@@ -78,9 +78,36 @@ public sealed record LanPeerRecord(
 /// The cap is a bound on a mistake, not on a workflow: fifteen paired devices is already more than a desk
 /// has, and a file that grew past that is a file somebody else wrote.
 /// </para>
+/// <para>
+/// Dropping a row is not by itself a revocation. The token lives in <see cref="LanPeerSecretStore"/>, so an
+/// evicted device keeps a credential that still verifies — which is why <c>revokeEvicted</c> exists and why the
+/// listener also refuses a credential whose row is gone.
+/// </para>
 /// </remarks>
-public sealed class LanPeerStore(string? path = null, int maximumPeers = 15)
+/// <param name="path">Where the roster is kept. Null means the application's own LAN folder.</param>
+/// <param name="maximumPeers">How many devices are remembered before the least recently seen one is dropped.</param>
+/// <param name="revokeEvicted">
+/// Called with the device id of a row this store just dropped, so the caller can delete the credential that
+/// outlived it. A row is only dropped when the list is full, and the token for it lives in a different file,
+/// so without this the roster silently stopped being the list of devices that may write.
+/// </param>
+public sealed class LanPeerStore(
+    string? path = null,
+    int maximumPeers = 15,
+    Func<string, CancellationToken, Task>? revokeEvicted = null)
 {
+    /// <summary>
+    /// How long a sighting may stay unwritten while it changes nothing the roster would show.
+    /// </summary>
+    /// <remarks>
+    /// Every authenticated request passes through <see cref="RememberContactAsync"/>: a phone polls the room
+    /// every three seconds, and the room itself ticks on the same beat. Persisting each sighting turned that
+    /// into a read, a serialise and a rename on every poll, with every concurrent request queued behind the
+    /// same gate while the disk caught up. A last-seen time that is thirty seconds stale is indistinguishable
+    /// to the person reading the list; an address or port that moved is written immediately.
+    /// </remarks>
+    public static readonly TimeSpan ContactPersistInterval = TimeSpan.FromSeconds(30);
+
     private readonly SemaphoreSlim _gate = new(1, 1);
     public string Path { get; } = path ?? System.IO.Path.Combine(AppDataPaths.LanTransfer, "lan-peers.json");
 
@@ -112,6 +139,7 @@ public sealed class LanPeerStore(string? path = null, int maximumPeers = 15)
                     SeenAddresses = records[index].SeenAddresses,
                 };
 
+            LanPeerRecord? evicted = null;
             if (index < 0)
             {
                 // One record is dropped per add, never a batch: a comparison against Min() would remove every
@@ -119,20 +147,34 @@ public sealed class LanPeerStore(string? path = null, int maximumPeers = 15)
                 // is ordinary, not a tie to break.
                 if (records.Count >= maximumPeers)
                 {
-                    var oldest = records.MinBy(older => older.LastSeenUtc);
-                    if (oldest is not null) records.Remove(oldest);
+                    evicted = records.MinBy(older => older.LastSeenUtc);
+                    if (evicted is not null) records.Remove(evicted);
                 }
                 records.Add(merged);
             }
             else records[index] = merged;
 
             await WriteUnlockedAsync(records, ct).ConfigureAwait(false);
+
+            // Only after the write: a failure above leaves the row in place, and revoking the credential of a
+            // device the list still shows would be a worse lie than the eviction itself. The evicted device's
+            // token lives in a different file, so nothing else in this class would ever have touched it — and a
+            // token whose row is gone still verifies, which is why the roster alone was not a real revocation.
+            if (evicted is not null && revokeEvicted is not null)
+                await revokeEvicted(evicted.DeviceId, ct).ConfigureAwait(false);
+
             return merged;
         }
         finally { _gate.Release(); }
     }
 
     /// <summary>Records that a known device just spoke, and from where.</summary>
+    /// <remarks>
+    /// The in-memory row is always updated; the file is only rewritten when the sighting changes something the
+    /// roster would show, or when the last write is older than <see cref="ContactPersistInterval"/>. This runs on
+    /// every authenticated request, so writing unconditionally put a full serialise-and-rename on the hot path of
+    /// a client that polls several times a second.
+    /// </remarks>
     public async Task RememberContactAsync(string deviceId, string address, int port, DateTimeOffset now, CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
@@ -141,11 +183,20 @@ public sealed class LanPeerStore(string? path = null, int maximumPeers = 15)
             var records = await LoadUnlockedAsync(ct).ConfigureAwait(false);
             var index = records.FindExisting(deviceId);
             if (index < 0) return;
-            records[index] = records[index].SeenFrom(address, port, now);
-            await WriteUnlockedAsync(records, ct).ConfigureAwait(false);
+            var before = records[index];
+            var after = before.SeenFrom(address, port, now);
+            records[index] = after;
+            if (ContactNeedsPersisting(before, after, now))
+                await WriteUnlockedAsync(records, ct).ConfigureAwait(false);
         }
         finally { _gate.Release(); }
     }
+
+    /// <summary>Whether a sighting is worth a disk write, or is the same row arriving again.</summary>
+    private static bool ContactNeedsPersisting(LanPeerRecord before, LanPeerRecord after, DateTimeOffset now) =>
+        after.Port != before.Port
+        || !after.SeenAddresses.SequenceEqual(before.SeenAddresses, StringComparer.OrdinalIgnoreCase)
+        || now - before.LastSeenUtc >= ContactPersistInterval;
 
     /// <summary>Renames a remembered device, which is the only way a stale 设备名 gets corrected.</summary>
     public async Task<bool> RenameAsync(string deviceId, string deviceName, CancellationToken ct = default)

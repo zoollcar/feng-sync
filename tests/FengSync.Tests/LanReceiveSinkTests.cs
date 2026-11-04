@@ -72,6 +72,21 @@ public sealed class LanReceiveSinkTests : IDisposable
     }
 
     [Fact]
+    public async Task Receiving_leaves_no_destination_lock_behind()
+    {
+        // The gate table is static and process-wide, so this is a delta rather than an absolute: another test
+        // class may be holding one of its own gates while this runs. What must not happen is one entry per path
+        // received — a window that renamed its way through a few hundred files would carry them forever.
+        var baseline = LanReceiveSink.LiveDestinationGates;
+
+        for (var index = 0; index < 20; index++)
+            await Sink().ReceiveAsync(Body("x"), $"file-{index}.txt", 1, null, null, CancellationToken.None);
+
+        Assert.True(LanReceiveSink.LiveDestinationGates - baseline <= 1,
+            $"接收结束后仍有 {LanReceiveSink.LiveDestinationGates - baseline} 把目标锁没有回收。");
+    }
+
+    [Fact]
     public async Task Two_senders_of_one_path_take_turns_and_the_second_renames_instead_of_sharing_a_staging_file()
     {
         // A deterministic staging name is what makes an interrupted receive recognisable, so the price of it is

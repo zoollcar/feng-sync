@@ -171,6 +171,11 @@ public sealed class LanSession(
     /// The peer's <c>deviceId:token</c>, from the <c>Authorization</c> header or from the cookie a pairing reply
     /// set — see <see cref="TrySplitCredential"/> for what either form may carry.
     /// </param>
+    /// <param name="claimedName">What the peer says it is called. Unused on purpose: the name this machine
+    /// answers to a member with is the one a person read when they paired, and a device with no row is refused
+    /// rather than described from its own claim. Kept in the signature because the wire still carries them and
+    /// because the refusal it produces is the same one an unpaired stranger gets.</param>
+    /// <param name="claimedKind">What the peer says it is. See <paramref name="claimedName"/>.</param>
     public async Task<LanAuthResult> AuthenticateAsync(string? credential, string? claimedName, string? claimedKind, string address, int port, CancellationToken ct = default)
     {
         if (!TrySplitCredential(credential, out var deviceId, out var token)) return LanAuthResult.Rejected(LanRefusal.Unpaired);
@@ -186,13 +191,12 @@ public sealed class LanSession(
             return LanAuthResult.Rejected(record is null ? LanRefusal.Unpaired : LanRefusal.DeviceIdentityChanged);
         }
 
-        // The name and kind come from the record when there is one, because that is what a person read and
-        // agreed to. A credential with no record behind it falls back to what the peer claims about itself,
-        // which it can only ever do for itself.
-        var contact = new LanContact(deviceId,
-            string.IsNullOrWhiteSpace(record?.DeviceName) ? LanProtocol.SanitizePeerName(claimedName) : record!.DeviceName,
-            record?.Kind ?? KindOf(claimedKind),
-            address, port);
+        // A credential with no row behind it is not a member. The roster is the user's view of who may write
+        // here, and it is also the only place a device is ever removed from — a token whose row was evicted or
+        // forgotten would otherwise keep working for as long as the secret file survives, which is forever.
+        if (record is null) return LanAuthResult.Rejected(LanRefusal.Unpaired);
+
+        var contact = new LanContact(deviceId, record.DeviceName, record.Kind, address, port);
 
         // Only a device already in the list has its sighting recorded; an unknown id was refused above, so this
         // cannot grow the trusted list out of a header.

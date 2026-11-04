@@ -207,6 +207,77 @@ public sealed class LanPeerStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Evicting_a_row_revokes_the_credential_that_outlived_it()
+    {
+        // The token lives in LanPeerSecretStore, so dropping the row alone leaves a working credential behind
+        // for a device the user can no longer see in the list.
+        var revoked = new List<string>();
+        var store = new LanPeerStore(_path, maximumPeers: 2,
+            revokeEvicted: (deviceId, _) => { revoked.Add(deviceId); return Task.CompletedTask; });
+        var now = DateTimeOffset.UtcNow;
+
+        await store.RememberAsync(Peer("oldest", seen: now.AddMinutes(-30)), CancellationToken.None);
+        await store.RememberAsync(Peer("middle", seen: now.AddMinutes(-20)), CancellationToken.None);
+        Assert.Empty(revoked);
+
+        await store.RememberAsync(Peer("newest", seen: now.AddMinutes(-10)), CancellationToken.None);
+        Assert.Equal(["oldest"], revoked);
+    }
+
+    [Fact]
+    public async Task A_repeated_sighting_from_the_same_place_does_not_rewrite_the_file()
+    {
+        // This is the authentication hot path: a phone polls the room every few seconds, and a write per poll
+        // was a serialise and a rename per poll.
+        var store = new LanPeerStore(_path);
+        var now = DateTimeOffset.UtcNow;
+        await store.RememberAsync(Peer("aaaaaaaa", seen: now), CancellationToken.None);
+        await store.RememberContactAsync("aaaaaaaa", "192.168.1.20", 59871, now.AddSeconds(1), CancellationToken.None);
+
+        var written = await File.ReadAllBytesAsync(_path);
+        for (var second = 2; second <= 6; second++)
+            await store.RememberContactAsync("aaaaaaaa", "192.168.1.20", 59871, now.AddSeconds(second), CancellationToken.None);
+
+        Assert.Equal(written, await File.ReadAllBytesAsync(_path));
+
+        // What is on disk is deliberately up to one interval behind: the sighting is a heartbeat, and the row a
+        // person reads is allowed to be thirty seconds stale. The address and port, which are the facts that
+        // change, are written the moment they do — see the two cases below.
+        var record = Assert.Single(await store.LoadAsync());
+        Assert.Equal(now.AddSeconds(1), record.LastSeenUtc);
+        Assert.Equal(59871, record.Port);
+    }
+
+    [Fact]
+    public async Task A_device_that_moved_is_written_through_immediately()
+    {
+        var store = new LanPeerStore(_path);
+        var now = DateTimeOffset.UtcNow;
+        await store.RememberAsync(Peer("aaaaaaaa", seen: now), CancellationToken.None);
+        await store.RememberContactAsync("aaaaaaaa", "192.168.1.20", 59871, now.AddSeconds(1), CancellationToken.None);
+        await store.RememberContactAsync("aaaaaaaa", "192.168.1.77", 59871, now.AddSeconds(2), CancellationToken.None);
+
+        // Read through a second store, so this is the file and not the cache of the first one.
+        var record = Assert.Single(await new LanPeerStore(_path).LoadAsync());
+        Assert.Equal(["192.168.1.20", "192.168.1.77"], record.SeenAddresses);
+    }
+
+    [Fact]
+    public async Task A_sighting_older_than_the_persist_interval_reaches_the_disk_again()
+    {
+        var store = new LanPeerStore(_path);
+        var now = DateTimeOffset.UtcNow;
+        await store.RememberAsync(Peer("aaaaaaaa", seen: now), CancellationToken.None);
+        await store.RememberContactAsync("aaaaaaaa", "192.168.1.20", 59871, now.AddSeconds(1), CancellationToken.None);
+        var written = await File.ReadAllBytesAsync(_path);
+
+        await store.RememberContactAsync("aaaaaaaa", "192.168.1.20", 59871,
+            now.AddSeconds(1) + LanPeerStore.ContactPersistInterval, CancellationToken.None);
+
+        Assert.NotEqual(written, await File.ReadAllBytesAsync(_path));
+    }
+
+    [Fact]
     public void The_record_has_no_field_that_could_carry_a_token()
     {
         // The secret for a peer lives in LanPeerSecretStore. This list is the file a user is most likely to

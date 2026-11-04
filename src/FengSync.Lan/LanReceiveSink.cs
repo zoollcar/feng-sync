@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using FengSync.Core;
 
 namespace FengSync.Lan;
@@ -46,7 +45,7 @@ public sealed class LanReceiveSink
     /// </summary>
     public static readonly TimeSpan TimestampTolerance = TimeSpan.FromSeconds(2);
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> DestinationGates = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, DestinationGate> DestinationGates = new(StringComparer.OrdinalIgnoreCase);
     private readonly string _root;
     private readonly LocalEndpoint _endpoint;
     private readonly Func<string, IReadOnlyList<string>, string> _chooseFreeName;
@@ -103,13 +102,70 @@ public sealed class LanReceiveSink
         // what makes that deterministic name safe: the second transfer waits, then reads a listing that already
         // has the first file in it and renames itself. It also means a leftover partial from a process that
         // crashed is garbage rather than somebody's in-flight work, so overwriting it is correct.
-        var gate = DestinationGates.GetOrAdd(Compose(safe), _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(ct).ConfigureAwait(false);
+        return await WithDestinationGateAsync(Compose(safe),
+            () => ReceiveLockedAsync(body, safe, declaredBytes, sourceWriteUtc, progress, ct), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// How many destination locks are alive. A sink that has finished receiving leaves nothing behind, so this
+    /// is the number the reference counting exists to keep at zero — and the only way to see it from outside.
+    /// </summary>
+    public static int LiveDestinationGates
+    {
+        get { lock (DestinationGates) return DestinationGates.Count; }
+    }
+
+    /// <summary>
+    /// One destination's turn-taking lock, plus how many callers are currently using or waiting for it.
+    /// </summary>
+    /// <remarks>
+    /// The count is what lets the dictionary stay bounded. A plain <c>GetOrAdd</c> leaves one semaphore behind
+    /// for every path this machine has ever received, and a busy window renames colliding files, so those paths
+    /// are mostly unique: the table grew for the life of the process with nothing ever removing an entry.
+    /// </remarks>
+    private sealed class DestinationGate
+    {
+        public SemaphoreSlim Semaphore { get; } = new(1, 1);
+        public int Users { get; set; }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="body"/> while holding the gate for one destination, then retires the gate when the
+    /// last caller lets go of it.
+    /// </summary>
+    private static async Task<T> WithDestinationGateAsync<T>(string key, Func<Task<T>> body, CancellationToken ct)
+    {
+        DestinationGate gate;
+        lock (DestinationGates)
+        {
+            if (!DestinationGates.TryGetValue(key, out gate!))
+                DestinationGates[key] = gate = new DestinationGate();
+            gate.Users++;
+        }
+
+        var held = false;
         try
         {
-            return await ReceiveLockedAsync(body, safe, declaredBytes, sourceWriteUtc, progress, ct).ConfigureAwait(false);
+            await gate.Semaphore.WaitAsync(ct).ConfigureAwait(false);
+            held = true;
+            return await body().ConfigureAwait(false);
         }
-        finally { gate.Release(); }
+        finally
+        {
+            lock (DestinationGates)
+            {
+                // A waiter cancelled before it was let in never acquired the semaphore, so releasing on its
+                // behalf would hand a second caller a turn that nobody is taking.
+                if (held) gate.Semaphore.Release();
+                if (--gate.Users == 0 && DestinationGates.TryGetValue(key, out var current) && ReferenceEquals(current, gate))
+                {
+                    DestinationGates.Remove(key);
+                    // Safe to dispose: a caller can only hold this instance after registering itself above, so
+                    // a zero count means nobody — waiting or running — still refers to it.
+                    gate.Semaphore.Dispose();
+                }
+            }
+        }
     }
 
     private async Task<LanReceived> ReceiveLockedAsync(

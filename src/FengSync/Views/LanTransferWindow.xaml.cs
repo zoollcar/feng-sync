@@ -373,8 +373,11 @@ public partial class LanTransferWindow : Window
         try
         {
             _identity ??= await LanDeviceIdentity.LoadOrCreateAsync(ct: _lifetime.Token);
-            _peers ??= new LanPeerStore();
-            _secrets ??= new LanPeerSecretStore();
+            // The secrets store comes first because evicting a row has to revoke the credential behind it: the
+            // roster is capped, and a device dropped from the list whose token still verifies would keep the
+            // write access the user believes they took away.
+            var secrets = _secrets ??= new LanPeerSecretStore();
+            _peers ??= new LanPeerStore(revokeEvicted: (deviceId, token) => secrets.ForgetAsync(deviceId, token));
             _received ??= new LanPeerSecretStore(LanPeerClient.DefaultReceivedPath());
             _archive ??= new LanTransferHistoryRepository();
             _pairing ??= new LanPairingState();

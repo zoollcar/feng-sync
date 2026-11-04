@@ -199,7 +199,11 @@ public sealed class LanPeerClientTests
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 0, ["10.0.0.9"]));
         // A machine will not carry a question it has no reason to trust, so this one already holds the credential
         // that gateway answers to — the half a pairing leaves behind, and the only thing that makes a forwarded
-        // invitation an authorized request rather than a stranger's note on somebody's phone.
+        // invitation an authorized request rather than a stranger's note on somebody's phone. The row comes with
+        // it: a token is only good while the roster still names the device, so a pairing that issued a credential
+        // without writing one would leave a member the listener refuses.
+        await gateway.Peers.RememberAsync(new LanPeerRecord(self.DeviceId, "这台电脑", LanProtocol.KindWindows,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
         await received.StoreAsync(gateway.Identity.DeviceId, await gateway.Secrets.IssueAsync(self.DeviceId));
         using var client = new LanPeerClient(self, members, received, issued: issued);
 
